@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { LogOut, ShieldOff } from "lucide-react";
+import { LogOut, PhoneForwarded, ShieldOff, UserX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -13,8 +13,12 @@ import {
   EntityTable,
 } from "@/components/entity";
 import { createColumn } from "@/components/tables";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { CustomerDevicesCard } from "@/features/customer-panel/components/customer-devices-card";
+import { CustomerPhoneChangeDialog } from "@/features/customer-panel/components/customer-phone-change-dialog";
+import { CustomerReassignedDialog } from "@/features/customer-panel/components/customer-reassigned-dialog";
 import {
   useCustomerLogout,
   useCustomerProfile,
@@ -26,9 +30,11 @@ import { appToast } from "@/providers/toast-provider";
 import { useLocale } from "@/providers/locale-provider";
 
 /**
- * `/panel/profile`: the verified phone, the businesses that know it and the
- * person's sessions. Signing out everywhere ends every panel session of
- * this phone (other phones and browsers too).
+ * `/panel/profile`: the verified phone, the businesses that know it, the
+ * signed-in devices and access security (TEC-910): a safe number change,
+ * the report of a recently reassigned number, and signing out. Signing out
+ * everywhere ends every panel session of this phone (other phones and
+ * browsers too).
  */
 export function CustomerProfilePage() {
   const { t, locale } = useLocale();
@@ -36,6 +42,8 @@ export function CustomerProfilePage() {
   const profile = useCustomerProfile().data;
   const logout = useCustomerLogout();
   const [confirmAll, setConfirmAll] = useState(false);
+  const [changingPhone, setChangingPhone] = useState(false);
+  const [reassigned, setReassigned] = useState(false);
 
   const columns = useMemo(
     () =>
@@ -46,7 +54,23 @@ export function CustomerProfilePage() {
           enableSorting: false,
           gridPrimary: true,
           cell: ({ row }) => (
-            <span className="font-medium">{row.original.name}</span>
+            <span className="flex flex-wrap items-center gap-2 font-medium">
+              {row.original.name}
+              {row.original.history_from ? (
+                <Badge variant="outline">
+                  {t("customer_panel.profile.history_from", {
+                    at: date(row.original.history_from, undefined, locale),
+                  })}
+                </Badge>
+              ) : null}
+              {row.original.history_until ? (
+                <Badge variant="outline">
+                  {t("customer_panel.profile.history_until", {
+                    at: date(row.original.history_until, undefined, locale),
+                  })}
+                </Badge>
+              ) : null}
+            </span>
           ),
         }),
         createColumn<CustomerBusiness>({
@@ -76,7 +100,7 @@ export function CustomerProfilePage() {
           cell: ({ row }) => date(row.original.linked_at, undefined, locale),
         }),
       ] as ColumnDef<CustomerBusiness, unknown>[],
-    [locale],
+    [locale, t],
   );
 
   const signOut = (everywhere: boolean) =>
@@ -163,6 +187,31 @@ export function CustomerProfilePage() {
         />
       </EntitySectionCard>
 
+      <CustomerDevicesCard />
+
+      <EntitySectionCard title={t("customer_panel.profile.access")}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-muted-foreground text-sm">
+              {t("customer_panel.profile.change_phone_hint")}
+            </p>
+            <Button variant="outline" onClick={() => setChangingPhone(true)}>
+              <PhoneForwarded className="size-4" />
+              {t("customer_panel.phone_change.title")}
+            </Button>
+          </div>
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-muted-foreground text-sm">
+              {t("customer_panel.profile.reassigned_hint")}
+            </p>
+            <Button variant="outline" onClick={() => setReassigned(true)}>
+              <UserX className="size-4" />
+              {t("customer_panel.reassigned.title")}
+            </Button>
+          </div>
+        </div>
+      </EntitySectionCard>
+
       <EntitySectionCard title={t("customer_panel.profile.sessions")}>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button
@@ -184,6 +233,15 @@ export function CustomerProfilePage() {
         </div>
       </EntitySectionCard>
 
+      <CustomerPhoneChangeDialog
+        open={changingPhone}
+        onOpenChange={setChangingPhone}
+      />
+      <CustomerReassignedDialog
+        open={reassigned}
+        onOpenChange={setReassigned}
+        businesses={profile.businesses}
+      />
       <ConfirmDialog
         open={confirmAll}
         title={t("customer_panel.profile.logout_everywhere")}

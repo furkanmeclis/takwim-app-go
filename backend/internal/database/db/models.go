@@ -256,6 +256,25 @@ type Customer struct {
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type CustomerAccessLink struct {
+	ID         int64              `json:"id"`
+	Uuid       uuid.UUID          `json:"uuid"`
+	TokenHash  string             `json:"token_hash"`
+	PhoneE164  string             `json:"phone_e164"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type CustomerAuthEvent struct {
+	ID         int64              `json:"id"`
+	Kind       string             `json:"kind"`
+	PhoneE164  pgtype.Text        `json:"phone_e164"`
+	IdentityID pgtype.Int8        `json:"identity_id"`
+	Ip         string             `json:"ip"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type CustomerIdentity struct {
 	ID              int64              `json:"id"`
 	Uuid            uuid.UUID          `json:"uuid"`
@@ -274,6 +293,8 @@ type CustomerIdentityLink struct {
 	VerifiedPhoneE164 string             `json:"verified_phone_e164"`
 	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	VisibleFrom       pgtype.Timestamptz `json:"visible_from"`
+	VisibleUntil      pgtype.Timestamptz `json:"visible_until"`
 }
 
 type CustomerOtpChallenge struct {
@@ -289,6 +310,16 @@ type CustomerOtpChallenge struct {
 	ConsumedAt  pgtype.Timestamptz `json:"consumed_at"`
 	Ip          string             `json:"ip"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	IdentityID  pgtype.Int8        `json:"identity_id"`
+}
+
+type CustomerPhoneRelease struct {
+	ID         int64              `json:"id"`
+	PhoneE164  string             `json:"phone_e164"`
+	IdentityID pgtype.Int8        `json:"identity_id"`
+	Reason     string             `json:"reason"`
+	ReleasedAt pgtype.Timestamptz `json:"released_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type CustomerSession struct {
@@ -304,6 +335,19 @@ type CustomerSession struct {
 	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
 	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Method        string             `json:"method"`
+}
+
+type CustomerVisitLink struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ReservationID  int64              `json:"reservation_id"`
+	TokenHash      string             `json:"token_hash"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
+	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type ExportJob struct {

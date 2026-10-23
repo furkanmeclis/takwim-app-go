@@ -129,7 +129,7 @@ func listArgs(f model.ListFilter) (pgtype.Bool, pgtype.UUID, []string) {
 
 // List returns the person's reservations across businesses.
 func (s *Service) List(ctx context.Context, p Principal, f model.ListFilter) ([]model.ReservationItem, int64, error) {
-	s.linkRecords(ctx, p.Phone, p.VerifiedAt)
+	s.linkRecords(ctx, p.Phone, p.VerifiedAt, p.source())
 	now := s.now()
 	upcoming, business, statuses := listArgs(f)
 	rows, err := s.q.ListCustomerPanelReservations(ctx, db.ListCustomerPanelReservationsParams{
@@ -232,6 +232,12 @@ func (s *Service) load(ctx context.Context, p Principal, id uuid.UUID) (owned, e
 	if err != nil {
 		return owned{}, err
 	}
+	return s.loadRow(ctx, row)
+}
+
+// loadRow completes a reservation row (found through the person's links or
+// a visit link) with the record, the settings and the business state.
+func (s *Service) loadRow(ctx context.Context, row db.GetCustomerPanelReservationRow) (owned, error) {
 	full, err := s.deps.Reservations.Get(ctx, row.OrganizationID, row.Uuid, availabilityusecase.Caller{})
 	if errors.Is(err, reservationsusecase.ErrNotFound) {
 		return owned{}, ErrNotFound
@@ -391,17 +397,23 @@ func (s *Service) Cancel(ctx context.Context, p Principal, id uuid.UUID, in mode
 	if err != nil {
 		return Changed{}, err
 	}
-	if a := o.actions(s.now()).Cancel; !a.Allowed {
-		return Changed{}, &ActionError{Action: "cancel", Reason: *a.Reason}
-	}
-	cutoff := o.settings.Settings.Reservation.CancelCutoffMinutes
-	_, err = s.deps.Reservations.Cancel(ctx, o.row.OrganizationID, o.row.Uuid, availabilityusecase.Caller{}, 0, reservationsusecase.ChangeInput{
-		ExpectedVersion: in.ExpectedVersion, Reason: CancelReason, Guard: guard(o, "cancel", cutoff, s.now),
-	})
-	if err != nil {
+	if err := s.cancel(ctx, o, in.ExpectedVersion); err != nil {
 		return Changed{}, err
 	}
 	return s.reloaded(ctx, p, o)
+}
+
+// cancel applies the cancel rules and cancels through the reservations use
+// case, with the guard on the locked record.
+func (s *Service) cancel(ctx context.Context, o owned, version *int) error {
+	if a := o.actions(s.now()).Cancel; !a.Allowed {
+		return &ActionError{Action: "cancel", Reason: *a.Reason}
+	}
+	cutoff := o.settings.Settings.Reservation.CancelCutoffMinutes
+	_, err := s.deps.Reservations.Cancel(ctx, o.row.OrganizationID, o.row.Uuid, availabilityusecase.Caller{}, 0, reservationsusecase.ChangeInput{
+		ExpectedVersion: version, Reason: CancelReason, Guard: guard(o, "cancel", cutoff, s.now),
+	})
+	return err
 }
 
 func (s *Service) reloaded(ctx context.Context, p Principal, o owned) (Changed, error) {

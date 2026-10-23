@@ -16,8 +16,9 @@ const Slug = "tenant.customers"
 var Sources = []string{"panel", "import", "online"}
 
 // LinkSources lists how a phone was proven before a record was linked to
-// the shared identity.
-var LinkSources = []string{"otp", "panel_login"}
+// the shared identity: a booking code, a panel sign-in code, a panel link
+// sent by SMS, or a number change confirmed with a code (TEC-910).
+var LinkSources = []string{"otp", "panel_login", "panel_link", "phone_change"}
 
 // Verification tells that the record is linked to a person who proved the
 // phone. The shared identity itself never leaves the platform.

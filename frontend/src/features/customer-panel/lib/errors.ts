@@ -9,6 +9,7 @@ export const REASON_KEYS: Record<string, string> = {
   business_unavailable: "customer_panel.reasons.business_unavailable",
   online_unavailable: "customer_panel.reasons.online_unavailable",
   services_changed: "customer_panel.reasons.services_changed",
+  sign_in_required: "customer_panel.reasons.sign_in_required",
 };
 
 const CONFLICT_KEYS: Record<string, string> = {
@@ -29,6 +30,10 @@ export function customerErrorMessage(t: Translate, error: unknown): string {
       return t("customer_panel.login.invalid_code");
     case "ACTION_NOT_ALLOWED":
       return t(REASON_KEYS[detail] ?? "customer_panel.errors.generic");
+    case "LINK_INVALID":
+      return t("customer_panel.link.invalid_description");
+    case "PHONE_IN_USE":
+      return t("customer_panel.phone_change.in_use");
     case "RATE_LIMITED":
       return t("customer_panel.errors.rate_limited");
     default:
@@ -41,6 +46,9 @@ export function customerErrorMessage(t: Translate, error: unknown): string {
   if (error.status === 429) return t("customer_panel.errors.rate_limited");
   if (error.isValidation) {
     const field = error.details[0]?.field;
+    if (field === "phone" && detail === "same") {
+      return t("customer_panel.phone_change.same");
+    }
     if (field === "phone") return t("customer_panel.login.invalid_phone");
     if (field === "code") return t("customer_panel.login.code_format");
   }

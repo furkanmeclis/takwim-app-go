@@ -39,3 +39,4 @@ cash_movements
 cash_closings
 sale_lines
 ledger_entries
+customer_visit_links

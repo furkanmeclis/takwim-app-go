@@ -116,6 +116,9 @@ type fixture struct {
 	exec                      func(sql string, args ...any)
 	count                     func(sql string, args ...any) int
 	huseyinPhone, zeynepPhone string
+	// extraPhones are removed from the platform tables after the test.
+	extraPhones []string
+	suffix      string
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -140,7 +143,7 @@ func newFixture(t *testing.T) *fixture {
 		}
 		return b.String()
 	}
-	f := &fixture{pool: pool, q: q, now: at(8, 0), sender: &capture{},
+	f := &fixture{pool: pool, q: q, now: at(8, 0), sender: &capture{}, suffix: digits(suffix),
 		huseyinPhone: "+90532" + digits(suffix)[:7], zeynepPhone: "+90533" + digits(suffix)[:7]}
 	newUser := func(name string) db.User {
 		u, err := q.CreateUser(ctx, db.CreateUserParams{
@@ -166,8 +169,10 @@ func newFixture(t *testing.T) *fixture {
 		bg := context.Background()
 		_, _ = pool.Exec(bg, "DELETE FROM organizations WHERE id = ANY($1)", []int64{f.orgA.ID, f.orgB.ID})
 		_, _ = pool.Exec(bg, "DELETE FROM users WHERE id = ANY($1)", []int64{f.owner.ID, other.ID})
-		_, _ = pool.Exec(bg, "DELETE FROM customer_otp_challenges WHERE phone_e164 = ANY($1)", []string{f.huseyinPhone, f.zeynepPhone})
-		_, _ = pool.Exec(bg, "DELETE FROM customer_identities WHERE phone_e164 = ANY($1)", []string{f.huseyinPhone, f.zeynepPhone})
+		phones := append([]string{f.huseyinPhone, f.zeynepPhone}, f.extraPhones...)
+		for _, table := range []string{"customer_otp_challenges", "customer_access_links", "customer_phone_releases", "customer_auth_events", "customer_identities"} {
+			_, _ = pool.Exec(bg, "DELETE FROM "+table+" WHERE phone_e164 = ANY($1)", phones)
+		}
 	})
 	f.exec = func(sql string, args ...any) {
 		t.Helper()
@@ -238,6 +243,7 @@ func newFixture(t *testing.T) *fixture {
 		Reservations: f.reservations, Availability: avail, Settings: f.settings,
 	}, log)
 	f.svc.SetClock(clock)
+	f.svc.SetTx(customersrepository.NewPostgres(pool, q))
 	h := handler.New(f.svc, nil)
 	mux := http.NewServeMux()
 	customerpanel.RegisterRoutes(mux, h)

@@ -14,6 +14,9 @@ import (
 const (
 	PurposeCustomerOTP       = "customer_otp"
 	PurposeCustomerPanelLink = "customer_panel_link"
+	// PurposeCustomerPhoneChange: the code that confirms a new number of a
+	// panel profile (TEC-910).
+	PurposeCustomerPhoneChange = "customer_phone_change"
 )
 
 // ErrUnavailable: no provider can deliver messages (callers answer 503 or

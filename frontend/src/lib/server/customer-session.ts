@@ -17,7 +17,10 @@ import {
  */
 const COOKIE_PATH = "/api/v1/customer";
 const VERIFY_PATH = "customer/auth/verify";
+const LINK_PATH = "customer/auth/link";
 const LOGOUT_PATH = "customer/auth/logout";
+/** Paths that open a session: a code or a single-use panel link. */
+const SESSION_PATHS = new Set([VERIFY_PATH, LINK_PATH]);
 
 export function customerCookieName() {
   return process.env.NODE_ENV === "production"
@@ -92,12 +95,14 @@ export async function proxyCustomer(
   const clientIp = clientIpFromHeaders(request.headers);
   if (clientIp) headers.set("X-Forwarded-For", clientIp);
   const userAgent = request.headers.get("user-agent");
-  if (userAgent && path === VERIFY_PATH) headers.set("User-Agent", userAgent);
+  const opensSession = SESSION_PATHS.has(path);
+  // The device list names devices by the user agent of the sign-in.
+  if (userAgent && opensSession) headers.set("User-Agent", userAgent);
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();
   if (idempotencyKey && request.method !== "GET") {
     headers.set("Idempotency-Key", idempotencyKey);
   }
-  if (token && path !== VERIFY_PATH) {
+  if (token && !opensSession) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
@@ -108,7 +113,7 @@ export async function proxyCustomer(
   });
 
   let responseBody: ArrayBuffer | string = result.body;
-  if (path === VERIFY_PATH && result.status === 200) {
+  if (opensSession && result.status === 200) {
     const envelope = parse(result.body);
     const access = envelope?.data?.access_token;
     if (envelope?.data && access) {

@@ -8,7 +8,10 @@ import {
 } from "@tanstack/react-query";
 
 import { customerPanelService } from "@/features/customer-panel/services/customer-panel.service";
-import type { CustomerListParams } from "@/features/customer-panel/types";
+import type {
+  CustomerListParams,
+  CustomerProfile,
+} from "@/features/customer-panel/types";
 
 export const customerPanelKeys = {
   all: ["customer-panel"] as const,
@@ -23,6 +26,7 @@ export const customerPanelKeys = {
     [...customerPanelKeys.all, "payments", params] as const,
   paymentSummary: () =>
     [...customerPanelKeys.all, "payments", "summary"] as const,
+  sessions: () => [...customerPanelKeys.all, "sessions"] as const,
 };
 
 /** The signed-in person; a 401 means there is no customer session. */
@@ -168,4 +172,78 @@ export function useReloadReservation(uuid: string) {
     queryClient.invalidateQueries({
       queryKey: customerPanelKeys.reservation(uuid),
     });
+}
+
+/** Opens a panel session from a single-use panel link. */
+export function useRedeemPanelLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => customerPanelService.redeemLink(token),
+    onSuccess: (session) => {
+      queryClient.removeQueries({ queryKey: customerPanelKeys.all });
+      queryClient.setQueryData(customerPanelKeys.me(), session.profile);
+    },
+  });
+}
+
+/** The person's signed-in devices. */
+export function useCustomerSessions() {
+  return useQuery({
+    queryKey: customerPanelKeys.sessions(),
+    queryFn: customerPanelService.sessions,
+    retry: false,
+  });
+}
+
+/** Signs one device out; the list and the session count refresh. */
+export function useRevokeCustomerSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (uuid: string) => customerPanelService.revokeSession(uuid),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: customerPanelKeys.sessions(),
+      });
+      void queryClient.invalidateQueries({ queryKey: customerPanelKeys.me() });
+    },
+  });
+}
+
+export function useStartPhoneChange() {
+  return useMutation({
+    mutationFn: (phone: string) => customerPanelService.startPhoneChange(phone),
+  });
+}
+
+/**
+ * After a number change or a reassignment report the profile answer
+ * replaces the cached one and every other panel query reloads (other
+ * devices are signed out, history windows changed).
+ */
+function useProfileChanged() {
+  const queryClient = useQueryClient();
+  return (profile: CustomerProfile) => {
+    queryClient.setQueryData(customerPanelKeys.me(), profile);
+    void queryClient.invalidateQueries({
+      queryKey: customerPanelKeys.all,
+      predicate: (query) => query.queryKey[1] !== "me",
+    });
+  };
+}
+
+export function useVerifyPhoneChange() {
+  const changed = useProfileChanged();
+  return useMutation({
+    mutationFn: ({ phone, code }: { phone: string; code: string }) =>
+      customerPanelService.verifyPhoneChange(phone, code),
+    onSuccess: changed,
+  });
+}
+
+export function useReportReassigned() {
+  const changed = useProfileChanged();
+  return useMutation({
+    mutationFn: (keep: string[]) => customerPanelService.reportReassigned(keep),
+    onSuccess: changed,
+  });
 }

@@ -1,6 +1,7 @@
 import { apiConfig } from "@/config/api";
 import type {
   CustomerAvailability,
+  CustomerDeviceList,
   CustomerListParams,
   CustomerPaymentSummary,
   CustomerProfile,
@@ -78,6 +79,11 @@ export const customerPanelService = {
     customerRequest<CustomerSession>("POST", "/auth/verify", {
       body: { phone, code },
     }),
+  /** Exchanges a panel link token (from the URL fragment) for a session. */
+  redeemLink: (token: string) =>
+    customerRequest<CustomerSession>("POST", "/auth/link", {
+      body: { token },
+    }),
   logout: (everywhere: boolean) =>
     customerRequest<void>("POST", "/auth/logout", { body: { everywhere } }),
   me: () => customerRequest<CustomerProfile>("GET", "/me"),
@@ -114,4 +120,28 @@ export const customerPanelService = {
     }),
   paymentSummary: () =>
     customerRequest<CustomerPaymentSummary>("GET", "/payments/summary"),
+  sessions: () => customerRequest<CustomerDeviceList>("GET", "/sessions"),
+  revokeSession: (uuid: string) =>
+    customerRequest<void>("DELETE", `/sessions/${uuid}`),
+  startPhoneChange: (phone: string) =>
+    customerRequest<CustomerSignInStart>("POST", "/phone/start", {
+      body: { phone },
+    }),
+  verifyPhoneChange: (phone: string, code: string) =>
+    customerRequest<CustomerProfile>("POST", "/phone/verify", {
+      body: { phone, code },
+    }),
+  reportReassigned: (keepBusinesses: string[]) =>
+    customerRequest<CustomerProfile>("POST", "/phone/reassigned", {
+      body: { keep_businesses: keepBusinesses },
+    }),
+  /** Visit link: the token is the only key; no session is involved. */
+  visit: (token: string) =>
+    customerRequest<CustomerReservation>("POST", "/visit", {
+      body: { token },
+    }),
+  visitCancel: (token: string, expectedVersion: number) =>
+    customerRequest<CustomerReservation>("POST", "/visit/cancel", {
+      body: { token, expected_version: expectedVersion },
+    }),
 };

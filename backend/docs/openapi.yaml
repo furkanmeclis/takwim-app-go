@@ -10519,7 +10519,10 @@ paths:
         record with the phone (or the phone was verified before). The answer
         is the same for every valid phone, whether a code went out, the
         60 second cooldown or the hourly cap (5 codes) applied, or the phone
-        is unknown. Limits: 10 per IP and 5 per phone in 10 minutes.
+        is unknown. Codes of one phone: 60 second cooldown, 5 an hour and 10
+        a day. An address that asked codes for 20 different phones within an
+        hour gets no more codes for an hour (same answer). Limits: 10 per IP
+        and 5 per phone in 10 minutes.
       security: []
       requestBody:
         required: true
@@ -10837,6 +10840,252 @@ paths:
               schema:
                 $ref: "#/components/schemas/EnvelopeCustomerPaymentSummary"
         "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/customer/auth/link:
+    post:
+      tags: [Customer panel]
+      operationId: redeemCustomerPanelLink
+      summary: Exchange a panel link for a panel session
+      description: |
+        The SMS after an online booking carries a single-use panel link,
+        `takwim.link/panel/l#<token>`. The token sits after `#`, so it never
+        reaches a server log; the page (or the mobile app) sends it here in
+        the body. A link works once, for 24 hours; an unknown, expired or
+        used link answers `400 LINK_INVALID` and the person signs in with a
+        code instead. Only a keyed hash of the token is stored. On success
+        the answer is the same as `auth/verify` (session method `link`,
+        link source `panel_link`). Limit: 10 per IP in 10 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token: { type: string, minLength: 32, maxLength: 32 }
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerSession"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/sessions:
+    get:
+      tags: [Customer panel]
+      operationId: listCustomerSessions
+      summary: The person's signed-in devices
+      description: Live panel sessions of the identity, most recently used first; `current` marks this one.
+      security:
+        - customerAuth: []
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerDeviceList"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/sessions/{uuid}:
+    delete:
+      tags: [Customer panel]
+      operationId: revokeCustomerSession
+      summary: Sign one device out
+      description: The session ends at once. Another person's session or an unknown id answers `404`.
+      security:
+        - customerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Signed out }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/phone/start:
+    post:
+      tags: [Customer panel]
+      operationId: startCustomerPhoneChange
+      summary: Send a code to the new number
+      description: |
+        Number change, step 1. The code is bound to the signed-in profile
+        and works only for `phone/verify`. Cooldown and caps of the target
+        number apply as in `auth/start`, plus 5 number change codes a day
+        per profile (past it the answer is the same, nothing is sent). The
+        current number answers `400` with `phone` / `same`.
+      security:
+        - customerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              additionalProperties: false
+              properties:
+                phone: { type: string }
+      responses:
+        "202":
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerSignInStart"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/phone/verify:
+    post:
+      tags: [Customer panel]
+      operationId: verifyCustomerPhoneChange
+      summary: Move the profile to the confirmed number
+      description: |
+        Number change, step 2. The profile keeps its identity and every
+        visit it sees. The old number is released: its next holder starts
+        with an empty panel, and the records proven with the old number stop
+        showing visits booked after the change. Every other session of the
+        profile ends; this one continues on the new number. A number that
+        has its own Takwim profile answers `409 PHONE_IN_USE` (profiles are
+        never merged on a number). A wrong code answers `400 OTP_INVALID`.
+      security:
+        - customerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              additionalProperties: false
+              properties:
+                phone: { type: string }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: Profile on the new number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerProfile"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/phone/reassigned:
+    post:
+      tags: [Customer panel]
+      operationId: reportCustomerNumberReassigned
+      summary: Report that this number was recently given to me
+      description: |
+        For a person who received a recycled number and sees somebody
+        else's visits. Every business except `keep_businesses` shows only
+        visits booked from now on (its earlier history and the name it
+        keeps are hidden); records of the number found later open the same
+        way; every other session of the profile (the previous holder's
+        devices) ends. Nothing is deleted: the businesses keep their
+        records. A business that is not in the profile answers `400` with
+        `keep_businesses` / `unknown`.
+      security:
+        - customerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                keep_businesses:
+                  type: array
+                  description: Businesses whose history is the person's own.
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerProfile"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/visit:
+    post:
+      tags: [Customer panel]
+      operationId: getCustomerVisit
+      summary: Open one visit by its visit link
+      description: |
+        A visit link (`takwim.link/panel/v#<token>`, sent with confirmation
+        and cancel messages) opens exactly one reservation: the panel detail
+        of it, with `actions.reschedule` refused (`sign_in_required`). It is
+        a separate token type: it opens no panel session and no other visit.
+        It works until a day after the visit ends. An unknown, expired or
+        revoked link answers `400 LINK_INVALID`. Limit: 30 per IP in 10
+        minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token: { type: string, minLength: 32, maxLength: 32 }
+      responses:
+        "200":
+          description: Visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/visit/cancel:
+    post:
+      tags: [Customer panel]
+      operationId: cancelCustomerVisit
+      summary: Cancel the visit of a visit link
+      description: The business's cancel rules apply exactly as in the panel (`409 ACTION_NOT_ALLOWED`, `stale`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token: { type: string, minLength: 32, maxLength: 32 }
+                expected_version: { type: integer }
+      responses:
+        "200":
+          description: Cancelled visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
 components:
   securitySchemes:
@@ -17537,15 +17786,52 @@ components:
 
     CustomerBusiness:
       type: object
-      required: [uuid, slug, name, first_name, last_name, linked_at, reservation_count]
+      required: [uuid, slug, name, first_name, last_name, linked_at, reservation_count, history_from, history_until]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
-        first_name: { type: string, description: The name this business keeps for the person. }
+        first_name: { type: string, description: "The name this business keeps for the person; empty while `history_from` is set (it may be the previous holder's)." }
         last_name: { type: string }
         linked_at: { type: string, format: date-time }
-        reservation_count: { type: integer, format: int64 }
+        reservation_count: { type: integer, format: int64, description: Visits shown (inside the history window). }
+        history_from:
+          type: [string, "null"]
+          format: date-time
+          description: Only visits booked from this moment are shown (the number was reassigned to the person, or the record is older than the number's last change of hands).
+        history_until:
+          type: [string, "null"]
+          format: date-time
+          description: Only visits booked before this moment are shown (the person moved to another number).
+
+    CustomerDevice:
+      type: object
+      required: [uuid, current, method, device, ip, created_at, last_seen_at, expires_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        current: { type: boolean, description: The session of this request. }
+        method: { type: string, enum: [code, link], description: How the session was opened. }
+        device: { type: string, description: "Browser and system from the user agent (\"Chrome · Android\"); empty when unknown." }
+        ip: { type: string, description: "Masked address of the sign-in (\"85.105.*.*\")." }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: The earlier of the idle and the hard expiry. }
+
+    CustomerDeviceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerDevice" }
+
+    EnvelopeCustomerDeviceList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerDeviceList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     CustomerProfile:
       type: object
@@ -17640,7 +17926,7 @@ components:
         until: { type: [string, "null"], format: date-time, description: The last moment the action is allowed. }
         reason:
           type: [string, "null"]
-          enum: [status, cutoff, business_unavailable, online_unavailable, services_changed, null]
+          enum: [status, cutoff, business_unavailable, online_unavailable, services_changed, sign_in_required, null]
 
     CustomerReservation:
       allOf:

@@ -24,4 +24,14 @@ func RegisterRoutes(mux *http.ServeMux, h *customerpanelhandler.Handler) {
 	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/reschedule", h.Authenticate(h.Reschedule))
 	mux.HandleFunc("GET /v1/customer/payments", h.Authenticate(h.Payments))
 	mux.HandleFunc("GET /v1/customer/payments/summary", h.Authenticate(h.PaymentSummary))
+	// TEC-910: panel links, devices, number change, reassigned numbers.
+	mux.HandleFunc("POST /v1/customer/auth/link", h.Link)
+	mux.HandleFunc("GET /v1/customer/sessions", h.Authenticate(h.Sessions))
+	mux.HandleFunc("DELETE /v1/customer/sessions/{uuid}", h.Authenticate(h.RevokeSession))
+	mux.HandleFunc("POST /v1/customer/phone/start", h.Authenticate(h.PhoneStart))
+	mux.HandleFunc("POST /v1/customer/phone/verify", h.Authenticate(h.PhoneVerify))
+	mux.HandleFunc("POST /v1/customer/phone/reassigned", h.Authenticate(h.Reassigned))
+	// Visit links: one reservation, no session. The token is the only key.
+	mux.HandleFunc("POST /v1/customer/visit", h.Visit)
+	mux.HandleFunc("POST /v1/customer/visit/cancel", h.VisitCancel)
 }
