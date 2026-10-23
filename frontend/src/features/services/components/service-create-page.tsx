@@ -28,6 +28,12 @@ export function ServiceCreatePage() {
   const [selectedBranch] = useSelectedBranch(slug);
   const defaults = serviceFormDefaults(undefined, {
     staffMode: sector?.capacity.staff as StaffMode | undefined,
+    // Where every booking needs a resource (table, wash bay) the new
+    // service asks for one, like the API default.
+    resourceKinds:
+      sector?.capacity.resource_required && sector.capacity.resources[0]
+        ? [sector.capacity.resources[0]]
+        : [],
     branchUuids: selectedBranch ? [selectedBranch] : [],
   });
 

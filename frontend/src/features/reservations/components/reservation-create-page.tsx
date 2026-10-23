@@ -2,6 +2,7 @@
 
 import {
   CalendarClock,
+  Car,
   ListChecks,
   MapPin,
   MessageSquareText,
@@ -37,7 +38,11 @@ import { customersService } from "@/features/customers/services/customers.servic
 import type { Customer } from "@/features/customers/types";
 import { CustomerQuickCreateDialog } from "@/features/reservations/components/customer-quick-create-dialog";
 import { SlotPicker } from "@/features/reservations/components/slot-picker";
-import { MAX_LINES } from "@/features/reservations/constants";
+import {
+  MAX_LINES,
+  VEHICLE_TYPE_KEYS,
+  VEHICLE_TYPES,
+} from "@/features/reservations/constants";
 import { useCreateReservation } from "@/features/reservations/hooks/use-reservations";
 import { useSlotSearch } from "@/features/reservations/hooks/use-slot-search";
 import { useZoneOptions } from "@/features/reservations/hooks/use-zone-options";
@@ -48,8 +53,10 @@ import {
   ANY_STAFF,
   ANY_ZONE,
   createBookingSchema,
+  NO_VEHICLE,
   toLineInputs,
   toPartySize,
+  toVehicle,
   toZone,
   type BookingFormValues,
 } from "@/features/reservations/schemas/reservation-forms";
@@ -83,8 +90,11 @@ export function ReservationCreatePage() {
   const create = useCreateReservation();
   const branches = useAccessibleBranches();
   const [selectedBranch] = useSelectedBranch(slug);
+  const { sector } = useSector();
   // Restaurants book a table for a party: guests and area come first.
-  const party = Boolean(useSector().sector?.capacity.party_size);
+  const party = Boolean(sector?.capacity.party_size);
+  // Car washes ask for the vehicle (type and plate).
+  const vehicle = Boolean(sector?.flow.includes("vehicle"));
   const schema = useMemo(() => createBookingSchema(t, { party }), [t, party]);
   const zone = organization?.timezone ?? undefined;
 
@@ -115,6 +125,8 @@ export function ReservationCreatePage() {
       lines: [{ ...EMPTY_LINE, staff_uuid: preset.staff || ANY_STAFF }],
       party_size: "",
       zone: ANY_ZONE,
+      vehicle_type: NO_VEHICLE,
+      vehicle_plate: "",
       date: preset.date || dateKeyInZone(new Date(), zone),
       starts_at: "",
       customer_note: "",
@@ -163,6 +175,7 @@ export function ReservationCreatePage() {
                 lines: toLineInputs(values.lines),
                 party_size: toPartySize(values.party_size),
                 zone: toZone(values.zone),
+                vehicle: toVehicle(values.vehicle_type, values.vehicle_plate),
                 starts_at: values.starts_at,
                 customer_note: values.customer_note || undefined,
                 internal_note: values.internal_note || undefined,
@@ -175,6 +188,7 @@ export function ReservationCreatePage() {
             {(form) => (
               <BookingFields
                 party={party}
+                vehicle={vehicle}
                 preferredTime={preset.at}
                 branchOptions={(branches.data?.items ?? []).map((branch) => ({
                   value: branch.uuid,
@@ -195,6 +209,7 @@ export function ReservationCreatePage() {
 
 function BookingFields({
   party,
+  vehicle,
   preferredTime,
   branchOptions,
   isSubmitting,
@@ -202,6 +217,8 @@ function BookingFields({
 }: {
   /** The sector books by party size (restaurant flow). */
   party: boolean;
+  /** The sector asks for the vehicle (car wash flow). */
+  vehicle: boolean;
   /** "HH:MM" to pick once its slot is offered (calendar click). */
   preferredTime: string;
   branchOptions: { value: string; label: string }[];
@@ -242,6 +259,13 @@ function BookingFields({
         }),
       })),
     [services.data?.items, t],
+  );
+
+  // A group class (gym) books seats of a session: how many people.
+  const group = (services.data?.items ?? []).some(
+    (service) =>
+      service.group_capacity != null &&
+      lines.some((line) => line.service_uuid === service.uuid),
   );
 
   const { query, ready } = useSlotSearch({
@@ -318,6 +342,15 @@ function BookingFields({
           label: t("reservations.form.section_services"),
           icon: ListChecks,
         },
+        ...(vehicle
+          ? [
+              {
+                key: "vehicle",
+                label: t("reservations.form.section_vehicle"),
+                icon: Car,
+              },
+            ]
+          : []),
         {
           key: "time",
           label: t("reservations.form.section_time"),
@@ -329,7 +362,7 @@ function BookingFields({
           icon: MessageSquareText,
         },
       ]),
-    [t],
+    [t, vehicle],
   );
 
   return (
@@ -424,22 +457,58 @@ function BookingFields({
         </div>
       </FormSection>
 
+      {vehicle ? (
+        <FormSection
+          id={sections.id("vehicle")}
+          title={t("reservations.form.section_vehicle")}
+          description={t("reservations.form.section_vehicle_desc")}
+          columns={2}
+        >
+          <AppSelect
+            name="vehicle_type"
+            label={t("reservations.fields.vehicle_type")}
+            options={[
+              {
+                value: NO_VEHICLE,
+                label: t("reservations.fields.vehicle_none"),
+              },
+              ...VEHICLE_TYPES.map((type) => ({
+                value: type,
+                label: t(VEHICLE_TYPE_KEYS[type]),
+              })),
+            ]}
+          />
+          <AppInput
+            name="vehicle_plate"
+            label={t("reservations.fields.vehicle_plate")}
+            description={t("reservations.fields.vehicle_plate_hint")}
+            startIcon={Car}
+            autoComplete="off"
+            className="uppercase"
+          />
+        </FormSection>
+      ) : null}
+
       <FormSection
         id={sections.id("time")}
         title={t("reservations.form.section_time")}
         description={t("reservations.form.section_time_desc")}
       >
-        {party ? (
+        {party || group ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <AppInput
               name="party_size"
               label={t("reservations.fields.party_size")}
-              description={t("reservations.fields.party_size_hint")}
+              description={t(
+                party
+                  ? "reservations.fields.party_size_hint"
+                  : "reservations.fields.seats_hint",
+              )}
               startIcon={Users}
               inputMode="numeric"
               autoComplete="off"
             />
-            {zoneOptions.length > 0 ? (
+            {party && zoneOptions.length > 0 ? (
               <AppSelect
                 name="zone"
                 label={t("reservations.fields.zone")}

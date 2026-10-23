@@ -27,14 +27,14 @@ SELECT currency::TEXT FROM organizations WHERE id = sqlc.arg(organization_id);
 INSERT INTO reservations (
     organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status,
     confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields,
-    customer_note, internal_note, created_by, party_size, zone
+    customer_note, internal_note, created_by, party_size, zone, vehicle_type, vehicle_plate
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(number), sqlc.arg(branch_id), sqlc.arg(customer_id), sqlc.narg(hold_id),
     sqlc.arg(status), sqlc.arg(approval_mode), sqlc.arg(approval_status), sqlc.arg(confirmation_status),
     sqlc.arg(payment_status), sqlc.arg(source), sqlc.arg(starts_at), sqlc.arg(ends_at), sqlc.arg(total_price),
     sqlc.arg(currency), sqlc.arg(custom_fields), sqlc.arg(customer_note), sqlc.arg(internal_note), sqlc.narg(created_by),
-    sqlc.narg(party_size), sqlc.arg(zone)
+    sqlc.narg(party_size), sqlc.arg(zone), sqlc.narg(vehicle_type), sqlc.arg(vehicle_plate)
 )
 RETURNING *;
 
@@ -146,6 +146,7 @@ WHERE r.organization_id = sqlc.arg(organization_id)
     OR r.number::text = sqlc.narg(q)
     OR (c.first_name || ' ' || c.last_name) ILIKE '%' || sqlc.narg(q) || '%'
     OR (sqlc.narg(q_digits)::text IS NOT NULL AND c.phone_e164 LIKE '%' || sqlc.narg(q_digits) || '%')
+    OR (r.vehicle_plate <> '' AND replace(r.vehicle_plate, ' ', '') ILIKE '%' || replace(sqlc.narg(q), ' ', '') || '%')
   )
 ORDER BY
   CASE WHEN sqlc.arg(sort_field)::text = 'starts_at' AND NOT sqlc.arg(sort_desc)::boolean THEN r.starts_at END ASC,
@@ -190,6 +191,7 @@ WHERE r.organization_id = sqlc.arg(organization_id)
     OR r.number::text = sqlc.narg(q)
     OR (c.first_name || ' ' || c.last_name) ILIKE '%' || sqlc.narg(q) || '%'
     OR (sqlc.narg(q_digits)::text IS NOT NULL AND c.phone_e164 LIKE '%' || sqlc.narg(q_digits) || '%')
+    OR (r.vehicle_plate <> '' AND replace(r.vehicle_plate, ' ', '') ILIKE '%' || replace(sqlc.narg(q), ' ', '') || '%')
   );
 
 -- name: ListReservationBranchFacets :many

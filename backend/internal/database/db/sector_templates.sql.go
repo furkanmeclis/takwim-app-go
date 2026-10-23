@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createTemplateResource = `-- name: CreateTemplateResource :one
@@ -59,23 +60,25 @@ func (q *Queries) CreateTemplateResource(ctx context.Context, arg CreateTemplate
 const createTemplateService = `-- name: CreateTemplateService :one
 
 INSERT INTO services (
-    organization_id, name, description, duration_minutes, price, payment_mode, staff_mode, resource_kinds, show_online
+    organization_id, name, description, duration_minutes, price, payment_mode, staff_mode, resource_kinds, show_online,
+    group_capacity
 )
 VALUES (
     $1, $2, $3, $4, 0,
-    $5, $6, $7::TEXT[], TRUE
+    $5, $6, $7::TEXT[], TRUE, $8
 )
 RETURNING id, uuid
 `
 
 type CreateTemplateServiceParams struct {
-	OrganizationID  int64    `json:"organization_id"`
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	DurationMinutes int32    `json:"duration_minutes"`
-	PaymentMode     string   `json:"payment_mode"`
-	StaffMode       string   `json:"staff_mode"`
-	ResourceKinds   []string `json:"resource_kinds"`
+	OrganizationID  int64       `json:"organization_id"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description"`
+	DurationMinutes int32       `json:"duration_minutes"`
+	PaymentMode     string      `json:"payment_mode"`
+	StaffMode       string      `json:"staff_mode"`
+	ResourceKinds   []string    `json:"resource_kinds"`
+	GroupCapacity   pgtype.Int4 `json:"group_capacity"`
 }
 
 type CreateTemplateServiceRow struct {
@@ -93,6 +96,7 @@ func (q *Queries) CreateTemplateService(ctx context.Context, arg CreateTemplateS
 		arg.PaymentMode,
 		arg.StaffMode,
 		arg.ResourceKinds,
+		arg.GroupCapacity,
 	)
 	var i CreateTemplateServiceRow
 	err := row.Scan(&i.ID, &i.Uuid)

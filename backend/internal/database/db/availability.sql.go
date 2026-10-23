@@ -55,7 +55,7 @@ func (q *Queries) GetAvailabilityBranch(ctx context.Context, arg GetAvailability
 
 const getAvailabilityService = `-- name: GetAvailabilityService :one
 SELECT s.id, s.uuid, s.name, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes,
-       s.staff_mode, s.resource_kinds, s.show_online, s.is_active,
+       s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.group_capacity,
        sb.id AS offer_id, sb.duration_minutes AS offer_duration_minutes, sb.is_active AS offer_is_active
 FROM services s
 LEFT JOIN service_branches sb
@@ -80,6 +80,7 @@ type GetAvailabilityServiceRow struct {
 	ResourceKinds        []string    `json:"resource_kinds"`
 	ShowOnline           bool        `json:"show_online"`
 	IsActive             bool        `json:"is_active"`
+	GroupCapacity        pgtype.Int4 `json:"group_capacity"`
 	OfferID              pgtype.Int8 `json:"offer_id"`
 	OfferDurationMinutes pgtype.Int4 `json:"offer_duration_minutes"`
 	OfferIsActive        pgtype.Bool `json:"offer_is_active"`
@@ -100,6 +101,7 @@ func (q *Queries) GetAvailabilityService(ctx context.Context, arg GetAvailabilit
 		&i.ResourceKinds,
 		&i.ShowOnline,
 		&i.IsActive,
+		&i.GroupCapacity,
 		&i.OfferID,
 		&i.OfferDurationMinutes,
 		&i.OfferIsActive,

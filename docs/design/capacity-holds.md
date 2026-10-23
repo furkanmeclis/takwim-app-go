@@ -48,9 +48,14 @@ The slot engine ([availability.md](./availability.md)) says which starts are fre
 
 Confirming is not an HTTP action: the reservation flow confirms inside its own transaction.
 
-## Not yet
+## Group class seats (TEC-904)
 
-Group class quotas (several customers in one session) come with the classes module: a session will hold a counted capacity instead of an exclusive one. Party sizes on restaurant tables come with restaurant bookings.
+A booking of a group class names its session on the hold: `session_service_id` (with `branch_id` and `starts_at`), the `seats` it takes and the `session_seats` of the class when it was booked (migration `000056_group_sessions_vehicle`). Two database rules keep the last seat from going to two writers (A03), with or without the organization lock:
+
+1. **Seat count.** A trigger on `capacity_holds` takes a transaction advisory lock of the session and sums the seats of its active commitments; more than `session_seats` raises an exclusion violation (`ErrSlotTaken`).
+2. **Shared holders.** A trigger fills `capacity_allocations.session_key` from the hold. The exclusion constraints compare `COALESCE(session_key, 'hold:' || hold_id)` with `<>`: allocations of one session may share the trainer and the area; any other pair of one holder still never overlaps.
+
+Releasing or expiring a booking frees its seats with its rows. `TestGymTemplate` runs eight parallel writers for three seats, with and without the lock, and gets exactly three winners.
 
 ## Tests
 

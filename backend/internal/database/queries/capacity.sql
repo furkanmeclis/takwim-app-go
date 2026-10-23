@@ -25,12 +25,13 @@ ORDER BY organization_id;
 
 -- name: CreateCapacityHold :one
 INSERT INTO capacity_holds (
-    organization_id, branch_id, kind, reason, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by
+    organization_id, branch_id, kind, reason, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by,
+    session_service_id, seats, session_seats
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(branch_id), sqlc.arg(kind), sqlc.narg(reason), sqlc.arg(channel),
     sqlc.arg(starts_at), sqlc.arg(ends_at), sqlc.narg(expires_at), sqlc.narg(ref_type), sqlc.narg(ref_uuid),
-    sqlc.narg(created_by)
+    sqlc.narg(created_by), sqlc.narg(session_service_id), sqlc.narg(seats), sqlc.narg(session_seats)
 )
 RETURNING *;
 
@@ -102,3 +103,23 @@ WHERE a.organization_id = sqlc.arg(organization_id)
   AND h.id <> sqlc.arg(exclude_hold_id)
   AND (a.staff_id = ANY(sqlc.arg(staff_ids)::BIGINT[]) OR a.resource_id = ANY(sqlc.arg(resource_ids)::BIGINT[]))
   AND a.period && tstzrange(sqlc.arg(since)::TIMESTAMPTZ, sqlc.arg(until)::TIMESTAMPTZ, '[)');
+
+-- name: ListGroupSessionHolds :many
+-- TEC-904: the bookings of group sessions of the given services in a
+-- branch starting in [since, until): active holds that have not lapsed and
+-- confirmed bookings, with the seats each takes and what it holds (the
+-- session's trainer and area). exclude_hold_id leaves one out (0 = none).
+SELECT h.id, h.session_service_id::BIGINT AS service_id, h.starts_at, h.seats::INT AS seats,
+       COALESCE((SELECT array_agg(a.staff_id ORDER BY a.id) FROM capacity_allocations a
+                 WHERE a.organization_id = h.organization_id AND a.hold_id = h.id AND a.staff_id IS NOT NULL),
+                '{}')::BIGINT[] AS staff_ids,
+       COALESCE((SELECT array_agg(a.resource_id ORDER BY a.id) FROM capacity_allocations a
+                 WHERE a.organization_id = h.organization_id AND a.hold_id = h.id AND a.resource_id IS NOT NULL),
+                '{}')::BIGINT[] AS resource_ids
+FROM capacity_holds h
+WHERE h.organization_id = sqlc.arg(organization_id) AND h.branch_id = sqlc.arg(branch_id)
+  AND h.session_service_id = ANY(sqlc.arg(service_ids)::BIGINT[])
+  AND h.status = 'active' AND (h.expires_at IS NULL OR h.expires_at > sqlc.arg(now))
+  AND h.id <> sqlc.arg(exclude_hold_id)
+  AND h.starts_at >= sqlc.arg(since) AND h.starts_at < sqlc.arg(until)
+ORDER BY h.starts_at, h.id;

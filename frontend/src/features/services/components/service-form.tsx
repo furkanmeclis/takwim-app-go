@@ -20,13 +20,16 @@ import { useResourceKinds } from "@/features/resources/lib/kinds";
 import {
   MAX_BUFFER,
   MAX_DURATION,
+  MAX_GROUP_CAPACITY,
   MIN_DURATION,
+  MIN_GROUP_CAPACITY,
   PAYMENT_MODE_LABEL_KEYS,
   PAYMENT_MODES,
   STAFF_MODE_LABEL_KEYS,
   STAFF_MODES,
   UNCATEGORIZED,
 } from "@/features/services/constants";
+import { useSector } from "@/features/sectors/hooks/use-sector";
 import { useServiceCategories } from "@/features/services/hooks/use-services";
 import {
   createServiceFormSchema,
@@ -63,6 +66,12 @@ export function ServiceForm({
   const categories = useServiceCategories();
   const branches = useAccessibleBranches();
   const kinds = useResourceKinds();
+  const { sector } = useSector();
+  // Group classes (seats per session) belong to sectors with group
+  // sessions (gym); a service that already is one keeps the field.
+  const groupSessions =
+    Boolean(sector?.capacity.group_sessions) ||
+    defaultValues.group_capacity !== "";
 
   const categoryOptions = useMemo(
     () => [
@@ -242,6 +251,17 @@ export function ServiceForm({
               placeholder={t("services.fields.resource_kinds_placeholder")}
               emptyText={t("services.fields.resource_kinds_empty")}
             />
+            {groupSessions ? (
+              <AppInput
+                name="group_capacity"
+                type="number"
+                min={MIN_GROUP_CAPACITY}
+                max={MAX_GROUP_CAPACITY}
+                label={t("services.fields.group_capacity")}
+                description={t("services.fields.group_capacity_hint")}
+                placeholder={t("services.fields.group_capacity_placeholder")}
+              />
+            ) : null}
             {mode === "create" ? (
               <AppMultiCombobox
                 name="branch_uuids"

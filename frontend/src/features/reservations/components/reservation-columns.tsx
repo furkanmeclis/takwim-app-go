@@ -19,7 +19,11 @@ import {
   ReservationRowActions,
   type ReservationRowActionHandlers,
 } from "@/features/reservations/components/reservation-row-actions";
-import { partyLabel, sourceLabel } from "@/features/reservations/lib/labels";
+import {
+  partyLabel,
+  sourceLabel,
+  vehicleLabel,
+} from "@/features/reservations/lib/labels";
 import type {
   ReservationFacets,
   ReservationListItem,
@@ -54,7 +58,9 @@ export function useReservationColumns({ handlers, facets }: Options) {
   const { t, locale } = useLocale();
   const { organization } = useTenant();
   const zone = organization?.timezone ?? undefined;
-  const party = Boolean(useSector().sector?.capacity.party_size);
+  const { sector } = useSector();
+  const party = Boolean(sector?.capacity.party_size);
+  const vehicle = Boolean(sector?.flow.includes("vehicle"));
 
   return useMemo(() => {
     const facetOptions = (list?: ReservationFacets["branch"]) =>
@@ -119,6 +125,14 @@ export function useReservationColumns({ handlers, facets }: Options) {
         // Shown where the sector books by party size (restaurants).
         defaultHidden: !party,
         cell: ({ row }) => partyLabel(t, row.original) || "—",
+      }),
+      createColumn<ReservationListItem>({
+        accessorKey: "vehicle",
+        labelKey: "reservations.columns.vehicle",
+        enableSorting: false,
+        // Shown where the sector asks for the vehicle (car washes).
+        defaultHidden: !vehicle,
+        cell: ({ row }) => vehicleLabel(t, row.original) || "—",
       }),
       createColumn<ReservationListItem>({
         accessorKey: "staff",
@@ -216,5 +230,14 @@ export function useReservationColumns({ handlers, facets }: Options) {
         ),
       }),
     ] as ColumnDef<ReservationListItem, unknown>[];
-  }, [facets?.branch, facets?.staff, handlers, locale, party, t, zone]);
+  }, [
+    facets?.branch,
+    facets?.staff,
+    handlers,
+    locale,
+    party,
+    t,
+    vehicle,
+    zone,
+  ]);
 }

@@ -103,6 +103,24 @@ type Line struct {
 	StaffDuration map[int64]time.Duration
 	// ResourceKinds are needed one of each for the line's held time.
 	ResourceKinds []string
+	// Seats > 0 makes the line a group class (TEC-904): every start is one
+	// session with this many seats. The first booking of a session holds
+	// its staff member and resources; later ones join it (Request.Sessions)
+	// while seats are left. The booking takes Request.PartySize seats (at
+	// least one); resources are not sized to the party.
+	Seats int
+}
+
+// Session is a running group session of a line: its bookings share the
+// staff member and resources of the first one.
+type Session struct {
+	// Key is the line key (service), Start the session start.
+	Key         string
+	Start       time.Time
+	StaffID     int64
+	ResourceIDs []int64
+	// Taken is the number of seats already booked.
+	Taken int
 }
 
 // Request is one availability question.
@@ -135,6 +153,8 @@ type Request struct {
 	Combine   bool
 	// Zone narrows the resources to one area (the customer's choice).
 	Zone string
+	// Sessions are the running group sessions of the group lines.
+	Sessions []Session
 }
 
 // Assignment is who and what serves one line of a slot.
@@ -148,6 +168,9 @@ type Assignment struct {
 	// StaffID is 0 when the line runs without a staff member.
 	StaffID     int64
 	ResourceIDs []int64
+	// SeatsLeft is, for a group line, the free seats of the session before
+	// this booking (0 for other lines).
+	SeatsLeft int
 }
 
 // Slot is one bookable start with a plan for every line.
@@ -202,10 +225,17 @@ type planner struct {
 	resources map[string][]*Resource
 	// load is the booked time of each person on the day being planned.
 	load map[int64]time.Duration
+	// sessions are the running group sessions by line key and start.
+	sessions map[sessionKey]*Session
 	// failed memoises (line, start, open interval) triples that have no
 	// plan: feasibility of the remaining lines depends only on them, because
 	// a booking never conflicts with itself.
 	failed map[failKey]bool
+}
+
+type sessionKey struct {
+	key   string
+	start int64
 }
 
 type failKey struct {
@@ -227,7 +257,12 @@ func newPlanner(req Request) *planner {
 		loc:       loc,
 		staff:     make(map[int64]*Staff, len(req.Staff)),
 		resources: map[string][]*Resource{},
+		sessions:  map[sessionKey]*Session{},
 		failed:    map[failKey]bool{},
+	}
+	for i := range req.Sessions {
+		s := &req.Sessions[i]
+		p.sessions[sessionKey{key: s.Key, start: s.Start.UnixNano()}] = s
 	}
 	for i := range req.Staff {
 		p.staff[req.Staff[i].ID] = &req.Staff[i]
@@ -312,7 +347,9 @@ func (p *planner) day(d time.Time) Day {
 // working that day.
 func (p *planner) staffed(window Interval) bool {
 	for _, l := range p.req.Lines {
-		if l.StaffMode != StaffRequired {
+		// A group class with running sessions can be joined even when its
+		// trainers are fully booked by those sessions.
+		if l.StaffMode != StaffRequired || (l.Seats > 0 && len(p.sessions) > 0) {
 			continue
 		}
 		found := false
@@ -402,6 +439,13 @@ func (p *planner) assign(i int, t time.Time, open Interval, out []Assignment) bo
 		return false
 	}
 	l := p.req.Lines[i]
+	if l.Seats > 0 {
+		if p.assignGroup(i, l, t, open, out) {
+			return true
+		}
+		p.failed[key] = true
+		return false
+	}
 	for _, staffID := range p.candidates(l) {
 		d := l.Duration
 		if staffID != 0 {
@@ -417,7 +461,7 @@ func (p *planner) assign(i int, t time.Time, open Interval, out []Assignment) bo
 		if staffID != 0 && !p.staffFree(staffID, held) {
 			continue
 		}
-		resources, ok := p.pickResources(l.ResourceKinds, held, out[:i])
+		resources, ok := p.pickResources(l.ResourceKinds, held, out[:i], p.req.PartySize)
 		if !ok {
 			continue
 		}
@@ -427,6 +471,63 @@ func (p *planner) assign(i int, t time.Time, open Interval, out []Assignment) bo
 		}
 	}
 	p.failed[key] = true
+	return false
+}
+
+// assignGroup plans a group line at t: it joins the running session of
+// the start while seats are left, otherwise it opens a session on a free
+// staff member and free resources like any line (one session per start).
+func (p *planner) assignGroup(i int, l Line, t time.Time, open Interval, out []Assignment) bool {
+	need := p.req.PartySize
+	if need < 1 {
+		need = 1
+	}
+	if s, ok := p.sessions[sessionKey{key: l.Key, start: t.UnixNano()}]; ok {
+		if s.Taken+need > l.Seats {
+			return false
+		}
+		d := l.Duration
+		if sd, ok := l.StaffDuration[s.StaffID]; ok && sd > 0 && s.StaffID != 0 {
+			d = sd
+		}
+		customer := Interval{Start: t, End: t.Add(d)}
+		if !customer.Within(open) {
+			return false
+		}
+		held := Interval{Start: t.Add(-l.BufferBefore), End: customer.End.Add(l.BufferAfter)}
+		out[i] = Assignment{
+			Key: l.Key, Start: customer.Start, End: customer.End, Held: held,
+			StaffID: s.StaffID, ResourceIDs: slices.Clone(s.ResourceIDs), SeatsLeft: l.Seats - s.Taken,
+		}
+		return p.assign(i+1, customer.End, open, out)
+	}
+	if need > l.Seats {
+		return false
+	}
+	for _, staffID := range p.candidates(l) {
+		d := l.Duration
+		if staffID != 0 {
+			if sd, ok := l.StaffDuration[staffID]; ok && sd > 0 {
+				d = sd
+			}
+		}
+		customer := Interval{Start: t, End: t.Add(d)}
+		if !customer.Within(open) {
+			continue
+		}
+		held := Interval{Start: t.Add(-l.BufferBefore), End: customer.End.Add(l.BufferAfter)}
+		if staffID != 0 && !p.staffFree(staffID, held) {
+			continue
+		}
+		resources, ok := p.pickResources(l.ResourceKinds, held, out[:i], 0)
+		if !ok {
+			continue
+		}
+		out[i] = Assignment{Key: l.Key, Start: customer.Start, End: customer.End, Held: held, StaffID: staffID, ResourceIDs: resources, SeatsLeft: l.Seats}
+		if p.assign(i+1, customer.End, open, out) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -476,7 +577,7 @@ func (p *planner) staffFree(id int64, held Interval) bool {
 // visit) and otherwise the first free one in input order. With a party the
 // resource must seat it (see Request.PartySize) and a kind may take several
 // joined resources.
-func (p *planner) pickResources(kinds []string, held Interval, earlier []Assignment) ([]int64, bool) {
+func (p *planner) pickResources(kinds []string, held Interval, earlier []Assignment, party int) ([]int64, bool) {
 	if len(kinds) == 0 {
 		return []int64{}, true
 	}
@@ -500,8 +601,8 @@ func (p *planner) pickResources(kinds []string, held Interval, earlier []Assignm
 			free = append(free, r)
 		}
 		var choice []*Resource
-		if p.req.PartySize > 0 {
-			choice = p.seat(free, used)
+		if party > 0 {
+			choice = p.seat(free, used, party)
 		} else {
 			for _, r := range free {
 				if used[r.ID] {
@@ -532,8 +633,7 @@ const MaxJoined = 4
 // capacity, then the highest minimum, then input order), else with Combine
 // the fewest combinable resources of one zone whose capacities add up to
 // the party (largest first).
-func (p *planner) seat(free []*Resource, used map[int64]bool) []*Resource {
-	party := p.req.PartySize
+func (p *planner) seat(free []*Resource, used map[int64]bool, party int) []*Resource {
 	fits := func(r *Resource) bool { return r.MinCapacity <= party && party <= r.Capacity }
 	var best *Resource
 	for _, r := range free {

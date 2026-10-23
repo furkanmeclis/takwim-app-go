@@ -225,5 +225,20 @@
   "fields.zone_hint": "Salon, bahçe gibi; boş bırakılırsa uygun herhangi bir alan.",
   "fields.zone_any": "Fark etmez",
   "validation.party_size": "1 ile 1000 arasında bir kişi sayısı girin.",
-  "party_count": "{{count}} kişi"
+  "party_count": "{{count}} kişi",
+  "fields.seats_hint": "Grup dersinde kaç kişilik yer ayrılsın; boş bırakılırsa 1 kişi.",
+  "slots.seats_left": "{{count}} yer",
+  "form.section_vehicle": "Araç",
+  "form.section_vehicle_desc": "Yıkanacak aracın türü ve plakası.",
+  "fields.vehicle_type": "Araç türü",
+  "fields.vehicle_none": "Belirtilmedi",
+  "fields.vehicle_plate": "Plaka",
+  "fields.vehicle_plate_hint": "Örn. 34 ABC 123; harf, rakam ve boşluk.",
+  "columns.vehicle": "Araç",
+  "vehicle.car": "Otomobil",
+  "vehicle.suv": "SUV / arazi",
+  "vehicle.van": "Hafif ticari / minibüs",
+  "vehicle.motorcycle": "Motosiklet",
+  "vehicle.other": "Diğer",
+  "validation.plate": "Plaka en fazla 16 karakter; yalnız harf, rakam ve boşluk."
 }

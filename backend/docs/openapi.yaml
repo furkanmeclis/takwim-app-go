@@ -13080,7 +13080,9 @@ components:
         A service of the business catalog (TEC-894). `buffer_*` minutes are
         held around a booking; `resource_kinds` are the kinds a booking needs
         (one of each). `image_url` is the API-owned public cover URL.
-      required: [uuid, category, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, currency, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_url, offers, created_at, updated_at]
+        `group_capacity` makes the service a group class (TEC-904): every
+        start is one session with that many seats, null = individual.
+      required: [uuid, category, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, currency, payment_mode, staff_mode, resource_kinds, group_capacity, show_online, is_active, sort_order, image_url, offers, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         category:
@@ -13099,6 +13101,7 @@ components:
         resource_kinds:
           type: array
           items: { type: string, enum: [chair, table, area, room, device, bay] }
+        group_capacity: { type: [integer, "null"], minimum: 2, maximum: 1000, description: Seats of a group class session; null = individual. }
         show_online: { type: boolean }
         is_active: { type: boolean }
         sort_order: { type: integer }
@@ -13129,6 +13132,8 @@ components:
         resource_kinds:
           type: array
           items: { type: string, enum: [chair, table, area, room, device, bay] }
+          description: Default follows the sector (a table for restaurants, a wash bay for car washes, none otherwise).
+        group_capacity: { type: [integer, "null"], minimum: 2, maximum: 1000, description: Seats of a group class session (gym); null = individual. }
         show_online: { type: boolean, default: true }
         is_active: { type: boolean, default: true }
         sort_order: { type: integer, minimum: 0, maximum: 100000 }
@@ -13151,6 +13156,7 @@ components:
         resource_kinds:
           type: array
           items: { type: string, enum: [chair, table, area, room, device, bay] }
+        group_capacity: { type: [integer, "null"], minimum: 2, maximum: 1000, description: Seats of a group class session; null makes the service individual. }
         show_online: { type: boolean }
         is_active: { type: boolean }
         sort_order: { type: integer, minimum: 0, maximum: 100000 }
@@ -15638,7 +15644,7 @@ components:
           type: array
           items:
             type: object
-            required: [service_uuid, starts_at, ends_at, staff, resources]
+            required: [service_uuid, starts_at, ends_at, staff, resources, seats_left]
             properties:
               service_uuid: { type: string, format: uuid }
               starts_at: { type: string, format: date-time }
@@ -15650,6 +15656,9 @@ components:
               resources:
                 type: array
                 items: { $ref: "#/components/schemas/TenantAvailabilityResourceRef" }
+              seats_left:
+                type: [integer, "null"]
+                description: Group class - free seats of the session before this booking (a running session is joined on its trainer and area). Null for an individual service.
 
     TenantAvailability:
       type: object
@@ -15665,7 +15674,7 @@ components:
           type: array
           items:
             type: object
-            required: [service_uuid, service_name, duration_minutes, buffer_before_minutes, buffer_after_minutes, staff_mode, resource_kinds, staff]
+            required: [service_uuid, service_name, duration_minutes, buffer_before_minutes, buffer_after_minutes, staff_mode, resource_kinds, staff, group_capacity]
             properties:
               service_uuid: { type: string, format: uuid }
               service_name: { type: string }
@@ -15677,6 +15686,7 @@ components:
               staff:
                 type: array
                 items: { $ref: "#/components/schemas/TenantAvailabilityRef" }
+              group_capacity: { type: [integer, "null"], description: "Seats of a group class session (a group class is booked on its own, else lines.N.service_uuid group_alone); null = individual." }
         days:
           type: array
           items:
@@ -15807,6 +15817,21 @@ components:
         custom_fields: { type: object, additionalProperties: true }
         customer_note: { type: string, maxLength: 2000 }
         internal_note: { type: string, maxLength: 2000 }
+        vehicle:
+          oneOf:
+            - $ref: "#/components/schemas/ReservationVehicle"
+            - type: "null"
+
+    ReservationVehicle:
+      type: object
+      additionalProperties: false
+      description: |
+        The vehicle of a car wash booking (TEC-904). The plate is stored
+        upper case with single spaces; letters, digits and spaces only.
+      required: [type, plate]
+      properties:
+        type: { type: string, enum: [car, suv, van, motorcycle, other] }
+        plate: { type: string, maxLength: 16 }
 
     TenantReservationRescheduleRequest:
       type: object
@@ -15869,10 +15894,14 @@ components:
 
     TenantReservationListItem:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, source, branch, customer, services, staff, starts_at, ends_at, total_price, currency, version, created_at, party_size, zone]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, source, branch, customer, services, staff, starts_at, ends_at, total_price, currency, version, created_at, party_size, zone, vehicle]
       properties:
-        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
+        vehicle:
+          oneOf:
+            - $ref: "#/components/schemas/ReservationVehicle"
+            - type: "null"
         uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/TenantReservationStatus" }
@@ -16046,10 +16075,14 @@ components:
 
     TenantReservation:
       type: object
-      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, events, created_at, updated_at, party_size, zone]
+      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, events, created_at, updated_at, party_size, zone, vehicle]
       properties:
-        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
+        vehicle:
+          oneOf:
+            - $ref: "#/components/schemas/ReservationVehicle"
+            - type: "null"
         uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/TenantReservationStatus" }
@@ -16533,7 +16566,7 @@ components:
 
     PublicSlotLine:
       type: object
-      required: [service_uuid, starts_at, ends_at, staff]
+      required: [service_uuid, starts_at, ends_at, staff, seats_left]
       properties:
         service_uuid: { type: string, format: uuid }
         starts_at: { type: string, format: date-time }
@@ -16542,6 +16575,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/PublicRef"
             - type: "null"
+        seats_left: { type: [integer, "null"], description: Free seats of a group class session; null for an individual service. }
 
     PublicAvailability:
       type: object
@@ -16556,7 +16590,7 @@ components:
           type: array
           items:
             type: object
-            required: [service_uuid, service_name, duration_minutes, staff_mode, staff]
+            required: [service_uuid, service_name, duration_minutes, staff_mode, staff, group_capacity]
             properties:
               service_uuid: { type: string, format: uuid }
               service_name: { type: string }
@@ -16565,6 +16599,7 @@ components:
               staff:
                 type: array
                 items: { $ref: "#/components/schemas/PublicRef" }
+              group_capacity: { type: [integer, "null"], description: Seats of a group class session; null = individual. }
         days:
           type: array
           items:
@@ -16647,13 +16682,22 @@ components:
         customer_note: { type: string, maxLength: 2000 }
         custom_fields: { type: object, additionalProperties: true }
         website: { type: string, description: "Honeypot: hidden from people, must stay empty." }
+        vehicle:
+          description: The vehicle of a car wash booking (optional).
+          oneOf:
+            - $ref: "#/components/schemas/ReservationVehicle"
+            - type: "null"
 
     PublicReservation:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, lines, created_at, party_size, zone]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, lines, created_at, party_size, zone, vehicle]
       properties:
-        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
+        vehicle:
+          oneOf:
+            - $ref: "#/components/schemas/ReservationVehicle"
+            - type: "null"
         uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }

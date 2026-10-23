@@ -132,3 +132,21 @@ export const MAX_NOTE = 2000;
 /** Guests of one booking (restaurant flow), as the API allows. */
 export const MIN_PARTY_SIZE = 1;
 export const MAX_PARTY_SIZE = 1000;
+
+/** Vehicle types of a car wash booking (API enum) and their label keys. */
+export const VEHICLE_TYPES = [
+  "car",
+  "suv",
+  "van",
+  "motorcycle",
+  "other",
+] as const;
+export type VehicleType = (typeof VEHICLE_TYPES)[number];
+export const VEHICLE_TYPE_KEYS: Record<VehicleType, string> = {
+  car: "reservations.vehicle.car",
+  suv: "reservations.vehicle.suv",
+  van: "reservations.vehicle.van",
+  motorcycle: "reservations.vehicle.motorcycle",
+  other: "reservations.vehicle.other",
+};
+export const MAX_PLATE = 16;

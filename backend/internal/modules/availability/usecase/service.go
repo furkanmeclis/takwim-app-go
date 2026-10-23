@@ -89,6 +89,7 @@ type Queries interface {
 	ListAvailabilityTimeOff(ctx context.Context, arg db.ListAvailabilityTimeOffParams) ([]db.ListAvailabilityTimeOffRow, error)
 	ListAvailabilityResources(ctx context.Context, arg db.ListAvailabilityResourcesParams) ([]db.ListAvailabilityResourcesRow, error)
 	ListAvailabilityResourceClosures(ctx context.Context, arg db.ListAvailabilityResourceClosuresParams) ([]db.ListAvailabilityResourceClosuresRow, error)
+	ListGroupSessionHolds(ctx context.Context, arg db.ListGroupSessionHoldsParams) ([]db.ListGroupSessionHoldsRow, error)
 }
 
 // SettingsReader returns the current business settings (orgsettings).
@@ -175,12 +176,15 @@ func (s *Service) Check(ctx context.Context, orgID int64, in model.SearchInput, 
 
 // prepared is an engine request with the lookups to render its answer.
 type prepared struct {
-	branchID  int64
-	req       engine.Request
-	result    model.Result
-	services  []uuid.UUID
-	staff     map[int64]model.Ref
-	resources map[int64]model.ResourceRef
+	branchID int64
+	req      engine.Request
+	result   model.Result
+	services []uuid.UUID
+	// serviceIDs and seats (group capacity, 0 = individual) per line.
+	serviceIDs []int64
+	seats      []int
+	staff      map[int64]model.Ref
+	resources  map[int64]model.ResourceRef
 }
 
 func (p *prepared) slot(s engine.Slot) model.Slot {
@@ -197,6 +201,12 @@ func (p *prepared) slot(s engine.Slot) model.Slot {
 		}
 		for _, id := range a.ResourceIDs {
 			line.Resources = append(line.Resources, p.resources[id])
+		}
+		if seats := p.seats[i]; seats > 0 {
+			left := a.SeatsLeft
+			line.SeatsLeft = &left
+			line.SessionServiceID, line.SessionSeats = p.serviceIDs[i], seats
+			line.Seats = max(p.req.PartySize, 1)
 		}
 		out.Lines = append(out.Lines, line)
 	}
@@ -444,11 +454,20 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 			Key: svc.Uuid.String(), Duration: minutes(duration),
 			BufferBefore: minutes(svc.BufferBeforeMinutes), BufferAfter: minutes(svc.BufferAfterMinutes),
 			StaffMode: svc.StaffMode, ResourceKinds: svc.ResourceKinds, StaffDuration: map[int64]time.Duration{},
+			Seats: int(svc.GroupCapacity.Int32),
 		}
 		info := model.LineInfo{
 			ServiceUUID: svc.Uuid, ServiceName: svc.Name, DurationMinutes: int(duration),
 			BufferBeforeMinutes: int(svc.BufferBeforeMinutes), BufferAfterMinutes: int(svc.BufferAfterMinutes),
 			StaffMode: svc.StaffMode, ResourceKinds: append([]string{}, svc.ResourceKinds...), Staff: []model.Ref{},
+		}
+		if svc.GroupCapacity.Valid {
+			seats := int(svc.GroupCapacity.Int32)
+			info.GroupCapacity = &seats
+			if len(in.Lines) > 1 {
+				ve.add(field+".service_uuid", "group_alone", "a group class is booked on its own")
+				continue
+			}
 		}
 		for _, k := range svc.ResourceKinds {
 			kinds[k] = true
@@ -497,6 +516,8 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		}
 		req.Lines = append(req.Lines, line)
 		p.services = append(p.services, svc.Uuid)
+		p.serviceIDs = append(p.serviceIDs, svc.ID)
+		p.seats = append(p.seats, line.Seats)
 		result.Lines = append(result.Lines, info)
 	}
 	// A sector that books by party (restaurant) needs the party size for
@@ -592,9 +613,56 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		}
 	}
 
+	if err := s.loadSessions(ctx, orgID, p, &req, since, until); err != nil {
+		return nil, err
+	}
+
 	p.req = req
 	p.result = result
 	return p, nil
+}
+
+// loadSessions reads the running sessions of the group lines (TEC-904):
+// the seats booked at each start and the trainer and area of the session's
+// first booking, which later bookings share.
+func (s *Service) loadSessions(ctx context.Context, orgID int64, p *prepared, req *engine.Request, since, until time.Time) error {
+	var ids []int64
+	keys := map[int64]string{}
+	for i, seats := range p.seats {
+		if seats > 0 {
+			ids = append(ids, p.serviceIDs[i])
+			keys[p.serviceIDs[i]] = req.Lines[i].Key
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := s.q.ListGroupSessionHolds(ctx, db.ListGroupSessionHoldsParams{
+		OrganizationID: orgID, BranchID: p.branchID, ServiceIds: ids, Now: ts(s.now()),
+		Since: ts(since), Until: ts(until),
+	})
+	if err != nil {
+		return err
+	}
+	type key struct {
+		service int64
+		start   int64
+	}
+	index := map[key]int{}
+	for _, r := range rows {
+		k := key{service: r.ServiceID, start: r.StartsAt.Time.UnixNano()}
+		if i, ok := index[k]; ok {
+			req.Sessions[i].Taken += int(r.Seats)
+			continue
+		}
+		session := engine.Session{Key: keys[r.ServiceID], Start: r.StartsAt.Time, Taken: int(r.Seats), ResourceIDs: r.ResourceIds}
+		if len(r.StaffIds) > 0 {
+			session.StaffID = r.StaffIds[0]
+		}
+		index[k] = len(req.Sessions)
+		req.Sessions = append(req.Sessions, session)
+	}
+	return nil
 }
 
 // partySector reports whether the business's sector books by party size.

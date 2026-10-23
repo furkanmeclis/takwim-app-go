@@ -64,6 +64,8 @@ Otherwise the answer is `409 BOOKING_UNAVAILABLE` with detail `channel` / reason
 
 In a party sector, availability and checkouts take `party_size` (required when a line needs a table) and an optional `zone`; the branch list answers each branch's `zones` (areas of its online tables and areas) for the area step. The checkout stores both and the booking reads them from the checkout, so the reservation keeps the party and area. Online bookings are seated at one table; joining tables is left to the business on the panel. A free service cannot be paid online (`payment` / `not_allowed`).
 
+Group classes (TEC-904): availability lines carry `group_capacity` and slot lines `seats_left`; the checkout takes `party_size` seats of the session (one by default). Car washes: the booking body takes an optional `vehicle` (`type`: `car`, `suv`, `van`, `motorcycle`, `other`; `plate`), stored on the reservation and answered with it.
+
 ## Customer by phone
 
 The phone is normalized to E.164 (`pkg/phone`; a number without a country code is Turkish).

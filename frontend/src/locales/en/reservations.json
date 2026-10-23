@@ -225,5 +225,20 @@
   "fields.zone_hint": "Such as the hall or the garden; leave as is for any area that fits.",
   "fields.zone_any": "Any area",
   "validation.party_size": "Enter between 1 and 1000 guests.",
-  "party_count": "{{count}} guests"
+  "party_count": "{{count}} guests",
+  "fields.seats_hint": "How many seats of the group class to book; empty means one person.",
+  "slots.seats_left": "{{count}} left",
+  "form.section_vehicle": "Vehicle",
+  "form.section_vehicle_desc": "Type and licence plate of the vehicle to wash.",
+  "fields.vehicle_type": "Vehicle type",
+  "fields.vehicle_none": "Not given",
+  "fields.vehicle_plate": "Licence plate",
+  "fields.vehicle_plate_hint": "E.g. 34 ABC 123; letters, digits and spaces.",
+  "columns.vehicle": "Vehicle",
+  "vehicle.car": "Car",
+  "vehicle.suv": "SUV / off-road",
+  "vehicle.van": "Van / minibus",
+  "vehicle.motorcycle": "Motorcycle",
+  "vehicle.other": "Other",
+  "validation.plate": "Plate: at most 16 characters, letters, digits and spaces only."
 }

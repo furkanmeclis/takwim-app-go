@@ -657,7 +657,7 @@ func (s *Service) Availability(ctx context.Context, o Org, in model.Availability
 		Lines: make([]model.LineInfo, 0, len(res.Lines)), Days: make([]model.Day, 0, len(res.Days)),
 	}
 	for _, l := range res.Lines {
-		info := model.LineInfo{ServiceUUID: l.ServiceUUID, ServiceName: l.ServiceName, DurationMinutes: l.DurationMinutes, StaffMode: l.StaffMode, Staff: make([]model.Ref, 0, len(l.Staff))}
+		info := model.LineInfo{ServiceUUID: l.ServiceUUID, ServiceName: l.ServiceName, DurationMinutes: l.DurationMinutes, StaffMode: l.StaffMode, Staff: make([]model.Ref, 0, len(l.Staff)), GroupCapacity: l.GroupCapacity}
 		for _, st := range l.Staff {
 			info.Staff = append(info.Staff, model.Ref{UUID: st.UUID, Name: st.Name})
 		}
@@ -676,7 +676,7 @@ func (s *Service) Availability(ctx context.Context, o Org, in model.Availability
 func slotLines(lines []availabilitymodel.SlotLine) []model.SlotLine {
 	out := make([]model.SlotLine, 0, len(lines))
 	for _, l := range lines {
-		item := model.SlotLine{ServiceUUID: l.ServiceUUID, StartsAt: l.StartsAt, EndsAt: l.EndsAt}
+		item := model.SlotLine{ServiceUUID: l.ServiceUUID, StartsAt: l.StartsAt, EndsAt: l.EndsAt, SeatsLeft: l.SeatsLeft}
 		if l.Staff != nil {
 			item.Staff = &model.Ref{UUID: l.Staff.UUID, Name: l.Staff.Name}
 		}
@@ -911,7 +911,7 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 	input := reservationsmodel.CreateInput{
 		BranchUUID: checkout.BranchUuid, StartsAt: &checkout.StartsAt.Time, Source: reservationsmodel.SourceOnline,
 		Payment: in.Payment, CustomFields: in.CustomFields, CustomerNote: strings.TrimSpace(in.CustomerNote),
-		Zone: checkout.Zone,
+		Zone: checkout.Zone, Vehicle: in.Vehicle,
 	}
 	if checkout.PartySize.Valid {
 		n := int(checkout.PartySize.Int32)
@@ -1046,7 +1046,7 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		Branch: model.Ref{UUID: r.Branch.UUID, Name: r.Branch.Name}, Timezone: meta.Timezone,
 		StartsAt: r.StartsAt, EndsAt: r.EndsAt, TotalPrice: r.TotalPrice, Currency: r.Currency,
 		CustomerNote: r.CustomerNote, ExpiresAt: r.HoldExpiresAt, CancelReason: r.CancelReason,
-		PartySize: r.PartySize, Zone: r.Zone,
+		PartySize: r.PartySize, Zone: r.Zone, Vehicle: r.Vehicle,
 		Lines: make([]model.Line, 0, len(r.Lines)), CreatedAt: r.CreatedAt, AccessToken: s.AccessToken(o, r.UUID),
 	}
 	for _, l := range r.Lines {

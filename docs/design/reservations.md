@@ -30,6 +30,8 @@ Also stored: `custom_fields` (answers to booking form questions, a JSON object),
 
 The start is re-planned under the business's lock with the slot engine; a taken start is `ErrSlotTaken` with nothing written. Online bookings need the approval mode and a payment method in the business settings (`ErrOnlineNotReady`). An empty `payment` picks on site when the business takes it, else online; the method must be one every service of the visit takes (`payment` / `not_allowed`). The panel collects at the counter (`payment` other than `on_site` is refused).
 
+A car wash booking may carry its `vehicle` (TEC-904): `type` (`car`, `suv`, `van`, `motorcycle`, `other`) and `plate` (letters, digits and spaces, at most 16, stored upper case with single spaces; `vehicle.type` / `vehicle.plate` `invalid`). The list, detail and list search (`q` matches the plate without spaces) show it. A group class booking takes `party_size` seats of its session (see [availability.md](./availability.md)).
+
 ## Transitions
 
 | Action   | From                              | Effect                                                                                |

@@ -25,6 +25,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
@@ -250,7 +251,7 @@ func (s *Service) Get(ctx context.Context, orgID int64, id uuid.UUID) (model.Ser
 func (s *Service) Create(ctx context.Context, orgID int64, in model.Input) (model.Service, error) {
 	f := fields{
 		Price: money.Zero(), PaymentMode: "on_site", StaffMode: defaultStaffMode(ctx),
-		ResourceKinds: []string{}, ShowOnline: true, IsActive: true,
+		ResourceKinds: defaultResourceKinds(ctx), ShowOnline: true, IsActive: true,
 	}
 	ve := &ValidationError{}
 	q := s.repo.Q()
@@ -275,6 +276,7 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.Input) (mode
 			DurationMinutes: f.Duration, BufferBeforeMinutes: f.BufferBefore, BufferAfterMinutes: f.BufferAfter,
 			Price: f.Price.Numeric(), PaymentMode: f.PaymentMode, StaffMode: f.StaffMode,
 			ResourceKinds: f.ResourceKinds, ShowOnline: f.ShowOnline, IsActive: f.IsActive, SortOrder: f.SortOrder,
+			GroupCapacity: f.GroupCapacity,
 		})
 		if err != nil {
 			return err
@@ -323,6 +325,7 @@ func (s *Service) Patch(ctx context.Context, orgID int64, id uuid.UUID, in model
 		DurationMinutes: f.Duration, BufferBeforeMinutes: f.BufferBefore, BufferAfterMinutes: f.BufferAfter,
 		Price: f.Price.Numeric(), PaymentMode: f.PaymentMode, StaffMode: f.StaffMode,
 		ResourceKinds: f.ResourceKinds, ShowOnline: f.ShowOnline, IsActive: f.IsActive, SortOrder: f.SortOrder,
+		GroupCapacity: f.GroupCapacity,
 	}); err != nil {
 		return model.Service{}, mapNotFound(mapNameTaken(err), ErrNotFound)
 	}
@@ -826,6 +829,7 @@ type fields struct {
 	Price                  money.Money
 	PaymentMode, StaffMode string
 	ResourceKinds          []string
+	GroupCapacity          pgtype.Int4
 	ShowOnline, IsActive   bool
 	SortOrder              int32
 }
@@ -839,7 +843,7 @@ func fieldsFromRow(row db.GetServiceRow) fields {
 		CategoryID: row.CategoryID, Name: row.Name, Description: row.Description,
 		Duration: row.DurationMinutes, BufferBefore: row.BufferBeforeMinutes, BufferAfter: row.BufferAfterMinutes,
 		Price: money.FromNumericOrZero(row.Price), PaymentMode: row.PaymentMode, StaffMode: row.StaffMode,
-		ResourceKinds: kinds, ShowOnline: row.ShowOnline, IsActive: row.IsActive, SortOrder: row.SortOrder,
+		ResourceKinds: kinds, GroupCapacity: row.GroupCapacity, ShowOnline: row.ShowOnline, IsActive: row.IsActive, SortOrder: row.SortOrder,
 	}
 }
 
@@ -914,6 +918,16 @@ func (f *fields) apply(ve *ValidationError, in model.Input, create bool) {
 		}
 		f.ResourceKinds = kinds
 	}
+	if in.GroupCapacity.Set {
+		switch v := in.GroupCapacity.Value; {
+		case v == nil:
+			f.GroupCapacity = pgtype.Int4{}
+		case *v < minGroupCapacity || *v > maxGroupCapacity:
+			ve.add("group_capacity", "invalid", fmt.Sprintf("group_capacity must be between %d and %d", minGroupCapacity, maxGroupCapacity))
+		default:
+			f.GroupCapacity = pgtype.Int4{Int32: *v, Valid: true}
+		}
+	}
 	if in.ShowOnline != nil {
 		f.ShowOnline = *in.ShowOnline
 	}
@@ -929,6 +943,12 @@ func (f *fields) apply(ve *ValidationError, in model.Input, create bool) {
 	}
 }
 
+// Seats of a group class session.
+const (
+	minGroupCapacity = 2
+	maxGroupCapacity = 1000
+)
+
 // parsePrice reads a non-negative amount with at most two decimals.
 func parsePrice(ve *ValidationError, field string, raw json.Number) (money.Money, bool) {
 	m, err := money.Parse(strings.TrimSpace(raw.String()))
@@ -939,13 +959,27 @@ func parsePrice(ve *ValidationError, field string, raw json.Number) (money.Money
 	return m, true
 }
 
-// defaultStaffMode follows the sector: a sector without staff books no
-// staff time by default.
+// defaultStaffMode follows the sector: a restaurant books no staff time,
+// a gym or a car wash takes a person when one is free, the others need
+// one.
 func defaultStaffMode(ctx context.Context) string {
-	if scope, ok := orgctx.From(ctx); ok && scope.Sector == "restaurant" {
-		return "none"
+	if scope, ok := orgctx.From(ctx); ok {
+		if def, ok := sector.Get(sector.Code(scope.Sector)); ok && def.Capacity.Staff != "" {
+			return def.Capacity.Staff
+		}
 	}
 	return "required"
+}
+
+// defaultResourceKinds follows the sector: where every booking needs a
+// resource (restaurant table, car wash bay) a new service asks for one.
+func defaultResourceKinds(ctx context.Context) []string {
+	if scope, ok := orgctx.From(ctx); ok {
+		if def, ok := sector.Get(sector.Code(scope.Sector)); ok && def.Capacity.ResourceRequired && len(def.Capacity.Resources) > 0 {
+			return []string{string(def.Capacity.Resources[0])}
+		}
+	}
+	return []string{}
 }
 
 func currencyOf(ctx context.Context) string {
@@ -985,6 +1019,10 @@ func MapService(row db.GetServiceRow, orgUUID uuid.UUID, currency string) model.
 	}
 	if row.CategoryUuid.Valid {
 		svc.Category = &model.CategoryRef{UUID: uuid.UUID(row.CategoryUuid.Bytes), Name: row.CategoryName.String}
+	}
+	if row.GroupCapacity.Valid {
+		seats := row.GroupCapacity.Int32
+		svc.GroupCapacity = &seats
 	}
 	if row.ImageUuid.Valid && orgUUID != uuid.Nil {
 		url := PublicImagePath(orgUUID, uuid.UUID(row.ImageUuid.Bytes))

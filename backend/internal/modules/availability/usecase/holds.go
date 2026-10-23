@@ -344,12 +344,20 @@ func (h *Holds) CreateIn(ctx context.Context, tx *Tx, in model.HoldInput, caller
 	if !ok {
 		return Created{}, ErrSlotTaken
 	}
+	// A group class is booked on its own: its line names the session.
+	var session model.SlotLine
+	if len(slot.Lines) == 1 {
+		session = slot.Lines[0]
+	}
 	row, err := tx.Q.CreateCapacityHold(ctx, db.CreateCapacityHoldParams{
 		OrganizationID: tx.OrgID, BranchID: slot.BranchID, Kind: model.KindHold,
 		Reason: pgtype.Text{String: in.Reason, Valid: true}, Channel: channel,
 		StartsAt: ts(slot.StartsAt), EndsAt: ts(slot.EndsAt),
-		ExpiresAt: ts(now.Add(time.Duration(minutes) * time.Minute)),
-		CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
+		ExpiresAt:        ts(now.Add(time.Duration(minutes) * time.Minute)),
+		CreatedBy:        pgtype.Int8{Int64: actorID, Valid: actorID > 0},
+		SessionServiceID: pgtype.Int8{Int64: session.SessionServiceID, Valid: session.SessionServiceID != 0},
+		Seats:            pgtype.Int4{Int32: int32(session.Seats), Valid: session.SessionServiceID != 0},
+		SessionSeats:     pgtype.Int4{Int32: int32(session.SessionSeats), Valid: session.SessionServiceID != 0},
 	})
 	if err != nil {
 		return Created{}, err

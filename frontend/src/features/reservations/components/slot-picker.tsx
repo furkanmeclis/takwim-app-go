@@ -55,6 +55,9 @@ export function SlotPicker({
   const time = (iso: string) =>
     datetimeInZone(iso, zone, locale, { hour: "2-digit", minute: "2-digit" });
   const picked = day?.slots.find((slot) => slot.starts_at === value) ?? null;
+  // Group class (gym): free seats of the session at that start.
+  const seatsLeft = (slot: AvailabilitySlot) =>
+    slot.lines.find((line) => line.seats_left != null)?.seats_left ?? null;
 
   return (
     <div className="space-y-3">
@@ -91,9 +94,16 @@ export function SlotPicker({
             <ToggleGroupItem
               key={slot.starts_at}
               value={slot.starts_at}
-              className="min-w-16 tabular-nums"
+              className="h-auto min-w-16 flex-col gap-0 py-1.5 tabular-nums"
             >
               {time(slot.starts_at)}
+              {seatsLeft(slot) != null ? (
+                <span className="text-muted-foreground text-xs font-normal">
+                  {t("reservations.slots.seats_left", {
+                    count: seatsLeft(slot) ?? 0,
+                  })}
+                </span>
+              ) : null}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -113,6 +123,11 @@ export function SlotPicker({
             const who = [
               line.staff?.name,
               ...line.resources.map((resource) => resource.name),
+              line.seats_left != null
+                ? t("reservations.slots.seats_left", {
+                    count: line.seats_left,
+                  })
+                : null,
             ]
               .filter(Boolean)
               .join(" · ");
