@@ -52,6 +52,8 @@ tags:
     description: Invitation accept flow (`/invite/{token}`) and organization logos
   - name: Public booking
     description: Unauthenticated booking API of a business (`/v1/public/businesses/{slug}`) for the business page, the widget and the mobile app
+  - name: Customer panel
+    description: Shared customer panel (`takwim.link/panel`, `/v1/customer/*`). Sign-in by a code sent to the phone; a customer token (kind `customer`) that staff routes refuse, and that only opens the records the verified phone was linked to.
 
 paths:
   /healthz:
@@ -10101,12 +10103,346 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/customer/auth/start:
+    post:
+      tags: [Customer panel]
+      operationId: startCustomerSignIn
+      summary: Send a sign-in code
+      description: |
+        Sends a six-digit code by SMS when a live business keeps a customer
+        record with the phone (or the phone was verified before). The answer
+        is the same for every valid phone, whether a code went out, the
+        60 second cooldown or the hourly cap (5 codes) applied, or the phone
+        is unknown. Limits: 10 per IP and 5 per phone in 10 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              additionalProperties: false
+              properties:
+                phone: { type: string, description: "Any spelling; a number without a country code is Turkish.", example: "0532 111 22 33" }
+      responses:
+        "202":
+          description: Code sent if the phone is known
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerSignInStart"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/auth/verify:
+    post:
+      tags: [Customer panel]
+      operationId: verifyCustomerSignIn
+      summary: Exchange the code for a panel session
+      description: |
+        A code works for 5 minutes, once, with 5 attempts. Every failure
+        answers `400 OTP_INVALID`. On success the verified phone links the
+        person's records in every business (`customer_identity_links`,
+        source `panel_login`) and a session opens: `access_token` is a
+        customer token (send it as `Authorization: Bearer`) that expires
+        with the session's 30 day cap; an idle week also ends it. The web
+        BFF moves the token into an httpOnly cookie and drops it from the
+        answer. Limits: 30 per IP and 10 per phone in 10 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              additionalProperties: false
+              properties:
+                phone: { type: string }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerSession"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/auth/logout:
+    post:
+      tags: [Customer panel]
+      operationId: customerLogout
+      summary: End the session
+      security:
+        - customerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                everywhere: { type: boolean, description: "End every session of the person." }
+      responses:
+        "204": { description: Signed out }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/customer/me:
+    get:
+      tags: [Customer panel]
+      operationId: getCustomerProfile
+      summary: The signed-in person
+      description: Phone, the businesses that linked it (with the name each keeps) and the sessions.
+      security:
+        - customerAuth: []
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerProfile"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/reservations:
+    get:
+      tags: [Customer panel]
+      operationId: listCustomerReservations
+      summary: The person's visits in every business
+      description: |
+        Only visits of the records linked to the session's identity. `upcoming`
+        is requested, booked or in service and not over (soonest first);
+        `past` is everything else (newest first).
+      security:
+        - customerAuth: []
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [upcoming, past, all], default: all }
+        - name: business
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          description: Comma-separated reservation statuses
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [starts_at, -starts_at] }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Visits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservationPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/reservations/{uuid}:
+    get:
+      tags: [Customer panel]
+      operationId: getCustomerReservation
+      summary: One visit
+      description: |
+        Lines, place, policy texts, the customer-visible history and the
+        actions the business rules allow now. Another person's visit, an
+        unknown or a malformed id all answer `404`.
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/customer/reservations/{uuid}/cancel:
+    post:
+      tags: [Customer panel]
+      operationId: cancelCustomerReservation
+      summary: Cancel a visit
+      description: |
+        Allowed for a requested or booked visit until the business's cancel
+        cutoff (`cancel_cutoff_minutes` before the start). The capacity is
+        freed and the reason is `customer_cancelled`. Not allowed:
+        `409 ACTION_NOT_ALLOWED` with detail `cancel` / `status`, `cutoff`
+        or `business_unavailable`. Send an `Idempotency-Key`.
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                expected_version: { type: integer }
+      responses:
+        "200":
+          description: Cancelled visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/reservations/{uuid}/availability:
+    post:
+      tags: [Customer panel]
+      operationId: searchCustomerReservationStarts
+      summary: Free starts to move a visit to
+      description: |
+        The same services and staff on the online channel (the business's
+        minimum notice, booking window and online visibility apply), local
+        dates of the branch. The current start is left out. Not allowed:
+        `409 ACTION_NOT_ALLOWED` with detail `reschedule` / reason.
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                from: { type: string, format: date }
+                to: { type: string, format: date }
+      responses:
+        "200":
+          description: Free starts per day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerAvailability"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/reservations/{uuid}/reschedule:
+    post:
+      tags: [Customer panel]
+      operationId: rescheduleCustomerReservation
+      summary: Move a visit
+      description: |
+        Allowed until the business's change cutoff, when the business takes
+        online bookings. The visit is planned again with the same services
+        and staff; a taken start answers `409` `starts_at` / `taken` and
+        changes nothing, a stale `expected_version` `409` `expected_version`
+        / `stale`. Send an `Idempotency-Key`.
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [starts_at]
+              additionalProperties: false
+              properties:
+                starts_at: { type: string, format: date-time }
+                expected_version: { type: integer }
+      responses:
+        "200":
+          description: Moved visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/payments:
+    get:
+      tags: [Customer panel]
+      operationId: listCustomerPayments
+      summary: Visits with money (Ödemelerim)
+      description: |
+        The visit list without visits that ended with no money moving
+        (cancelled or rejected and unpaid). Same filters as the visit list;
+        newest first.
+      security:
+        - customerAuth: []
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [upcoming, past, all], default: all }
+        - name: business
+          in: query
+          schema: { type: string, format: uuid }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [starts_at, -starts_at] }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Visits with money
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservationPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/customer/payments/summary:
+    get:
+      tags: [Customer panel]
+      operationId: getCustomerPaymentSummary
+      summary: Amounts per currency
+      description: Currencies are never added together.
+      security:
+        - customerAuth: []
+      responses:
+        "200":
+          description: Totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPaymentSummary"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    customerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Customer panel token (kind `customer`) from `POST /v1/customer/auth/verify`. Staff routes refuse it; customer routes refuse staff tokens.
 
   parameters:
     PublicBusinessSlug:
@@ -16419,4 +16755,279 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/PublicReservation" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    CustomerSignInStart:
+      type: object
+      required: [status, phone_masked, resend_after_seconds, code_ttl_seconds]
+      properties:
+        status: { type: string, enum: [code_sent_if_known] }
+        phone_masked: { type: string, example: "+90532*****33" }
+        resend_after_seconds: { type: integer }
+        code_ttl_seconds: { type: integer }
+
+    CustomerBusiness:
+      type: object
+      required: [uuid, slug, name, first_name, last_name, linked_at, reservation_count]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        first_name: { type: string, description: The name this business keeps for the person. }
+        last_name: { type: string }
+        linked_at: { type: string, format: date-time }
+        reservation_count: { type: integer, format: int64 }
+
+    CustomerProfile:
+      type: object
+      required: [phone, phone_display, verified_at, session_expires_at, active_sessions, businesses]
+      properties:
+        phone: { type: string, description: E.164 }
+        phone_display: { type: string }
+        verified_at: { type: string, format: date-time }
+        session_expires_at: { type: string, format: date-time }
+        active_sessions: { type: integer, format: int64 }
+        businesses:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerBusiness" }
+
+    CustomerSession:
+      type: object
+      required: [expires_at, profile]
+      properties:
+        access_token: { type: string, description: "Customer token (Bearer). The web BFF removes it from the answer and keeps it in an httpOnly cookie." }
+        token_type: { type: string, enum: [Bearer] }
+        expires_at: { type: string, format: date-time }
+        authenticated: { type: boolean, description: Set by the web BFF instead of the token. }
+        profile: { $ref: "#/components/schemas/CustomerProfile" }
+
+    CustomerMoney:
+      type: object
+      required: [total, paid, refunded, balance, currency, method, payment_status]
+      description: |
+        The recorded payment picture of a visit. Until the payment ledger
+        records amounts, an online payment is the full total and a refund
+        the full total once refunded (`refunded` is null when unknown).
+        `balance` is null for a finished visit paid at the business.
+      properties:
+        total: { $ref: "#/components/schemas/MoneyAmount" }
+        paid: { $ref: "#/components/schemas/MoneyAmount" }
+        refunded:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        balance:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        currency: { type: string }
+        method: { type: string, enum: [on_site, online] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+
+    CustomerRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    CustomerReservationItem:
+      type: object
+      required: [uuid, number, business, branch, timezone, starts_at, ends_at, upcoming, status, approval_status, confirmation_status, payment_status, cancel_reason, services, staff, money, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+        business:
+          type: object
+          required: [uuid, slug, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            slug: { type: string }
+            name: { type: string }
+        branch: { $ref: "#/components/schemas/CustomerRef" }
+        timezone: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        upcoming: { type: boolean }
+        status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }
+        approval_status: { type: string, enum: [pending, accepted, rejected] }
+        confirmation_status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        cancel_reason: { type: [string, "null"] }
+        services:
+          type: array
+          items: { type: string }
+        staff:
+          type: array
+          items: { type: string }
+        money: { $ref: "#/components/schemas/CustomerMoney" }
+        created_at: { type: string, format: date-time }
+
+    CustomerAction:
+      type: object
+      required: [allowed, until, reason]
+      properties:
+        allowed: { type: boolean }
+        until: { type: [string, "null"], format: date-time, description: The last moment the action is allowed. }
+        reason:
+          type: [string, "null"]
+          enum: [status, cutoff, business_unavailable, online_unavailable, services_changed, null]
+
+    CustomerReservation:
+      allOf:
+        - $ref: "#/components/schemas/CustomerReservationItem"
+        - type: object
+          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history]
+          properties:
+            branch:
+              type: object
+              required: [uuid, name, address, city, district, phone]
+              properties:
+                uuid: { type: string, format: uuid }
+                name: { type: string }
+                address: { type: string }
+                city: { type: string }
+                district: { type: string }
+                phone: { type: string }
+            version: { type: integer }
+            customer_note: { type: string }
+            hold_expires_at: { type: [string, "null"], format: date-time }
+            lines:
+              type: array
+              items:
+                type: object
+                required: [service_name, staff_name, starts_at, ends_at, duration_minutes, unit_price]
+                properties:
+                  service_name: { type: string }
+                  staff_name: { type: [string, "null"] }
+                  starts_at: { type: string, format: date-time }
+                  ends_at: { type: string, format: date-time }
+                  duration_minutes: { type: integer }
+                  unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+            policies:
+              type: object
+              required: [cancellation, change, no_show, cancel_cutoff_minutes, change_cutoff_minutes]
+              properties:
+                cancellation: { type: string }
+                change: { type: string }
+                no_show: { type: string }
+                cancel_cutoff_minutes: { type: [integer, "null"] }
+                change_cutoff_minutes: { type: [integer, "null"] }
+            actions:
+              type: object
+              required: [cancel, reschedule]
+              properties:
+                cancel: { $ref: "#/components/schemas/CustomerAction" }
+                reschedule: { $ref: "#/components/schemas/CustomerAction" }
+            history:
+              type: array
+              items:
+                type: object
+                required: [type, to_status, at]
+                properties:
+                  type: { type: string }
+                  to_status: { type: [string, "null"] }
+                  at: { type: string, format: date-time }
+
+    CustomerReservationPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerReservationItem" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CustomerAvailability:
+      type: object
+      required: [timezone, earliest_start, latest_date, days]
+      properties:
+        timezone: { type: string }
+        earliest_start: { type: string, format: date-time }
+        latest_date: { type: [string, "null"], format: date }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, status, starts]
+            properties:
+              date: { type: string, format: date }
+              status: { type: string }
+              starts:
+                type: array
+                items: { type: string, format: date-time }
+
+    CustomerPaymentSummary:
+      type: object
+      required: [totals]
+      properties:
+        totals:
+          type: array
+          items:
+            type: object
+            required: [currency, booked, paid, refund_pending, refunded, reservation_count]
+            properties:
+              currency: { type: string }
+              booked: { $ref: "#/components/schemas/MoneyAmount" }
+              paid: { $ref: "#/components/schemas/MoneyAmount" }
+              refund_pending: { $ref: "#/components/schemas/MoneyAmount" }
+              refunded: { $ref: "#/components/schemas/MoneyAmount" }
+              reservation_count: { type: integer, format: int64 }
+
+    EnvelopeCustomerSignInStart:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerSignInStart" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerSession:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerSession" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerProfile:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerProfile" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerReservationPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerReservationPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerReservation:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerReservation" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerAvailability:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerAvailability" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPaymentSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPaymentSummary" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }

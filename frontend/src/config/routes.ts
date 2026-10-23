@@ -7,6 +7,18 @@ export const routes = {
       signed: (token: string) => `/share/s/${token}`,
     },
   },
+  /**
+   * Customer panel (takwim.link/panel): one area for the people who book,
+   * across every business they visit. Separate session (phone + code), no
+   * staff shell.
+   */
+  customer: {
+    root: "/panel",
+    login: "/panel/login",
+    reservation: (uuid: string) => `/panel/reservations/${uuid}`,
+    payments: "/panel/payments",
+    profile: "/panel/profile",
+  },
   guest: {
     login: "/platform/login",
     register: "/platform/register",

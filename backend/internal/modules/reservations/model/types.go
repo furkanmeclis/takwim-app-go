@@ -176,6 +176,22 @@ type RescheduleInput struct {
 	// PartySize / Zone change the party (nil keeps the booked one).
 	PartySize *int    `json:"party_size"`
 	Zone      *string `json:"zone"`
+	// Channel plans the new start on the panel channel (empty) or the
+	// online one (the customer panel: the online booking rules apply).
+	// Never read from a request body.
+	Channel string `json:"-"`
+	// Guard, when set, runs on the locked record before anything changes
+	// (the customer panel checks ownership and the change cutoff there).
+	Guard func(Locked) error `json:"-"`
+}
+
+// Locked is what a guard sees of a reservation locked for a change.
+type Locked struct {
+	CustomerID    int64
+	Status        string
+	PaymentStatus string
+	StartsAt      time.Time
+	Version       int
 }
 
 // NotesInput edits the notes and form answers.

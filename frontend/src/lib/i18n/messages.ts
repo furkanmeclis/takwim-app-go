@@ -11,6 +11,7 @@ import enServices from "@/locales/en/services.json";
 import enCustomers from "@/locales/en/customers.json";
 import enCash from "@/locales/en/cash.json";
 import enReservations from "@/locales/en/reservations.json";
+import enCustomerPanel from "@/locales/en/customer_panel.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
 import enBusinessPage from "@/locales/en/business_page.json";
@@ -55,6 +56,7 @@ import trServices from "@/locales/tr/services.json";
 import trCustomers from "@/locales/tr/customers.json";
 import trCash from "@/locales/tr/cash.json";
 import trReservations from "@/locales/tr/reservations.json";
+import trCustomerPanel from "@/locales/tr/customer_panel.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
 import trBusinessPage from "@/locales/tr/business_page.json";
@@ -134,6 +136,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     customers: trCustomers,
     cash: trCash,
     reservations: trReservations,
+    customer_panel: trCustomerPanel,
     tenant_members: trTenantMembers,
     tenant_roles: trTenantRoles,
     tenant_settings: trTenantSettings,
@@ -180,6 +183,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     customers: enCustomers,
     cash: enCash,
     reservations: enReservations,
+    customer_panel: enCustomerPanel,
     tenant_members: enTenantMembers,
     tenant_roles: enTenantRoles,
     tenant_settings: enTenantSettings,

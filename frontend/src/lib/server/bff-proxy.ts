@@ -3,6 +3,7 @@ import {
   getApiTokens,
   persistApiTokens,
 } from "@/lib/server/auth-tokens";
+import { isCustomerPath, proxyCustomer } from "@/lib/server/customer-session";
 import {
   sharedRefresh,
   type RefreshResult,
@@ -473,6 +474,12 @@ export async function proxyToUpstream(
     request.method === "GET" || request.method === "HEAD"
       ? new ArrayBuffer(0)
       : await request.arrayBuffer();
+
+  // Customer panel: its own cookie and token kind; the staff session is
+  // never read or forwarded here.
+  if (isCustomerPath(pathSegments)) {
+    return proxyCustomer(path, pathWithQuery, request, incomingBody);
+  }
 
   const { accessToken, refreshToken } = await getApiTokens();
 

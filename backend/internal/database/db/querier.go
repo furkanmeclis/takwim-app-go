@@ -36,9 +36,13 @@ type Querier interface {
 	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
+	// A new code replaces the open ones: only the latest code works.
+	CloseOpenCustomerOTPChallenges(ctx context.Context, arg CloseOpenCustomerOTPChallengesParams) error
 	ConfirmCapacityHold(ctx context.Context, arg ConfirmCapacityHoldParams) (CapacityHold, error)
 	ConfirmUserTOTP(ctx context.Context, arg ConfirmUserTOTPParams) (UserTotp, error)
+	ConsumeCustomerOTPChallenge(ctx context.Context, arg ConsumeCustomerOTPChallengeParams) (int64, error)
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
+	CountActiveCustomerSessions(ctx context.Context, arg CountActiveCustomerSessionsParams) (int64, error)
 	CountActivityEvents(ctx context.Context, arg CountActivityEventsParams) (int64, error)
 	CountAllBulkJobs(ctx context.Context) (int64, error)
 	CountAllExportJobs(ctx context.Context) (int64, error)
@@ -52,6 +56,9 @@ type Querier interface {
 	CountCashAccounts(ctx context.Context, arg CountCashAccountsParams) (int64, error)
 	CountCashClosings(ctx context.Context, arg CountCashClosingsParams) (int64, error)
 	CountCashMovements(ctx context.Context, arg CountCashMovementsParams) (int64, error)
+	CountCustomerOTPAttempt(ctx context.Context, id int64) (CountCustomerOTPAttemptRow, error)
+	CountCustomerOTPChallengesSince(ctx context.Context, arg CountCustomerOTPChallengesSinceParams) (int64, error)
+	CountCustomerPanelReservations(ctx context.Context, arg CountCustomerPanelReservationsParams) (int64, error)
 	CountCustomers(ctx context.Context, arg CountCustomersParams) (int64, error)
 	// Live branches and staff seats of a business: members, open invitations
 	// and staff without an account (a staff record linked to a member uses the
@@ -111,6 +118,13 @@ type Querier interface {
 	// carries its uuid.
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateCustomerIdentityLink(ctx context.Context, arg CreateCustomerIdentityLinkParams) (CustomerIdentityLink, error)
+	// Shared customer panel (TEC-909). customer_otp_challenges and
+	// customer_sessions are platform-level. Every read of business data starts
+	// from the identity's verified links (customer_identity_links), never from
+	// a phone typed by the caller, and joins each tenant table on the link's
+	// organization_id.
+	CreateCustomerOTPChallenge(ctx context.Context, arg CreateCustomerOTPChallengeParams) (CustomerOtpChallenge, error)
+	CreateCustomerSession(ctx context.Context, arg CreateCustomerSessionParams) (CustomerSession, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
 	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
 	// Staff invitations (TEC-671). Organization-side queries are scoped by
@@ -154,6 +168,14 @@ type Querier interface {
 	CreateTenantRole(ctx context.Context, arg CreateTenantRoleParams) (CreateTenantRoleRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
+	// Amounts per currency, payment state and whether the visit still stands
+	// (cancelled / rejected visits count only for refunds). Currencies are
+	// never added together.
+	CustomerPanelPaymentTotals(ctx context.Context, identityID int64) ([]CustomerPanelPaymentTotalsRow, error)
+	// Whether a live business keeps a live customer record with the phone, or
+	// the phone was verified before. Codes go only to such phones (no SMS to
+	// arbitrary numbers); the answer to the caller is the same either way.
+	CustomerPhoneKnown(ctx context.Context, phoneE164 pgtype.Text) (bool, error)
 	CustomerPhoneTaken(ctx context.Context, arg CustomerPhoneTakenParams) (bool, error)
 	// Self-service account deletion: keep every row, mark the user disabled.
 	DeactivateUser(ctx context.Context, id int64) (User, error)
@@ -180,6 +202,7 @@ type Querier interface {
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
 	DeleteServiceStaffExcept(ctx context.Context, arg DeleteServiceStaffExceptParams) error
 	DeleteStaffTimeOff(ctx context.Context, arg DeleteStaffTimeOffParams) (int64, error)
+	DeleteStaleCustomerOTPChallenges(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	DeleteStorageShare(ctx context.Context, argUuid uuid.UUID) error
 	DeleteStorageStar(ctx context.Context, arg DeleteStorageStarParams) error
 	DeleteStorageTrashByUUID(ctx context.Context, argUuid uuid.UUID) error
@@ -237,7 +260,11 @@ type Querier interface {
 	GetCustomerByPhone(ctx context.Context, arg GetCustomerByPhoneParams) (GetCustomerByPhoneRow, error)
 	GetCustomerIdentityByPhone(ctx context.Context, phoneE164 string) (CustomerIdentity, error)
 	GetCustomerIdentityLink(ctx context.Context, arg GetCustomerIdentityLinkParams) (CustomerIdentityLink, error)
+	// One reservation of the identity: its business and branch context. Any
+	// uuid outside the identity's links answers no rows.
+	GetCustomerPanelReservation(ctx context.Context, arg GetCustomerPanelReservationParams) (GetCustomerPanelReservationRow, error)
 	GetCustomerSearchDocument(ctx context.Context, arg GetCustomerSearchDocumentParams) (GetCustomerSearchDocumentRow, error)
+	GetCustomerSession(ctx context.Context, argUuid uuid.UUID) (GetCustomerSessionRow, error)
 	GetExportJobByID(ctx context.Context, id int64) (ExportJob, error)
 	GetExportJobByUUID(ctx context.Context, argUuid uuid.UUID) (ExportJob, error)
 	GetGitHubAppSettings(ctx context.Context) (GithubAppSetting, error)
@@ -247,6 +274,7 @@ type Querier interface {
 	GetIntegrationAccountByID(ctx context.Context, arg GetIntegrationAccountByIDParams) (GetIntegrationAccountByIDRow, error)
 	GetInvitationByUUID(ctx context.Context, arg GetInvitationByUUIDParams) (OrganizationInvitation, error)
 	GetInvitationPreviewByTokenHash(ctx context.Context, tokenHash string) (GetInvitationPreviewByTokenHashRow, error)
+	GetLatestCustomerOTPChallenge(ctx context.Context, phoneE164 string) (CustomerOtpChallenge, error)
 	// The business's own record of an identity (customer panel, online booking).
 	GetLinkedCustomer(ctx context.Context, arg GetLinkedCustomerParams) (GetLinkedCustomerRow, error)
 	GetLogPurgeRuleByUUID(ctx context.Context, argUuid uuid.UUID) (LogPurgeRule, error)
@@ -258,6 +286,9 @@ type Querier interface {
 	GetOAuthAccountByProviderAccount(ctx context.Context, arg GetOAuthAccountByProviderAccountParams) (GetOAuthAccountByProviderAccountRow, error)
 	GetOAuthAccountByUserProvider(ctx context.Context, arg GetOAuthAccountByUserProviderParams) (GetOAuthAccountByUserProviderRow, error)
 	GetOAuthProviderSettings(ctx context.Context, provider string) (OauthProviderSetting, error)
+	// The open code of a phone. Attempts are counted and the code consumed
+	// with single atomic updates, so no lock is held.
+	GetOpenCustomerOTPChallenge(ctx context.Context, arg GetOpenCustomerOTPChallengeParams) (CustomerOtpChallenge, error)
 	GetOrganizationByID(ctx context.Context, id int64) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
 	GetOrganizationByUUID(ctx context.Context, argUuid uuid.UUID) (Organization, error)
@@ -429,6 +460,10 @@ type Querier interface {
 	ListCashMovementKindFacets(ctx context.Context, arg ListCashMovementKindFacetsParams) ([]ListCashMovementKindFacetsRow, error)
 	ListCashMovements(ctx context.Context, arg ListCashMovementsParams) ([]ListCashMovementsRow, error)
 	ListCashTransferLegs(ctx context.Context, arg ListCashTransferLegsParams) ([]ListCashTransferLegsRow, error)
+	// The businesses that linked the identity, with the person's name as each
+	// business keeps it.
+	ListCustomerPanelBusinesses(ctx context.Context, identityID int64) ([]ListCustomerPanelBusinessesRow, error)
+	ListCustomerPanelReservations(ctx context.Context, arg ListCustomerPanelReservationsParams) ([]ListCustomerPanelReservationsRow, error)
 	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)
 	ListCustomerSourceFacets(ctx context.Context, organizationID int64) ([]ListCustomerSourceFacetsRow, error)
 	ListCustomerTagFacets(ctx context.Context, organizationID int64) ([]ListCustomerTagFacetsRow, error)
@@ -595,6 +630,9 @@ type Querier interface {
 	ListTenantRolePermissionSlugsByRoleID(ctx context.Context, roleID int64) ([]string, error)
 	// Template roles plus the roles created by this organization.
 	ListTenantRolesForOrganization(ctx context.Context, organizationID int64) ([]ListTenantRolesForOrganizationRow, error)
+	// Live records with the proven phone that are not linked yet, in every live
+	// business. The caller links each one with customers.LinkVerified.
+	ListUnlinkedCustomersByPhone(ctx context.Context, phoneE164 pgtype.Text) ([]ListUnlinkedCustomersByPhoneRow, error)
 	ListUserRoleSlugs(ctx context.Context, userID int64) ([]string, error)
 	ListUserRolesByUserID(ctx context.Context, userID int64) ([]Role, error)
 	ListUserRolesByUserUUID(ctx context.Context, argUuid uuid.UUID) ([]Role, error)
@@ -669,6 +707,8 @@ type Querier interface {
 	// Bulk delete rollback.
 	RestoreCustomer(ctx context.Context, arg RestoreCustomerParams) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
+	RevokeCustomerSession(ctx context.Context, arg RevokeCustomerSessionParams) (int64, error)
+	RevokeCustomerSessionsOfIdentity(ctx context.Context, arg RevokeCustomerSessionsOfIdentityParams) (int64, error)
 	RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (OrganizationInvitation, error)
 	// Re-inviting an e-mail replaces its open (possibly expired) invitation.
 	RevokeOpenInvitationsForEmail(ctx context.Context, arg RevokeOpenInvitationsForEmailParams) (int64, error)
@@ -726,6 +766,7 @@ type Querier interface {
 	TenantActivityFacets(ctx context.Context, arg TenantActivityFacetsParams) ([]TenantActivityFacetsRow, error)
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
 	TouchBranch(ctx context.Context, arg TouchBranchParams) error
+	TouchCustomerSession(ctx context.Context, arg TouchCustomerSessionParams) error
 	UncategorizeServices(ctx context.Context, arg UncategorizeServicesParams) error
 	UnlockRunnerJob(ctx context.Context, arg UnlockRunnerJobParams) error
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)

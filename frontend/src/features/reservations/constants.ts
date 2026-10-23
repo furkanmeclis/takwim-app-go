@@ -91,6 +91,7 @@ export const CANCEL_REASON_KEYS: Record<string, string> = {
   business: "reservations.cancel_reasons.business",
   approval_timeout: "reservations.cancel_reasons.approval_timeout",
   payment_timeout: "reservations.cancel_reasons.payment_timeout",
+  customer_cancelled: "reservations.cancel_reasons.customer_cancelled",
 };
 
 /** Which actions a state allows (mirrors the API's transitions). */

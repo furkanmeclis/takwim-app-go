@@ -43,6 +43,9 @@ import (
 	cashhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/handler"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	customerpanelmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel"
+	customerpanelhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/handler"
+	customerpanelusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/usecase"
 	customersmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers"
 	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
 	customershandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/handler"
@@ -140,6 +143,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
 	searchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine/adapters"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sms"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/stepup"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/queue"
@@ -592,6 +596,21 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Public booking API (TEC-906): business page, widget and mobile app.
 	publicSvc := publicbookingusecase.New(deps.Queries, orgsettingsSvc, availabilitySvc, capacityHolds, reservationsSvc, fieldCipher)
 	publicSvc.SetIndexer(searchIndexer)
+	// Shared customer panel (TEC-909): /v1/customer/*, its own token kind.
+	// The SMS provider is not chosen yet (TEC-884): the log sender stands in
+	// and shows message texts outside production only.
+	panelSender := sms.NewLogSender(log, cfg.App.Env != "production")
+	panelSvc := customerpanelusecase.New(deps.Queries, tokens, fieldCipher, panelSender, customersSvc, customerpanelusecase.PanelDeps{
+		Reservations: reservationsSvc, Availability: availabilitySvc, Settings: orgsettingsSvc,
+	}, log)
+	panelCfg := customerpanelusecase.DefaultConfig
+	panelCfg.PanelURL = strings.TrimRight(cfg.Auth.FrontendURL, "/") + "/panel"
+	panelSvc.SetConfig(panelCfg)
+	panelH := customerpanelhandler.New(panelSvc, activityRec)
+	panelH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	panelH.SetResourceEvents(resourceEvents)
+	customerpanelmodule.RegisterRoutes(mux, panelH)
+	publicSvc.SetPanelNotifier(panelSvc)
 	publicH := publicbookinghandler.New(publicSvc, deps.Storage, activityRec)
 	publicH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	publicH.SetResourceEvents(resourceEvents)

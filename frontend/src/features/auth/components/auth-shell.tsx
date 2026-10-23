@@ -9,7 +9,14 @@ import { ThemeSwitch } from "@/components/layout/theme-switch";
 import { routes } from "@/config/routes";
 import { useLocale } from "@/providers/locale-provider";
 
-export function AuthShell({ children }: { children: ReactNode }) {
+export function AuthShell({
+  children,
+  homeHref = routes.guest.login,
+}: {
+  children: ReactNode;
+  /** Where the wordmark leads (the customer panel uses its own sign-in). */
+  homeHref?: string;
+}) {
   const { t } = useLocale();
 
   return (
@@ -20,7 +27,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       </div>
       <div className="flex w-full max-w-sm flex-col gap-6">
         <Link
-          href={routes.guest.login}
+          href={homeHref}
           className="self-center"
           aria-label={t("common.app_product")}
         >

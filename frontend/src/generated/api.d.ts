@@ -6256,6 +6256,251 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customer/auth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a sign-in code
+         * @description Sends a six-digit code by SMS when a live business keeps a customer
+         *     record with the phone (or the phone was verified before). The answer
+         *     is the same for every valid phone, whether a code went out, the
+         *     60 second cooldown or the hourly cap (5 codes) applied, or the phone
+         *     is unknown. Limits: 10 per IP and 5 per phone in 10 minutes.
+         */
+        post: operations["startCustomerSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/auth/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange the code for a panel session
+         * @description A code works for 5 minutes, once, with 5 attempts. Every failure
+         *     answers `400 OTP_INVALID`. On success the verified phone links the
+         *     person's records in every business (`customer_identity_links`,
+         *     source `panel_login`) and a session opens: `access_token` is a
+         *     customer token (send it as `Authorization: Bearer`) that expires
+         *     with the session's 30 day cap; an idle week also ends it. The web
+         *     BFF moves the token into an httpOnly cookie and drops it from the
+         *     answer. Limits: 30 per IP and 10 per phone in 10 minutes.
+         */
+        post: operations["verifyCustomerSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the session */
+        post: operations["customerLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in person
+         * @description Phone, the businesses that linked it (with the name each keeps) and the sessions.
+         */
+        get: operations["getCustomerProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The person's visits in every business
+         * @description Only visits of the records linked to the session's identity. `upcoming`
+         *     is requested, booked or in service and not over (soonest first);
+         *     `past` is everything else (newest first).
+         */
+        get: operations["listCustomerReservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/reservations/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One visit
+         * @description Lines, place, policy texts, the customer-visible history and the
+         *     actions the business rules allow now. Another person's visit, an
+         *     unknown or a malformed id all answer `404`.
+         */
+        get: operations["getCustomerReservation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/reservations/{uuid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a visit
+         * @description Allowed for a requested or booked visit until the business's cancel
+         *     cutoff (`cancel_cutoff_minutes` before the start). The capacity is
+         *     freed and the reason is `customer_cancelled`. Not allowed:
+         *     `409 ACTION_NOT_ALLOWED` with detail `cancel` / `status`, `cutoff`
+         *     or `business_unavailable`. Send an `Idempotency-Key`.
+         */
+        post: operations["cancelCustomerReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/reservations/{uuid}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Free starts to move a visit to
+         * @description The same services and staff on the online channel (the business's
+         *     minimum notice, booking window and online visibility apply), local
+         *     dates of the branch. The current start is left out. Not allowed:
+         *     `409 ACTION_NOT_ALLOWED` with detail `reschedule` / reason.
+         */
+        post: operations["searchCustomerReservationStarts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/reservations/{uuid}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a visit
+         * @description Allowed until the business's change cutoff, when the business takes
+         *     online bookings. The visit is planned again with the same services
+         *     and staff; a taken start answers `409` `starts_at` / `taken` and
+         *     changes nothing, a stale `expected_version` `409` `expected_version`
+         *     / `stale`. Send an `Idempotency-Key`.
+         */
+        post: operations["rescheduleCustomerReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Visits with money (Ödemelerim)
+         * @description The visit list without visits that ended with no money moving
+         *     (cancelled or rejected and unpaid). Same filters as the visit list;
+         *     newest first.
+         */
+        get: operations["listCustomerPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/payments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Amounts per currency
+         * @description Currencies are never added together.
+         */
+        get: operations["getCustomerPaymentSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11185,6 +11430,230 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["PublicReservation"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        CustomerSignInStart: {
+            /** @enum {string} */
+            status: "code_sent_if_known";
+            /** @example +90532*****33 */
+            phone_masked: string;
+            resend_after_seconds: number;
+            code_ttl_seconds: number;
+        };
+        CustomerBusiness: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            name: string;
+            /** @description The name this business keeps for the person. */
+            first_name: string;
+            last_name: string;
+            /** Format: date-time */
+            linked_at: string;
+            /** Format: int64 */
+            reservation_count: number;
+        };
+        CustomerProfile: {
+            /** @description E.164 */
+            phone: string;
+            phone_display: string;
+            /** Format: date-time */
+            verified_at: string;
+            /** Format: date-time */
+            session_expires_at: string;
+            /** Format: int64 */
+            active_sessions: number;
+            businesses: components["schemas"]["CustomerBusiness"][];
+        };
+        CustomerSession: {
+            /** @description Customer token (Bearer). The web BFF removes it from the answer and keeps it in an httpOnly cookie. */
+            access_token?: string;
+            /** @enum {string} */
+            token_type?: "Bearer";
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Set by the web BFF instead of the token. */
+            authenticated?: boolean;
+            profile: components["schemas"]["CustomerProfile"];
+        };
+        /**
+         * @description The recorded payment picture of a visit. Until the payment ledger
+         *     records amounts, an online payment is the full total and a refund
+         *     the full total once refunded (`refunded` is null when unknown).
+         *     `balance` is null for a finished visit paid at the business.
+         */
+        CustomerMoney: {
+            total: components["schemas"]["MoneyAmount"];
+            paid: components["schemas"]["MoneyAmount"];
+            refunded: components["schemas"]["MoneyAmount"] | null;
+            balance: components["schemas"]["MoneyAmount"] | null;
+            currency: string;
+            /** @enum {string} */
+            method: "on_site" | "online";
+            /** @enum {string} */
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+        };
+        CustomerRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        CustomerReservationItem: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+            business: {
+                /** Format: uuid */
+                uuid: string;
+                slug: string;
+                name: string;
+            };
+            branch: components["schemas"]["CustomerRef"];
+            timezone: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            upcoming: boolean;
+            /** @enum {string} */
+            status: "requested" | "active" | "in_service" | "completed" | "cancelled" | "rejected" | "no_show";
+            /** @enum {string} */
+            approval_status: "pending" | "accepted" | "rejected";
+            /** @enum {string} */
+            confirmation_status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
+            /** @enum {string} */
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            cancel_reason: string | null;
+            services: string[];
+            staff: string[];
+            money: components["schemas"]["CustomerMoney"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        CustomerAction: {
+            allowed: boolean;
+            /**
+             * Format: date-time
+             * @description The last moment the action is allowed.
+             */
+            until: string | null;
+            /** @enum {string|null} */
+            reason: "status" | "cutoff" | "business_unavailable" | "online_unavailable" | "services_changed" | null;
+        };
+        CustomerReservation: components["schemas"]["CustomerReservationItem"] & {
+            branch: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                address: string;
+                city: string;
+                district: string;
+                phone: string;
+            };
+            version: number;
+            customer_note: string;
+            /** Format: date-time */
+            hold_expires_at: string | null;
+            lines: {
+                service_name: string;
+                staff_name: string | null;
+                /** Format: date-time */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+                duration_minutes: number;
+                unit_price: components["schemas"]["MoneyAmount"];
+            }[];
+            policies: {
+                cancellation: string;
+                change: string;
+                no_show: string;
+                cancel_cutoff_minutes: number | null;
+                change_cutoff_minutes: number | null;
+            };
+            actions: {
+                cancel: components["schemas"]["CustomerAction"];
+                reschedule: components["schemas"]["CustomerAction"];
+            };
+            history: {
+                type: string;
+                to_status: string | null;
+                /** Format: date-time */
+                at: string;
+            }[];
+        };
+        CustomerReservationPage: {
+            items: components["schemas"]["CustomerReservationItem"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CustomerAvailability: {
+            timezone: string;
+            /** Format: date-time */
+            earliest_start: string;
+            /** Format: date */
+            latest_date: string | null;
+            days: {
+                /** Format: date */
+                date: string;
+                status: string;
+                starts: string[];
+            }[];
+        };
+        CustomerPaymentSummary: {
+            totals: {
+                currency: string;
+                booked: components["schemas"]["MoneyAmount"];
+                paid: components["schemas"]["MoneyAmount"];
+                refund_pending: components["schemas"]["MoneyAmount"];
+                refunded: components["schemas"]["MoneyAmount"];
+                /** Format: int64 */
+                reservation_count: number;
+            }[];
+        };
+        EnvelopeCustomerSignInStart: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerSignInStart"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerSession: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerSession"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerProfile: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerProfile"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerReservationPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerReservationPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerReservation: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerReservation"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerAvailability: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerAvailability"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPaymentSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPaymentSummary"];
             meta: components["schemas"]["ResponseMeta"];
         };
     };
@@ -22821,6 +23290,326 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    startCustomerSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Any spelling; a number without a country code is Turkish.
+                     * @example 0532 111 22 33
+                     */
+                    phone: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Code sent if the phone is known */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerSignInStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    verifyCustomerSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    phone: string;
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    customerLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description End every session of the person. */
+                    everywhere?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getCustomerProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerProfile"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listCustomerReservations: {
+        parameters: {
+            query?: {
+                scope?: "upcoming" | "past" | "all";
+                business?: string;
+                /** @description Comma-separated reservation statuses */
+                status?: string;
+                sort?: "starts_at" | "-starts_at";
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCustomerReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelCustomerReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    expected_version?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Cancelled visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    searchCustomerReservationStarts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date */
+                    from?: string;
+                    /** Format: date */
+                    to?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Free starts per day */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerAvailability"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    rescheduleCustomerReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date-time */
+                    starts_at: string;
+                    expected_version?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Moved visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listCustomerPayments: {
+        parameters: {
+            query?: {
+                scope?: "upcoming" | "past" | "all";
+                business?: string;
+                sort?: "starts_at" | "-starts_at";
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visits with money */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getCustomerPaymentSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPaymentSummary"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
         };
     };
 }

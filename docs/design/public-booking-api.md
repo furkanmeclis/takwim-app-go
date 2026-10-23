@@ -114,7 +114,7 @@ It has composite foreign keys to branches, capacity holds and reservations, and 
 - **Phone verification and the customer panel** (TEC-909 / TEC-910): see above.
 - **Packages and products in the public catalog.** They come with their catalog modules (bundles TEC-895, products TEC-918 / TEC-919).
 - **Payment.** An online payment link for `online_pending` bookings comes with the payment layer (TEC-912). Until then the booking answers `requested` / `online_pending` with `expires_at`.
-- **Customer actions.** Cancellation and change requests come with the customer panel (TEC-909); booking form fields with flow customization (TEC-905).
+- **Customer actions.** Cancellation and rescheduling live in the customer panel ([customer-panel.md](./customer-panel.md), TEC-909), which also sends the panel link by SMS after a new booking; booking form fields come with flow customization (TEC-905).
 
 ## Tests
 
