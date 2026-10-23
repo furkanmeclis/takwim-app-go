@@ -21,15 +21,20 @@ const (
 	// IdempotentReplayedHeader marks a response replayed from the store.
 	IdempotentReplayedHeader = "Idempotent-Replayed"
 
+	// PublicIdempotencyPrefix: anonymous requests under it (the public
+	// booking API) are replayed too.
+	PublicIdempotencyPrefix = "/v1/public/businesses/"
+
 	maxIdempotencyKey   = 255
 	maxIdempotentBody   = 10 << 20
 	maxIdempotentRecord = 1 << 20
 )
 
 // Idempotency replays the outcome of authenticated POST / PUT / PATCH /
-// DELETE requests that carry an Idempotency-Key (see package idempotency).
-// Requests without the header, safe methods, anonymous requests and a nil
-// store pass through unchanged.
+// DELETE requests that carry an Idempotency-Key (see package idempotency),
+// and of anonymous ones under PublicIdempotencyPrefix. Requests without the
+// header, safe methods, other anonymous requests and a nil store pass
+// through unchanged.
 func Idempotency(store idempotency.Store, tokens *jwt.Manager, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if store == nil || tokens == nil {
@@ -41,8 +46,15 @@ func Idempotency(store idempotency.Store, tokens *jwt.Manager, log *slog.Logger)
 				next.ServeHTTP(w, r)
 				return
 			}
-			claims, err := tokens.ParseAccess(bearerToken(r.Header.Get("Authorization")))
-			if err != nil {
+			subject := ""
+			if claims, err := tokens.ParseAccess(bearerToken(r.Header.Get("Authorization"))); err == nil {
+				subject = claims.Subject
+			} else if strings.HasPrefix(r.URL.Path, PublicIdempotencyPrefix) {
+				// Public booking API: anonymous callers share one scope; the
+				// key (a client-generated uuid) and the body fingerprint
+				// separate them.
+				subject = "public"
+			} else {
 				// Authentication rejects it (or the route is public).
 				next.ServeHTTP(w, r)
 				return
@@ -65,7 +77,7 @@ func Idempotency(store idempotency.Store, tokens *jwt.Manager, log *slog.Logger)
 				return
 			}
 
-			scope := hash(claims.Subject, r.Header.Get("X-Organization"), r.Method, r.URL.Path, key)
+			scope := hash(subject, r.Header.Get("X-Organization"), r.Method, r.URL.Path, key)
 			fp := hash(r.Method, r.URL.RequestURI(), string(body))
 			ctx := r.Context()
 			existing, err := store.Reserve(ctx, scope, fp)
@@ -92,7 +104,8 @@ func Idempotency(store idempotency.Store, tokens *jwt.Manager, log *slog.Logger)
 					_ = store.Release(ctx, scope)
 					panic(p)
 				}
-				if rec.status >= 500 || rec.overflow {
+				// 5xx and 429 (rate limited) free the key: the retry runs again.
+				if rec.status >= 500 || rec.status == http.StatusTooManyRequests || rec.overflow {
 					_ = store.Release(ctx, scope)
 					return
 				}

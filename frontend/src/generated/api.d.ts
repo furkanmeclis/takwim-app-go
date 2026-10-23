@@ -5108,6 +5108,259 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/businesses/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Business profile and booking page context
+         * @description No authentication. The business page (`takwim.link/{slug}`), the
+         *     embedded widget and the mobile app start here: name, logo, sector
+         *     flow and terms, public contact details, policy texts and whether /
+         *     how the business takes bookings (`booking`). A channel books when
+         *     `booking.ready` and `booking.channels[channel]`. Unknown, suspended
+         *     and expired businesses all answer `404`. Rate limited per IP.
+         */
+        get: operations["getPublicBusiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Business logo
+         * @description No authentication. Use the `logo_url` of the profile (it carries a version).
+         */
+        get: operations["getPublicBusinessLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Branches shown online
+         * @description No authentication. Active branches with `show_online`, with weekly
+         *     hours, today's and later special days and photos (API-owned URLs).
+         *     A single branch means the page skips the branch step.
+         */
+        get: operations["listPublicBranches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bookable services
+         * @description No authentication. Active services with `show_online` that a public
+         *     branch offers, with their branch prices and durations and the people
+         *     shown online who perform them (personal price / duration when set;
+         *     the booking uses personal › branch › list). With `branch_uuid` only
+         *     that branch's services, priced for it; a hidden branch or another
+         *     business's is `400` detail `branch_uuid` / `not_found`.
+         */
+        get: operations["listPublicServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff shown online
+         * @description No authentication. Active people with `show_online` working in a
+         *     public branch, with their public branches and bookable services. No
+         *     contact details. Filters `branch_uuid` and `service_uuid` (`400`
+         *     `not_found` for hidden or foreign records).
+         */
+        get: operations["listPublicStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bookable start times (online channel)
+         * @description No authentication. The panel's slot engine on the online channel:
+         *     services, staff and resources shown online, the minimum notice and
+         *     maximum advance of the business settings. Same body and day statuses
+         *     as the panel search, without buffers and resources. `409
+         *     BOOKING_UNAVAILABLE` (detail `channel` / `module_disabled`,
+         *     `online_not_ready` or `channel_disabled`) when the business does not
+         *     take bookings on `channel`. Rate limited per IP.
+         */
+        post: operations["postPublicAvailability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/checkouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hold the picked slot during checkout
+         * @description No authentication. Holds the slot for the customer while they fill
+         *     in the contact form (a `checkout` capacity hold of the online
+         *     channel, `booking.checkout_minutes`, 10 by default) and returns the
+         *     checkout `token` with the planned lines (the staff member of each
+         *     line is kept for the booking). `409` detail `starts_at` / `taken`
+         *     when the slot is gone; the gate of `availability` applies. Send an
+         *     `Idempotency-Key` so a retried request does not hold twice. Rate
+         *     limited per IP.
+         */
+        post: operations["postPublicCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/checkouts/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A checkout
+         * @description No authentication; the token is the secret. `status` is `active`,
+         *     `expired` (its time may still be free), `released` or `booked`
+         *     (with `reservation_uuid`).
+         */
+        get: operations["getPublicCheckout"];
+        put?: never;
+        post?: never;
+        /**
+         * Release a checkout
+         * @description No authentication. Frees the held slot when the customer goes back.
+         *     A booked, expired or released checkout is returned as it is.
+         */
+        delete: operations["deletePublicCheckout"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a checkout
+         * @description No authentication. Books the checkout for the customer identified by
+         *     phone (normalized to E.164; numbers without a country code are
+         *     Turkish). The business's live customer record with that phone is
+         *     used as it is; otherwise a new record (source `online`, unverified)
+         *     is created. The checkout's time is freed and booked again in one
+         *     transaction, so an expired checkout still books while its time is
+         *     free (`409` `starts_at` / `taken` otherwise). The business settings
+         *     decide the state: auto approval and payment on site → `active`;
+         *     staff approval → `requested` until the business accepts; online
+         *     payment → `requested` / `online_pending` until paid (`expires_at`).
+         *
+         *     A checkout books once: a retry answers `200` with the same
+         *     reservation and `Idempotent-Replayed: true`. The answer carries the
+         *     reservation's `access_token` for the status route; keep it. A filled
+         *     `website` (honeypot) is `400` `website` / `rejected`. Rate limited
+         *     per IP and per phone of the business.
+         */
+        post: operations["postPublicReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/reservations/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reservation status
+         * @description No authentication; `X-Reservation-Token` must be the reservation's
+         *     `access_token` from the booking answer. A missing or wrong token, an
+         *     unknown reservation and another business's slug all answer `404`.
+         *     The view has no internal notes, history or resources.
+         */
+        get: operations["getPublicReservation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -8906,6 +9159,350 @@ export interface components {
                 [key: string]: string;
             };
         };
+        PublicRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        /**
+         * @description Sales channel of the caller (business settings `sales_channels`); the mobile app and partners use `api`.
+         * @default web
+         * @enum {string}
+         */
+        PublicChannel: "web" | "widget" | "api";
+        PublicBusiness: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            name: string;
+            /** @description API-owned logo URL (versioned). */
+            logo_url: string | null;
+            /** @enum {string} */
+            sector: "hairdresser" | "restaurant" | "gym" | "car_wash" | "clinic" | "beauty_salon";
+            /** @example Europe/Istanbul */
+            timezone: string;
+            /** @example TRY */
+            currency: string;
+            /** @description The sector's default customer booking steps. */
+            flow: string[];
+            /** @description Sector term codes (`staff`, `resource`, `booking`). */
+            terms: {
+                [key: string]: string;
+            };
+            contact: {
+                phone: string;
+                email: string;
+                website: string;
+                address: string;
+            };
+            policies: {
+                cancellation: string;
+                change: string;
+                no_show: string;
+            };
+            booking: {
+                /** @description `web`, `widget`, `api` switched on or off. */
+                channels: {
+                    [key: string]: boolean;
+                };
+                /** @description Booking rules complete and the plan includes the booking page. */
+                ready: boolean;
+                unavailable: ("module_disabled" | "online_not_ready")[];
+                /** @enum {string} */
+                approval_mode: "" | "auto" | "staff";
+                min_lead_minutes: number | null;
+                max_advance_days: number | null;
+                cancel_cutoff_minutes: number | null;
+                change_cutoff_minutes: number | null;
+                payment_methods: ("on_site" | "online")[];
+                checkout_minutes: number;
+            };
+            branch_count: number;
+        };
+        PublicBranch: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            name: string;
+            description: string;
+            address: string;
+            city: string;
+            district: string;
+            latitude: number | null;
+            longitude: number | null;
+            phone: string;
+            email: string;
+            timezone: string;
+            /** @description Weekday key (`mon` … `sun`) → hours. */
+            working_hours: {
+                [key: string]: {
+                    closed: boolean;
+                    /** @example 09:00 */
+                    open: string;
+                    /** @example 18:00 */
+                    close: string;
+                };
+            };
+            special_days: {
+                /** Format: date */
+                date: string;
+                closed: boolean;
+                open: string;
+                close: string;
+                note: string;
+            }[];
+            images: {
+                /** Format: uuid */
+                uuid: string;
+                url: string;
+            }[];
+        };
+        PublicService: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            category: components["schemas"]["PublicRef"] | null;
+            /** @description The branch's with a branch filter, else the list value. */
+            duration_minutes: number;
+            price: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** @enum {string} */
+            payment_mode: "on_site" | "online" | "both";
+            /** @enum {string} */
+            staff_mode: "required" | "optional" | "none";
+            image_url: string | null;
+            branches: {
+                /** Format: uuid */
+                branch_uuid: string;
+                price: components["schemas"]["MoneyAmount"];
+                duration_minutes: number;
+            }[];
+            staff: {
+                /** Format: uuid */
+                staff_uuid: string;
+                price: components["schemas"]["MoneyAmount"] | null;
+                duration_minutes: number | null;
+            }[];
+        };
+        PublicStaff: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            title: string;
+            bio: string;
+            branch_uuids: string[];
+            service_uuids: string[];
+        };
+        PublicLineInput: {
+            /** Format: uuid */
+            service_uuid: string;
+            /**
+             * Format: uuid
+             * @description A person shown online who performs the service in the branch; null = anyone free.
+             */
+            staff_uuid?: string | null;
+        };
+        PublicAvailabilityRequest: {
+            /** Format: uuid */
+            branch_uuid: string;
+            lines: components["schemas"]["PublicLineInput"][];
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            /** @default 15 */
+            step_minutes: number;
+            channel?: components["schemas"]["PublicChannel"];
+        };
+        PublicSlotLine: {
+            /** Format: uuid */
+            service_uuid: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            staff: components["schemas"]["PublicRef"] | null;
+        };
+        PublicAvailability: {
+            branch: components["schemas"]["PublicRef"];
+            timezone: string;
+            /** Format: date-time */
+            earliest_start: string;
+            /** Format: date */
+            latest_date: string | null;
+            step_minutes: number;
+            lines: {
+                /** Format: uuid */
+                service_uuid: string;
+                service_name: string;
+                duration_minutes: number;
+                /** @enum {string} */
+                staff_mode: "required" | "optional" | "none";
+                staff: components["schemas"]["PublicRef"][];
+            }[];
+            days: {
+                /** Format: date */
+                date: string;
+                /** @enum {string} */
+                status: "available" | "closed" | "too_far" | "too_soon" | "no_staff" | "full";
+                slots: {
+                    /** Format: date-time */
+                    starts_at: string;
+                    /** Format: date-time */
+                    ends_at: string;
+                    lines: components["schemas"]["PublicSlotLine"][];
+                }[];
+            }[];
+        };
+        PublicCheckoutRequest: {
+            /** Format: uuid */
+            branch_uuid: string;
+            lines: components["schemas"]["PublicLineInput"][];
+            /**
+             * Format: date-time
+             * @description A slot start from the availability answer.
+             */
+            starts_at: string;
+            channel?: components["schemas"]["PublicChannel"];
+        };
+        PublicCheckout: {
+            /**
+             * Format: uuid
+             * @description The checkout token (secret of the client).
+             */
+            token: string;
+            /** @enum {string} */
+            status: "active" | "expired" | "released" | "booked";
+            channel: components["schemas"]["PublicChannel"];
+            branch: components["schemas"]["PublicRef"];
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** Format: date-time */
+            expires_at: string | null;
+            lines: components["schemas"]["PublicSlotLine"][];
+            /** Format: uuid */
+            reservation_uuid: string | null;
+        };
+        PublicBookingRequest: {
+            /** Format: uuid */
+            checkout_token: string;
+            customer: {
+                first_name: string;
+                last_name?: string;
+                /** @description Any common format; normalized to E.164 (Turkish without a country code). */
+                phone: string;
+                email?: string;
+                /** @default false */
+                sms_consent: boolean;
+                /** @default false */
+                email_consent: boolean;
+            };
+            /**
+             * @description Default: on site when the business and every service allow it.
+             * @enum {string}
+             */
+            payment?: "on_site" | "online";
+            customer_note?: string;
+            custom_fields?: {
+                [key: string]: unknown;
+            };
+            /** @description Honeypot: hidden from people, must stay empty. */
+            website?: string;
+        };
+        PublicReservation: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+            /** @enum {string} */
+            status: "requested" | "active" | "in_service" | "completed" | "cancelled" | "rejected" | "no_show";
+            /** @enum {string} */
+            approval_status: "pending" | "accepted" | "rejected";
+            /** @enum {string} */
+            confirmation_status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
+            /** @enum {string} */
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            branch: components["schemas"]["PublicRef"];
+            timezone: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            total_price: components["schemas"]["MoneyAmount"];
+            currency: string;
+            customer_note: string;
+            /**
+             * Format: date-time
+             * @description A request waiting for the business or for payment lets its time go then.
+             */
+            expires_at: string | null;
+            cancel_reason: string | null;
+            lines: {
+                /** Format: uuid */
+                service_uuid: string | null;
+                service_name: string;
+                staff: {
+                    /** Format: uuid */
+                    uuid: string | null;
+                    name: string;
+                } | null;
+                /** Format: date-time */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+                duration_minutes: number;
+                unit_price: components["schemas"]["MoneyAmount"];
+            }[];
+            /** Format: date-time */
+            created_at: string;
+            /** @description Only in the booking answer; send it as `X-Reservation-Token` to the status route. */
+            access_token?: string;
+        };
+        EnvelopePublicBusiness: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicBusiness"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicBranchList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicBranch"][];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicServiceList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicService"][];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicStaffList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicStaff"][];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicAvailability: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicAvailability"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicCheckout: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicCheckout"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicReservation: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicReservation"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
     };
     responses: {
         /** @description Integration account */
@@ -9023,6 +9620,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The business's slug (`takwim.link/{slug}`). */
+        PublicBusinessSlug: string;
+        /** @description Checkout token from `POST …/checkouts`. */
+        PublicCheckoutToken: string;
         InvitationUUID: string;
         /** @description Raw invitation token from the e-mail link (43 characters, base64url) */
         InvitationToken: string;
@@ -18397,6 +18998,345 @@ export interface operations {
             400: components["responses"]["OrganizationRequired"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getPublicBusiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Business */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicBusiness"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPublicBusinessLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logo image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPublicBranches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicBranchList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPublicServices: {
+        parameters: {
+            query?: {
+                branch_uuid?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Services */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicServiceList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPublicStaff: {
+        parameters: {
+            query?: {
+                branch_uuid?: string;
+                service_uuid?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Staff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicStaffList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postPublicAvailability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicAvailabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Days and slots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicAvailability"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postPublicCheckout: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Client-generated key (a UUID) for an unsafe request the client may
+                 *     retry. Scoped to the caller, `X-Organization`, method and path; kept
+                 *     24 hours. Same key + same body replays the first response with
+                 *     `Idempotent-Replayed: true`; same key + another body is `422
+                 *     IDEMPOTENCY_KEY_REUSED`; while the first request runs a retry gets
+                 *     `409 IDEMPOTENCY_IN_PROGRESS`. 5xx outcomes are not kept.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Checkout */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicCheckout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPublicCheckout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+                /** @description Checkout token from `POST …/checkouts`. */
+                token: components["parameters"]["PublicCheckoutToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checkout */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicCheckout"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deletePublicCheckout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+                /** @description Checkout token from `POST …/checkouts`. */
+                token: components["parameters"]["PublicCheckoutToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checkout */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicCheckout"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postPublicReservation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Client-generated key (a UUID) for an unsafe request the client may
+                 *     retry. Scoped to the caller, `X-Organization`, method and path; kept
+                 *     24 hours. Same key + same body replays the first response with
+                 *     `Idempotent-Replayed: true`; same key + another body is `422
+                 *     IDEMPOTENCY_KEY_REUSED`; while the first request runs a retry gets
+                 *     `409 IDEMPOTENCY_IN_PROGRESS`. 5xx outcomes are not kept.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicBookingRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation the checkout already became (replay) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicReservation"];
+                };
+            };
+            /** @description Reservation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPublicReservation: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Reservation-Token": string;
+            };
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reservation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicReservation"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

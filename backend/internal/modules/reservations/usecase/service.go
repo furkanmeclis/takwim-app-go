@@ -163,10 +163,27 @@ func (s *Service) planFor(ctx context.Context, orgID int64, in model.CreateInput
 	return p, nil
 }
 
+// CreateHooks let a caller take part in the booking's capacity transaction
+// (the public booking API, TEC-906): they run under the business's lock,
+// so what they write commits or fails together with the reservation.
+type CreateHooks struct {
+	// Before runs first in the transaction and returns the customer of the
+	// booking (it replaces CreateInput.CustomerUUID), e.g. after freeing
+	// the customer's checkout hold and finding or creating the customer.
+	Before func(ctx context.Context, tx *availabilityusecase.Tx) (uuid.UUID, error)
+	// After runs once the record and its lines are written.
+	After func(ctx context.Context, tx *availabilityusecase.Tx, reservationID int64) error
+}
+
 // Create books a visit: it holds the capacity (re-planned on fresh data
 // under the business's lock), writes the record with its lines at today's
 // prices and, when nothing is pending, turns the hold into a booking.
 func (s *Service) Create(ctx context.Context, orgID int64, in model.CreateInput, caller availabilityusecase.Caller, actorID int64) (model.Reservation, error) {
+	return s.CreateWith(ctx, orgID, in, caller, actorID, CreateHooks{})
+}
+
+// CreateWith is Create with hooks inside its transaction.
+func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateInput, caller availabilityusecase.Caller, actorID int64, hooks CreateHooks) (model.Reservation, error) {
 	ve := &ValidationError{}
 	switch in.Source {
 	case "":
@@ -175,7 +192,7 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.CreateInput,
 	default:
 		ve.add("source", "invalid", "source must be panel, online or embed")
 	}
-	if in.CustomerUUID == uuid.Nil {
+	if in.CustomerUUID == uuid.Nil && hooks.Before == nil {
 		ve.add("customer_uuid", "required", "customer is required")
 	}
 	if len(in.CustomerNote) > MaxNoteLength {
@@ -204,6 +221,13 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.CreateInput,
 	}
 	var id uuid.UUID
 	err = s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
+		if hooks.Before != nil {
+			customerUUID, err := hooks.Before(ctx, tx)
+			if err != nil {
+				return err
+			}
+			in.CustomerUUID = customerUUID
+		}
 		customer, err := tx.Q.GetReservationCustomer(ctx, db.GetReservationCustomerParams{OrganizationID: orgID, Uuid: in.CustomerUUID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			ve.add("customer_uuid", "not_found", "customer not found")
@@ -253,6 +277,11 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.CreateInput,
 		}
 		if p.confirm {
 			if err := s.holds.ConfirmIn(ctx, tx, created.ID, RefType, &row.Uuid); err != nil {
+				return err
+			}
+		}
+		if hooks.After != nil {
+			if err := hooks.After(ctx, tx, row.ID); err != nil {
 				return err
 			}
 		}

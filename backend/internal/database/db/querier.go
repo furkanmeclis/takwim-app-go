@@ -100,6 +100,7 @@ type Querier interface {
 	CreateOAuthAccount(ctx context.Context, arg CreateOAuthAccountParams) (OauthAccount, error)
 	CreateOTPCode(ctx context.Context, arg CreateOTPCodeParams) (OtpCode, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	CreatePublicCheckout(ctx context.Context, arg CreatePublicCheckoutParams) (PublicCheckout, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
 	CreateReservationEvent(ctx context.Context, arg CreateReservationEventParams) error
@@ -223,6 +224,16 @@ type Querier interface {
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
 	// Public media route: the image of a live branch of an active organization.
 	GetPublicBranchImage(ctx context.Context, arg GetPublicBranchImageParams) (GetPublicBranchImageRow, error)
+	GetPublicCheckout(ctx context.Context, arg GetPublicCheckoutParams) (GetPublicCheckoutRow, error)
+	GetPublicCheckoutForUpdate(ctx context.Context, arg GetPublicCheckoutForUpdateParams) (PublicCheckout, error)
+	// Public booking API (TEC-906): the business page, the widget and the
+	// mobile app read the catalog of one business, resolved from its slug.
+	// Every query below filters by the organization id of that business.
+	GetPublicOrganizationBySlug(ctx context.Context, slug string) (GetPublicOrganizationBySlugRow, error)
+	// What the public status view adds to the reservation: the source and
+	// the branch's time zone.
+	GetPublicReservationMeta(ctx context.Context, arg GetPublicReservationMetaParams) (GetPublicReservationMetaRow, error)
+	GetPublicReservationUUID(ctx context.Context, arg GetPublicReservationUUIDParams) (uuid.UUID, error)
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
 	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
 	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)
@@ -403,6 +414,18 @@ type Querier interface {
 	ListPlatformNotificationsForExport(ctx context.Context, arg ListPlatformNotificationsForExportParams) ([]Notification, error)
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
+	ListPublicBranchImages(ctx context.Context, arg ListPublicBranchImagesParams) ([]ListPublicBranchImagesRow, error)
+	// Active branches shown on the customer screens.
+	ListPublicBranches(ctx context.Context, organizationID int64) ([]ListPublicBranchesRow, error)
+	// Active branch offers of services (branch price / duration overrides).
+	ListPublicServiceOffers(ctx context.Context, organizationID int64) ([]ListPublicServiceOffersRow, error)
+	// Who may perform which service, with personal price / duration.
+	ListPublicServiceStaff(ctx context.Context, organizationID int64) ([]ListPublicServiceStaffRow, error)
+	// Active services shown online, with their category.
+	ListPublicServices(ctx context.Context, organizationID int64) ([]ListPublicServicesRow, error)
+	// Active staff shown online.
+	ListPublicStaff(ctx context.Context, organizationID int64) ([]ListPublicStaffRow, error)
+	ListPublicStaffBranches(ctx context.Context, organizationID int64) ([]ListPublicStaffBranchesRow, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
 	// Branches with reservations (in the caller's scope) for the list filter.
 	ListReservationBranchFacets(ctx context.Context, arg ListReservationBranchFacetsParams) ([]ListReservationBranchFacetsRow, error)
@@ -567,6 +590,7 @@ type Querier interface {
 	SetOrganizationAccessWindow(ctx context.Context, arg SetOrganizationAccessWindowParams) (Organization, error)
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
+	SetPublicCheckoutReservation(ctx context.Context, arg SetPublicCheckoutReservationParams) error
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
 	SetRolePermissions(ctx context.Context, roleID int64) error
 	SetServiceActive(ctx context.Context, arg SetServiceActiveParams) error

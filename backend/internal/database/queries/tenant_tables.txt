@@ -28,3 +28,4 @@ capacity_allocations
 reservations
 reservation_lines
 reservation_events
+public_checkouts

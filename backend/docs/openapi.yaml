@@ -50,6 +50,8 @@ tags:
     description: In-app notification center, preferences, and admin send
   - name: Organizations
     description: Invitation accept flow (`/invite/{token}`) and organization logos
+  - name: Public booking
+    description: Unauthenticated booking API of a business (`/v1/public/businesses/{slug}`) for the business page, the widget and the mobile app
 
 paths:
   /healthz:
@@ -8285,6 +8287,325 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
 
+  /v1/public/businesses/{slug}:
+    get:
+      tags: [Public booking]
+      operationId: getPublicBusiness
+      summary: Business profile and booking page context
+      description: |
+        No authentication. The business page (`takwim.link/{slug}`), the
+        embedded widget and the mobile app start here: name, logo, sector
+        flow and terms, public contact details, policy texts and whether /
+        how the business takes bookings (`booking`). A channel books when
+        `booking.ready` and `booking.channels[channel]`. Unknown, suspended
+        and expired businesses all answer `404`. Rate limited per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+      responses:
+        "200":
+          description: Business
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicBusiness"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/logo:
+    get:
+      tags: [Public booking]
+      operationId: getPublicBusinessLogo
+      summary: Business logo
+      description: No authentication. Use the `logo_url` of the profile (it carries a version).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+      responses:
+        "200":
+          description: Logo image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/branches:
+    get:
+      tags: [Public booking]
+      operationId: listPublicBranches
+      summary: Branches shown online
+      description: |
+        No authentication. Active branches with `show_online`, with weekly
+        hours, today's and later special days and photos (API-owned URLs).
+        A single branch means the page skips the branch step.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+      responses:
+        "200":
+          description: Branches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicBranchList"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/services:
+    get:
+      tags: [Public booking]
+      operationId: listPublicServices
+      summary: Bookable services
+      description: |
+        No authentication. Active services with `show_online` that a public
+        branch offers, with their branch prices and durations and the people
+        shown online who perform them (personal price / duration when set;
+        the booking uses personal › branch › list). With `branch_uuid` only
+        that branch's services, priced for it; a hidden branch or another
+        business's is `400` detail `branch_uuid` / `not_found`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - name: branch_uuid
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Services
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicServiceList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/staff:
+    get:
+      tags: [Public booking]
+      operationId: listPublicStaff
+      summary: Staff shown online
+      description: |
+        No authentication. Active people with `show_online` working in a
+        public branch, with their public branches and bookable services. No
+        contact details. Filters `branch_uuid` and `service_uuid` (`400`
+        `not_found` for hidden or foreign records).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - name: branch_uuid
+          in: query
+          schema: { type: string, format: uuid }
+        - name: service_uuid
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Staff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicStaffList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/availability:
+    post:
+      tags: [Public booking]
+      operationId: postPublicAvailability
+      summary: Bookable start times (online channel)
+      description: |
+        No authentication. The panel's slot engine on the online channel:
+        services, staff and resources shown online, the minimum notice and
+        maximum advance of the business settings. Same body and day statuses
+        as the panel search, without buffers and resources. `409
+        BOOKING_UNAVAILABLE` (detail `channel` / `module_disabled`,
+        `online_not_ready` or `channel_disabled`) when the business does not
+        take bookings on `channel`. Rate limited per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicAvailabilityRequest"
+      responses:
+        "200":
+          description: Days and slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicAvailability"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/checkouts:
+    post:
+      tags: [Public booking]
+      operationId: postPublicCheckout
+      summary: Hold the picked slot during checkout
+      description: |
+        No authentication. Holds the slot for the customer while they fill
+        in the contact form (a `checkout` capacity hold of the online
+        channel, `booking.checkout_minutes`, 10 by default) and returns the
+        checkout `token` with the planned lines (the staff member of each
+        line is kept for the booking). `409` detail `starts_at` / `taken`
+        when the slot is gone; the gate of `availability` applies. Send an
+        `Idempotency-Key` so a retried request does not hold twice. Rate
+        limited per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicCheckoutRequest"
+      responses:
+        "201":
+          description: Checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicCheckout"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/checkouts/{token}:
+    get:
+      tags: [Public booking]
+      operationId: getPublicCheckout
+      summary: A checkout
+      description: |
+        No authentication; the token is the secret. `status` is `active`,
+        `expired` (its time may still be free), `released` or `booked`
+        (with `reservation_uuid`).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/PublicCheckoutToken"
+      responses:
+        "200":
+          description: Checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicCheckout"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    delete:
+      tags: [Public booking]
+      operationId: deletePublicCheckout
+      summary: Release a checkout
+      description: |
+        No authentication. Frees the held slot when the customer goes back.
+        A booked, expired or released checkout is returned as it is.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/PublicCheckoutToken"
+      responses:
+        "200":
+          description: Checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicCheckout"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/reservations:
+    post:
+      tags: [Public booking]
+      operationId: postPublicReservation
+      summary: Book a checkout
+      description: |
+        No authentication. Books the checkout for the customer identified by
+        phone (normalized to E.164; numbers without a country code are
+        Turkish). The business's live customer record with that phone is
+        used as it is; otherwise a new record (source `online`, unverified)
+        is created. The checkout's time is freed and booked again in one
+        transaction, so an expired checkout still books while its time is
+        free (`409` `starts_at` / `taken` otherwise). The business settings
+        decide the state: auto approval and payment on site → `active`;
+        staff approval → `requested` until the business accepts; online
+        payment → `requested` / `online_pending` until paid (`expires_at`).
+
+        A checkout books once: a retry answers `200` with the same
+        reservation and `Idempotent-Replayed: true`. The answer carries the
+        reservation's `access_token` for the status route; keep it. A filled
+        `website` (honeypot) is `400` `website` / `rejected`. Rate limited
+        per IP and per phone of the business.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicBookingRequest"
+      responses:
+        "200":
+          description: The reservation the checkout already became (replay)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicReservation"
+        "201":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/reservations/{uuid}:
+    get:
+      tags: [Public booking]
+      operationId: getPublicReservation
+      summary: Reservation status
+      description: |
+        No authentication; `X-Reservation-Token` must be the reservation's
+        `access_token` from the booking answer. A missing or wrong token, an
+        unknown reservation and another business's slug all answer `404`.
+        The view has no internal notes, history or resources.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: X-Reservation-Token
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+      responses:
+        "200":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicReservation"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -8293,6 +8614,18 @@ components:
       bearerFormat: JWT
 
   parameters:
+    PublicBusinessSlug:
+      name: slug
+      in: path
+      required: true
+      description: The business's slug (`takwim.link/{slug}`).
+      schema: { type: string, maxLength: 64, example: kuafor-ayse }
+    PublicCheckoutToken:
+      name: token
+      in: path
+      required: true
+      description: Checkout token from `POST …/checkouts`.
+      schema: { type: string, format: uuid }
     InvitationUUID:
       name: invitationUuid
       in: path
@@ -13210,3 +13543,415 @@ components:
             redis:
               type: string
               examples: [ok, down]
+
+    # --- Public booking API (TEC-906) ----------------------------------------
+
+    PublicRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    PublicChannel:
+      type: string
+      enum: [web, widget, api]
+      default: web
+      description: Sales channel of the caller (business settings `sales_channels`); the mobile app and partners use `api`.
+
+    PublicBusiness:
+      type: object
+      required: [uuid, slug, name, logo_url, sector, timezone, currency, flow, terms, contact, policies, booking, branch_count]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        logo_url: { type: [string, "null"], description: "API-owned logo URL (versioned)." }
+        sector: { type: string, enum: [hairdresser, restaurant, gym, car_wash, clinic, beauty_salon] }
+        timezone: { type: string, example: Europe/Istanbul }
+        currency: { type: string, example: TRY }
+        flow:
+          type: array
+          description: The sector's default customer booking steps.
+          items: { type: string }
+        terms:
+          type: object
+          description: Sector term codes (`staff`, `resource`, `booking`).
+          additionalProperties: { type: string }
+        contact:
+          type: object
+          required: [phone, email, website, address]
+          properties:
+            phone: { type: string }
+            email: { type: string }
+            website: { type: string }
+            address: { type: string }
+        policies:
+          type: object
+          required: [cancellation, change, no_show]
+          properties:
+            cancellation: { type: string }
+            change: { type: string }
+            no_show: { type: string }
+        booking:
+          type: object
+          required: [channels, ready, unavailable, approval_mode, min_lead_minutes, max_advance_days, cancel_cutoff_minutes, change_cutoff_minutes, payment_methods, checkout_minutes]
+          properties:
+            channels:
+              type: object
+              additionalProperties: { type: boolean }
+              description: "`web`, `widget`, `api` switched on or off."
+            ready: { type: boolean, description: "Booking rules complete and the plan includes the booking page." }
+            unavailable:
+              type: array
+              items: { type: string, enum: [module_disabled, online_not_ready] }
+            approval_mode: { type: string, enum: ["", auto, staff] }
+            min_lead_minutes: { type: [integer, "null"] }
+            max_advance_days: { type: [integer, "null"] }
+            cancel_cutoff_minutes: { type: [integer, "null"] }
+            change_cutoff_minutes: { type: [integer, "null"] }
+            payment_methods:
+              type: array
+              items: { type: string, enum: [on_site, online] }
+            checkout_minutes: { type: integer }
+        branch_count: { type: integer }
+
+    PublicBranch:
+      type: object
+      required: [uuid, slug, name, description, address, city, district, latitude, longitude, phone, email, timezone, working_hours, special_days, images]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        address: { type: string }
+        city: { type: string }
+        district: { type: string }
+        latitude: { type: [number, "null"] }
+        longitude: { type: [number, "null"] }
+        phone: { type: string }
+        email: { type: string }
+        timezone: { type: string }
+        working_hours:
+          type: object
+          description: "Weekday key (`mon` … `sun`) → hours."
+          additionalProperties:
+            type: object
+            required: [closed, open, close]
+            properties:
+              closed: { type: boolean }
+              open: { type: string, example: "09:00" }
+              close: { type: string, example: "18:00" }
+        special_days:
+          type: array
+          items:
+            type: object
+            required: [date, closed, open, close, note]
+            properties:
+              date: { type: string, format: date }
+              closed: { type: boolean }
+              open: { type: string }
+              close: { type: string }
+              note: { type: string }
+        images:
+          type: array
+          items:
+            type: object
+            required: [uuid, url]
+            properties:
+              uuid: { type: string, format: uuid }
+              url: { type: string }
+
+    PublicService:
+      type: object
+      required: [uuid, name, description, category, duration_minutes, price, currency, payment_mode, staff_mode, image_url, branches, staff]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/PublicRef"
+            - type: "null"
+        duration_minutes: { type: integer, description: "The branch's with a branch filter, else the list value." }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        payment_mode: { type: string, enum: [on_site, online, both] }
+        staff_mode: { type: string, enum: [required, optional, none] }
+        image_url: { type: [string, "null"] }
+        branches:
+          type: array
+          items:
+            type: object
+            required: [branch_uuid, price, duration_minutes]
+            properties:
+              branch_uuid: { type: string, format: uuid }
+              price: { $ref: "#/components/schemas/MoneyAmount" }
+              duration_minutes: { type: integer }
+        staff:
+          type: array
+          items:
+            type: object
+            required: [staff_uuid, price, duration_minutes]
+            properties:
+              staff_uuid: { type: string, format: uuid }
+              price:
+                oneOf:
+                  - $ref: "#/components/schemas/MoneyAmount"
+                  - type: "null"
+              duration_minutes: { type: [integer, "null"] }
+
+    PublicStaff:
+      type: object
+      required: [uuid, name, title, bio, branch_uuids, service_uuids]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        title: { type: string }
+        bio: { type: string }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+        service_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    PublicLineInput:
+      type: object
+      additionalProperties: false
+      required: [service_uuid]
+      properties:
+        service_uuid: { type: string, format: uuid }
+        staff_uuid:
+          type: [string, "null"]
+          format: uuid
+          description: A person shown online who performs the service in the branch; null = anyone free.
+
+    PublicAvailabilityRequest:
+      type: object
+      additionalProperties: false
+      required: [branch_uuid, lines]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { $ref: "#/components/schemas/PublicLineInput" }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        step_minutes: { type: integer, minimum: 5, maximum: 240, multipleOf: 5, default: 15 }
+        channel: { $ref: "#/components/schemas/PublicChannel" }
+
+    PublicSlotLine:
+      type: object
+      required: [service_uuid, starts_at, ends_at, staff]
+      properties:
+        service_uuid: { type: string, format: uuid }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/PublicRef"
+            - type: "null"
+
+    PublicAvailability:
+      type: object
+      required: [branch, timezone, earliest_start, latest_date, step_minutes, lines, days]
+      properties:
+        branch: { $ref: "#/components/schemas/PublicRef" }
+        timezone: { type: string }
+        earliest_start: { type: string, format: date-time }
+        latest_date: { type: [string, "null"], format: date }
+        step_minutes: { type: integer }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [service_uuid, service_name, duration_minutes, staff_mode, staff]
+            properties:
+              service_uuid: { type: string, format: uuid }
+              service_name: { type: string }
+              duration_minutes: { type: integer }
+              staff_mode: { type: string, enum: [required, optional, none] }
+              staff:
+                type: array
+                items: { $ref: "#/components/schemas/PublicRef" }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, status, slots]
+            properties:
+              date: { type: string, format: date }
+              status: { type: string, enum: [available, closed, too_far, too_soon, no_staff, full] }
+              slots:
+                type: array
+                items:
+                  type: object
+                  required: [starts_at, ends_at, lines]
+                  properties:
+                    starts_at: { type: string, format: date-time }
+                    ends_at: { type: string, format: date-time }
+                    lines:
+                      type: array
+                      items: { $ref: "#/components/schemas/PublicSlotLine" }
+
+    PublicCheckoutRequest:
+      type: object
+      additionalProperties: false
+      required: [branch_uuid, lines, starts_at]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { $ref: "#/components/schemas/PublicLineInput" }
+        starts_at: { type: string, format: date-time, description: "A slot start from the availability answer." }
+        channel: { $ref: "#/components/schemas/PublicChannel" }
+
+    PublicCheckout:
+      type: object
+      required: [token, status, channel, branch, starts_at, ends_at, expires_at, lines, reservation_uuid]
+      properties:
+        token: { type: string, format: uuid, description: "The checkout token (secret of the client)." }
+        status: { type: string, enum: [active, expired, released, booked] }
+        channel: { $ref: "#/components/schemas/PublicChannel" }
+        branch: { $ref: "#/components/schemas/PublicRef" }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/PublicSlotLine" }
+        reservation_uuid: { type: [string, "null"], format: uuid }
+
+    PublicBookingRequest:
+      type: object
+      additionalProperties: false
+      required: [checkout_token, customer]
+      properties:
+        checkout_token: { type: string, format: uuid }
+        customer:
+          type: object
+          additionalProperties: false
+          required: [first_name, phone]
+          properties:
+            first_name: { type: string, maxLength: 80 }
+            last_name: { type: string, maxLength: 80 }
+            phone: { type: string, description: "Any common format; normalized to E.164 (Turkish without a country code)." }
+            email: { type: string, maxLength: 254 }
+            sms_consent: { type: boolean, default: false }
+            email_consent: { type: boolean, default: false }
+        payment: { type: string, enum: [on_site, online], description: "Default: on site when the business and every service allow it." }
+        customer_note: { type: string, maxLength: 2000 }
+        custom_fields: { type: object, additionalProperties: true }
+        website: { type: string, description: "Honeypot: hidden from people, must stay empty." }
+
+    PublicReservation:
+      type: object
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, lines, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+        status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }
+        approval_status: { type: string, enum: [pending, accepted, rejected] }
+        confirmation_status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        branch: { $ref: "#/components/schemas/PublicRef" }
+        timezone: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        total_price: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        customer_note: { type: string }
+        expires_at: { type: [string, "null"], format: date-time, description: "A request waiting for the business or for payment lets its time go then." }
+        cancel_reason: { type: [string, "null"] }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [service_uuid, service_name, staff, starts_at, ends_at, duration_minutes, unit_price]
+            properties:
+              service_uuid: { type: [string, "null"], format: uuid }
+              service_name: { type: string }
+              staff:
+                oneOf:
+                  - type: object
+                    required: [uuid, name]
+                    properties:
+                      uuid: { type: [string, "null"], format: uuid }
+                      name: { type: string }
+                  - type: "null"
+              starts_at: { type: string, format: date-time }
+              ends_at: { type: string, format: date-time }
+              duration_minutes: { type: integer }
+              unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+        created_at: { type: string, format: date-time }
+        access_token:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: Only in the booking answer; send it as `X-Reservation-Token` to the status route.
+
+    EnvelopePublicBusiness:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicBusiness" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicBranchList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBranch" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicServiceList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicService" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicStaffList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicStaff" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicAvailability:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicAvailability" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicCheckout:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicCheckout" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicReservation:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicReservation" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
