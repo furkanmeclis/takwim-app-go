@@ -118,5 +118,7 @@
   "groups.tenant_schedules": "Schedules and resources",
   "groups.tenant_customers": "Customers",
   "groups.tenant_finance": "Finance",
-  "groups.tenant_earnings": "Staff earnings"
+  "groups.tenant_earnings": "Staff earnings",
+  "labels.tenant.activity.read": "View activity history",
+  "groups.tenant_activity": "Activity history"
 }

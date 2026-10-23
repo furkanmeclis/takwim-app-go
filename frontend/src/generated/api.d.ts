@@ -2294,6 +2294,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/activity/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity history faceted filter options
+         * @description Resources and actions (with row counts) present in the caller's branch scope.
+         */
+        get: operations["getTenantActivityFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity history of the organization
+         * @description Who changed what and when (`tenant.activity.read`). Updates carry the
+         *     before / after of each changed field in `payload.changes`. A member
+         *     limited to some branches (or with `X-Branch` set) only sees events of
+         *     those branches; business-wide events are hidden from them. `q`
+         *     searches the action, resource, actor and branch name.
+         */
+        get: operations["getTenantActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/context": {
         parameters: {
             query?: never;
@@ -4730,6 +4774,59 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["TenantOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TenantActivityActor: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            surname: string;
+            email: string;
+        };
+        TenantActivityBranch: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        TenantActivityEvent: {
+            /** Format: uuid */
+            uuid: string;
+            /** @example branches.updated */
+            action: string;
+            /** @example branches */
+            resource: string;
+            /** Format: uuid */
+            resource_uuid: string | null;
+            /** @description Action details; `changes` maps each changed field to `{before, after}` */
+            payload: {
+                [key: string]: unknown;
+            };
+            actor: components["schemas"]["TenantActivityActor"] | null;
+            branch: components["schemas"]["TenantActivityBranch"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TenantActivityPage: {
+            items: components["schemas"]["TenantActivityEvent"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        TenantActivityFacets: {
+            resources: components["schemas"]["Facet"][];
+            actions: components["schemas"]["Facet"][];
+        };
+        EnvelopeTenantActivityPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantActivityPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantActivityFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantActivityFacets"];
             meta: components["schemas"]["ResponseMeta"];
         };
         OrganizationCompanySettings: {
@@ -9908,6 +10005,102 @@ export interface operations {
                 };
             };
             400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantActivityFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantActivityFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description `created_at` or `-created_at` (default). */
+                sort?: string;
+                /** @description Resource; comma-separate for several (see `/v1/tenant/activity/facets`) */
+                resource?: string;
+                /** @description Action; comma-separate for several */
+                action?: string;
+                /** @description History of one record. */
+                resource_uuid?: string;
+                /** @description Events of one user. */
+                actor_uuid?: string;
+                /** @description RFC 3339 time, inclusive */
+                from?: string;
+                /** @description RFC 3339 time, exclusive */
+                to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];

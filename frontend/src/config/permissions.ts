@@ -66,6 +66,7 @@ export const Permission = {
   TenantBranchesBulkDeactivate: "tenant.branches.bulk.deactivate",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsRead: "tenant.integrations.read",
+  TenantActivityRead: "tenant.activity.read",
   TenantReservationsRead: "tenant.reservations.read",
   TenantReservationsWrite: "tenant.reservations.write",
   TenantReservationsOwn: "tenant.reservations.own",
@@ -206,6 +207,9 @@ export const permissions = {
     integrations: {
       read: Permission.TenantIntegrationsRead,
       manage: Permission.TenantIntegrationsManage,
+    },
+    activity: {
+      read: Permission.TenantActivityRead,
     },
     /** ".own" = only the member's own records (requirements §4). */
     reservations: {

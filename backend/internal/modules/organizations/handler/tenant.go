@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
@@ -176,18 +178,20 @@ func (h *Handler) TenantPatchMember(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
+	before, beforeErr := h.svc.GetTenantMember(r.Context(), scope, id)
 	m, err := h.svc.PatchTenantMember(r.Context(), scope, id, in)
 	if err != nil {
 		writeTenantError(w, r, err)
 		return
 	}
-	roleKeys := make([]string, 0, len(m.Roles))
-	for _, role := range m.Roles {
-		roleKeys = append(roleKeys, role.Key)
+	after := memberAccess(m)
+	var changes map[string]activity.Change
+	if beforeErr == nil {
+		changes = activity.Diff(memberAccess(before), after)
 	}
-	h.recordTenant(r, "members.updated", resourceTenantMembers, &m.User.UUID, map[string]any{
-		"roles": roleKeys, "branch_scope": m.BranchScope, "branches": len(m.Branches),
-	})
+	h.recordTenantChanges(r, "members.updated", resourceTenantMembers, &m.User.UUID, map[string]any{
+		"roles": after["roles"], "branch_scope": m.BranchScope, "branches": len(m.Branches),
+	}, changes)
 	response.JSON(w, r, http.StatusOK, m)
 }
 
@@ -290,14 +294,19 @@ func (h *Handler) TenantPatchRole(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
+	before, beforeErr := h.svc.GetTenantRole(r.Context(), scope, id)
 	role, err := h.svc.PatchTenantRole(r.Context(), scope, id, in)
 	if err != nil {
 		writeTenantError(w, r, err)
 		return
 	}
-	h.recordTenant(r, "roles.updated", resourceTenantRoles, &role.UUID, map[string]any{
+	var changes map[string]activity.Change
+	if beforeErr == nil {
+		changes = activity.Diff(before, role, "updated_at", "created_at", "member_count")
+	}
+	h.recordTenantChanges(r, "roles.updated", resourceTenantRoles, &role.UUID, map[string]any{
 		"key": role.Key, "permissions": role.Permissions,
-	})
+	}, changes)
 	response.JSON(w, r, http.StatusOK, role)
 }
 
@@ -317,12 +326,37 @@ func (h *Handler) TenantDeleteRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) recordTenant(r *http.Request, action, resource string, id *uuid.UUID, payload map[string]any) {
+	h.recordTenantChanges(r, action, resource, id, payload, nil)
+}
+
+// recordTenantChanges is recordTenant with the before / after of the
+// changed fields. Member and role events belong to the whole business.
+func (h *Handler) recordTenantChanges(r *http.Request, action, resource string, id *uuid.UUID, payload map[string]any, changes map[string]activity.Change) {
 	h.publishTenant(r.Context(), action, id)
 	if h.activity == nil {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
-	h.activity.Record(r.Context(), &p.UserInternal, action, resource, id, payload, r)
+	h.activity.RecordEntry(r.Context(), activity.Entry{
+		ActorID: &p.UserInternal, Action: action, Resource: resource, ResourceUUID: id,
+		Payload: payload, Changes: changes, Request: r,
+	})
+}
+
+// memberAccess is what a member edit changes: role keys, branch scope and
+// branch names (sorted, so the before / after compare by content).
+func memberAccess(m orgmodel.TenantMember) map[string]any {
+	roles := make([]string, 0, len(m.Roles))
+	for _, role := range m.Roles {
+		roles = append(roles, role.Key)
+	}
+	branches := make([]string, 0, len(m.Branches))
+	for _, b := range m.Branches {
+		branches = append(branches, b.Name)
+	}
+	slices.Sort(roles)
+	slices.Sort(branches)
+	return map[string]any{"roles": roles, "branch_scope": m.BranchScope, "branches": branches}
 }
 
 // publishTenant tells the open member / role lists of the organization on

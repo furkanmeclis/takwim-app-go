@@ -69,6 +69,9 @@ const (
 	PermTenantBranchesBulkDeactivate      = "tenant.branches.bulk.deactivate"
 	PermTenantIntegrationsManage          = "tenant.integrations.manage"
 	PermTenantIntegrationsRead            = "tenant.integrations.read"
+	// PermTenantActivityRead opens the activity history (TEC-893), limited
+	// to the member's branch scope.
+	PermTenantActivityRead = "tenant.activity.read"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

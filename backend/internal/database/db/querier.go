@@ -60,6 +60,7 @@ type Querier interface {
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountStorageActivity(ctx context.Context, objectKey string) (int64, error)
 	CountStorageTrash(ctx context.Context) (int64, error)
+	CountTenantActivity(ctx context.Context, arg CountTenantActivityParams) (int64, error)
 	CountTenantMembers(ctx context.Context, arg CountTenantMembersParams) (int64, error)
 	CountUnreadInappForUser(ctx context.Context, arg CountUnreadInappForUserParams) (int64, error)
 	CountUsers(ctx context.Context, arg CountUsersParams) (int64, error)
@@ -185,6 +186,8 @@ type Querier interface {
 	GetWebAuthnCredentialByUUID(ctx context.Context, arg GetWebAuthnCredentialByUUIDParams) (WebauthnCredential, error)
 	HasActivePushDevices(ctx context.Context, userID int64) (bool, error)
 	IncrementOTPAttempts(ctx context.Context, id int64) (OtpCode, error)
+	// branch_uuid ties the event to a branch of the same organization (NULL or
+	// an unknown uuid = an event of the whole business).
 	InsertActivityEvent(ctx context.Context, arg InsertActivityEventParams) (ActivityEvent, error)
 	InsertAppLog(ctx context.Context, arg InsertAppLogParams) error
 	InsertBulkChange(ctx context.Context, arg InsertBulkChangeParams) (BulkChange, error)
@@ -296,6 +299,10 @@ type Querier interface {
 	ListStorageStarsByUser(ctx context.Context, userID int64) ([]StorageStar, error)
 	ListStorageTrash(ctx context.Context, arg ListStorageTrashParams) ([]StorageTrash, error)
 	ListStuckProcessingNotificationIDs(ctx context.Context, staleMinutes int32) ([]int64, error)
+	// Activity history of one organization. branch_ids is the caller's branch
+	// scope (narrowed by X-Branch): NULL = every event, otherwise only events of
+	// those branches (events of the whole business are hidden).
+	ListTenantActivity(ctx context.Context, arg ListTenantActivityParams) ([]ListTenantActivityRow, error)
 	ListTenantMembers(ctx context.Context, arg ListTenantMembersParams) ([]ListTenantMembersRow, error)
 	ListTenantPermissions(ctx context.Context) ([]ListTenantPermissionsRow, error)
 	ListTenantRolePermissionSlugsByRoleID(ctx context.Context, roleID int64) ([]string, error)
@@ -373,6 +380,9 @@ type Querier interface {
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
+	// Distinct resources and actions (with counts) in the caller's scope, for
+	// the faceted filters.
+	TenantActivityFacets(ctx context.Context, arg TenantActivityFacetsParams) ([]TenantActivityFacetsRow, error)
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
 	TouchBranch(ctx context.Context, arg TouchBranchParams) error
 	UnlockRunnerJob(ctx context.Context, arg UnlockRunnerJobParams) error

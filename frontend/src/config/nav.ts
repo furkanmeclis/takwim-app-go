@@ -1,5 +1,6 @@
 import {
   Gauge,
+  History,
   PlugZap,
   Activity,
   Bell,
@@ -262,6 +263,13 @@ export function tenantNav(slug: string): NavCatalog {
             titleKey: "layout.home",
             href: routes.tenant.home(slug),
             icon: LayoutDashboard,
+          },
+          {
+            id: "activity",
+            titleKey: "layout.nav_tenant_activity",
+            href: routes.tenant.activity(slug),
+            icon: History,
+            permission: permissions.tenant.activity.read,
           },
         ],
       },
