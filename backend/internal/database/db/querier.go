@@ -160,6 +160,12 @@ type Querier interface {
 	GetAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (AppLog, error)
 	GetAppSettings(ctx context.Context) (AppSetting, error)
 	GetAuthSettings(ctx context.Context) (GetAuthSettingsRow, error)
+	// Availability engine inputs (TEC-897). Read-only; every query filters by
+	// organization_id, joined tables by alias.organization_id too.
+	GetAvailabilityBranch(ctx context.Context, arg GetAvailabilityBranchParams) (GetAvailabilityBranchRow, error)
+	// A live service with its offer in the branch (sb.* NULL = not offered).
+	GetAvailabilityService(ctx context.Context, arg GetAvailabilityServiceParams) (GetAvailabilityServiceRow, error)
+	GetAvailabilityStaffByUser(ctx context.Context, arg GetAvailabilityStaffByUserParams) (GetAvailabilityStaffByUserRow, error)
 	GetBranchByCode(ctx context.Context, arg GetBranchByCodeParams) (Branch, error)
 	GetBranchByUUID(ctx context.Context, arg GetBranchByUUIDParams) (Branch, error)
 	GetBranchImage(ctx context.Context, arg GetBranchImageParams) (BranchImage, error)
@@ -282,6 +288,12 @@ type Querier interface {
 	ListAllPermissionSlugs(ctx context.Context) ([]string, error)
 	ListAppLogSources(ctx context.Context) ([]string, error)
 	ListAppLogs(ctx context.Context, arg ListAppLogsParams) ([]AppLog, error)
+	ListAvailabilityResourceClosures(ctx context.Context, arg ListAvailabilityResourceClosuresParams) ([]ListAvailabilityResourceClosuresRow, error)
+	ListAvailabilityResources(ctx context.Context, arg ListAvailabilityResourcesParams) ([]ListAvailabilityResourcesRow, error)
+	// Live, active staff who may perform the service and work in the branch,
+	// with their personal duration and their weekly shifts there.
+	ListAvailabilityServiceStaff(ctx context.Context, arg ListAvailabilityServiceStaffParams) ([]ListAvailabilityServiceStaffRow, error)
+	ListAvailabilityTimeOff(ctx context.Context, arg ListAvailabilityTimeOffParams) ([]ListAvailabilityTimeOffRow, error)
 	ListBranchCityFacets(ctx context.Context, arg ListBranchCityFacetsParams) ([]ListBranchCityFacetsRow, error)
 	ListBranchIDsByUUIDs(ctx context.Context, arg ListBranchIDsByUUIDsParams) ([]ListBranchIDsByUUIDsRow, error)
 	ListBranchImages(ctx context.Context, arg ListBranchImagesParams) ([]BranchImage, error)

@@ -238,3 +238,34 @@ func TestRequireOrganizationBranchHeader(t *testing.T) {
 		t.Fatalf("plain resolver status = %d", rr.Code)
 	}
 }
+
+func TestRequireAnyTenantPermission(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		scope      *orgctx.Scope
+		wantStatus int
+	}{
+		{name: "first", scope: &orgctx.Scope{Permissions: []string{"tenant.reservations.read"}}, wantStatus: http.StatusOK},
+		{name: "second", scope: &orgctx.Scope{Permissions: []string{"tenant.reservations.own"}}, wantStatus: http.StatusOK},
+		{name: "none", scope: &orgctx.Scope{Permissions: []string{"tenant.settings.read"}}, wantStatus: http.StatusForbidden},
+		{name: "no scope", wantStatus: http.StatusInternalServerError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := RequireAnyTenantPermission("tenant.reservations.read", "tenant.reservations.own")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := withPrincipal(httptest.NewRequest(http.MethodPost, "/v1/tenant/availability/search", nil), authctx.Principal{UserInternal: 1})
+			if tc.scope != nil {
+				req = req.WithContext(orgctx.WithScope(req.Context(), *tc.scope))
+			}
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rr.Code, tc.wantStatus)
+			}
+		})
+	}
+}

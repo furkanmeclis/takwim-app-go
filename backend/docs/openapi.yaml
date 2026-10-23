@@ -6737,6 +6737,56 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/availability/search:
+    post:
+      tags: [Tenant]
+      operationId: postTenantAvailabilitySearch
+      summary: Bookable start times
+      description: |
+        The slot engine (`reservations` module; `tenant.reservations.read`,
+        or `tenant.reservations.own` for the caller's own calendar: every
+        line that takes a staff member is planned with the caller's staff
+        record, another `staff_uuid` is `403`). Answers each local date of
+        the branch from `from` to `to` (default today + 6 days, at most 31)
+        with a status (`available`, `closed`, `too_far`, `too_soon`,
+        `no_staff`, `full`) and the starts every `step_minutes` (default 15)
+        counted from the opening. Lines run back to back; each slot names
+        the staff member and resources of every line. `staff_uuid` null is
+        "anyone free" (the least booked person that day first).
+
+        A person has one calendar across branches: time off and bookings in
+        any branch are busy time. `channel` `online` previews what the
+        booking page offers: services, staff and resources shown online,
+        the minimum notice and maximum advance of the business settings
+        (`409` detail `channel` / `online_not_ready` until both are set).
+        The panel channel offers every start from now on. A branch outside
+        the caller's scope or of another business is `404`; services and
+        staff are checked per line (`lines.N.service_uuid` `not_found`,
+        `inactive`, `not_offered`; `lines.N.staff_uuid` `not_found`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantAvailabilitySearchRequest"
+      responses:
+        "200":
+          description: Days and slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantAvailability"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -11819,6 +11869,115 @@ components:
         source:
           type: array
           items: { $ref: "#/components/schemas/TenantResourceFacet" }
+
+    TenantAvailabilitySearchRequest:
+      type: object
+      additionalProperties: false
+      required: [branch_uuid, lines]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            additionalProperties: false
+            required: [service_uuid]
+            properties:
+              service_uuid: { type: string, format: uuid }
+              staff_uuid:
+                type: [string, "null"]
+                format: uuid
+                description: A person who may perform the service in the branch; null = anyone free.
+        from: { type: string, format: date, description: "Local date of the branch; default today." }
+        to: { type: string, format: date, description: "Inclusive; default from + 6 days, at most 31 days." }
+        step_minutes: { type: integer, minimum: 5, maximum: 240, multipleOf: 5, default: 15 }
+        channel: { type: string, enum: [panel, online], default: panel }
+
+    TenantAvailabilityRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    TenantAvailabilityResourceRef:
+      type: object
+      required: [uuid, name, kind]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [chair, table, area, room, device, bay] }
+
+    TenantAvailabilitySlot:
+      type: object
+      required: [starts_at, ends_at, lines]
+      properties:
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time, description: End of the customer's time (buffers excluded). }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [service_uuid, starts_at, ends_at, staff, resources]
+            properties:
+              service_uuid: { type: string, format: uuid }
+              starts_at: { type: string, format: date-time }
+              ends_at: { type: string, format: date-time }
+              staff:
+                oneOf:
+                  - $ref: "#/components/schemas/TenantAvailabilityRef"
+                  - type: "null"
+              resources:
+                type: array
+                items: { $ref: "#/components/schemas/TenantAvailabilityResourceRef" }
+
+    TenantAvailability:
+      type: object
+      required: [branch, timezone, channel, earliest_start, latest_date, step_minutes, lines, days]
+      properties:
+        branch: { $ref: "#/components/schemas/TenantAvailabilityRef" }
+        timezone: { type: string, example: Europe/Istanbul }
+        channel: { type: string, enum: [panel, online] }
+        earliest_start: { type: string, format: date-time }
+        latest_date: { type: [string, "null"], format: date }
+        step_minutes: { type: integer }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [service_uuid, service_name, duration_minutes, buffer_before_minutes, buffer_after_minutes, staff_mode, resource_kinds, staff]
+            properties:
+              service_uuid: { type: string, format: uuid }
+              service_name: { type: string }
+              duration_minutes: { type: integer, description: Branch duration (personal durations may differ per slot). }
+              buffer_before_minutes: { type: integer }
+              buffer_after_minutes: { type: integer }
+              staff_mode: { type: string, enum: [required, optional, none] }
+              resource_kinds: { type: array, items: { type: string } }
+              staff:
+                type: array
+                items: { $ref: "#/components/schemas/TenantAvailabilityRef" }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, status, slots]
+            properties:
+              date: { type: string, format: date }
+              status: { type: string, enum: [available, closed, too_far, too_soon, no_staff, full] }
+              slots:
+                type: array
+                items: { $ref: "#/components/schemas/TenantAvailabilitySlot" }
+
+    EnvelopeTenantAvailability:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantAvailability" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeTenantCustomer:
       type: object

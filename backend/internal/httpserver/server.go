@@ -27,6 +27,9 @@ import (
 	authsettingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/authsettings"
 	authsettingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/authsettings/handler"
 	authsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/authsettings/usecase"
+	availabilitymodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability"
+	availabilityhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/handler"
+	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	branchesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches"
 	branchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/adapters"
 	branchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/handler"
@@ -358,9 +361,12 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	orgSvc.SetStaffLimiter(entitlementSvc)
 	entitlementsmodule.RegisterRoutes(mux, entitlementsmodule.NewHandler(entitlementSvc, orgSvc, activityRec), tokens, loader, tenantResolver)
 	organizationsmodule.RegisterTenantRoutes(mux, orgH, tokens, loader, tenantResolver)
-	orgsettingsmodule.RegisterRoutes(mux, orgsettingshandler.New(
-		orgsettingsusecase.New(orgsettingsrepository.NewPostgres(deps.DB, deps.Queries)), activityRec,
-	), tokens, loader, tenantResolver)
+	orgsettingsSvc := orgsettingsusecase.New(orgsettingsrepository.NewPostgres(deps.DB, deps.Queries))
+	orgsettingsmodule.RegisterRoutes(mux, orgsettingshandler.New(orgsettingsSvc, activityRec), tokens, loader, tenantResolver)
+	// Slot engine (TEC-897): the panel search; the public booking API uses
+	// the same service with the online channel.
+	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilityusecase.New(deps.Queries, orgsettingsSvc)),
+		tokens, loader, tenantResolver)
 	// Central panel (TEC-892): branches one by one and in total.
 	overviewmodule.RegisterRoutes(mux, overviewmodule.NewHandler(overviewmodule.New(branchSvc, deps.Queries)), tokens, loader, tenantResolver)
 
