@@ -19,5 +19,7 @@
   "specs_branches": "Şubeler",
   "prefix_branches": "şube",
   "specs_staff": "Personel",
-  "prefix_staff": "personel"
+  "prefix_staff": "personel",
+  "prefix_resources": "kaynak",
+  "specs_resources": "Kaynaklar"
 }

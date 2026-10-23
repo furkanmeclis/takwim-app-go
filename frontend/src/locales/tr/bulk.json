@@ -42,5 +42,8 @@
   "confirm.organizations.suspend": "Seçili {{count}} işletme askıya alınsın mı? Üyelerin erişimi hemen kapanır.",
   "actions.staff.activate": "Personeli aktifleştir",
   "actions.staff.deactivate": "Personeli pasifleştir",
-  "confirm.staff.deactivate": "Seçili {{count}} personel pasifleştirilsin mi? Yeni randevularda seçilemezler."
+  "confirm.staff.deactivate": "Seçili {{count}} personel pasifleştirilsin mi? Yeni randevularda seçilemezler.",
+  "actions.resources.activate": "Kaynakları aktifleştir",
+  "actions.resources.deactivate": "Kaynakları pasifleştir",
+  "confirm.resources.deactivate": "Seçili {{count}} kaynak pasifleştirilsin mi? Yeni rezervasyonlarda seçilemezler."
 }

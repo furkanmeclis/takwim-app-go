@@ -80,6 +80,14 @@ const (
 	PermTenantStaffImport         = "tenant.staff.import"
 	PermTenantStaffBulkActivate   = "tenant.staff.bulk.activate"
 	PermTenantStaffBulkDeactivate = "tenant.staff.bulk.deactivate"
+	// Resources (TEC-891): bookable capacity of a branch (chair, table, area,
+	// room, device, bay).
+	PermTenantResourcesRead           = "tenant.resources.read"
+	PermTenantResourcesWrite          = "tenant.resources.write"
+	PermTenantResourcesExport         = "tenant.resources.export"
+	PermTenantResourcesImport         = "tenant.resources.import"
+	PermTenantResourcesBulkActivate   = "tenant.resources.bulk.activate"
+	PermTenantResourcesBulkDeactivate = "tenant.resources.bulk.deactivate"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

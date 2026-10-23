@@ -127,5 +127,12 @@
   "labels.tenant.staff.import": "Personeli içe aktar",
   "labels.tenant.staff.bulk.activate": "Personeli toplu aktifleştir",
   "labels.tenant.staff.bulk.deactivate": "Personeli toplu pasifleştir",
-  "groups.tenant_staff": "Personel"
+  "groups.tenant_staff": "Personel",
+  "labels.tenant.resources.read": "Kaynakları görüntüle",
+  "labels.tenant.resources.write": "Kaynakları yönet",
+  "labels.tenant.resources.export": "Kaynakları dışa aktar",
+  "labels.tenant.resources.import": "Kaynakları içe aktar",
+  "labels.tenant.resources.bulk.activate": "Kaynakları toplu aktifleştir",
+  "labels.tenant.resources.bulk.deactivate": "Kaynakları toplu pasifleştir",
+  "groups.tenant_resources": "Kaynaklar"
 }

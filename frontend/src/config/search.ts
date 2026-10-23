@@ -1,6 +1,7 @@
 import { LayoutDashboard } from "lucide-react";
 
 import { branchesSearchSpec } from "@/features/branches/search";
+import { resourcesSearchSpec } from "@/features/resources/search";
 import { staffSearchSpec } from "@/features/staff/search";
 import {
   defineSearchCatalog,
@@ -22,5 +23,6 @@ export const searchCatalog = defineSearchCatalog({
     }),
     branchesSearchSpec,
     staffSearchSpec,
+    resourcesSearchSpec,
   ],
 });

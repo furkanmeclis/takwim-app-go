@@ -55,6 +55,15 @@ export const routes = {
       edit: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/staff/${uuid}/edit`,
     },
+    resources: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/resources`,
+      create: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/resources/create`,
+      detail: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/resources/${uuid}`,
+      edit: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/resources/${uuid}/edit`,
+    },
     activity: (slug: string) => `/t/${encodeURIComponent(slug)}/activity`,
     exports: {
       /**

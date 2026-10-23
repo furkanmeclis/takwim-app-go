@@ -26,7 +26,7 @@ const dayHoursSchema = z.object({
   close: z.string(),
 });
 
-const weeklyHoursSchema = z.object({
+export const weeklyHoursSchema = z.object({
   mon: dayHoursSchema,
   tue: dayHoursSchema,
   wed: dayHoursSchema,
@@ -68,7 +68,7 @@ function checkDay(
   }
 }
 
-function checkWeek(
+export function checkWeek(
   t: Translate,
   ctx: z.RefinementCtx,
   path: (string | number)[],
@@ -221,7 +221,7 @@ function normalizeDay(day: DayHours): DayHours {
   return day.closed ? { closed: true, open: "", close: "" } : day;
 }
 
-function normalizeWeek(hours: WeeklyHours): WeeklyHours {
+export function normalizeWeek(hours: WeeklyHours): WeeklyHours {
   const out = { ...hours };
   for (const key of DAY_KEYS) out[key] = normalizeDay(hours[key]);
   return out;

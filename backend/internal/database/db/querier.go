@@ -59,6 +59,8 @@ type Querier interface {
 	CountPermissions(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
+	CountResourceClosures(ctx context.Context, arg CountResourceClosuresParams) (int64, error)
+	CountResources(ctx context.Context, arg CountResourcesParams) (int64, error)
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
 	// The linked account counts only while the user is a member.
 	CountStaff(ctx context.Context, arg CountStaffParams) (int64, error)
@@ -86,6 +88,9 @@ type Querier interface {
 	CreateOTPCode(ctx context.Context, arg CreateOTPCodeParams) (OtpCode, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	// Tenant resource: resources (TEC-891). Every query filters by organization_id.
+	CreateResource(ctx context.Context, arg CreateResourceParams) (Resource, error)
+	CreateResourceClosure(ctx context.Context, arg CreateResourceClosureParams) (ResourceClosure, error)
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
 	CreateServicePoint(ctx context.Context, arg CreateServicePointParams) (ServicePoint, error)
 	// Tenant resource: staff (TEC-890). Every query filters by organization_id.
@@ -109,6 +114,7 @@ type Querier interface {
 	DeletePushDeviceForUser(ctx context.Context, arg DeletePushDeviceForUserParams) (int64, error)
 	DeletePushSubscription(ctx context.Context, arg DeletePushSubscriptionParams) error
 	DeletePushTickets(ctx context.Context, ids []int64) error
+	DeleteResourceClosure(ctx context.Context, arg DeleteResourceClosureParams) (int64, error)
 	DeleteRole(ctx context.Context, argUuid uuid.UUID) error
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
 	DeleteStaffTimeOff(ctx context.Context, arg DeleteStaffTimeOffParams) (int64, error)
@@ -172,6 +178,11 @@ type Querier interface {
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
 	// Public media route: the image of a live branch of an active organization.
 	GetPublicBranchImage(ctx context.Context, arg GetPublicBranchImageParams) (GetPublicBranchImageRow, error)
+	GetResource(ctx context.Context, arg GetResourceParams) (GetResourceRow, error)
+	// Import key: a resource of the branch with the same name.
+	GetResourceByBranchName(ctx context.Context, arg GetResourceByBranchNameParams) (GetResourceByBranchNameRow, error)
+	GetResourceClosure(ctx context.Context, arg GetResourceClosureParams) (ResourceClosure, error)
+	GetResourceSearchDocument(ctx context.Context, arg GetResourceSearchDocumentParams) (GetResourceSearchDocumentRow, error)
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleBySlug(ctx context.Context, slug string) (Role, error)
 	GetRoleByUUID(ctx context.Context, argUuid uuid.UUID) (Role, error)
@@ -300,6 +311,15 @@ type Querier interface {
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
+	// Branches with their resource count, inside the caller's branch scope.
+	ListResourceBranchFacets(ctx context.Context, arg ListResourceBranchFacetsParams) ([]ListResourceBranchFacetsRow, error)
+	ListResourceClosures(ctx context.Context, arg ListResourceClosuresParams) ([]ResourceClosure, error)
+	ListResourceKindFacets(ctx context.Context, arg ListResourceKindFacetsParams) ([]ListResourceKindFacetsRow, error)
+	ListResourceSearchDocuments(ctx context.Context, organizationID int64) ([]ListResourceSearchDocumentsRow, error)
+	ListResourceUUIDs(ctx context.Context, arg ListResourceUUIDsParams) ([]uuid.UUID, error)
+	ListResourceZoneFacets(ctx context.Context, arg ListResourceZoneFacetsParams) ([]ListResourceZoneFacetsRow, error)
+	ListResources(ctx context.Context, arg ListResourcesParams) ([]ListResourcesRow, error)
+	ListResourcesForExport(ctx context.Context, arg ListResourcesForExportParams) ([]ListResourcesForExportRow, error)
 	ListRolePermissionSlugsByRoleIDs(ctx context.Context, roleIds []int64) ([]ListRolePermissionSlugsByRoleIDsRow, error)
 	ListRolePermissionSlugsByRoleUUID(ctx context.Context, argUuid uuid.UUID) ([]string, error)
 	ListRoleUUIDsForBulk(ctx context.Context, q_ pgtype.Text) ([]uuid.UUID, error)
@@ -385,6 +405,7 @@ type Querier interface {
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
+	ResourceNameTaken(ctx context.Context, arg ResourceNameTakenParams) (bool, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
 	RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (OrganizationInvitation, error)
 	// Re-inviting an e-mail replaces its open (possibly expired) invitation.
@@ -407,12 +428,14 @@ type Querier interface {
 	SetOrganizationAccessWindow(ctx context.Context, arg SetOrganizationAccessWindowParams) (Organization, error)
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
+	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
 	SetRolePermissions(ctx context.Context, roleID int64) error
 	SetStaffActive(ctx context.Context, arg SetStaffActiveParams) error
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
+	SoftDeleteResource(ctx context.Context, arg SoftDeleteResourceParams) (int64, error)
 	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
 	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
 	// Distinct resources and actions (with counts) in the caller's scope, for
@@ -437,6 +460,8 @@ type Querier interface {
 	// PUT semantics: every value is replaced; NULL limits mean the plan default.
 	UpdateOrganizationEntitlements(ctx context.Context, arg UpdateOrganizationEntitlementsParams) (Organization, error)
 	UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error)
+	UpdateResource(ctx context.Context, arg UpdateResourceParams) (Resource, error)
+	UpdateResourceClosure(ctx context.Context, arg UpdateResourceClosureParams) (ResourceClosure, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) (Staff, error)
