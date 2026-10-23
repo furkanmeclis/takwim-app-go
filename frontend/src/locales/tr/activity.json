@@ -22,6 +22,7 @@
   "actions.auth.account_deactivated": "Hesap silindi (pasifleştirildi)",
   "actions.integrations.github.updated": "GitHub entegrasyon ayarları güncellendi",
   "actions.integrations.oauth.updated": "OAuth sağlayıcı ayarları güncellendi",
+  "actions.integrations.job_retried": "Entegrasyon işi yeniden denendi",
   "actions.auth.settings.updated": "Auth kayıt ayarları güncellendi",
   "actions.users.impersonated": "Kullanıcı taklit oturumu başlatıldı",
   "actions.users.impersonation_stopped": "Kullanıcı taklit oturumu sonlandırıldı",

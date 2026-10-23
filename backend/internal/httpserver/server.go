@@ -41,9 +41,14 @@ import (
 	importmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports"
 	importhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/handler"
 	importusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/usecase"
+	integrationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations"
+	integrationaccountsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/accounts"
+	integrationaccountshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/accounts/handler"
 	githubmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/github"
 	githubhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/github/handler"
 	githubusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/github/usecase"
+	integrationjobsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/jobs"
+	integrationjobshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/jobs/handler"
 	oauthprovidermodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/oauthprovider"
 	oauthproviderhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/oauthprovider/handler"
 	oauthproviderusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/oauthprovider/usecase"
@@ -316,11 +321,31 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		orgsettingsusecase.New(orgsettingsrepository.NewPostgres(deps.DB, deps.Queries)), activityRec,
 	), tokens, loader, tenantResolver)
 
+	// External work skeleton (TEC-880): provider accounts with sealed
+	// credentials, the integration job runner (queue steps when a queue is
+	// configured, the worker's minute sweep otherwise) and inbound
+	// notification idempotency.
+	fieldCipher, err := crypto.NewFieldCipher(cfg.Encryption.Key)
+	if err != nil {
+		return nil, fmt.Errorf("httpserver: field cipher: %w", err)
+	}
+	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log)
+	if err != nil {
+		return nil, fmt.Errorf("httpserver: %w", err)
+	}
+	if deps.Queue != nil {
+		integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: deps.Queue})
+	}
+	integrationKit.Runner.SetResourceEvents(resourceEvents)
+	integrationaccountsmodule.RegisterRoutes(mux, integrationaccountshandler.New(integrationKit.Accounts, activityRec), tokens, loader, tenantResolver)
+	integrationjobsmodule.RegisterRoutes(mux, integrationjobshandler.New(integrationKit.Runner, activityRec), tokens, loader, tenantResolver)
+
 	// Live lists of tenant resources: org:{org_uuid}:resource:{name}, open to
 	// members whose tenant role grants the resource's read permission.
 	tenantLive := resourceevents.NewRegistry()
 	branchesmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
+	integrationjobsmodule.RegisterLiveResources(tenantLive)
 	resourceEvents.AddResolver(tenantmodule.ChannelResolver(tenantmodule.QueriesLookup(deps.Queries)))
 	uc.AddChannelRules(tenantmodule.ChannelRule(tenantLive, tenantResolver))
 

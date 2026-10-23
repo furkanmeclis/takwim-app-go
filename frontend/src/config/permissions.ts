@@ -64,6 +64,7 @@ export const Permission = {
   TenantBranchesImport: "tenant.branches.import",
   TenantBranchesBulkActivate: "tenant.branches.bulk.activate",
   TenantBranchesBulkDeactivate: "tenant.branches.bulk.deactivate",
+  TenantIntegrationsManage: "tenant.integrations.manage",
   TenantPriceOverride: "tenant.price.override",
   TenantDiscountApply: "tenant.discount.apply",
   TenantPaymentCollect: "tenant.payment.collect",
@@ -190,6 +191,9 @@ export const permissions = {
       import: Permission.TenantBranchesImport,
       bulkActivate: Permission.TenantBranchesBulkActivate,
       bulkDeactivate: Permission.TenantBranchesBulkDeactivate,
+    },
+    integrations: {
+      manage: Permission.TenantIntegrationsManage,
     },
     price: {
       override: Permission.TenantPriceOverride,

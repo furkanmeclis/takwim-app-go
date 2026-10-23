@@ -83,6 +83,7 @@
   "labels.tenant.branches.import": "Şubeleri içe aktar",
   "labels.tenant.branches.bulk.activate": "Şubeleri toplu aktifleştir",
   "labels.tenant.branches.bulk.deactivate": "Şubeleri toplu pasifleştir",
+  "labels.tenant.integrations.manage": "Entegrasyonları yönet",
   "labels.tenant.fleet.read": "Filoyu görüntüle (segment, grup, ürün)",
   "labels.tenant.fleet.write": "Filoyu yönet (segment, grup, ürün)",
   "labels.tenant.vehicles.read": "Araçları görüntüle",

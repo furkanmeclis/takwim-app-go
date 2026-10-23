@@ -1,4 +1,5 @@
 import {
+  PlugZap,
   Activity,
   Bell,
   Building2,
@@ -304,6 +305,13 @@ export function tenantNav(slug: string): NavCatalog {
             href: routes.tenant.settings.roles.root(slug),
             icon: Shield,
             permission: permissions.tenant.roles.read,
+          },
+          {
+            id: "settings-integrations",
+            titleKey: "layout.nav_tenant_settings_integrations",
+            href: routes.tenant.settings.integrations(slug),
+            icon: PlugZap,
+            permission: permissions.tenant.integrations.manage,
           },
         ],
       },

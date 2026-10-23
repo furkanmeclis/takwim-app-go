@@ -115,6 +115,24 @@ func ErrorWithDetails(w http.ResponseWriter, r *http.Request, status int, code, 
 	})
 }
 
+// ErrorWithData writes a failed envelope that also carries data (for example
+// the integration job a retry could not verify).
+func ErrorWithData(w http.ResponseWriter, r *http.Request, status int, code, message string, details []Detail, data any) {
+	if rec, ok := w.(errorCodeRecorder); ok {
+		rec.RecordErrorCode(code)
+	}
+	body := &ErrorBody{Code: code, Message: message}
+	if len(details) > 0 {
+		body.Details = details
+	}
+	write(w, r, status, Envelope{
+		Success: false,
+		Data:    data,
+		Error:   body,
+		Meta:    metaFrom(r),
+	})
+}
+
 // ValidationError writes HTTP 400 with code VALIDATION_ERROR and field details.
 func ValidationError(w http.ResponseWriter, r *http.Request, details []Detail) {
 	msg := "Request validation failed"

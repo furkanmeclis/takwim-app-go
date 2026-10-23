@@ -19,6 +19,8 @@ type Querier interface {
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) (OrganizationMember, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams) (bool, error)
+	// Moves a pending / failed job to processing (one worker at a time).
+	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
 	ConfirmUserTOTP(ctx context.Context, arg ConfirmUserTOTPParams) (UserTotp, error)
@@ -96,10 +98,18 @@ type Querier interface {
 	DeleteWebAuthnCredentialByCredentialID(ctx context.Context, credentialID string) error
 	DeleteWebAuthnCredentialByUUID(ctx context.Context, arg DeleteWebAuthnCredentialByUUIDParams) error
 	DisablePushDevice(ctx context.Context, arg DisablePushDeviceParams) error
+	// Generic runner (TEC-880). Every query names the organization scope; the
+	// worker carries the job's organization in the task payload.
+	// Creates a runner job once per provider and idempotency key; a repeated
+	// key returns the existing row (inserted = false) and sends nothing again.
+	EnqueueIntegrationJob(ctx context.Context, arg EnqueueIntegrationJobParams) (EnqueueIntegrationJobRow, error)
 	// First device registration opts the user into push (the OS permission
 	// prompt is the consent). An existing preference row is left untouched.
 	EnsureNotificationPreferencesPushDefault(ctx context.Context, userID int64) error
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
+	FinishIntegrationJob(ctx context.Context, arg FinishIntegrationJobParams) error
+	// The organization's active account of a kind (payments go to it).
+	GetActiveIntegrationAccount(ctx context.Context, arg GetActiveIntegrationAccountParams) (GetActiveIntegrationAccountRow, error)
 	GetActiveOTPByEmailType(ctx context.Context, arg GetActiveOTPByEmailTypeParams) (OtpCode, error)
 	GetAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (AppLog, error)
 	GetAppSettings(ctx context.Context) (AppSetting, error)
@@ -117,6 +127,8 @@ type Querier interface {
 	GetGitHubAppSettings(ctx context.Context) (GithubAppSetting, error)
 	GetImportJobByID(ctx context.Context, id int64) (ImportJob, error)
 	GetImportJobByUUID(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
+	GetIntegrationAccount(ctx context.Context, arg GetIntegrationAccountParams) (GetIntegrationAccountRow, error)
+	GetIntegrationAccountByID(ctx context.Context, arg GetIntegrationAccountByIDParams) (GetIntegrationAccountByIDRow, error)
 	GetInvitationByUUID(ctx context.Context, arg GetInvitationByUUIDParams) (OrganizationInvitation, error)
 	GetInvitationPreviewByTokenHash(ctx context.Context, tokenHash string) (GetInvitationPreviewByTokenHashRow, error)
 	GetLogPurgeRuleByUUID(ctx context.Context, argUuid uuid.UUID) (LogPurgeRule, error)
@@ -136,6 +148,8 @@ type Querier interface {
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleBySlug(ctx context.Context, slug string) (Role, error)
 	GetRoleByUUID(ctx context.Context, argUuid uuid.UUID) (Role, error)
+	GetRunnerJob(ctx context.Context, arg GetRunnerJobParams) (GetRunnerJobRow, error)
+	GetRunnerJobByUUID(ctx context.Context, arg GetRunnerJobByUUIDParams) (GetRunnerJobByUUIDRow, error)
 	GetServicePoint(ctx context.Context, arg GetServicePointParams) (ServicePoint, error)
 	GetStepupSettings(ctx context.Context) (StepupSetting, error)
 	GetStorageLinkBySlug(ctx context.Context, slug pgtype.Text) (StorageLink, error)
@@ -160,6 +174,11 @@ type Querier interface {
 	InsertAppLog(ctx context.Context, arg InsertAppLogParams) error
 	InsertBulkChange(ctx context.Context, arg InsertBulkChangeParams) (BulkChange, error)
 	InsertImportChange(ctx context.Context, arg InsertImportChangeParams) (ImportChange, error)
+	// Integration accounts and jobs (TEC-880). Accounts are organization-owned
+	// (every query filters by organization_id); jobs are mixed scope
+	// (organization_id NULL = platform job) and every query names the scope.
+	InsertIntegrationAccount(ctx context.Context, arg InsertIntegrationAccountParams) (int64, error)
+	InsertIntegrationAttempt(ctx context.Context, arg InsertIntegrationAttemptParams) (InsertIntegrationAttemptRow, error)
 	InsertNotificationHistory(ctx context.Context, arg InsertNotificationHistoryParams) (NotificationHistory, error)
 	InsertOrganizationSettingsVersion(ctx context.Context, arg InsertOrganizationSettingsVersionParams) (OrganizationSettingsVersion, error)
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (OutboxEvent, error)
@@ -195,10 +214,16 @@ type Querier interface {
 	ListBulkChangesForJob(ctx context.Context, jobID int64) ([]BulkChange, error)
 	ListBulkJobsForActor(ctx context.Context, arg ListBulkJobsForActorParams) ([]BulkJob, error)
 	ListDuePushTickets(ctx context.Context, arg ListDuePushTicketsParams) ([]ListDuePushTicketsRow, error)
+	// The sweep: runner jobs whose next call is due, across organizations
+	// (each row carries its organization_id; the runner re-scopes from it).
+	ListDueRunnerJobs(ctx context.Context, limitCount int32) ([]ListDueRunnerJobsRow, error)
 	ListEnabledLogPurgeRules(ctx context.Context) ([]LogPurgeRule, error)
 	ListExportJobsForActor(ctx context.Context, arg ListExportJobsForActorParams) ([]ExportJob, error)
 	ListImportChangesForJob(ctx context.Context, jobID int64) ([]ImportChange, error)
 	ListImportJobsForActor(ctx context.Context, arg ListImportJobsForActorParams) ([]ImportJob, error)
+	ListIntegrationAccounts(ctx context.Context, arg ListIntegrationAccountsParams) ([]ListIntegrationAccountsRow, error)
+	ListIntegrationAttempts(ctx context.Context, arg ListIntegrationAttemptsParams) ([]ListIntegrationAttemptsRow, error)
+	ListIntegrationJobs(ctx context.Context, arg ListIntegrationJobsParams) ([]ListIntegrationJobsRow, error)
 	ListInvitationBranches(ctx context.Context, arg ListInvitationBranchesParams) ([]ListInvitationBranchesRow, error)
 	ListInvitationRoles(ctx context.Context, arg ListInvitationRolesParams) ([]ListInvitationRolesRow, error)
 	// status: 'pending' (open, not expired), 'expired' (open, past expires_at),
@@ -269,6 +294,9 @@ type Querier interface {
 	ListWebAuthnCredentialsForUserIDs(ctx context.Context, userIds []int64) ([]WebauthnCredential, error)
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
+	// Claims a job for one provider call (one worker at a time; an expired
+	// claim of a crashed worker is free again).
+	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
 	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) (int64, error)
 	MarkBulkJobCompleted(ctx context.Context, arg MarkBulkJobCompletedParams) (BulkJob, error)
 	MarkBulkJobFailed(ctx context.Context, arg MarkBulkJobFailedParams) (BulkJob, error)
@@ -311,8 +339,12 @@ type Querier interface {
 	RevokeStorageLink(ctx context.Context, argUuid uuid.UUID) (StorageLink, error)
 	// Resend: a new token (the old link stops working) and a fresh expiry.
 	RotateInvitationToken(ctx context.Context, arg RotateInvitationTokenParams) (OrganizationInvitation, error)
+	// Stores the outcome of a provider call and releases the claim.
+	SaveRunnerJob(ctx context.Context, arg SaveRunnerJobParams) error
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)
+	SetIntegrationAccountCheck(ctx context.Context, arg SetIntegrationAccountCheckParams) error
+	SetIntegrationAccountStatus(ctx context.Context, arg SetIntegrationAccountStatusParams) (int64, error)
 	SetMemberBranchScope(ctx context.Context, arg SetMemberBranchScopeParams) error
 	SetMemberPrimaryRole(ctx context.Context, arg SetMemberPrimaryRoleParams) error
 	SetOrganizationAccessWindow(ctx context.Context, arg SetOrganizationAccessWindowParams) (Organization, error)
@@ -324,6 +356,7 @@ type Querier interface {
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
+	UnlockRunnerJob(ctx context.Context, arg UnlockRunnerJobParams) error
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error)
@@ -331,6 +364,7 @@ type Querier interface {
 	UpdateImportJobFileKey(ctx context.Context, arg UpdateImportJobFileKeyParams) (ImportJob, error)
 	UpdateImportJobMapping(ctx context.Context, arg UpdateImportJobMappingParams) (ImportJob, error)
 	UpdateImportJobPreview(ctx context.Context, arg UpdateImportJobPreviewParams) (ImportJob, error)
+	UpdateIntegrationAccount(ctx context.Context, arg UpdateIntegrationAccountParams) (int64, error)
 	UpdateLogPurgeRule(ctx context.Context, arg UpdateLogPurgeRuleParams) (LogPurgeRule, error)
 	UpdateOAuthAccountRefreshToken(ctx context.Context, arg UpdateOAuthAccountRefreshTokenParams) error
 	UpdateOAuthProviderSettings(ctx context.Context, arg UpdateOAuthProviderSettingsParams) (OauthProviderSetting, error)
@@ -351,6 +385,9 @@ type Querier interface {
 	UpdateUserTOTPRecoveryHashes(ctx context.Context, arg UpdateUserTOTPRecoveryHashesParams) error
 	UpdateWebAuthnCredentialCounter(ctx context.Context, arg UpdateWebAuthnCredentialCounterParams) error
 	UpdateWebAuthnCredentialName(ctx context.Context, arg UpdateWebAuthnCredentialNameParams) (WebauthnCredential, error)
+	// Records a job once per provider and idempotency key; a repeated key
+	// counts the delivery and returns the existing row (inserted = false).
+	UpsertIntegrationJob(ctx context.Context, arg UpsertIntegrationJobParams) (UpsertIntegrationJobRow, error)
 	UpsertNotificationPreferences(ctx context.Context, arg UpsertNotificationPreferencesParams) (NotificationPreference, error)
 	// Mobile push devices (Expo) and their pending push tickets.
 	// A token moves to the calling user when the device switches accounts and is

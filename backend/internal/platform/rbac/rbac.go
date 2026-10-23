@@ -67,6 +67,7 @@ const (
 	PermTenantBranchesImport              = "tenant.branches.import"
 	PermTenantBranchesBulkActivate        = "tenant.branches.bulk.activate"
 	PermTenantBranchesBulkDeactivate      = "tenant.branches.bulk.deactivate"
+	PermTenantIntegrationsManage          = "tenant.integrations.manage"
 	// Sensitive actions of later tenant modules (TEC-689), separate from the
 	// resource read/write slugs so roles can grant them one by one.
 	PermTenantPriceOverride    = "tenant.price.override"
