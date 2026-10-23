@@ -23,6 +23,7 @@ type ActivityEvent struct {
 	UserAgent      pgtype.Text        `json:"user_agent"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	OrganizationID pgtype.Int8        `json:"organization_id"`
+	BranchID       pgtype.Int8        `json:"branch_id"`
 }
 
 type AppLog struct {

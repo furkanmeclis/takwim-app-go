@@ -47,6 +47,7 @@ export const routes = {
       edit: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/branches/${uuid}/edit`,
     },
+    activity: (slug: string) => `/t/${encodeURIComponent(slug)}/activity`,
     exports: {
       /**
        * Downloads a finished export of the organization (the action link of

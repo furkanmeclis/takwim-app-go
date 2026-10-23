@@ -118,5 +118,7 @@
   "groups.tenant_schedules": "Program ve kaynaklar",
   "groups.tenant_customers": "Müşteriler",
   "groups.tenant_finance": "Finans",
-  "groups.tenant_earnings": "Çalışan kazançları"
+  "groups.tenant_earnings": "Çalışan kazançları",
+  "labels.tenant.activity.read": "İşlem geçmişini görüntüle",
+  "groups.tenant_activity": "İşlem geçmişi"
 }

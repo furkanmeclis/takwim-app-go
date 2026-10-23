@@ -9,6 +9,7 @@ import (
 
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
@@ -357,7 +358,10 @@ func (h *Handler) TenantPatchOrganization(w http.ResponseWriter, r *http.Request
 		writeError(w, r, err)
 		return
 	}
-	h.recordProfile(r, "organization.updated", org, map[string]any{"name": org.Name, "timezone": org.Timezone, "currency": org.Currency})
+	// The scope holds the profile before the edit.
+	after := map[string]any{"name": org.Name, "timezone": org.Timezone, "currency": org.Currency}
+	changes := activity.Diff(map[string]any{"name": scope.Name, "timezone": scope.Timezone, "currency": scope.Currency}, after)
+	h.recordProfileChanges(r, "organization.updated", org, after, changes)
 	response.JSON(w, r, http.StatusOK, tenantOrganization(org))
 }
 
@@ -431,12 +435,19 @@ func (h *Handler) TenantDeleteLogo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) recordProfile(r *http.Request, action string, org orgmodel.Organization, payload map[string]any) {
+	h.recordProfileChanges(r, action, org, payload, nil)
+}
+
+func (h *Handler) recordProfileChanges(r *http.Request, action string, org orgmodel.Organization, payload map[string]any, changes map[string]activity.Change) {
 	h.publishPlatform(r.Context(), resourceevents.ActionUpdated, org.UUID)
 	if h.activity == nil {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
-	h.activity.Record(r.Context(), &p.UserInternal, action, "tenant.organization", &org.UUID, payload, r)
+	h.activity.RecordEntry(r.Context(), activity.Entry{
+		ActorID: &p.UserInternal, Action: action, Resource: "tenant.organization", ResourceUUID: &org.UUID,
+		Payload: payload, Changes: changes, Request: r,
+	})
 }
 
 // TenantOrganization is the organization profile as the tenant shell sees it.

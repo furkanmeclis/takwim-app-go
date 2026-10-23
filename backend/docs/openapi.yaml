@@ -3632,6 +3632,88 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/activity/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantActivityFacets
+      summary: Activity history faceted filter options
+      description: Resources and actions (with row counts) present in the caller's branch scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantActivityFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantActivity
+      summary: Activity history of the organization
+      description: |
+        Who changed what and when (`tenant.activity.read`). Updates carry the
+        before / after of each changed field in `payload.changes`. A member
+        limited to some branches (or with `X-Branch` set) only sees events of
+        those branches; business-wide events are hidden from them. `q`
+        searches the action, the actor and the branch name.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "`created_at` or `-created_at` (default)."
+          schema: { type: string, example: "-created_at" }
+        - name: resource
+          in: query
+          description: "Resource; comma-separate for several (see `/v1/tenant/activity/facets`)"
+          schema: { type: string }
+        - name: action
+          in: query
+          description: "Action; comma-separate for several"
+          schema: { type: string }
+        - name: resource_uuid
+          in: query
+          description: History of one record.
+          schema: { type: string, format: uuid }
+        - name: actor_uuid
+          in: query
+          description: Events of one user.
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          description: "RFC 3339 time, inclusive"
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: "RFC 3339 time, exclusive"
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/context:
     get:
       tags: [Tenant]
@@ -7106,6 +7188,82 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/TenantOverview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantActivityActor:
+      type: object
+      required: [uuid, name, surname, email]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
+
+    TenantActivityBranch:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    TenantActivityEvent:
+      type: object
+      required: [uuid, action, resource, resource_uuid, payload, actor, branch, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        action: { type: string, example: branches.updated }
+        resource: { type: string, example: branches }
+        resource_uuid: { type: [string, "null"], format: uuid }
+        payload:
+          type: object
+          additionalProperties: true
+          description: "Action details; `changes` maps each changed field to `{before, after}`"
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/TenantActivityActor"
+            - type: "null"
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/TenantActivityBranch"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    TenantActivityPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantActivityEvent" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantActivityFacets:
+      type: object
+      required: [resources, actions]
+      properties:
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/Facet" }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/Facet" }
+
+    EnvelopeTenantActivityPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantActivityPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantActivityFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantActivityFacets" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     OrganizationCompanySettings:

@@ -140,12 +140,18 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	// The state before the edit, for the before / after of the history.
+	before, beforeErr := h.svc.Get(r.Context(), scope.ID, id)
 	b, err := h.svc.Patch(r.Context(), scope.ID, id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	h.record(r, "branches.updated", b.UUID, map[string]any{"code": b.Code, "fields": changedFields(in)})
+	var changes map[string]activity.Change
+	if beforeErr == nil {
+		changes = activity.Diff(before, b, branchDiffSkip...)
+	}
+	h.recordChanges(r, "branches.updated", b.UUID, map[string]any{"code": b.Code, "fields": changedFields(in)}, changes)
 	response.JSON(w, r, http.StatusOK, b)
 }
 
@@ -262,15 +268,27 @@ func (h *Handler) DeleteServicePoint(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// record writes a fail-soft activity event; the recorder stamps the
-// organization from the request scope.
+// branchDiffSkip are the response fields left out of the before / after of
+// a branch edit (derived or managed elsewhere).
+var branchDiffSkip = []string{"updated_at", "created_at", "images", "cover_url", "service_points_count", "effective_timezone"}
+
+// record writes a fail-soft activity event of the branch; the recorder
+// stamps the organization from the request scope.
 func (h *Handler) record(r *http.Request, action string, branchUUID uuid.UUID, payload map[string]any) {
+	h.recordChanges(r, action, branchUUID, payload, nil)
+}
+
+// recordChanges is record with the before / after of the changed fields.
+func (h *Handler) recordChanges(r *http.Request, action string, branchUUID uuid.UUID, payload map[string]any, changes map[string]activity.Change) {
 	h.publish(r, action, branchUUID)
 	if h.activity == nil {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
-	h.activity.Record(r.Context(), &p.UserInternal, action, model.Resource, &branchUUID, payload, r)
+	h.activity.RecordEntry(r.Context(), activity.Entry{
+		ActorID: &p.UserInternal, Action: action, Resource: model.Resource, ResourceUUID: &branchUUID,
+		BranchUUID: &branchUUID, Payload: payload, Changes: changes, Request: r,
+	})
 }
 
 // publish tells open branch lists of the organization what changed. Service

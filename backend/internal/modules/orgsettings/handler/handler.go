@@ -76,15 +76,23 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, r, response.CodeValidationError, "Invalid request body")
 		return
 	}
+	// The version the edit replaces, for the before / after of the history.
+	prev, prevErr := h.svc.Current(r.Context(), scope.ID)
 	v, err := h.svc.Save(r.Context(), scope.ID, p.UserInternal, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	if h.activity != nil {
-		h.activity.Record(r.Context(), &p.UserInternal, "settings.updated", model.Resource, nil, map[string]any{
-			"version": v.Version, "ready_for_online_sales": v.ReadyForOnlineSales,
-		}, r)
+		var changes map[string]activity.Change
+		if prevErr == nil {
+			changes = activity.Diff(prev.Settings, v.Settings)
+		}
+		h.activity.RecordEntry(r.Context(), activity.Entry{
+			ActorID: &p.UserInternal, Action: "settings.updated", Resource: model.Resource,
+			Payload: map[string]any{"version": v.Version, "ready_for_online_sales": v.ReadyForOnlineSales},
+			Changes: changes, Request: r,
+		})
 	}
 	response.JSON(w, r, http.StatusOK, v)
 }

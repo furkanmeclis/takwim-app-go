@@ -66,10 +66,65 @@ func (q *Queries) CountOrganizationResourceActivity(ctx context.Context, arg Cou
 	return column_1, err
 }
 
+const countTenantActivity = `-- name: CountTenantActivity :one
+SELECT COUNT(*)::bigint
+FROM activity_events e
+LEFT JOIN users u ON u.id = e.actor_user_id
+LEFT JOIN branches b ON b.id = e.branch_id AND b.organization_id = e.organization_id
+WHERE e.organization_id = $1
+  AND ($2::bigint[] IS NULL OR e.branch_id = ANY($2::bigint[]))
+  AND ($3::text[] IS NULL OR e.resource = ANY($3::text[]))
+  AND ($4::text[] IS NULL OR e.action = ANY($4::text[]))
+  AND ($5::uuid IS NULL OR e.resource_uuid = $5)
+  AND ($6::uuid IS NULL OR u.uuid = $6)
+  AND ($7::timestamptz IS NULL OR e.created_at >= $7)
+  AND ($8::timestamptz IS NULL OR e.created_at < $8)
+  AND (
+    $9::text IS NULL
+    OR e.action ILIKE '%' || $9 || '%'
+    OR u.email ILIKE '%' || $9 || '%'
+    OR (u.name || ' ' || u.surname) ILIKE '%' || $9 || '%'
+    OR b.name ILIKE '%' || $9 || '%'
+  )
+`
+
+type CountTenantActivityParams struct {
+	OrganizationID pgtype.Int8        `json:"organization_id"`
+	BranchIds      []int64            `json:"branch_ids"`
+	Resources      []string           `json:"resources"`
+	Actions        []string           `json:"actions"`
+	ResourceUuid   pgtype.UUID        `json:"resource_uuid"`
+	ActorUuid      pgtype.UUID        `json:"actor_uuid"`
+	CreatedFrom    pgtype.Timestamptz `json:"created_from"`
+	CreatedTo      pgtype.Timestamptz `json:"created_to"`
+	Q              pgtype.Text        `json:"q"`
+}
+
+func (q *Queries) CountTenantActivity(ctx context.Context, arg CountTenantActivityParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countTenantActivity,
+		arg.OrganizationID,
+		arg.BranchIds,
+		arg.Resources,
+		arg.Actions,
+		arg.ResourceUuid,
+		arg.ActorUuid,
+		arg.CreatedFrom,
+		arg.CreatedTo,
+		arg.Q,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const insertActivityEvent = `-- name: InsertActivityEvent :one
-INSERT INTO activity_events (actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, organization_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, uuid, actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, created_at, organization_id
+INSERT INTO activity_events (actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, organization_id, branch_id)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    (SELECT b.id FROM branches b
+     WHERE b.organization_id = $8 AND b.uuid = $9::uuid)
+)
+RETURNING id, uuid, actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, created_at, organization_id, branch_id
 `
 
 type InsertActivityEventParams struct {
@@ -81,8 +136,11 @@ type InsertActivityEventParams struct {
 	IpAddress      *netip.Addr `json:"ip_address"`
 	UserAgent      pgtype.Text `json:"user_agent"`
 	OrganizationID pgtype.Int8 `json:"organization_id"`
+	BranchUuid     pgtype.UUID `json:"branch_uuid"`
 }
 
+// branch_uuid ties the event to a branch of the same organization (NULL or
+// an unknown uuid = an event of the whole business).
 func (q *Queries) InsertActivityEvent(ctx context.Context, arg InsertActivityEventParams) (ActivityEvent, error) {
 	row := q.db.QueryRow(ctx, insertActivityEvent,
 		arg.ActorUserID,
@@ -93,6 +151,7 @@ func (q *Queries) InsertActivityEvent(ctx context.Context, arg InsertActivityEve
 		arg.IpAddress,
 		arg.UserAgent,
 		arg.OrganizationID,
+		arg.BranchUuid,
 	)
 	var i ActivityEvent
 	err := row.Scan(
@@ -107,12 +166,13 @@ func (q *Queries) InsertActivityEvent(ctx context.Context, arg InsertActivityEve
 		&i.UserAgent,
 		&i.CreatedAt,
 		&i.OrganizationID,
+		&i.BranchID,
 	)
 	return i, err
 }
 
 const listActivityEvents = `-- name: ListActivityEvents :many
-SELECT id, uuid, actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, created_at, organization_id FROM activity_events
+SELECT id, uuid, actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, created_at, organization_id, branch_id FROM activity_events
 WHERE organization_id IS NULL
   AND ($1::bigint IS NULL OR actor_user_id = $1)
   AND ($2::text IS NULL OR resource = $2)
@@ -165,6 +225,7 @@ func (q *Queries) ListActivityEvents(ctx context.Context, arg ListActivityEvents
 			&i.UserAgent,
 			&i.CreatedAt,
 			&i.OrganizationID,
+			&i.BranchID,
 		); err != nil {
 			return nil, err
 		}
@@ -237,6 +298,157 @@ func (q *Queries) ListOrganizationResourceActivity(ctx context.Context, arg List
 			&i.ActorSurname,
 			&i.ActorEmail,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTenantActivity = `-- name: ListTenantActivity :many
+SELECT
+    e.uuid, e.action, e.resource, e.resource_uuid, e.payload, e.created_at,
+    u.uuid AS actor_uuid, u.name AS actor_name, u.surname AS actor_surname, u.email AS actor_email,
+    b.uuid AS branch_uuid, b.name AS branch_name
+FROM activity_events e
+LEFT JOIN users u ON u.id = e.actor_user_id
+LEFT JOIN branches b ON b.id = e.branch_id AND b.organization_id = e.organization_id
+WHERE e.organization_id = $1
+  AND ($2::bigint[] IS NULL OR e.branch_id = ANY($2::bigint[]))
+  AND ($3::text[] IS NULL OR e.resource = ANY($3::text[]))
+  AND ($4::text[] IS NULL OR e.action = ANY($4::text[]))
+  AND ($5::uuid IS NULL OR e.resource_uuid = $5)
+  AND ($6::uuid IS NULL OR u.uuid = $6)
+  AND ($7::timestamptz IS NULL OR e.created_at >= $7)
+  AND ($8::timestamptz IS NULL OR e.created_at < $8)
+  AND (
+    $9::text IS NULL
+    OR e.action ILIKE '%' || $9 || '%'
+    OR u.email ILIKE '%' || $9 || '%'
+    OR (u.name || ' ' || u.surname) ILIKE '%' || $9 || '%'
+    OR b.name ILIKE '%' || $9 || '%'
+  )
+ORDER BY
+  CASE WHEN $10::boolean THEN e.created_at END DESC,
+  CASE WHEN NOT $10::boolean THEN e.created_at END ASC,
+  e.id DESC
+LIMIT $12 OFFSET $11
+`
+
+type ListTenantActivityParams struct {
+	OrganizationID pgtype.Int8        `json:"organization_id"`
+	BranchIds      []int64            `json:"branch_ids"`
+	Resources      []string           `json:"resources"`
+	Actions        []string           `json:"actions"`
+	ResourceUuid   pgtype.UUID        `json:"resource_uuid"`
+	ActorUuid      pgtype.UUID        `json:"actor_uuid"`
+	CreatedFrom    pgtype.Timestamptz `json:"created_from"`
+	CreatedTo      pgtype.Timestamptz `json:"created_to"`
+	Q              pgtype.Text        `json:"q"`
+	SortDesc       bool               `json:"sort_desc"`
+	OffsetCount    int32              `json:"offset_count"`
+	LimitCount     int32              `json:"limit_count"`
+}
+
+type ListTenantActivityRow struct {
+	Uuid         uuid.UUID          `json:"uuid"`
+	Action       string             `json:"action"`
+	Resource     string             `json:"resource"`
+	ResourceUuid pgtype.UUID        `json:"resource_uuid"`
+	Payload      []byte             `json:"payload"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ActorUuid    pgtype.UUID        `json:"actor_uuid"`
+	ActorName    pgtype.Text        `json:"actor_name"`
+	ActorSurname pgtype.Text        `json:"actor_surname"`
+	ActorEmail   pgtype.Text        `json:"actor_email"`
+	BranchUuid   pgtype.UUID        `json:"branch_uuid"`
+	BranchName   pgtype.Text        `json:"branch_name"`
+}
+
+// Activity history of one organization. branch_ids is the caller's branch
+// scope (narrowed by X-Branch): NULL = every event, otherwise only events of
+// those branches (events of the whole business are hidden).
+func (q *Queries) ListTenantActivity(ctx context.Context, arg ListTenantActivityParams) ([]ListTenantActivityRow, error) {
+	rows, err := q.db.Query(ctx, listTenantActivity,
+		arg.OrganizationID,
+		arg.BranchIds,
+		arg.Resources,
+		arg.Actions,
+		arg.ResourceUuid,
+		arg.ActorUuid,
+		arg.CreatedFrom,
+		arg.CreatedTo,
+		arg.Q,
+		arg.SortDesc,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTenantActivityRow{}
+	for rows.Next() {
+		var i ListTenantActivityRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Action,
+			&i.Resource,
+			&i.ResourceUuid,
+			&i.Payload,
+			&i.CreatedAt,
+			&i.ActorUuid,
+			&i.ActorName,
+			&i.ActorSurname,
+			&i.ActorEmail,
+			&i.BranchUuid,
+			&i.BranchName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const tenantActivityFacets = `-- name: TenantActivityFacets :many
+SELECT e.resource, e.action, COUNT(*)::bigint AS count
+FROM activity_events e
+WHERE e.organization_id = $1
+  AND ($2::bigint[] IS NULL OR e.branch_id = ANY($2::bigint[]))
+GROUP BY e.resource, e.action
+ORDER BY e.resource, e.action
+`
+
+type TenantActivityFacetsParams struct {
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+	BranchIds      []int64     `json:"branch_ids"`
+}
+
+type TenantActivityFacetsRow struct {
+	Resource string `json:"resource"`
+	Action   string `json:"action"`
+	Count    int64  `json:"count"`
+}
+
+// Distinct resources and actions (with counts) in the caller's scope, for
+// the faceted filters.
+func (q *Queries) TenantActivityFacets(ctx context.Context, arg TenantActivityFacetsParams) ([]TenantActivityFacetsRow, error) {
+	rows, err := q.db.Query(ctx, tenantActivityFacets, arg.OrganizationID, arg.BranchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TenantActivityFacetsRow{}
+	for rows.Next() {
+		var i TenantActivityFacetsRow
+		if err := rows.Scan(&i.Resource, &i.Action, &i.Count); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
