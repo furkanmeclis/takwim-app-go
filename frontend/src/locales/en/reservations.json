@@ -198,5 +198,22 @@
   "bulk_report.reasons.not_found": "Not found",
   "bulk_report.empty_title": "Nothing skipped",
   "bulk_report.empty_description": "Every selected reservation was processed.",
-  "bulk_report.close": "Close"
+  "bulk_report.close": "Close",
+  "agenda.title": "My schedule",
+  "agenda.description": "Where and when you work today, and the visits you serve.",
+  "agenda.time": "Time",
+  "agenda.note": "Customer note",
+  "agenda.shift": "Working hours",
+  "agenda.leave": "Leave",
+  "agenda.no_shift": "You have no shift on this day.",
+  "agenda.visits": "My visits",
+  "agenda.empty_title": "No visits",
+  "agenda.empty_description": "Nothing is assigned to you on this day.",
+  "agenda.no_staff_title": "No staff record",
+  "agenda.no_staff_description": "Ask your manager to link your account to a staff record to see your schedule.",
+  "agenda.load_failed": "The schedule could not be loaded.",
+  "errors.other_staff": "A colleague also serves this visit; you can change only your own service.",
+  "errors.taken": "The chosen time is no longer free. Pick another time.",
+  "errors.stale": "The visit changed while you were looking. The page was refreshed; try again.",
+  "errors.invalid_transition": "This action is not possible in the visit's current state."
 }

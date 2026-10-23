@@ -8,9 +8,11 @@ import {
 } from "@tanstack/react-query";
 
 import { reservationsKeys } from "@/features/reservations/hooks/query-keys";
+import { reportReservationError } from "@/features/reservations/lib/errors";
 import { reservationsService } from "@/features/reservations/services/reservations.service";
 import type {
   AvailabilitySearchRequest,
+  AgendaParams,
   CalendarParams,
   ListReservationsParams,
   ReservationAction,
@@ -56,6 +58,15 @@ export function useReservationCalendar(params: CalendarParams | null) {
     queryKey: reservationsKeys.calendar(slug, params ?? {}),
     queryFn: () => reservationsService.calendar(slug, params!),
     enabled: Boolean(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useReservationAgenda(params: AgendaParams) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.agenda(slug, params),
+    queryFn: () => reservationsService.agenda(slug, params),
     placeholderData: keepPreviousData,
   });
 }
@@ -136,7 +147,10 @@ export function useReservationAction() {
       appToast.success(t(ACTION_TOAST_KEYS[action]));
       void invalidate();
     },
-    onError: () => void invalidate(),
+    onError: (error) => {
+      reportReservationError(error, t);
+      void invalidate();
+    },
   });
 }
 
@@ -156,7 +170,10 @@ export function useRescheduleReservation() {
       appToast.success(t("reservations.toast.rescheduled"));
       void invalidate();
     },
-    onError: () => void invalidate(),
+    onError: (error) => {
+      reportReservationError(error, t);
+      void invalidate();
+    },
   });
 }
 

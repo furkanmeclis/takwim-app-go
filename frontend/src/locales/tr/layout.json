@@ -51,5 +51,6 @@
   "nav_services": "Hizmetler",
   "nav_customers": "Müşteriler",
   "nav_reservations": "Rezervasyonlar",
-  "nav_calendar": "Takvim"
+  "nav_calendar": "Takvim",
+  "nav_my_agenda": "Programım"
 }

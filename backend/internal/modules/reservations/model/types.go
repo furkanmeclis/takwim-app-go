@@ -304,3 +304,45 @@ type Calendar struct {
 	Columns  []CalendarColumn `json:"columns"`
 	Items    []CalendarItem   `json:"items"`
 }
+
+// AgendaFilter asks for a member's own programme of local dates From..To.
+type AgendaFilter struct {
+	From, To         string
+	IncludeCancelled bool
+}
+
+// AgendaStaff is the member's staff record.
+type AgendaStaff struct {
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
+}
+
+// AgendaWork is a working period of the member in one branch.
+type AgendaWork struct {
+	Branch   Ref       `json:"branch"`
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+}
+
+// AgendaItem is one line the member serves, with what the member needs at
+// the chair: the customer's phone and note, the branch.
+type AgendaItem struct {
+	CalendarItem
+	BranchName    string  `json:"branch_name"`
+	CustomerPhone *string `json:"customer_phone"`
+	CustomerNote  string  `json:"customer_note"`
+}
+
+// Agenda is the member's own programme (TEC-902): shifts in every branch,
+// leave and the lines it serves. Staff is nil when the member has no staff
+// record (nothing to serve).
+type Agenda struct {
+	Staff    *AgendaStaff `json:"staff"`
+	Timezone string       `json:"timezone"`
+	From     string       `json:"from"`
+	To       string       `json:"to"`
+	Work     []AgendaWork `json:"work"`
+	Off      []Interval   `json:"off"`
+	Items    []AgendaItem `json:"items"`
+}

@@ -51,5 +51,6 @@
   "nav_services": "Services",
   "nav_customers": "Customers",
   "nav_reservations": "Reservations",
-  "nav_calendar": "Calendar"
+  "nav_calendar": "Calendar",
+  "nav_my_agenda": "My schedule"
 }

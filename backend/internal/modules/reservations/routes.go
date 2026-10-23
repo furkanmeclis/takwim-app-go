@@ -44,6 +44,7 @@ func RegisterRoutes(
 	route("GET /v1/tenant/reservations/meta", h.Meta, read)
 	route("GET /v1/tenant/reservations/facets", h.Facets, read)
 	route("GET /v1/tenant/reservations/calendar", h.Calendar, read)
+	route("GET /v1/tenant/reservations/agenda", h.Agenda, read)
 	route("GET /v1/tenant/reservations", h.List, read)
 	route("POST /v1/tenant/reservations", h.Create, write)
 	route("GET /v1/tenant/reservations/{uuid}", h.Get, read)
