@@ -723,22 +723,6 @@ func tenantRoutes(t *testing.T, mux *http.ServeMux) []string {
 	return routes
 }
 
-func pageItems(t *testing.T, data any) []any {
-	t.Helper()
-	switch v := data.(type) {
-	case []any:
-		if len(v) > 0 {
-			return v
-		}
-	case map[string]any:
-		if items, ok := v["items"].([]any); ok && len(items) > 0 {
-			return items
-		}
-	}
-	t.Fatalf("expected a non-empty list: %v", data)
-	return nil
-}
-
 func asMap(v any) map[string]any {
 	m, _ := v.(map[string]any)
 	return m
