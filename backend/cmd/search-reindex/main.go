@@ -11,6 +11,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/logging"
 	branchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/adapters"
 	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
+	reservationsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/adapters"
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
 	servicesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/adapters"
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
@@ -55,6 +56,7 @@ func main() {
 		resourcesadapters.NewSearch(queries),
 		servicesadapters.NewSearch(queries),
 		customersadapters.NewSearch(queries),
+		reservationsadapters.NewSearch(queries),
 	)
 	indexer := searchengine.NewIndexer(client, reg, nil, log)
 	if err := indexer.ProcessReindex(ctx, ""); err != nil {

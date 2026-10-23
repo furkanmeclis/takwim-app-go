@@ -65,7 +65,17 @@ Releasing products and session rights on cancel comes with those modules; capaci
 | `POST /v1/tenant/reservations/{uuid}/{accept,reject,cancel,start,complete,no-show}` | Transitions; optional `expected_version`, `note`, `reason` (cancel)                                                                    |
 | `POST /v1/tenant/reservations/{uuid}/reschedule`                                    | New start, optionally other people per line                                                                                            |
 
-Errors: a taken start is `409 starts_at/taken`, a stale version `409 expected_version/stale`, a transition the state does not allow `409 status/invalid_transition`. Reads need `tenant.reservations.read` or `.own`, writes `.write` or `.own`; the module must be on. The list is live (`tenant.reservations` channel) for members with read. Export, bulk actions and search come in a later change.
+Errors: a taken start is `409 starts_at/taken`, a stale version `409 expected_version/stale`, a transition the state does not allow `409 status/invalid_transition`. Reads need `tenant.reservations.read` or `.own`, writes `.write` or `.own`; the module must be on. The list is live (`tenant.reservations` channel) for members with read. Export, bulk actions and search: see below (TEC-963).
+
+## Export, bulk actions and Cmd+K (TEC-963)
+
+All three work inside the caller's reach, exactly like the list: the business, the branch scope and, for a member with only `tenant.reservations.own`, the bookings it created or serves. Worker jobs re-resolve the requester's membership (`orgctx.WithJobScope`) and act as that user (`orgctx.JobActor`).
+
+- **Export** (`POST /v1/tenant/reservations/export`, `tenant.reservations.export` plus read or own): the list filters, `q` and `sort`; dates and times in the business timezone; state columns carry their `tr` / `en` labels. There is no import: a booking is only written through the capacity engine.
+- **Bulk** (`POST /v1/tenant/reservations/bulk`, write or own plus `tenant.reservations.bulk.{accept,reject,cancel}`): each record runs its own transition, so capacity is confirmed or released with it. Cancel takes `params.reason`; `params.versions` (`uuid:version,…`) carries the versions the panel listed. Records the action does not apply to (`invalid_transition`), changed since (`stale`) or whose hold lapsed (`expired`) are skipped and listed with their number in the summary (`skipped`, `issues`). Not reversible: a freed time may be booked again at once.
+- **Cmd+K** (spec `reservations`): `#number · customer`, the visit time and branch; number, name and phone (with or without the country code) match. Documents carry `branch_ids` and `owner_user_ids` (booker and the accounts of the staff serving it); a member with only the own slug matches only documents listing it (`searchengine.TenantOwnFilter`). Documents are written on booking and on a move; a state change does not touch them. A customer rename shows up after the next reindex.
+
+Roles (migration 000050): owner, admin and branch manager get export and every bulk action; reception gets bulk accept and reject.
 
 ## Calendar (TEC-901)
 
@@ -79,4 +89,4 @@ Every read and write checks the business and the caller's branch scope; a member
 
 ## Tests
 
-`reservations_db_test.go`: panel booking (prices, snapshots, double booking writes nothing, lifecycle, versions, history, cancel frees the time, no-show, validation), online flows (manual approval on site / online payment, reject, approval timeout through a writer, automatic approval with a payment timeout through the sweep, payment rules, no hold left after a refusal), visibility and isolation, and parallel bookings of the last start (one record, one commitment).
+`reservations_db_test.go`: panel booking (prices, snapshots, double booking writes nothing, lifecycle, versions, history, cancel frees the time, no-show, validation), online flows (manual approval on site / online payment, reject, approval timeout through a writer, automatic approval with a payment timeout through the sweep, payment rules, no hold left after a refusal), visibility and isolation, and parallel bookings of the last start (one record, one commitment). `engines_db_test.go` (TEC-963): export, bulk and search documents stay inside the caller's reach (another branch, another member's own calendar, a missing slug), a worker job acts with its requester's membership, and bulk cancel frees the time and reports stale and inapplicable records.

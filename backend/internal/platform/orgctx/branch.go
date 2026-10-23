@@ -127,6 +127,9 @@ func WithJobScope(ctx context.Context, loader JobScopeLoader, organizationID, ac
 	if s, ok := From(ctx); ok && s.ID == organizationID && s.Slug != "" {
 		return ctx, nil
 	}
+	if actorID > 0 {
+		ctx = context.WithValue(ctx, jobActorKey{}, actorID)
+	}
 	if loader == nil || actorID <= 0 {
 		return WithOrganizationID(ctx, organizationID), nil
 	}
@@ -135,4 +138,15 @@ func WithJobScope(ctx context.Context, loader JobScopeLoader, organizationID, ac
 		return ctx, err
 	}
 	return WithScope(ctx, scope), nil
+}
+
+type jobActorKey struct{}
+
+// JobActor is the user who requested the tenant job a worker context runs
+// (set by WithJobScope). Request contexts carry the principal instead; an
+// engine adapter that needs the acting user (an own-records reach, history
+// entries) reads the principal first and falls back to JobActor.
+func JobActor(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(jobActorKey{}).(int64)
+	return id, ok && id > 0
 }

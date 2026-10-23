@@ -25,5 +25,7 @@
   "prefix_services": "hizmet",
   "specs_services": "Hizmetler",
   "prefix_customers": "müşteri",
-  "specs_customers": "Müşteriler"
+  "specs_customers": "Müşteriler",
+  "prefix_reservations": "rezervasyon",
+  "specs_reservations": "Rezervasyonlar"
 }

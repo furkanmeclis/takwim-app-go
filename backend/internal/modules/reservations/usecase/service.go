@@ -79,6 +79,7 @@ type Service struct {
 	holds    *availabilityusecase.Holds
 	q        *db.Queries
 	settings availabilityusecase.SettingsReader
+	indexer  SearchIndexer
 }
 
 // New builds the service. The capacity writer must also run ExpireRequests
@@ -261,6 +262,7 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.CreateInput,
 	if err != nil {
 		return model.Reservation{}, err
 	}
+	s.index(ctx, orgID, id)
 	return s.get(ctx, orgID, id)
 }
 

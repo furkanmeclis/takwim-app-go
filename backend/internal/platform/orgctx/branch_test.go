@@ -97,6 +97,12 @@ func TestWithJobScope(t *testing.T) {
 	if s := Must(ctx); s.ID != 9 || len(s.BranchIDs) != 1 || s.BranchIDs[0] != 3 {
 		t.Fatalf("job scope = %+v", s)
 	}
+	if actor, ok := JobActor(ctx); !ok || actor != 42 {
+		t.Fatalf("job actor = %d %v", actor, ok)
+	}
+	if _, ok := JobActor(context.Background()); ok {
+		t.Fatal("job actor without a job")
+	}
 	// The actor left the organization: the job fails.
 	if _, err := WithJobScope(context.Background(), loader, 9, 7); !errors.Is(err, ErrNotMember) {
 		t.Fatalf("former member err = %v", err)

@@ -5,6 +5,7 @@ import type {
   BulkExecuteSyncResult,
   BulkJob,
   BulkResource,
+  BulkSummary,
   BulkTarget,
 } from "@/features/bulk-engine/types";
 import { useApiScope } from "@/features/tenant/hooks/use-api-scope";
@@ -23,6 +24,8 @@ type ExecuteInput = {
   action: string;
   target: BulkTarget;
   onComplete?: () => void;
+  /** The summary of a run that finished inline (sync). */
+  onResult?: (summary: BulkSummary) => void;
 };
 
 export function useBulkMutation() {
@@ -44,12 +47,13 @@ export function useBulkMutation() {
     },
     onSuccess: (data, variables) => {
       if (isSyncResult(data)) {
+        const { succeeded, failed, skipped = 0 } = data.summary;
         toast.success(
-          t("bulk.result.sync", {
-            succeeded: data.summary.succeeded,
-            failed: data.summary.failed,
-          }),
+          skipped > 0
+            ? t("bulk.result.sync_skipped", { succeeded, failed, skipped })
+            : t("bulk.result.sync", { succeeded, failed }),
         );
+        variables.onResult?.(data.summary);
         variables.onComplete?.();
         return;
       }

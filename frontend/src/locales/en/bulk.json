@@ -52,5 +52,12 @@
   "actions.customers.add_tag": "Add tag",
   "actions.customers.remove_tag": "Remove tag",
   "actions.customers.delete": "Delete customers",
-  "confirm.customers.delete": "Delete the {{count}} selected customers? You can undo it within the rollback window."
+  "confirm.customers.delete": "Delete the {{count}} selected customers? You can undo it within the rollback window.",
+  "result.sync_skipped": "{{succeeded}} succeeded, {{skipped}} skipped, {{failed}} failed",
+  "actions.reservations.accept": "Accept",
+  "actions.reservations.reject": "Reject",
+  "actions.reservations.cancel": "Cancel",
+  "confirm.reservations.accept": "Accept the {{count}} selected requests? Anything that is not a pending request is skipped.",
+  "confirm.reservations.reject": "Reject the {{count}} selected requests? Their times are freed; anything that is not a pending request is skipped. This cannot be undone.",
+  "confirm.reservations.cancel": "Cancel the {{count}} selected reservations? Their times are freed; anything that is not a request or an active booking is skipped. This cannot be undone."
 }

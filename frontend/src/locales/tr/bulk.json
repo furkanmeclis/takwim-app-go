@@ -52,5 +52,12 @@
   "actions.customers.add_tag": "Etiket ekle",
   "actions.customers.remove_tag": "Etiketi kaldır",
   "actions.customers.delete": "Müşterileri sil",
-  "confirm.customers.delete": "Seçili {{count}} müşteri silinsin mi? İşlem geri alma süresi içinde geri alınabilir."
+  "confirm.customers.delete": "Seçili {{count}} müşteri silinsin mi? İşlem geri alma süresi içinde geri alınabilir.",
+  "result.sync_skipped": "{{succeeded}} başarılı, {{skipped}} atlandı, {{failed}} hatalı",
+  "actions.reservations.accept": "Onayla",
+  "actions.reservations.reject": "Reddet",
+  "actions.reservations.cancel": "İptal et",
+  "confirm.reservations.accept": "Seçili {{count}} rezervasyon talebi onaylansın mı? Onay bekleyen talepler dışındakiler atlanır.",
+  "confirm.reservations.reject": "Seçili {{count}} rezervasyon talebi reddedilsin mi? Saatleri serbest kalır; onay bekleyen talepler dışındakiler atlanır. Geri alınamaz.",
+  "confirm.reservations.cancel": "Seçili {{count}} rezervasyon iptal edilsin mi? Saatleri serbest kalır; talep ve aktif rezervasyonlar dışındakiler atlanır. Geri alınamaz."
 }
