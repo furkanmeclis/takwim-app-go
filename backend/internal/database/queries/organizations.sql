@@ -1,10 +1,10 @@
 -- name: CreateOrganization :one
 INSERT INTO organizations (
-    slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings
+    slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, sector
 ) VALUES (
     $1, $2, sqlc.narg(logo_object_key), COALESCE(sqlc.narg(status), 'active'),
     COALESCE(sqlc.narg(access_starts_at), NOW()), sqlc.narg(access_ends_at),
-    COALESCE(sqlc.narg(settings), '{}'::jsonb)
+    COALESCE(sqlc.narg(settings), '{}'::jsonb), COALESCE(sqlc.narg(sector)::varchar, 'hairdresser')
 )
 RETURNING *;
 
@@ -32,7 +32,8 @@ SET name = COALESCE(sqlc.narg(name), name),
     logo_object_key = COALESCE(sqlc.narg(logo_object_key), logo_object_key),
     settings = COALESCE(sqlc.narg(settings), settings),
     timezone = COALESCE(sqlc.narg(timezone), timezone),
-    currency = COALESCE(sqlc.narg(currency), currency)
+    currency = COALESCE(sqlc.narg(currency), currency),
+    sector = COALESCE(sqlc.narg(sector), sector)
 WHERE uuid = sqlc.arg(uuid) AND deleted_at IS NULL
 RETURNING *;
 
@@ -171,6 +172,7 @@ WHERE om.organization_id = $1;
 
 -- name: ResolveOrganizationScopeByUUID :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
+       o.sector, o.timezone, o.currency,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)
@@ -179,6 +181,7 @@ WHERE o.uuid = sqlc.arg(uuid) AND o.deleted_at IS NULL;
 
 -- name: ResolveOrganizationScopeBySlug :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
+       o.sector, o.timezone, o.currency,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)

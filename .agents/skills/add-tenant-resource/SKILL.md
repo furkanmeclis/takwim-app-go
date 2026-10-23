@@ -131,7 +131,7 @@ Forms: `AppForm` + zod; dates only through `AppDatePicker` / `DatePicker` (`.age
 ## 7. Nav, routes, permissions, i18n
 
 1. `routes.tenant.<plural>.{root,create,detail,edit}(slug, …)` in `config/routes.ts`.
-2. Item in `tenantNav(slug)` (`config/nav.ts`) gated by `permissions.tenant.<plural>.read` (`.agents/skills/nav-engine`).
+2. Item in `tenantNav(slug)` (`config/nav.ts`) gated by `permissions.tenant.<plural>.read` and, when the resource is a sector module, `module: "<module>"` (`.agents/skills/nav-engine`, `docs/design/sectors.md`). Sector words (masa / oda / uzman) come from `useSector().term(...)`, never hard-coded.
 3. Permission triad: migration seed + `internal/platform/rbac/rbac.go` + `frontend/src/config/permissions.ts` (`permissions.tenant.<plural>.*`) + `permissions.labels.tenant.<plural>.*` in tr/en.
 4. Locales (Turkish primary, en mirror): `locales/{tr,en}/<plural>.json` registered in `lib/i18n/messages.ts`; `layout.nav_*`; `activity.resources.tenant.<plural>` + `activity.actions.*`; `exports/imports.resources.tenant.<plural>`; `bulk.actions.*` / `bulk.confirm.*`; `search.specs_<id>` / `search.prefix_<id>`. Prefer static key maps over template keys.
 5. `node scripts/check-i18n.mjs` → 0 errors.

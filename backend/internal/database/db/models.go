@@ -372,6 +372,7 @@ type Organization struct {
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 	Timezone       string             `json:"timezone"`
 	Currency       string             `json:"currency"`
+	Sector         string             `json:"sector"`
 }
 
 type OrganizationInvitation struct {

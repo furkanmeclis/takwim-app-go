@@ -207,6 +207,10 @@ func (f *fakeRepo) WithTx(ctx context.Context, fn repository.TxFunc) error {
 func (f *fakeRepo) CreateOrganization(_ context.Context, _ *db.Queries, params db.CreateOrganizationParams) (db.Organization, error) {
 	row := f.addOrg(params.Slug, "active", f.now, nil)
 	row.Name = params.Name
+	row.Sector = "hairdresser"
+	if params.Sector.Valid {
+		row.Sector = params.Sector.String
+	}
 	f.orgs[row.ID] = row
 	return row, nil
 }
@@ -280,6 +284,9 @@ func (f *fakeRepo) UpdateOrganization(_ context.Context, params db.UpdateOrganiz
 	}
 	if params.Currency.Valid {
 		org.Currency = params.Currency.String
+	}
+	if params.Sector.Valid {
+		org.Sector = params.Sector.String
 	}
 	f.orgs[org.ID] = org
 	return org, nil
@@ -553,5 +560,31 @@ func TestPatchOrganizationTimezoneAndCurrency(t *testing.T) {
 		if _, err := svc.PatchOrganization(context.Background(), org.UUID, in); !errors.Is(err, ErrInvalidRequest) {
 			t.Fatalf("patch %+v err = %v", in, err)
 		}
+	}
+}
+
+func TestOrganizationSector(t *testing.T) {
+	t.Parallel()
+	f := newFakeRepo(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC))
+	f.users[10] = db.User{ID: 10, Uuid: uuid.New(), Email: "owner@example.test", Name: "Owner", Surname: "User", Status: "active"}
+	svc := New(f, nil)
+	ctx := context.Background()
+	def, err := svc.CreateOrganization(ctx, orgmodel.CreateOrganizationInput{Name: "Salon", OwnerUserID: 10})
+	if err != nil || def.Sector != "hairdresser" {
+		t.Fatalf("default sector = %q, %v", def.Sector, err)
+	}
+	org, err := svc.CreateOrganization(ctx, orgmodel.CreateOrganizationInput{Name: "Lokanta", Sector: "restaurant", OwnerUserID: 10})
+	if err != nil || org.Sector != "restaurant" {
+		t.Fatalf("restaurant = %q, %v", org.Sector, err)
+	}
+	if _, err := svc.CreateOrganization(ctx, orgmodel.CreateOrganizationInput{Name: "Fırın", Sector: "bakery", OwnerUserID: 10}); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("unknown sector err = %v", err)
+	}
+	got, err := svc.PatchOrganization(ctx, org.UUID, orgmodel.PatchOrganizationInput{Sector: ptr("car_wash")})
+	if err != nil || got.Sector != "car_wash" {
+		t.Fatalf("patch sector = %q, %v", got.Sector, err)
+	}
+	if _, err := svc.PatchOrganization(ctx, org.UUID, orgmodel.PatchOrganizationInput{Sector: ptr("")}); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("empty sector err = %v", err)
 	}
 }

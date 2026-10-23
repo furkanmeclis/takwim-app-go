@@ -7,6 +7,7 @@ import { createElement } from "react";
 type AccessFns = {
   can: (permission: string | string[]) => boolean;
   canAny: (permissions: string[]) => boolean;
+  hasModule?: (module: string) => boolean;
 };
 
 export function buildNavPageItems(

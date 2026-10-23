@@ -24,6 +24,7 @@ import (
 func OperatorScope(org orgmodel.Organization) orgctx.Scope {
 	return orgctx.Scope{
 		ID: org.ID, UUID: org.UUID, Slug: org.Slug, Name: org.Name, Status: org.Status,
+		Sector: org.Sector, Timezone: org.Timezone, Currency: org.Currency,
 		MemberRole: orgctx.RoleOwner, MemberRoles: []string{orgctx.RoleOwner},
 	}
 }
@@ -313,6 +314,7 @@ func mapOrganizationSummary(row db.ListOrganizationsWithStatsRow, now time.Time)
 		ID: row.ID, Uuid: row.Uuid, Slug: row.Slug, Name: row.Name, LogoObjectKey: row.LogoObjectKey,
 		Status: row.Status, AccessStartsAt: row.AccessStartsAt, AccessEndsAt: row.AccessEndsAt,
 		Settings: row.Settings, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		Timezone: row.Timezone, Currency: row.Currency, Sector: row.Sector,
 	})
 	out := orgmodel.OrganizationSummary{
 		Organization: org, MemberCount: row.MemberCount, BranchCount: row.BranchCount,

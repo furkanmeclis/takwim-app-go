@@ -62,6 +62,11 @@ export type NavItemDef = {
   icon: LucideIcon;
   permission?: string | string[];
   anyPermission?: string[];
+  /**
+   * Panel module the entry belongs to (sector visibility, TEC-882); hidden
+   * when the shell's sector does not show it.
+   */
+  module?: string;
   soon?: boolean;
   /** Command palette icon key (see resolveSearchIcon). */
   searchIcon?: string;
@@ -80,6 +85,7 @@ export type NavGroupDef = {
   collapsible?: boolean;
   permission?: string | string[];
   anyPermission?: string[];
+  module?: string;
   items: NavItemDef[];
 };
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 )
 
@@ -14,6 +15,9 @@ type organizationDTO struct {
 	Name         string     `json:"name"`
 	Status       string     `json:"status"`
 	AccessEndsAt *time.Time `json:"access_ends_at"`
+	Sector       string     `json:"sector"`
+	Timezone     string     `json:"timezone"`
+	Currency     string     `json:"currency"`
 }
 
 type contextDTO struct {
@@ -24,6 +28,15 @@ type contextDTO struct {
 	// BranchScope is "all" or "selected" (branch-bound data is limited to
 	// the member's branches).
 	BranchScope string `json:"branch_scope"`
+	// Sector is the definition of the organization's sector: booking flow,
+	// capacity, terms and visible modules (TEC-882).
+	Sector sector.Definition `json:"sector"`
+}
+
+// listSectors serves GET /v1/sectors: the sector catalog (any signed-in
+// user; the platform uses it when it opens a business).
+func listSectors(w http.ResponseWriter, r *http.Request) {
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": sector.All()})
 }
 
 // getContext returns the resolved organization scope of the request.
@@ -48,10 +61,14 @@ func getContext(w http.ResponseWriter, r *http.Request) {
 			Name:         s.Name,
 			Status:       s.Status,
 			AccessEndsAt: s.AccessEndsAt,
+			Sector:       s.Sector,
+			Timezone:     s.Timezone,
+			Currency:     s.Currency,
 		},
 		Role:        s.MemberRole,
 		Roles:       roles,
 		Permissions: perms,
 		BranchScope: branchScope,
+		Sector:      sector.Of(s.Sector),
 	})
 }

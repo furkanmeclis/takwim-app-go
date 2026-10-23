@@ -85,13 +85,13 @@ func (q *Queries) CountOrganizationOwners(ctx context.Context, organizationID in
 
 const createOrganization = `-- name: CreateOrganization :one
 INSERT INTO organizations (
-    slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings
+    slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, sector
 ) VALUES (
     $1, $2, $3, COALESCE($4, 'active'),
     COALESCE($5, NOW()), $6,
-    COALESCE($7, '{}'::jsonb)
+    COALESCE($7, '{}'::jsonb), COALESCE($8::varchar, 'hairdresser')
 )
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
 `
 
 type CreateOrganizationParams struct {
@@ -102,6 +102,7 @@ type CreateOrganizationParams struct {
 	AccessStartsAt interface{}        `json:"access_starts_at"`
 	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
 	Settings       interface{}        `json:"settings"`
+	Sector         pgtype.Text        `json:"sector"`
 }
 
 func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error) {
@@ -113,6 +114,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		arg.AccessStartsAt,
 		arg.AccessEndsAt,
 		arg.Settings,
+		arg.Sector,
 	)
 	var i Organization
 	err := row.Scan(
@@ -130,6 +132,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
@@ -153,7 +156,7 @@ func (q *Queries) DeleteOrganizationMember(ctx context.Context, arg DeleteOrgani
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -175,12 +178,13 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organizati
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
 WHERE slug = $1 AND deleted_at IS NULL
 `
 
@@ -202,12 +206,13 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
 
 const getOrganizationByUUID = `-- name: GetOrganizationByUUID :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
 WHERE uuid = $1 AND deleted_at IS NULL
 `
 
@@ -229,6 +234,7 @@ func (q *Queries) GetOrganizationByUUID(ctx context.Context, argUuid uuid.UUID) 
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
@@ -574,7 +580,7 @@ func (q *Queries) ListTenantRolePermissionSlugsByRoleID(ctx context.Context, rol
 }
 
 const lockOrganizationRow = `-- name: LockOrganizationRow :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
 WHERE id = $1 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -597,12 +603,14 @@ func (q *Queries) LockOrganizationRow(ctx context.Context, id int64) (Organizati
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
 
 const resolveOrganizationScopeBySlug = `-- name: ResolveOrganizationScopeBySlug :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
+       o.sector, o.timezone, o.currency,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $1
@@ -623,6 +631,9 @@ type ResolveOrganizationScopeBySlugRow struct {
 	Status         string             `json:"status"`
 	AccessStartsAt pgtype.Timestamptz `json:"access_starts_at"`
 	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
+	Sector         string             `json:"sector"`
+	Timezone       string             `json:"timezone"`
+	Currency       string             `json:"currency"`
 	RoleID         int64              `json:"role_id"`
 	RoleKey        string             `json:"role_key"`
 	MemberID       int64              `json:"member_id"`
@@ -640,6 +651,9 @@ func (q *Queries) ResolveOrganizationScopeBySlug(ctx context.Context, arg Resolv
 		&i.Status,
 		&i.AccessStartsAt,
 		&i.AccessEndsAt,
+		&i.Sector,
+		&i.Timezone,
+		&i.Currency,
 		&i.RoleID,
 		&i.RoleKey,
 		&i.MemberID,
@@ -650,6 +664,7 @@ func (q *Queries) ResolveOrganizationScopeBySlug(ctx context.Context, arg Resolv
 
 const resolveOrganizationScopeByUUID = `-- name: ResolveOrganizationScopeByUUID :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
+       o.sector, o.timezone, o.currency,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $1
@@ -670,6 +685,9 @@ type ResolveOrganizationScopeByUUIDRow struct {
 	Status         string             `json:"status"`
 	AccessStartsAt pgtype.Timestamptz `json:"access_starts_at"`
 	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
+	Sector         string             `json:"sector"`
+	Timezone       string             `json:"timezone"`
+	Currency       string             `json:"currency"`
 	RoleID         int64              `json:"role_id"`
 	RoleKey        string             `json:"role_key"`
 	MemberID       int64              `json:"member_id"`
@@ -687,6 +705,9 @@ func (q *Queries) ResolveOrganizationScopeByUUID(ctx context.Context, arg Resolv
 		&i.Status,
 		&i.AccessStartsAt,
 		&i.AccessEndsAt,
+		&i.Sector,
+		&i.Timezone,
+		&i.Currency,
 		&i.RoleID,
 		&i.RoleKey,
 		&i.MemberID,
@@ -700,7 +721,7 @@ UPDATE organizations
 SET access_starts_at = COALESCE($1, access_starts_at),
     access_ends_at = $2
 WHERE uuid = $3 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
 `
 
 type SetOrganizationAccessWindowParams struct {
@@ -727,6 +748,7 @@ func (q *Queries) SetOrganizationAccessWindow(ctx context.Context, arg SetOrgani
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
@@ -735,7 +757,7 @@ const setOrganizationStatus = `-- name: SetOrganizationStatus :one
 UPDATE organizations
 SET status = $1
 WHERE uuid = $2 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
 `
 
 type SetOrganizationStatusParams struct {
@@ -761,6 +783,7 @@ func (q *Queries) SetOrganizationStatus(ctx context.Context, arg SetOrganization
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
@@ -782,7 +805,7 @@ const softDeleteOrganization = `-- name: SoftDeleteOrganization :one
 UPDATE organizations
 SET deleted_at = NOW()
 WHERE uuid = $1 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
 `
 
 func (q *Queries) SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error) {
@@ -803,6 +826,7 @@ func (q *Queries) SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID)
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }
@@ -814,9 +838,10 @@ SET name = COALESCE($1, name),
     logo_object_key = COALESCE($3, logo_object_key),
     settings = COALESCE($4, settings),
     timezone = COALESCE($5, timezone),
-    currency = COALESCE($6, currency)
-WHERE uuid = $7 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency
+    currency = COALESCE($6, currency),
+    sector = COALESCE($7, sector)
+WHERE uuid = $8 AND deleted_at IS NULL
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
 `
 
 type UpdateOrganizationParams struct {
@@ -826,6 +851,7 @@ type UpdateOrganizationParams struct {
 	Settings      []byte      `json:"settings"`
 	Timezone      pgtype.Text `json:"timezone"`
 	Currency      pgtype.Text `json:"currency"`
+	Sector        pgtype.Text `json:"sector"`
 	Uuid          uuid.UUID   `json:"uuid"`
 }
 
@@ -837,6 +863,7 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		arg.Settings,
 		arg.Timezone,
 		arg.Currency,
+		arg.Sector,
 		arg.Uuid,
 	)
 	var i Organization
@@ -855,6 +882,7 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		&i.DeletedAt,
 		&i.Timezone,
 		&i.Currency,
+		&i.Sector,
 	)
 	return i, err
 }

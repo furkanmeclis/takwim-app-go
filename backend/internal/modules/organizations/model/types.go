@@ -25,6 +25,7 @@ type Organization struct {
 	Status         string          `json:"status"`
 	Timezone       string          `json:"timezone"`
 	Currency       string          `json:"currency"`
+	Sector         string          `json:"sector"`
 	AccessStartsAt time.Time       `json:"access_starts_at"`
 	AccessEndsAt   *time.Time      `json:"access_ends_at,omitempty"`
 	Settings       json.RawMessage `json:"settings,omitempty"`
@@ -63,6 +64,9 @@ type Membership struct {
 type CreateOrganizationInput struct {
 	Name string
 	Slug string
+	// Sector is a sector code (internal/platform/sector); empty means the
+	// default sector.
+	Sector string
 	// OwnerUserUUID selects the owner; when zero, OwnerUserID is used.
 	OwnerUserUUID uuid.UUID
 	OwnerUserID   int64
@@ -79,6 +83,9 @@ type PatchOrganizationInput struct {
 	Timezone *string
 	// Currency is an ISO 4217 code ("TRY").
 	Currency *string
+	// Sector is a sector code; platform-managed (the tenant API does not
+	// accept it).
+	Sector *string
 }
 
 type ListFilter struct {

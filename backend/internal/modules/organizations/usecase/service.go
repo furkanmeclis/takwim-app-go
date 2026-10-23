@@ -13,6 +13,7 @@ import (
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/slug"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/localtime"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
@@ -126,6 +127,13 @@ func (s *Service) createOrganization(
 			return orgmodel.Organization{}, err
 		}
 	}
+	var sectorParam pgtype.Text
+	if v := strings.TrimSpace(in.Sector); v != "" {
+		if !sector.Valid(v) {
+			return orgmodel.Organization{}, fmt.Errorf("%w: sector is not known", ErrInvalidRequest)
+		}
+		sectorParam = pgtype.Text{String: v, Valid: true}
+	}
 	allocated, err := s.allocateSlug(ctx, in.Slug, name)
 	if err != nil {
 		return orgmodel.Organization{}, err
@@ -134,7 +142,7 @@ func (s *Service) createOrganization(
 	var created db.Organization
 	err = s.repo.WithTx(ctx, func(ctx context.Context, q *db.Queries, tx pgx.Tx) error {
 		row, err := s.repo.CreateOrganization(ctx, q, db.CreateOrganizationParams{
-			Slug: allocated, Name: name,
+			Slug: allocated, Name: name, Sector: sectorParam,
 		})
 		if err != nil {
 			return err
@@ -241,6 +249,13 @@ func (s *Service) PatchOrganization(ctx context.Context, id uuid.UUID, in orgmod
 			return orgmodel.Organization{}, fmt.Errorf("%w: currency must be a 3-letter ISO 4217 code", ErrInvalidRequest)
 		}
 		params.Currency = pgtype.Text{String: string(v), Valid: true}
+	}
+	if in.Sector != nil {
+		v := strings.TrimSpace(*in.Sector)
+		if !sector.Valid(v) {
+			return orgmodel.Organization{}, fmt.Errorf("%w: sector is not known", ErrInvalidRequest)
+		}
+		params.Sector = pgtype.Text{String: v, Valid: true}
 	}
 	row, err := s.repo.UpdateOrganization(ctx, params)
 	if err != nil {
@@ -454,6 +469,9 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		rowSlug     string
 		rowName     string
 		rowStatus   string
+		rowSector   string
+		rowZone     string
+		rowCurrency string
 		startsAt    pgtype.Timestamptz
 		endsAt      pgtype.Timestamptz
 		roleKey     string
@@ -469,6 +487,7 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		rowID, rowUUID, rowSlug, rowName, rowStatus = row.ID, row.Uuid, row.Slug, row.Name, row.Status
 		startsAt, endsAt, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleKey
 		memberID, branchScope = row.MemberID, row.BranchScope
+		rowSector, rowZone, rowCurrency = row.Sector, row.Timezone, row.Currency
 	} else {
 		row, err := s.repo.ResolveOrganizationScopeBySlug(ctx, strings.ToLower(ref), userID)
 		if err != nil {
@@ -477,6 +496,7 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		rowID, rowUUID, rowSlug, rowName, rowStatus = row.ID, row.Uuid, row.Slug, row.Name, row.Status
 		startsAt, endsAt, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleKey
 		memberID, branchScope = row.MemberID, row.BranchScope
+		rowSector, rowZone, rowCurrency = row.Sector, row.Timezone, row.Currency
 	}
 	if rowStatus == orgctx.StatusSuspended {
 		return orgctx.Scope{}, orgctx.ErrSuspended
@@ -518,6 +538,7 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 	return orgctx.Scope{
 		ID: rowID, UUID: rowUUID, Slug: rowSlug, Name: rowName, Status: rowStatus,
 		AccessStartsAt: startsAt.Time.UTC(), AccessEndsAt: accessEnds,
+		Sector: rowSector, Timezone: rowZone, Currency: rowCurrency,
 		MemberRole: roleKey, MemberRoles: roleKeys, Permissions: perms, BranchIDs: branchIDs,
 	}, nil
 }
@@ -678,7 +699,7 @@ func mapOrganization(row db.Organization) orgmodel.Organization {
 	return orgmodel.Organization{
 		ID: row.ID, UUID: row.Uuid, Slug: row.Slug, Name: row.Name,
 		LogoURL: LogoURL(row.Uuid, row.LogoObjectKey), Status: row.Status,
-		Timezone: row.Timezone, Currency: row.Currency,
+		Timezone: row.Timezone, Currency: row.Currency, Sector: row.Sector,
 		AccessStartsAt: row.AccessStartsAt.Time.UTC(), AccessEndsAt: timePtr(row.AccessEndsAt),
 		Settings: row.Settings, CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
 	}

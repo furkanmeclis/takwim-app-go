@@ -28,6 +28,7 @@ Public API: `defineNav`, `defineNavItem`, `defineNavGroup`, `createNavAdornment`
 2. i18n: `titleKey` / group `labelKey` as `layout.*` in `frontend/src/locales/{en,tr}/layout.json`.
 3. Put the item in the right group in `config/nav.ts` (inline object **or** `defineNavItem` exported from the feature).
 4. Gate with `permission` (AND) or `anyPermission` (OR). Omit both → always visible if the group is visible.
+   Tenant items that belong to a sector module (`reservations`, `resources`, `staff_shares`, … see `docs/design/sectors.md`) also set `module`: the item is hidden when the organization's sector does not show the module, and the sector's highlighted modules move to the top of their group. Core items (home, branches, members, roles, settings) have no `module`.
 
 ```ts
 {

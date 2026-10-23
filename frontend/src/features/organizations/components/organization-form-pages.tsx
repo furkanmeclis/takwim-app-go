@@ -12,6 +12,7 @@ import {
   AppForm,
   AppInput,
   AppRadioGroup,
+  AppSelect,
   FormActions,
   FormLayout,
   FormSection,
@@ -32,6 +33,7 @@ import {
   type OrganizationEditValues,
   type OrganizationFormValues,
 } from "@/features/organizations/schemas/organization-form";
+import { SECTOR_CODES, SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
 import { UserAsyncPicker } from "@/features/users/components/user-async-picker";
 import { useLocale } from "@/providers/locale-provider";
 
@@ -60,6 +62,21 @@ function SlugAutofill() {
     setValue("slug", slugFromName(name ?? ""), { shouldDirty: false });
   }, [name, setValue]);
   return null;
+}
+
+function SectorField() {
+  const { t } = useLocale();
+  return (
+    <AppSelect
+      name="sector"
+      label={t("sectors.label")}
+      description={t("sectors.field_hint")}
+      options={SECTOR_CODES.map((code) => ({
+        value: code,
+        label: t(SECTOR_LABEL_KEYS[code]),
+      }))}
+    />
+  );
 }
 
 function OwnerFields() {
@@ -155,6 +172,7 @@ export function OrganizationCreatePage() {
           defaultValues={{
             name: "",
             slug: "",
+            sector: "hairdresser",
             owner_mode: "existing",
             owner_user_uuid: "",
             owner_email: "",
@@ -163,6 +181,7 @@ export function OrganizationCreatePage() {
             const result = await create.mutateAsync({
               name: values.name.trim(),
               ...(values.slug ? { slug: values.slug } : {}),
+              sector: values.sector,
               ...(values.owner_mode === "existing"
                 ? { owner_user_uuid: values.owner_user_uuid }
                 : { owner_email: values.owner_email.trim() }),
@@ -193,6 +212,7 @@ export function OrganizationCreatePage() {
                   description={t("organizations.form.slug_hint")}
                   startIcon={Link2}
                 />
+                <SectorField />
               </FormSection>
               <FormSection
                 id={sections.id("owner")}
@@ -271,11 +291,19 @@ export function OrganizationEditPage({ uuid }: { uuid: string }) {
           <AppForm<OrganizationEditValues>
             key={org.updated_at}
             schema={schema}
-            defaultValues={{ name: org.name, slug: org.slug }}
+            defaultValues={{
+              name: org.name,
+              slug: org.slug,
+              sector: org.sector,
+            }}
             onSubmit={async (values) => {
               await update.mutateAsync({
                 uuid,
-                body: { name: values.name.trim(), slug: values.slug },
+                body: {
+                  name: values.name.trim(),
+                  slug: values.slug,
+                  sector: values.sector,
+                },
               });
               router.push(routes.platform.organizations.detail(uuid));
             }}
@@ -296,6 +324,7 @@ export function OrganizationEditPage({ uuid }: { uuid: string }) {
                   label={t("organizations.fields.slug")}
                   startIcon={Link2}
                 />
+                <SectorField />
                 <FormActions className="sm:col-span-2">
                   <Button
                     type="button"
