@@ -249,6 +249,12 @@ func (s *Service) AddMember(ctx context.Context, orgUUID, userUUID uuid.UUID, ro
 		if err != nil {
 			return mapRepoNotFound(err, ErrRoleNotFound)
 		}
+		// The organization row is locked, so this check cannot race another add.
+		if _, err := s.repo.GetOrganizationMember(ctx, q, org.ID, user.ID); err == nil {
+			return fmt.Errorf("%w: user is already a member", ErrConflict)
+		} else if !errors.Is(err, repository.ErrNotFound) {
+			return err
+		}
 		if err := s.repo.AddOrganizationMember(ctx, q, db.AddOrganizationMemberParams{
 			OrganizationID: org.ID, UserID: user.ID, RoleID: role.ID,
 		}); err != nil {

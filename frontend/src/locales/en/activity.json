@@ -26,10 +26,10 @@
   "actions.users.impersonated": "User impersonation started",
   "actions.users.impersonation_stopped": "User impersonation ended",
   "resources.platform.users": "Users",
+  "resources.platform.organizations": "Businesses",
   "resources.platform.roles": "Roles",
   "resources.platform.notifications": "Notifications",
   "resources.platform.activity": "Activity",
-  "resources.platform.organizations": "Businesses",
   "resources.platform.settings": "Settings",
   "resources.platform.access": "Access settings",
   "resources.platform.auth.settings": "Auth settings",
@@ -38,5 +38,13 @@
   "resources.platform.integrations.facebook": "Facebook integration",
   "resources.platform.integrations.apple": "Apple integration",
   "resources.auth.step_up": "Step-up verification",
-  "resources.auth.account": "Account"
+  "resources.auth.account": "Account",
+  "actions.organizations.created": "Business created",
+  "actions.organizations.updated": "Business updated",
+  "actions.organizations.deleted": "Business deleted",
+  "actions.organizations.status_updated": "Business status updated",
+  "actions.organizations.access_updated": "Business access window updated",
+  "actions.organizations.member_added": "Business member added",
+  "actions.organizations.member_role_updated": "Business member role updated",
+  "actions.organizations.member_removed": "Business member removed"
 }

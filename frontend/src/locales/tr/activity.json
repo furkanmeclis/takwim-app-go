@@ -26,10 +26,10 @@
   "actions.users.impersonated": "Kullanıcı taklit oturumu başlatıldı",
   "actions.users.impersonation_stopped": "Kullanıcı taklit oturumu sonlandırıldı",
   "resources.platform.users": "Kullanıcılar",
+  "resources.platform.organizations": "İşletmeler",
   "resources.platform.roles": "Roller",
   "resources.platform.notifications": "Bildirimler",
   "resources.platform.activity": "Etkinlik",
-  "resources.platform.organizations": "İşletmeler",
   "resources.platform.settings": "Ayarlar",
   "resources.platform.access": "Erişim ayarları",
   "resources.platform.auth.settings": "Auth ayarları",
@@ -38,5 +38,13 @@
   "resources.platform.integrations.facebook": "Facebook entegrasyonu",
   "resources.platform.integrations.apple": "Apple entegrasyonu",
   "resources.auth.step_up": "Step-up doğrulama",
-  "resources.auth.account": "Hesap"
+  "resources.auth.account": "Hesap",
+  "actions.organizations.created": "İşletme oluşturuldu",
+  "actions.organizations.updated": "İşletme güncellendi",
+  "actions.organizations.deleted": "İşletme silindi",
+  "actions.organizations.status_updated": "İşletme durumu güncellendi",
+  "actions.organizations.access_updated": "İşletme erişim süresi güncellendi",
+  "actions.organizations.member_added": "İşletme üyesi eklendi",
+  "actions.organizations.member_role_updated": "İşletme üyesinin rolü güncellendi",
+  "actions.organizations.member_removed": "İşletme üyesi çıkarıldı"
 }

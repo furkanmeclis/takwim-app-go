@@ -6,6 +6,7 @@ export {
   fetchSession,
 } from "./client";
 export { platformRequest } from "./platform-request";
+export { tenantRequest, ORGANIZATION_HEADER } from "./tenant-request";
 export {
   ApiError,
   parseApiError,

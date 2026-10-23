@@ -1,6 +1,7 @@
 import {
   Activity,
   Bell,
+  Building2,
   Cpu,
   Download,
   HardDrive,
@@ -228,6 +229,33 @@ export const platformNav = defineNav({
     },
   ],
 });
+
+/**
+ * Organization shell (`/t/{slug}`) sidebar. Built per slug because every href
+ * carries the organization. Items gate on `tenant.*` permissions, which the
+ * tenant shell resolves for the current organization only.
+ */
+export function tenantNav(slug: string): NavCatalog {
+  return defineNav({
+    id: "tenant",
+    groups: [
+      {
+        id: "general",
+        labelKey: "layout.section_organization",
+        icon: Building2,
+        defaultOpen: true,
+        items: [
+          {
+            id: "home",
+            titleKey: "layout.home",
+            href: routes.tenant.home(slug),
+            icon: LayoutDashboard,
+          },
+        ],
+      },
+    ],
+  });
+}
 
 export const cmsNav = defineNav({
   id: "cms",
