@@ -434,6 +434,31 @@ type IntegrationJob struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
+type LedgerEntry struct {
+	ID              int64              `json:"id"`
+	Uuid            uuid.UUID          `json:"uuid"`
+	OrganizationID  int64              `json:"organization_id"`
+	BranchID        int64              `json:"branch_id"`
+	CustomerID      pgtype.Int8        `json:"customer_id"`
+	ReservationID   pgtype.Int8        `json:"reservation_id"`
+	Kind            string             `json:"kind"`
+	Direction       string             `json:"direction"`
+	Amount          pgtype.Numeric     `json:"amount"`
+	Currency        string             `json:"currency"`
+	EntryDate       pgtype.Date        `json:"entry_date"`
+	SaleLineID      pgtype.Int8        `json:"sale_line_id"`
+	Method          string             `json:"method"`
+	CashMovementID  pgtype.Int8        `json:"cash_movement_id"`
+	RefundsEntryID  pgtype.Int8        `json:"refunds_entry_id"`
+	ReversesEntryID pgtype.Int8        `json:"reverses_entry_id"`
+	SourceType      string             `json:"source_type"`
+	SourceUuid      pgtype.UUID        `json:"source_uuid"`
+	IdempotencyKey  pgtype.Text        `json:"idempotency_key"`
+	Description     string             `json:"description"`
+	CreatedBy       pgtype.Int8        `json:"created_by"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type LogPurgeRule struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`
@@ -913,6 +938,39 @@ type Role struct {
 type RolePermission struct {
 	RoleID       int64 `json:"role_id"`
 	PermissionID int64 `json:"permission_id"`
+}
+
+type SaleLine struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	BranchID          int64              `json:"branch_id"`
+	CustomerID        pgtype.Int8        `json:"customer_id"`
+	Kind              string             `json:"kind"`
+	ItemType          string             `json:"item_type"`
+	SourceType        string             `json:"source_type"`
+	SourceUuid        pgtype.UUID        `json:"source_uuid"`
+	ReservationID     pgtype.Int8        `json:"reservation_id"`
+	LineIndex         pgtype.Int4        `json:"line_index"`
+	ServiceID         pgtype.Int8        `json:"service_id"`
+	ProductID         pgtype.Int8        `json:"product_id"`
+	VariantID         pgtype.Int8        `json:"variant_id"`
+	StaffID           pgtype.Int8        `json:"staff_id"`
+	Description       string             `json:"description"`
+	Quantity          int32              `json:"quantity"`
+	UnitPrice         pgtype.Numeric     `json:"unit_price"`
+	GrossAmount       pgtype.Numeric     `json:"gross_amount"`
+	DiscountAmount    pgtype.Numeric     `json:"discount_amount"`
+	NetAmount         pgtype.Numeric     `json:"net_amount"`
+	Currency          string             `json:"currency"`
+	SaleDate          pgtype.Date        `json:"sale_date"`
+	AccrualKey        string             `json:"accrual_key"`
+	AccrualGeneration int32              `json:"accrual_generation"`
+	ReversesLineID    pgtype.Int8        `json:"reverses_line_id"`
+	ReplacesLineID    pgtype.Int8        `json:"replaces_line_id"`
+	Reason            string             `json:"reason"`
+	CreatedBy         pgtype.Int8        `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
 type Service struct {

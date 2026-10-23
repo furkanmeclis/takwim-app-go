@@ -190,13 +190,27 @@ func (s *Service) Start(ctx context.Context, orgID int64, id uuid.UUID, caller a
 	})
 }
 
-// Complete closes the visit; its capacity stays booked (history).
+// CompletionHook runs inside the transaction that completes a visit (the
+// sales module writes its sale lines there, TEC-916), so the status and
+// the revenue commit together.
+type CompletionHook func(ctx context.Context, q *db.Queries, orgID, reservationID, actorID int64) error
+
+// SetCompletionHook installs the completion hook (nil: none).
+func (s *Service) SetCompletionHook(fn CompletionHook) {
+	s.onComplete = fn
+}
+
+// Complete closes the visit; its capacity stays booked (history). The
+// services delivered become sale lines through the completion hook.
 func (s *Service) Complete(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64, in ChangeInput) (model.Reservation, error) {
-	return s.transition(ctx, orgID, id, caller, actorID, in, "completed", func(_ *availabilityusecase.Tx, row db.Reservation, next *state) error {
+	return s.transition(ctx, orgID, id, caller, actorID, in, "completed", func(tx *availabilityusecase.Tx, row db.Reservation, next *state) error {
 		if row.Status != model.StatusActive && row.Status != model.StatusInService {
 			return ErrInvalidTransition
 		}
 		next.status = model.StatusCompleted
+		if s.onComplete != nil {
+			return s.onComplete(ctx, tx.Q, orgID, row.ID, actorID)
+		}
 		return nil
 	})
 }

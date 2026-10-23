@@ -44,6 +44,9 @@ import (
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
 	resourcesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/repository"
 	resourcesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/usecase"
+	salesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales"
+	salesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/repository"
+	salesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/usecase"
 	servicesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/adapters"
 	servicesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
 	servicesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/usecase"
@@ -158,6 +161,11 @@ func main() {
 	reservationHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
 	reservationsSvc := reservationsusecase.New(reservationHolds, queries, orgSettings)
 	cashSvc := cashusecase.New(cashrepository.NewPostgres(pool, queries), nil)
+	// Completed visits and stock sales become sale lines (TEC-916) in the
+	// same transaction, whichever process runs them.
+	salesSvc := salesusecase.New(salesrepository.NewPostgres(pool, queries), cashSvc)
+	reservationsSvc.SetCompletionHook(salesSvc.RecordReservationTx)
+	productsSvc.SetSaleRecorder(salesmodule.ProductSaleRecorder(salesSvc))
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)

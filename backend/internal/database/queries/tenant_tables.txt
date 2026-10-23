@@ -37,3 +37,5 @@ stock_movements
 cash_accounts
 cash_movements
 cash_closings
+sale_lines
+ledger_entries

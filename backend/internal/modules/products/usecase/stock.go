@@ -320,6 +320,15 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 				return err
 			}
 			created = append(created, id)
+			if in.Kind == model.KindSale && s.sales != nil {
+				// The product handed over is revenue (TEC-916), in the same
+				// transaction as the stock leaving.
+				return s.sales(ctx, tx, orgID, StockSale{
+					MovementUUID: id, BranchID: branchID, ProductID: product.ID, VariantID: optional(variantID),
+					StaffID: optional(staffID), Description: saleName(product.Name, variant), Quantity: quantity,
+					UnitPrice: money.FromNumericOrZero(unitPrice), OccurredAt: occurred, CreatedBy: optional(actor),
+				})
+			}
 			return nil
 		}
 	})
@@ -339,6 +348,46 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 	}
 	out.Product, err = s.Get(ctx, orgID, product.Uuid)
 	return out, err
+}
+
+// StockSale is a product handed over at the counter, passed to the sale
+// recorder inside the stock movement's transaction.
+type StockSale struct {
+	MovementUUID uuid.UUID
+	BranchID     int64
+	ProductID    int64
+	VariantID    *int64
+	StaffID      *int64
+	Description  string
+	Quantity     int32
+	UnitPrice    money.Money
+	OccurredAt   time.Time
+	CreatedBy    *int64
+}
+
+// SaleRecorder writes the sale line of a stock sale (the sales module).
+type SaleRecorder func(ctx context.Context, q *db.Queries, orgID int64, sale StockSale) error
+
+// SetSaleRecorder installs the sale recorder (nil: stock sales are not
+// posted as revenue).
+func (s *Service) SetSaleRecorder(fn SaleRecorder) {
+	s.sales = fn
+}
+
+func optional(v pgtype.Int8) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int64
+	return &n
+}
+
+// saleName is the line text of a product sale (product / variant).
+func saleName(product string, variant *db.ProductVariant) string {
+	if variant == nil || variant.Name == "" {
+		return product
+	}
+	return product + " / " + variant.Name
 }
 
 // lockLevel creates the level row of a stock item when missing and locks it.

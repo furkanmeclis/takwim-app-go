@@ -101,6 +101,50 @@ func (s *Service) PostTx(ctx context.Context, q *db.Queries, orgID int64, in Pos
 	return id, err
 }
 
+// ReverseModuleTx posts, inside the caller's transaction, the exact
+// opposite of a movement another module wrote through PostTx (a voided
+// collection, a refund taken back). It is dated today and follows the same
+// rules as any movement (open day, till floor). The posting module has
+// authorized the caller already, so the branch scope is not checked here.
+func (s *Service) ReverseModuleTx(ctx context.Context, q *db.Queries, orgID int64, movementID uuid.UUID, reason string, userID *int64) (uuid.UUID, error) {
+	mv, err := q.GetCashMovement(ctx, db.GetCashMovementParams{OrganizationID: orgID, Uuid: movementID})
+	if err != nil {
+		if errors.Is(repository.MapErr(err), repository.ErrNotFound) {
+			return uuid.Nil, ErrMovementNotFound
+		}
+		return uuid.Nil, err
+	}
+	if _, ok := moduleKinds[mv.Kind]; !ok {
+		return uuid.Nil, ErrNotReversible
+	}
+	if mv.ReversedByUuid.Valid {
+		return uuid.Nil, ErrAlreadyReversed
+	}
+	reason = strings.TrimSpace(reason)
+	if utf8.RuneCountInString(reason) > maxDescriptionLength {
+		reason = string([]rune(reason)[:maxDescriptionLength])
+	}
+	locked, err := s.lock(ctx, q, orgID, mv.CashAccountID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	acc := locked[mv.CashAccountID]
+	date := s.Today(ctx)
+	if err := s.checkOpenDay(ctx, q, orgID, acc, date); err != nil {
+		return uuid.Nil, err
+	}
+	dir := opposite(mv.Direction)
+	amount := money.FromNumericOrZero(mv.Amount)
+	if err := s.checkFunds(ctx, q, orgID, acc, dir, amount); err != nil {
+		return uuid.Nil, err
+	}
+	reverses := mv.ID
+	return s.insert(ctx, q, orgID, acc, movementRow{
+		Kind: model.MovementReversal, Direction: dir, Amount: amount, Date: date, Description: reason,
+		ReversesID: &reverses, SourceType: mv.SourceType, SourceUUID: uuidPtr(mv.SourceUuid), CreatedBy: userID,
+	})
+}
+
 // CreateMovement records a manual money in (deposit) or out (withdrawal).
 func (s *Service) CreateMovement(ctx context.Context, orgID int64, accountID uuid.UUID, userID *int64, in model.MovementInput) (model.Movement, error) {
 	row, err := s.loadAccount(ctx, s.repo.Q(), orgID, accountID)

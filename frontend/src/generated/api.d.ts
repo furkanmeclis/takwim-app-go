@@ -5499,6 +5499,266 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/sales/lines/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sale line list metadata
+         * @description Table contract of `GET /v1/tenant/sales/lines` (`tenant.finance.read`, `finance` module).
+         */
+        get: operations["getTenantSaleLinesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sale lines (revenue)
+         * @description Services delivered (a completed visit, one line per reservation line)
+         *     and products handed over (a stock sale), with their reversals, in the
+         *     caller's branch scope (`tenant.finance.read`). The net amounts of a
+         *     day are its revenue. `q` searches the description, the customer and
+         *     the staff member.
+         */
+        get: operations["getTenantSaleLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/lines/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One sale line */
+        get: operations["getTenantSaleLine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/lines/{uuid}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a sale line
+         * @description `tenant.finance.write` and a reason. Writes the exact negative of a
+         *     live sale line dated today and reverses its ledger debit; the line
+         *     itself stays. A line is reversed once (`409 already_reversed`); a
+         *     reversal is not reversed (`409 not_reversible`).
+         */
+        post: operations["postTenantSaleLineReverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/lines/{uuid}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a sale line
+         * @description `tenant.finance.write` and a reason; a new `unit_price` also needs
+         *     `tenant.price.override`, a new `discount_amount` `tenant.discount.apply`.
+         *     The live line is reversed and a replacement for the same item is
+         *     written, both dated today, with their ledger postings: earlier days
+         *     keep their figures. `409 nothing_changed` when the values are the same.
+         */
+        post: operations["postTenantSaleLineCorrect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/entries/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger list metadata
+         * @description Table contract of `GET /v1/tenant/sales/entries` (`tenant.finance.read`, `finance` module).
+         */
+        get: operations["getTenantLedgerEntriesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer ledger
+         * @description What customers were charged (`sale`, debit), paid (`collection`,
+         *     credit) and paid back (`refund`, debit), with reversals, in the
+         *     caller's branch scope (`tenant.finance.read`). `q` searches the
+         *     description and the customer.
+         */
+        get: operations["getTenantLedgerEntries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/entries/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One ledger entry */
+        get: operations["getTenantLedgerEntry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/entries/{uuid}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a collection or refund
+         * @description `tenant.finance.write` and a reason. Posts the opposite entry and the
+         *     reversal of its cash movement, both dated today. A sale entry is
+         *     reversed through its sale line (`409 reverse_sale_line`); a
+         *     collection with live refunds only after them (`409 has_refunds`);
+         *     an entry is reversed once (`409 already_reversed`).
+         */
+        post: operations["postTenantLedgerEntryReverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Revenue, collections, transfers and staff payouts
+         * @description The figures of a date range (default today; at most 366 days) per
+         *     currency and per day, each from its own source (A20): revenue from
+         *     the sale lines, collections and refunds from the ledger, transfers
+         *     between accounts and staff payouts from the cash book. A prepayment
+         *     is a collection on the day it was taken; the service is revenue on
+         *     the day it was delivered.
+         */
+        get: operations["getTenantSalesSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/reservations/{uuid}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a visit costs and what was paid
+         * @description Before completion the expected amount is the booked total of a
+         *     standing booking (0 once cancelled, rejected or not attended);
+         *     afterwards the net of its live sale lines. Paid = collected -
+         *     refunded; `remaining` is still owed, `credit` paid beyond it.
+         */
+        get: operations["getTenantReservationBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/sales/customers/{uuid}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ledger balance of a customer
+         * @description Charged, collected, refunded, paid and balance per currency inside the caller's branch scope.
+         */
+        get: operations["getTenantCustomerBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -8323,6 +8583,269 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["CashMovementList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        SalesRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        SalesReservationRef: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+        };
+        /** @description One service delivered or product handed over (`sale`), or the exact negative of one (`reversal`). Append-only. */
+        SaleLine: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "sale" | "reversal";
+            /** @enum {string} */
+            item_type: "service" | "product";
+            /** @enum {string} */
+            source_type: "reservation" | "stock_movement";
+            /**
+             * Format: uuid
+             * @description The reservation or the stock movement
+             */
+            source_uuid: string | null;
+            branch: components["schemas"]["SalesRef"];
+            customer: components["schemas"]["SalesRef"] | null;
+            reservation: components["schemas"]["SalesReservationRef"] | null;
+            line_index: number | null;
+            /** Format: uuid */
+            service_uuid: string | null;
+            /** Format: uuid */
+            product_uuid: string | null;
+            /** Format: uuid */
+            variant_uuid: string | null;
+            staff: components["schemas"]["SalesRef"] | null;
+            description: string;
+            quantity: number;
+            /** @example 100.00 */
+            unit_price: string;
+            /**
+             * @description Negative on a reversal
+             * @example 100.00
+             */
+            gross_amount: string;
+            /** @example 0.00 */
+            discount_amount: string;
+            /**
+             * @description gross - discount; the revenue of sale_date
+             * @example 100.00
+             */
+            net_amount: string;
+            currency: string;
+            /** Format: date */
+            sale_date: string;
+            /** @description 0 for the first sale of the item, +1 per correction */
+            generation: number;
+            /** Format: uuid */
+            reverses_uuid: string | null;
+            /** Format: uuid */
+            reversed_by_uuid: string | null;
+            /** Format: uuid */
+            replaces_uuid: string | null;
+            /** Format: uuid */
+            replaced_by_uuid: string | null;
+            reason: string;
+            created_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SaleLinePage: {
+            items: components["schemas"]["SaleLine"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        SalesReasonRequest: {
+            reason: string;
+        };
+        SaleLineCorrectRequest: {
+            quantity?: number;
+            /** @example 90.00 */
+            unit_price?: string;
+            /** @example 10.00 */
+            discount_amount?: string;
+            reason: string;
+        };
+        SaleLineCorrection: {
+            reversal: components["schemas"]["SaleLine"];
+            replacement: components["schemas"]["SaleLine"];
+        };
+        /** @description One append-only row of the customer ledger. */
+        LedgerEntry: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "sale" | "collection" | "refund" | "reversal";
+            /**
+             * @description The kind a reversal undoes (the kind itself otherwise)
+             * @enum {string}
+             */
+            effective_kind: "sale" | "collection" | "refund";
+            /** @enum {string} */
+            direction: "debit" | "credit";
+            /** @example 100.00 */
+            amount: string;
+            currency: string;
+            /** Format: date */
+            entry_date: string;
+            /** @enum {string} */
+            method: "" | "cash" | "card" | "transfer" | "online" | "other";
+            branch: components["schemas"]["SalesRef"];
+            customer: components["schemas"]["SalesRef"] | null;
+            reservation: components["schemas"]["SalesReservationRef"] | null;
+            /** Format: uuid */
+            sale_line_uuid: string | null;
+            /** Format: uuid */
+            cash_movement_uuid: string | null;
+            cash_account: components["schemas"]["SalesRef"] | null;
+            /**
+             * Format: uuid
+             * @description The collection a refund pays back
+             */
+            refunds_uuid: string | null;
+            /** Format: uuid */
+            reverses_uuid: string | null;
+            /** Format: uuid */
+            reversed_by_uuid: string | null;
+            source_type: string;
+            /** Format: uuid */
+            source_uuid: string | null;
+            description: string;
+            created_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        LedgerEntryPage: {
+            items: components["schemas"]["LedgerEntry"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        SalesRevenue: {
+            gross: string;
+            discount: string;
+            /** @description Reversals and the old side of corrections (negative) */
+            reversed: string;
+            net: string;
+            service_net: string;
+            product_net: string;
+            /** Format: int64 */
+            sale_count: number;
+        };
+        SalesCollections: {
+            collected: string;
+            refunded: string;
+            /** @description Net effect of reversed collections / refunds */
+            reversed: string;
+            net: string;
+            /** Format: int64 */
+            count: number;
+        };
+        SalesFigures: {
+            currency: string;
+            revenue: components["schemas"]["SalesRevenue"];
+            collections: components["schemas"]["SalesCollections"];
+            /** @description Money moved between accounts (not revenue) */
+            transfers: string;
+            /** @description Staff payouts from the cash book (not an expense of the sale) */
+            staff_payments: string;
+        };
+        SalesSummary: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            totals: components["schemas"]["SalesFigures"][];
+            days: {
+                /** Format: date */
+                date: string;
+                figures: components["schemas"]["SalesFigures"][];
+            }[];
+        };
+        ReservationBalance: {
+            reservation: components["schemas"]["SalesReservationRef"];
+            status: string;
+            currency: string;
+            booked_total: string;
+            sales_posted: boolean;
+            expected: string;
+            collected: string;
+            refunded: string;
+            paid: string;
+            remaining: string;
+            credit: string;
+            lines: components["schemas"]["SaleLine"][];
+            entries: components["schemas"]["LedgerEntry"][];
+        };
+        LedgerTotals: {
+            currency: string;
+            charged: string;
+            collected: string;
+            refunded: string;
+            paid: string;
+            /** @description charged - paid; negative = held for the customer */
+            balance: string;
+        };
+        CustomerBalance: {
+            /** Format: uuid */
+            customer_uuid: string;
+            totals: components["schemas"]["LedgerTotals"][];
+        };
+        EnvelopeSaleLine: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SaleLine"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSaleLinePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SaleLinePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSaleLineCorrection: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SaleLineCorrection"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeLedgerEntry: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["LedgerEntry"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeLedgerEntryPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["LedgerEntryPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSalesSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SalesSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeReservationBalance: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ReservationBalance"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerBalance: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerBalance"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeCashMovementFacets: {
@@ -11845,6 +12368,10 @@ export interface components {
         ResourceUUID: string;
         /** @description Cash account UUID. */
         CashAccountUUID: string;
+        /** @description Sale line UUID. */
+        SaleLineUUID: string;
+        /** @description Ledger entry UUID. */
+        LedgerEntryUUID: string;
         /** @description Cash movement UUID. */
         CashMovementUUID: string;
         /** @description User UUID */
@@ -21923,6 +22450,514 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantSaleLinesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantSaleLines: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `sale_date`, `net_amount`, `kind`, `created_at`; prefix `-` for descending. Default: newest first. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description `sale` and / or `reversal`; comma-separate or repeat */
+                kind?: string;
+                /** @description `service` and / or `product`; comma-separate or repeat */
+                item_type?: string;
+                reservation?: string;
+                customer?: string;
+                /** @description Staff uuids; comma-separate or repeat */
+                staff?: string;
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sale line page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSaleLinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantSaleLine: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path: {
+                /** @description Sale line UUID. */
+                uuid: components["parameters"]["SaleLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sale line */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSaleLine"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantSaleLineReverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Sale line UUID. */
+                uuid: components["parameters"]["SaleLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalesReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal line */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSaleLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantSaleLineCorrect: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Sale line UUID. */
+                uuid: components["parameters"]["SaleLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaleLineCorrectRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal and the replacement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSaleLineCorrection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantLedgerEntriesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantLedgerEntries: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `entry_date`, `amount`, `kind`, `created_at`; prefix `-` for descending. Default: newest first. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description Entry kinds; comma-separate or repeat */
+                kind?: string;
+                reservation?: string;
+                customer?: string;
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ledger page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeLedgerEntryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantLedgerEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path: {
+                /** @description Ledger entry UUID. */
+                uuid: components["parameters"]["LedgerEntryUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ledger entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeLedgerEntry"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantLedgerEntryReverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Ledger entry UUID. */
+                uuid: components["parameters"]["LedgerEntryUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalesReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal entry */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeLedgerEntry"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantSalesSummary: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSalesSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantReservationBalance: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path: {
+                /** @description Reservation UUID. */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reservation balance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeReservationBalance"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantCustomerBalance: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path: {
+                /** @description Customer UUID. */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer balance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerBalance"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getTenantResourcesMeta: {
