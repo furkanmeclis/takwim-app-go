@@ -20,6 +20,18 @@ type ChangeInput struct {
 	ExpectedVersion *int   `json:"expected_version"`
 	Reason          string `json:"reason"`
 	Note            string `json:"note"`
+	// Guard, when set, runs on the locked record before the step (the
+	// customer panel checks ownership and the cancel cutoff there). Never
+	// read from a request body.
+	Guard func(model.Locked) error `json:"-"`
+}
+
+// lockedView is what a guard sees of the locked row.
+func lockedView(r db.Reservation) model.Locked {
+	return model.Locked{
+		CustomerID: r.CustomerID, Status: r.Status, PaymentStatus: r.PaymentStatus,
+		StartsAt: r.StartsAt.Time, Version: int(r.Version),
+	}
 }
 
 // state is what a transition changes.
@@ -65,6 +77,11 @@ func (s *Service) transition(ctx context.Context, orgID int64, id uuid.UUID, cal
 		}
 		if in.ExpectedVersion != nil && *in.ExpectedVersion != int(row.Version) {
 			return ErrStaleVersion
+		}
+		if in.Guard != nil {
+			if err := in.Guard(lockedView(row)); err != nil {
+				return err
+			}
 		}
 		// A status belongs to the whole visit: an own calendar member
 		// changes it only when it serves every staffed line.

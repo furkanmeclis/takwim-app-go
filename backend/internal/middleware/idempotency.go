@@ -24,6 +24,9 @@ const (
 	// PublicIdempotencyPrefix: anonymous requests under it (the public
 	// booking API) are replayed too.
 	PublicIdempotencyPrefix = "/v1/public/businesses/"
+	// CustomerIdempotencyPrefix: customer panel requests (customer token)
+	// are replayed per person.
+	CustomerIdempotencyPrefix = "/v1/customer/"
 
 	maxIdempotencyKey   = 255
 	maxIdempotentBody   = 10 << 20
@@ -49,6 +52,11 @@ func Idempotency(store idempotency.Store, tokens *jwt.Manager, log *slog.Logger)
 			subject := ""
 			if claims, err := tokens.ParseAccess(bearerToken(r.Header.Get("Authorization"))); err == nil {
 				subject = claims.Subject
+			} else if claims, err := tokens.ParseCustomer(bearerToken(r.Header.Get("Authorization"))); err == nil &&
+				strings.HasPrefix(r.URL.Path, CustomerIdempotencyPrefix) {
+				// Customer panel: scoped by the person (a revoked session is
+				// refused by the route before anything runs).
+				subject = "customer:" + claims.Subject
 			} else if strings.HasPrefix(r.URL.Path, PublicIdempotencyPrefix) {
 				// Public booking API: anonymous callers share one scope; the
 				// key (a client-generated uuid) and the body fingerprint

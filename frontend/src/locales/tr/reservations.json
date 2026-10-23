@@ -68,6 +68,7 @@
   "cancel_reasons.business": "İşletme kararı",
   "cancel_reasons.approval_timeout": "Onay süresi doldu",
   "cancel_reasons.payment_timeout": "Ödeme süresi doldu",
+  "cancel_reasons.customer_cancelled": "Müşteri iptal etti",
   "actions.create": "Rezervasyon ekle",
   "actions.view": "Görüntüle",
   "actions.accept": "Onayla",

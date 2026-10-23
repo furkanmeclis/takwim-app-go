@@ -68,6 +68,7 @@
   "cancel_reasons.business": "Business decision",
   "cancel_reasons.approval_timeout": "Approval time ran out",
   "cancel_reasons.payment_timeout": "Payment time ran out",
+  "cancel_reasons.customer_cancelled": "Cancelled by the customer",
   "actions.create": "Add booking",
   "actions.view": "View",
   "actions.accept": "Accept",

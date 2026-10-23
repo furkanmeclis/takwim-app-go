@@ -272,6 +272,36 @@ type CustomerIdentityLink struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
+type CustomerOtpChallenge struct {
+	ID          int64              `json:"id"`
+	Uuid        uuid.UUID          `json:"uuid"`
+	PhoneE164   string             `json:"phone_e164"`
+	Purpose     string             `json:"purpose"`
+	CodeHash    string             `json:"code_hash"`
+	Sent        bool               `json:"sent"`
+	Attempts    int32              `json:"attempts"`
+	MaxAttempts int32              `json:"max_attempts"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt  pgtype.Timestamptz `json:"consumed_at"`
+	Ip          string             `json:"ip"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type CustomerSession struct {
+	ID            int64              `json:"id"`
+	Uuid          uuid.UUID          `json:"uuid"`
+	IdentityID    int64              `json:"identity_id"`
+	PhoneE164     string             `json:"phone_e164"`
+	VerifiedAt    pgtype.Timestamptz `json:"verified_at"`
+	Ip            string             `json:"ip"`
+	UserAgent     string             `json:"user_agent"`
+	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
+	IdleExpiresAt pgtype.Timestamptz `json:"idle_expires_at"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type ExportJob struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

@@ -43,4 +43,4 @@ Owner and admin hold every slug. `sube_yoneticisi` reads, writes, exports and ta
 
 ## Later
 
-In-business history (bookings, payments, no-shows) joins the detail page with reservations. The OTP and customer panel flows call `LinkVerified`; KVKK export / erasure requests of a person come with their own issue.
+In-business history (bookings, payments, no-shows) joins the detail page with reservations. The customer panel sign-in ([customer-panel.md](./customer-panel.md)) calls `LinkVerified` with source `panel_login`; KVKK export / erasure requests of a person come with their own issue.

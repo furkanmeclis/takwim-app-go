@@ -49,6 +49,11 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if in.ExpectedVersion != nil && *in.ExpectedVersion != int(row.Version) {
 			return ErrStaleVersion
 		}
+		if in.Guard != nil {
+			if err := in.Guard(lockedView(row)); err != nil {
+				return err
+			}
+		}
 		if row.Status != model.StatusRequested && row.Status != model.StatusActive {
 			return ErrInvalidTransition
 		}
@@ -120,8 +125,12 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if in.Zone != nil {
 			zone = strings.TrimSpace(*in.Zone)
 		}
+		channel := availabilitymodel.ChannelPanel
+		if in.Channel == availabilitymodel.ChannelOnline {
+			channel = availabilitymodel.ChannelOnline
+		}
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
-			BranchUUID: full.BranchUuid, Lines: lines, Channel: availabilitymodel.ChannelPanel,
+			BranchUUID: full.BranchUuid, Lines: lines, Channel: channel,
 			StartsAt: in.StartsAt, Reason: reason, Minutes: minutes, PartySize: party, Zone: zone,
 		}, caller, actorID)
 		if err != nil {

@@ -121,8 +121,16 @@ type SearchIndexer interface {
 	EnqueueUpsert(ctx context.Context, spec, id string)
 }
 
+// PanelNotifier sends the customer panel address after a booking
+// (customerpanel, TEC-909). It opens nothing by itself: the panel asks for
+// a code sent to the phone.
+type PanelNotifier interface {
+	PanelLinkNotice(ctx context.Context, phoneE164, businessName string)
+}
+
 // Service implements the public booking API.
 type Service struct {
+	panel        PanelNotifier
 	q            *db.Queries
 	settings     SettingsReader
 	availability *availabilityusecase.Service
@@ -144,6 +152,11 @@ func New(q *db.Queries, settings SettingsReader, availability *availabilityuseca
 // SetIndexer indexes customers created by bookings (optional).
 func (s *Service) SetIndexer(ix SearchIndexer) {
 	s.indexer = ix
+}
+
+// SetPanelNotifier plugs in the panel link notice of new bookings.
+func (s *Service) SetPanelNotifier(n PanelNotifier) {
+	s.panel = n
 }
 
 // SetClock replaces time.Now (tests).
@@ -954,6 +967,9 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 	}
 	if createdCustomer != uuid.Nil && s.indexer != nil {
 		s.indexer.EnqueueUpsert(ctx, customersusecase.SearchSpec, searchengine.TenantDocumentID(o.ID, createdCustomer.String()))
+	}
+	if s.panel != nil {
+		s.panel.PanelLinkNotice(ctx, c.phone, o.Name)
 	}
 	out, err := s.view(ctx, o, res)
 	return out, false, err

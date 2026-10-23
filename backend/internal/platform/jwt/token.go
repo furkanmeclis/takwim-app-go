@@ -18,6 +18,10 @@ var ErrInvalidToken = errors.New("invalid token")
 // (TEC-909 / TEC-910), so a customer token can never reach a staff route.
 const (
 	KindStaff = "staff"
+	// KindCustomer is the customer panel session (takwim.link/panel,
+	// /v1/customer/*): the subject is the platform customer identity, the
+	// sid its customer_sessions row.
+	KindCustomer = "customer"
 )
 
 // ErrWrongKind is returned when a token of another kind is presented.
@@ -137,6 +141,68 @@ func (m *Manager) ParseAccess(token string) (Claims, error) {
 	}
 	if claims.Roles == nil {
 		claims.Roles = []string{}
+	}
+	return claims, nil
+}
+
+// CustomerInput is the payload of a customer panel token.
+type CustomerInput struct {
+	IdentityID uuid.UUID
+	SessionID  uuid.UUID
+	ExpiresAt  time.Time
+}
+
+// IssueCustomer signs a customer panel token (kind customer). It expires
+// with its session's hard cap; the session row decides revocation and idle
+// expiry on every request.
+func (m *Manager) IssueCustomer(in CustomerInput) (string, error) {
+	if in.IdentityID == uuid.Nil || in.SessionID == uuid.Nil {
+		return "", errors.New("jwt: identity and session are required")
+	}
+	now := m.now().UTC()
+	if !in.ExpiresAt.After(now) {
+		return "", errors.New("jwt: expiry must be in the future")
+	}
+	claims := Claims{
+		Roles:     []string{},
+		SessionID: in.SessionID.String(),
+		Kind:      KindCustomer,
+		RegisteredClaims: jwtlib.RegisteredClaims{
+			Subject:   in.IdentityID.String(),
+			ExpiresAt: jwtlib.NewNumericDate(in.ExpiresAt.UTC()),
+			IssuedAt:  jwtlib.NewNumericDate(now),
+			ID:        uuid.NewString(),
+		},
+	}
+	signed, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims).SignedString(m.accessSecret)
+	if err != nil {
+		return "", fmt.Errorf("jwt: sign customer token: %w", err)
+	}
+	return signed, nil
+}
+
+// ParseCustomer validates a customer panel token. Staff tokens (and tokens
+// without a kind, which read as staff) answer ErrWrongKind, so a staff
+// token never opens a customer's history either.
+func (m *Manager) ParseCustomer(token string) (Claims, error) {
+	var claims Claims
+	parsed, err := jwtlib.ParseWithClaims(token, &claims, func(token *jwtlib.Token) (any, error) {
+		if token.Method != jwtlib.SigningMethodHS256 {
+			return nil, ErrInvalidToken
+		}
+		return m.accessSecret, nil
+	})
+	if err != nil || !parsed.Valid || claims.Subject == "" {
+		return Claims{}, ErrInvalidToken
+	}
+	if claims.Kind != KindCustomer {
+		return Claims{}, ErrWrongKind
+	}
+	if _, err := uuid.Parse(claims.Subject); err != nil {
+		return Claims{}, ErrInvalidToken
+	}
+	if claims.SessionUUID() == uuid.Nil {
+		return Claims{}, ErrInvalidToken
 	}
 	return claims, nil
 }
