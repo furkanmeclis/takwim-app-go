@@ -591,6 +591,48 @@ type ServicePoint struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Staff struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	UserID         pgtype.Int8        `json:"user_id"`
+	Name           string             `json:"name"`
+	Title          string             `json:"title"`
+	Bio            string             `json:"bio"`
+	Phone          string             `json:"phone"`
+	Email          string             `json:"email"`
+	Color          string             `json:"color"`
+	ShowOnline     bool               `json:"show_online"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type StaffBranch struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	StaffID        int64              `json:"staff_id"`
+	BranchID       int64              `json:"branch_id"`
+	Shifts         []byte             `json:"shifts"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffTimeOff struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	StaffID        int64              `json:"staff_id"`
+	Kind           string             `json:"kind"`
+	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+	Note           string             `json:"note"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StepupSetting struct {
 	ID                        int16              `json:"id"`
 	TtlHours                  int32              `json:"ttl_hours"`

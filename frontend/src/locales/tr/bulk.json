@@ -39,5 +39,8 @@
   "confirm.one_way_rules.deactivate": "Seçili {{count}} kural pasifleştirilsin mi? Bu güzergâhlarda tek yön iade kapanır.",
   "actions.organizations.activate": "İşletmeleri etkinleştir",
   "actions.organizations.suspend": "İşletmeleri askıya al",
-  "confirm.organizations.suspend": "Seçili {{count}} işletme askıya alınsın mı? Üyelerin erişimi hemen kapanır."
+  "confirm.organizations.suspend": "Seçili {{count}} işletme askıya alınsın mı? Üyelerin erişimi hemen kapanır.",
+  "actions.staff.activate": "Personeli aktifleştir",
+  "actions.staff.deactivate": "Personeli pasifleştir",
+  "confirm.staff.deactivate": "Seçili {{count}} personel pasifleştirilsin mi? Yeni randevularda seçilemezler."
 }

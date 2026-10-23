@@ -120,5 +120,12 @@
   "groups.tenant_finance": "Finance",
   "groups.tenant_earnings": "Staff earnings",
   "labels.tenant.activity.read": "View activity history",
-  "groups.tenant_activity": "Activity history"
+  "groups.tenant_activity": "Activity history",
+  "labels.tenant.staff.read": "View staff",
+  "labels.tenant.staff.write": "Manage staff",
+  "labels.tenant.staff.export": "Export staff",
+  "labels.tenant.staff.import": "Import staff",
+  "labels.tenant.staff.bulk.activate": "Bulk activate staff",
+  "labels.tenant.staff.bulk.deactivate": "Bulk deactivate staff",
+  "groups.tenant_staff": "Staff"
 }

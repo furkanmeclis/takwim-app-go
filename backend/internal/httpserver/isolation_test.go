@@ -67,6 +67,7 @@ var isolationAllowlist = map[string]string{
 	"PUT /v1/tenant/settings":                "settings document of the caller's organization; versions are the {version} cases",
 	"POST /v1/tenant/notifications/read-all": "marks the caller's rows of the current organization (notifications scope test)",
 	"POST /v1/tenant/branches/import":        "imports match natural keys inside the organization (adapter tests); the job is the {uuid} cases",
+	"POST /v1/tenant/staff/import":           "imports match uuids and branch codes inside the organization (staff DB tests); the job is the {uuid} cases",
 	"PATCH /v1/tenant/organization":          "profile of the caller's organization (name only); no foreign references",
 	"PUT /v1/tenant/organization/logo":       "logo of the caller's organization; the key is built from the scope (storage prefix check)",
 	"DELETE /v1/tenant/organization/logo":    "logo of the caller's organization; no ids",
@@ -274,6 +275,12 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		doc := settings.data.(map[string]any)["settings"].(map[string]any)
 		doc["company"] = map[string]any{"legal_name": m + " A.Ş.", "tax_number": "4540536920", "tax_office": "Kadıköy", "address": "", "phone": "", "email": "info@iso.test"}
 		must(call(o, http.MethodPut, "/v1/tenant/settings", map[string]any{"settings": doc, "base_version": 0}), http.StatusOK, "settings v1")
+		ids["staff"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff", map[string]any{
+			"name": m + " Personel", "branch_uuids": []string{ids["branch"]}, "account_uuid": o.owner.Uuid.String(),
+		}), http.StatusCreated, "create staff"), "uuid")
+		ids["timeOff"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff/"+ids["staff"]+"/time-off", map[string]any{
+			"kind": "leave", "starts_at": "2030-01-01T09:00:00Z", "ends_at": "2030-01-02T09:00:00Z", "note": m,
+		}), http.StatusCreated, "create time off"), "uuid")
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -500,6 +507,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/invitations", map[string]any{"email": "x2@iso.test", "role_uuids": []string{orgA.ids["role"]},
 			"branch_scope": "selected", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/branches/bulk", bulkIDs("branch"), nil},
+		{"POST /v1/tenant/staff", map[string]any{"name": "X", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
+		{"POST /v1/tenant/staff", map[string]any{"name": "X", "branch_uuids": []string{orgA.ids["branch"]}, "account_uuid": orgB.ids["member"]}, reject},
+		{"POST /v1/tenant/staff/bulk", bulkIDs("staff"), nil},
 	}
 	for _, c := range cases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -521,6 +531,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	ownCases := []bodyCase{
 		{"PATCH /v1/tenant/members/" + alice.Uuid.String(), map[string]any{"role_uuids": []string{orgB.ids["role"]}}, reject},
 		{"PATCH /v1/tenant/members/" + alice.Uuid.String(), map[string]any{"branch_scope": "selected", "branch_uuids": []string{orgB.ids["home"]}}, reject},
+		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"branch_uuids": []string{orgB.ids["home"]}}, reject},
+		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"account_uuid": orgB.ids["member"]}, reject},
 	}
 	for _, c := range ownCases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -669,6 +681,12 @@ func paramKey(prev, name string) string {
 		return "integrationAccount"
 	case "integration-jobs/uuid":
 		return "integrationJob"
+	case "staff/uuid":
+		return "staff"
+	case "branches/branchUuid":
+		return "branch"
+	case "time-off/timeOffUuid":
+		return "timeOff"
 	}
 	return ""
 }

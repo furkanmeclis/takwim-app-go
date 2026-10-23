@@ -77,6 +77,11 @@ import (
 	settingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings"
 	settingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings/handler"
 	settingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings/usecase"
+	staffmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff"
+	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
+	staffhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/handler"
+	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
+	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
 	storagemodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage"
 	storagehandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/handler"
 	storageusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/usecase"
@@ -207,6 +212,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		searchadapters.NewUsers(deps.Queries),
 		searchadapters.NewRoles(deps.Queries),
 		branchadapters.NewSearch(deps.Queries),
+		staffadapters.NewSearch(deps.Queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, deps.Queue, log)
@@ -294,6 +300,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	branchRepo := branchrepository.NewPostgres(deps.Queries)
 	branchSvc := branchusecase.New(branchRepo, searchIndexer)
 	branchSvc.SetMedia(branchRepo, deps.Storage)
+	staffSvc := staffusecase.New(staffrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	orgSvc := orgusecase.New(
 		orgrepository.NewPostgres(deps.DB, deps.Queries),
 		branchusecase.NewOrganizationHooks(searchIndexer),
@@ -325,6 +332,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// seats, Konfirmasyon add-on, monthly communication usage.
 	entitlementSvc := entitlementsmodule.New(deps.Queries)
 	branchSvc.SetLimiter(entitlementSvc)
+	staffSvc.SetLimiter(entitlementSvc)
 	orgSvc.SetStaffLimiter(entitlementSvc)
 	entitlementsmodule.RegisterRoutes(mux, entitlementsmodule.NewHandler(entitlementSvc, orgSvc, activityRec), tokens, loader, tenantResolver)
 	organizationsmodule.RegisterTenantRoutes(mux, orgH, tokens, loader, tenantResolver)
@@ -357,6 +365,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// members whose tenant role grants the resource's read permission.
 	tenantLive := resourceevents.NewRegistry()
 	branchesmodule.RegisterLiveResources(tenantLive)
+	staffmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
 	resourceEvents.AddResolver(tenantmodule.ChannelResolver(tenantmodule.QueriesLookup(deps.Queries)))
@@ -388,6 +397,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		ioadapters.NewNotifications(deps.Queries),
 		ioadapters.NewActivity(deps.Queries),
 		branchadapters.NewIO(branchSvc),
+		staffadapters.NewIO(staffSvc),
 		orgadapters.NewIO(orgSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
@@ -396,6 +406,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		bulkadapters.NewUsers(deps.Queries),
 		bulkadapters.NewRoles(deps.Queries),
 		branchadapters.NewBulk(branchSvc),
+		staffadapters.NewBulk(staffSvc),
 		orgadapters.NewBulk(orgSvc),
 	)
 	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, jobQueue, notifSvc, activityRec, cfg.Bulk, log)
@@ -444,6 +455,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Import: importH.TenantUpload(branchesmodule.Resource),
 		Sample: importH.TenantSample(branchesmodule.Resource),
 		Bulk:   bulkH.TenantExecute(branchesmodule.Resource),
+	}, tokens, loader, tenantResolver)
+	staffH := staffhandler.New(staffSvc, activityRec)
+	staffH.SetResourceEvents(resourceEvents)
+	staffmodule.RegisterRoutes(mux, staffH, staffmodule.EngineHandlers{
+		Export: exportH.TenantExport(staffmodule.Resource, staffmodule.ExportQueryKeys...),
+		Import: importH.TenantUpload(staffmodule.Resource),
+		Sample: importH.TenantSample(staffmodule.Resource),
+		Bulk:   bulkH.TenantExecute(staffmodule.Resource),
 	}, tokens, loader, tenantResolver)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),

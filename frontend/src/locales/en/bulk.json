@@ -39,5 +39,8 @@
   "confirm.one_way_rules.deactivate": "Deactivate {{count}} selected rules? One-way returns on these routes close.",
   "actions.organizations.activate": "Activate businesses",
   "actions.organizations.suspend": "Suspend businesses",
-  "confirm.organizations.suspend": "Suspend {{count}} selected businesses? Their members lose access immediately."
+  "confirm.organizations.suspend": "Suspend {{count}} selected businesses? Their members lose access immediately.",
+  "actions.staff.activate": "Activate staff",
+  "actions.staff.deactivate": "Deactivate staff",
+  "confirm.staff.deactivate": "Deactivate {{count}} selected staff members? They can no longer be picked for new bookings."
 }
