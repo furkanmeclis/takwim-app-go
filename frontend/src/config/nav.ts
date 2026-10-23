@@ -294,7 +294,7 @@ export function tenantNav(slug: string): NavCatalog {
               permissions.tenant.reservations.read,
               permissions.tenant.reservations.own,
             ],
-            module: "reservations",
+            module: "calendar",
           },
           {
             id: "reservations",
