@@ -316,6 +316,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"branch_uuid": ids["branch"], "lines": []map[string]any{{"service_uuid": ids["service"]}},
 			"starts_at": "2030-01-07T09:00:00+03:00", "reason": "approval", "minutes": 1440,
 		}), http.StatusCreated, "create hold"), "uuid")
+		ids["reservation"] = str(must(call(o, http.MethodPost, "/v1/tenant/reservations", map[string]any{
+			"branch_uuid": ids["branch"], "customer_uuid": ids["customer"], "lines": []map[string]any{{"service_uuid": ids["service"]}},
+			"starts_at": "2030-01-07T10:00:00+03:00", "internal_note": m,
+		}), http.StatusCreated, "create reservation"), "uuid")
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -507,6 +511,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/integration-jobs": {"?status=failed"},
 		"GET /v1/tenant/services":         {"?category=" + orgB.ids["serviceCategory"], "?branch=" + orgB.ids["branch"]},
 		"GET /v1/tenant/customers":        {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
+		"GET /v1/tenant/reservations": {"?q=" + orgB.ids["customerPhone"][3:], "?branch=" + orgB.ids["branch"],
+			"?staff=" + orgB.ids["staff"], "?customer_uuid=" + orgB.ids["customer"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -559,6 +565,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{
 			{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}, "starts_at": "2030-01-07T10:00:00+03:00", "reason": "checkout"}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}}}, reject},
+		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgB.ids["branch"], "customer_uuid": orgA.ids["customer"],
+			"lines": []map[string]any{{"service_uuid": orgA.ids["service"]}}, "starts_at": "2030-01-07T11:00:00+03:00"}, reject},
+		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgA.ids["branch"], "customer_uuid": orgB.ids["customer"],
+			"lines": []map[string]any{{"service_uuid": orgA.ids["service"]}}, "starts_at": "2030-01-07T11:00:00+03:00"}, reject},
+		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgA.ids["branch"], "customer_uuid": orgA.ids["customer"],
+			"lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}, "starts_at": "2030-01-07T11:00:00+03:00"}, reject},
+		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgA.ids["branch"], "customer_uuid": orgA.ids["customer"],
+			"lines": []map[string]any{{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}, "starts_at": "2030-01-07T11:00:00+03:00"}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{
 			{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}}, reject},
@@ -589,6 +603,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/staff", map[string]any{"staff": []map[string]any{{"staff_uuid": orgB.ids["staff"]}}}, reject},
+		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
+			"lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}}, reject},
+		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
+			"lines": []map[string]any{{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}}, reject},
 	}
 	for _, c := range ownCases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -765,6 +783,8 @@ func paramKey(prev, name string) string {
 		return "customer"
 	case "holds/uuid":
 		return "hold"
+	case "reservations/uuid":
+		return "reservation"
 	}
 	return ""
 }

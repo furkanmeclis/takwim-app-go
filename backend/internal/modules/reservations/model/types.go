@@ -156,3 +156,81 @@ type Reservation struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
+
+// Slug is the resource slug (activity, live lists).
+const Slug = "tenant.reservations"
+
+// RescheduleInput moves a booking: a new start and, optionally, new lines
+// (empty = the current services and staff). Every line is planned again.
+type RescheduleInput struct {
+	StartsAt        *time.Time               `json:"starts_at"`
+	Lines           []availability.LineInput `json:"lines"`
+	ExpectedVersion *int                     `json:"expected_version"`
+	Note            string                   `json:"note"`
+}
+
+// NotesInput edits the notes and form answers.
+type NotesInput struct {
+	CustomerNote    string         `json:"customer_note"`
+	InternalNote    string         `json:"internal_note"`
+	CustomFields    map[string]any `json:"custom_fields"`
+	ExpectedVersion *int           `json:"expected_version"`
+}
+
+// ListFilter narrows the panel list.
+type ListFilter struct {
+	Q                string
+	Branches         []uuid.UUID
+	Staff            []uuid.UUID
+	CustomerUUID     *uuid.UUID
+	Statuses         []string
+	ApprovalStatuses []string
+	PaymentStatuses  []string
+	Sources          []string
+	StartsFrom       *time.Time
+	StartsTo         *time.Time
+	SortField        string
+	SortDesc         bool
+	Limit, Offset    int32
+}
+
+// Customer is the customer of a list row.
+type Customer struct {
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Phone *string   `json:"phone"`
+}
+
+// ListItem is one row of the panel list.
+type ListItem struct {
+	UUID               uuid.UUID   `json:"uuid"`
+	Number             int64       `json:"number"`
+	Status             string      `json:"status"`
+	ApprovalStatus     string      `json:"approval_status"`
+	ConfirmationStatus string      `json:"confirmation_status"`
+	PaymentStatus      string      `json:"payment_status"`
+	Source             string      `json:"source"`
+	Branch             Ref         `json:"branch"`
+	Customer           Customer    `json:"customer"`
+	Services           string      `json:"services"`
+	Staff              string      `json:"staff"`
+	StartsAt           time.Time   `json:"starts_at"`
+	EndsAt             time.Time   `json:"ends_at"`
+	TotalPrice         money.Money `json:"total_price"`
+	Currency           string      `json:"currency"`
+	Version            int         `json:"version"`
+	CreatedAt          time.Time   `json:"created_at"`
+}
+
+// Facet is one filter option with its count.
+type Facet struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Count int64  `json:"count"`
+}
+
+// Facets are the dynamic filter options of the list.
+type Facets struct {
+	Branch []Facet `json:"branch"`
+	Staff  []Facet `json:"staff"`
+}

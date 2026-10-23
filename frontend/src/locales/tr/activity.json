@@ -209,5 +209,15 @@
   "fields.tenant.customers.tags": "Etiketler",
   "fields.tenant.customers.sms_consent": "SMS izni",
   "fields.tenant.customers.email_consent": "E-posta izni",
-  "fields.tenant.customers.verified": "Doğrulanmış telefon"
+  "fields.tenant.customers.verified": "Doğrulanmış telefon",
+  "resources.tenant.reservations": "Rezervasyonlar",
+  "actions.reservations.created": "Rezervasyon oluşturuldu",
+  "actions.reservations.accepted": "Rezervasyon onaylandı",
+  "actions.reservations.rejected": "Rezervasyon reddedildi",
+  "actions.reservations.cancelled": "Rezervasyon iptal edildi",
+  "actions.reservations.started": "Hizmete başlandı",
+  "actions.reservations.completed": "Rezervasyon tamamlandı",
+  "actions.reservations.no_show": "Müşteri gelmedi",
+  "actions.reservations.rescheduled": "Rezervasyon saati değişti",
+  "actions.reservations.updated": "Rezervasyon notları güncellendi"
 }

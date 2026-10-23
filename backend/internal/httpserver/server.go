@@ -79,6 +79,8 @@ import (
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
+	reservationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations"
+	reservationshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/handler"
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	resourcesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources"
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
@@ -402,6 +404,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	resourcesmodule.RegisterLiveResources(tenantLive)
 	servicesmodule.RegisterLiveResources(tenantLive)
 	customersmodule.RegisterLiveResources(tenantLive)
+	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
 	resourceEvents.AddResolver(tenantmodule.ChannelResolver(tenantmodule.QueriesLookup(deps.Queries)))
@@ -530,6 +533,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Sample: importH.TenantSample(customersmodule.Resource),
 		Bulk:   bulkH.TenantExecute(customersmodule.Resource),
 	}, tokens, loader, tenantResolver)
+	// Reservations (TEC-899 / TEC-900): the record on top of the capacity
+	// holds.
+	reservationsH := reservationshandler.New(reservationsusecase.New(capacityHolds, deps.Queries, orgsettingsSvc), activityRec)
+	reservationsH.SetResourceEvents(resourceEvents)
+	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),
 		deps.Storage,
