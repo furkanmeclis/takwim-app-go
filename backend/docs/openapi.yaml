@@ -4951,6 +4951,122 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/branches/{uuid}/images:
+    post:
+      tags: [Tenant]
+      operationId: postTenantBranchImage
+      summary: Add a photo to a branch gallery
+      description: "`tenant.branches.write`. JPEG, PNG or WebP (sniffed) up to 5 MiB; at most 12 photos. Appended last."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchImage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/branches/{uuid}/images/order:
+    put:
+      tags: [Tenant]
+      operationId: putTenantBranchImageOrder
+      summary: Reorder a branch gallery
+      description: "`tenant.branches.write`. The first photo becomes the cover."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BranchImageOrderRequest"
+      responses:
+        "200":
+          description: Gallery in the new order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchImageList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/branches/{uuid}/images/{imageUuid}:
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantBranchImage
+      summary: Remove a photo from a branch gallery
+      description: "`tenant.branches.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: imageUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/public/media/branches/{orgUuid}/images/{imageUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getPublicBranchImage
+      summary: Branch photo
+      description: No authentication; booking pages and the mobile app show branch photos. Clients use the `public_url` / `cover_url` the API returns. Immutable (cached for a year).
+      security: []
+      parameters:
+        - name: orgUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: imageUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/tenant/branches/{uuid}/service-points:
     get:
       tags: [Tenant]
@@ -5974,6 +6090,12 @@ components:
         - holiday_exceptions
         - prep_minutes
         - is_active
+        - slug
+        - description
+        - timezone
+        - effective_timezone
+        - show_online
+        - cover_url
         - service_points_count
         - created_at
         - updated_at
@@ -5981,6 +6103,21 @@ components:
         uuid: { type: string, format: uuid }
         code: { type: string, example: MRK }
         name: { type: string, example: Merkez }
+        slug: { type: string, description: "URL name on the booking page; unique in the business", example: merkez }
+        description: { type: string }
+        timezone:
+          type: [string, "null"]
+          description: The branch's own IANA zone; `null` follows the business zone
+          example: Europe/Istanbul
+        effective_timezone: { type: string, description: Zone calendar decisions use (own or business), example: Europe/Istanbul }
+        show_online: { type: boolean, description: Listed on the customer booking screens }
+        cover_url:
+          type: [string, "null"]
+          description: API-owned public URL of the first gallery image
+        images:
+          type: array
+          description: Gallery in display order (detail response only); the first image is the cover
+          items: { $ref: "#/components/schemas/BranchImage" }
         address: { type: string }
         city: { type: string, example: İstanbul }
         district: { type: string, example: Kadıköy }
@@ -5992,7 +6129,7 @@ components:
         holiday_exceptions:
           type: array
           items: { $ref: "#/components/schemas/HolidayException" }
-        prep_minutes: { type: integer, description: Vehicle preparation time in minutes, example: 60 }
+        prep_minutes: { type: integer, description: Preparation / cleanup buffer in minutes, example: 60 }
         is_active: { type: boolean }
         service_points_count: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
@@ -6018,6 +6155,47 @@ components:
           items: { $ref: "#/components/schemas/HolidayException" }
         prep_minutes: { type: integer, minimum: 0, maximum: 10080 }
         is_active: { type: boolean }
+        slug:
+          type: string
+          maxLength: 64
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$|^$"
+          description: Empty on create = generated from the name (with -2, -3 … on a clash)
+        description: { type: string, maxLength: 2000 }
+        timezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: IANA zone; `null` or empty follows the business zone
+        show_online: { type: boolean }
+
+    BranchImage:
+      type: object
+      required: [uuid, public_url, filename, content_type, size_bytes, sort_order, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        public_url: { type: string, description: API-owned public URL; clients use it as is }
+        filename: { type: string }
+        content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        size_bytes: { type: integer, format: int64 }
+        sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    BranchImageList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BranchImage" }
+
+    BranchImageOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [image_uuids]
+      properties:
+        image_uuids:
+          type: array
+          description: Every image of the branch once, in the new order
+          items: { type: string, format: uuid }
 
     BranchCreateRequest:
       type: object
@@ -6262,6 +6440,22 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/ServicePointList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBranchImage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BranchImage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBranchImageList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BranchImageList" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeBranchActivityPage:

@@ -98,5 +98,8 @@
   "actions.organization.updated": "İşletme adı güncellendi",
   "actions.organization.logo_updated": "İşletme logosu güncellendi",
   "actions.organization.logo_removed": "İşletme logosu kaldırıldı",
-  "actions.organizations.entitlements_updated": "İşletme paketi güncellendi"
+  "actions.organizations.entitlements_updated": "İşletme paketi güncellendi",
+  "actions.branches.image_added": "Şubeye fotoğraf eklendi",
+  "actions.branches.image_removed": "Şube fotoğrafı silindi",
+  "actions.branches.images_reordered": "Şube fotoğraflarının sırası değişti"
 }

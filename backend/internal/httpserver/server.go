@@ -290,7 +290,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// the /v1/tenant/* shell only with TENANCY_ENABLED.
 	// Tenant resources (organization-scoped). OrganizationHooks seed the
 	// default branch of every new organization.
-	branchSvc := branchusecase.New(branchrepository.NewPostgres(deps.Queries), searchIndexer)
+	branchRepo := branchrepository.NewPostgres(deps.Queries)
+	branchSvc := branchusecase.New(branchRepo, searchIndexer)
+	branchSvc.SetMedia(branchRepo, deps.Storage)
 	orgSvc := orgusecase.New(
 		orgrepository.NewPostgres(deps.DB, deps.Queries),
 		branchusecase.NewOrganizationHooks(searchIndexer),

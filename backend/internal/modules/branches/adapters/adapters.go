@@ -80,6 +80,7 @@ func (a *IO) ExportColumns() []ioengine.Column {
 	return []ioengine.Column{
 		{Key: "code", LabelKey: "branches.code", Type: ioengine.ColumnTypeString},
 		{Key: "name", LabelKey: "branches.name", Type: ioengine.ColumnTypeString},
+		{Key: "slug", LabelKey: "branches.slug", Type: ioengine.ColumnTypeString},
 		{Key: "city", LabelKey: "branches.city", Type: ioengine.ColumnTypeString},
 		{Key: "district", LabelKey: "branches.district", Type: ioengine.ColumnTypeString},
 		{Key: "address", LabelKey: "branches.address", Type: ioengine.ColumnTypeString},
@@ -89,6 +90,8 @@ func (a *IO) ExportColumns() []ioengine.Column {
 		{Key: "longitude", LabelKey: "branches.longitude", Type: ioengine.ColumnTypeString},
 		{Key: "prep_minutes", LabelKey: "branches.prep_minutes", Type: ioengine.ColumnTypeString},
 		{Key: "is_active", LabelKey: "branches.is_active", Type: ioengine.ColumnTypeBoolean},
+		{Key: "timezone", LabelKey: "branches.timezone", Type: ioengine.ColumnTypeString},
+		{Key: "show_online", LabelKey: "branches.show_online", Type: ioengine.ColumnTypeBoolean},
 		{Key: "uuid", LabelKey: "branches.uuid", Type: ioengine.ColumnTypeUUID},
 		{Key: "created_at", LabelKey: "branches.created_at", Type: ioengine.ColumnTypeDatetime},
 	}
@@ -110,6 +113,7 @@ func (a *IO) Export(ctx context.Context, query ioengine.ExportQuery, _ i18n.Loca
 			"address": b.Address, "phone": b.Phone, "email": b.Email,
 			"latitude": floatString(b.Latitude), "longitude": floatString(b.Longitude),
 			"prep_minutes": strconv.Itoa(int(b.PrepMinutes)), "is_active": b.IsActive,
+			"slug": b.Slug, "timezone": derefString(b.Timezone), "show_online": b.ShowOnline,
 			"created_at": b.CreatedAt,
 		})
 	}
@@ -129,6 +133,9 @@ func (a *IO) ImportSchema() []ioengine.ImportField {
 		{Key: "longitude", LabelKey: "branches.longitude", Type: ioengine.ColumnTypeString},
 		{Key: "prep_minutes", LabelKey: "branches.prep_minutes", Type: ioengine.ColumnTypeString, DefaultHint: "60"},
 		{Key: "is_active", LabelKey: "branches.is_active", Type: ioengine.ColumnTypeBoolean, DefaultHint: "true"},
+		{Key: "slug", LabelKey: "branches.slug", Type: ioengine.ColumnTypeString},
+		{Key: "timezone", LabelKey: "branches.timezone", Type: ioengine.ColumnTypeString},
+		{Key: "show_online", LabelKey: "branches.show_online", Type: ioengine.ColumnTypeBoolean, DefaultHint: "true"},
 	}
 }
 
@@ -244,7 +251,25 @@ func inputFromRow(row, defaults map[string]any) (model.BranchInput, error) {
 		}
 		in.IsActive = &b
 	}
+	in.Slug = str("slug")
+	if v, ok := get("timezone"); ok {
+		in.Timezone = model.OptionalString{Set: true, Value: &v}
+	}
+	if v, ok := get("show_online"); ok {
+		b, err := parseBool(v)
+		if err != nil {
+			return in, err
+		}
+		in.ShowOnline = &b
+	}
 	return in, nil
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
 
 func inputFromBranch(b model.Branch) model.BranchInput {
@@ -255,6 +280,8 @@ func inputFromBranch(b model.Branch) model.BranchInput {
 		Latitude: model.OptionalFloat{Set: true, Value: b.Latitude}, Longitude: model.OptionalFloat{Set: true, Value: b.Longitude},
 		Phone: &b.Phone, Email: &b.Email, WorkingHours: &hours, HolidayExceptions: &holidays,
 		PrepMinutes: &b.PrepMinutes, IsActive: &b.IsActive,
+		Slug: &b.Slug, Description: &b.Description, Timezone: model.OptionalString{Set: true, Value: b.Timezone},
+		ShowOnline: &b.ShowOnline,
 	}
 }
 

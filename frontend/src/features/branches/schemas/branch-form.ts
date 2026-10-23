@@ -5,6 +5,7 @@ import {
   DAY_KEYS,
   MONEY_PATTERN,
   SERVICE_POINT_TYPES,
+  SLUG_PATTERN,
   TIME_PATTERN,
   defaultWeeklyHours,
 } from "@/features/branches/constants";
@@ -128,6 +129,18 @@ export function createBranchFormSchema(t: Translate) {
           return v !== "" && Number.isInteger(n) && n >= 0 && n <= 10080;
         }, t("branches.validation.prep_minutes")),
       is_active: z.boolean(),
+      slug: z
+        .string()
+        .trim()
+        .max(64)
+        .refine(
+          (v) => v === "" || SLUG_PATTERN.test(v),
+          t("branches.validation.slug"),
+        ),
+      description: z.string().max(2000),
+      /** "" follows the business time zone. */
+      timezone: z.string(),
+      show_online: z.boolean(),
       working_hours: weeklyHoursSchema,
       holiday_exceptions: z.array(
         z.object({
@@ -187,6 +200,10 @@ export function branchFormDefaults(branch?: Branch): BranchFormValues {
     longitude: branch?.longitude != null ? String(branch.longitude) : "",
     prep_minutes: String(branch?.prep_minutes ?? 60),
     is_active: branch?.is_active ?? true,
+    slug: branch?.slug ?? "",
+    description: branch?.description ?? "",
+    timezone: branch?.timezone ?? "",
+    show_online: branch?.show_online ?? true,
     working_hours: branch?.working_hours ?? defaultWeeklyHours(),
     holiday_exceptions: (branch?.holiday_exceptions ?? []).map((h) => ({
       ...h,
@@ -226,6 +243,10 @@ export function branchFormToRequest(
     longitude: numberOrNull(values.longitude),
     prep_minutes: Number(values.prep_minutes),
     is_active: values.is_active,
+    slug: values.slug.trim().toLowerCase(),
+    description: values.description.trim(),
+    timezone: values.timezone || null,
+    show_online: values.show_online,
     working_hours: normalizeWeek(values.working_hours),
     holiday_exceptions: values.holiday_exceptions.map((h) => ({
       ...normalizeDay(h),

@@ -35,6 +35,47 @@ func (q *Queries) BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams
 	return column_1, err
 }
 
+const branchSlugTaken = `-- name: BranchSlugTaken :one
+SELECT EXISTS (
+    SELECT 1 FROM branches
+    WHERE organization_id = $1
+      AND slug = $2
+      AND deleted_at IS NULL
+      AND ($3::uuid IS NULL OR uuid <> $3)
+)::boolean
+`
+
+type BranchSlugTakenParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	Slug           string      `json:"slug"`
+	ExcludeUuid    pgtype.UUID `json:"exclude_uuid"`
+}
+
+func (q *Queries) BranchSlugTaken(ctx context.Context, arg BranchSlugTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, branchSlugTaken, arg.OrganizationID, arg.Slug, arg.ExcludeUuid)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countBranchImages = `-- name: CountBranchImages :one
+SELECT COUNT(*)::bigint FROM branch_images
+WHERE organization_id = $1
+  AND branch_id = $2
+`
+
+type CountBranchImagesParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	BranchID       int64 `json:"branch_id"`
+}
+
+func (q *Queries) CountBranchImages(ctx context.Context, arg CountBranchImagesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countBranchImages, arg.OrganizationID, arg.BranchID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countBranches = `-- name: CountBranches :one
 SELECT COUNT(*)::bigint
 FROM branches b
@@ -48,6 +89,7 @@ WHERE b.organization_id = $1
     $5::text IS NULL
     OR b.code ILIKE '%' || $5 || '%'
     OR b.name ILIKE '%' || $5 || '%'
+    OR b.slug ILIKE '%' || $5 || '%'
     OR b.city ILIKE '%' || $5 || '%'
     OR b.district ILIKE '%' || $5 || '%'
     OR b.phone ILIKE '%' || $5 || '%'
@@ -80,14 +122,16 @@ const createBranch = `-- name: CreateBranch :one
 
 INSERT INTO branches (
     organization_id, code, name, address, city, district, latitude, longitude,
-    phone, email, working_hours, holiday_exceptions, prep_minutes, is_active
+    phone, email, working_hours, holiday_exceptions, prep_minutes, is_active,
+    slug, description, timezone, show_online
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10, $11, $12,
-    $13, $14
+    $13, $14,
+    $15, $16, $17, $18
 )
-RETURNING id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone
+RETURNING id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone, slug, description, show_online
 `
 
 type CreateBranchParams struct {
@@ -105,6 +149,10 @@ type CreateBranchParams struct {
 	HolidayExceptions []byte         `json:"holiday_exceptions"`
 	PrepMinutes       int32          `json:"prep_minutes"`
 	IsActive          bool           `json:"is_active"`
+	Slug              string         `json:"slug"`
+	Description       string         `json:"description"`
+	Timezone          pgtype.Text    `json:"timezone"`
+	ShowOnline        bool           `json:"show_online"`
 }
 
 // Tenant resource: branches and service points.
@@ -125,6 +173,10 @@ func (q *Queries) CreateBranch(ctx context.Context, arg CreateBranchParams) (Bra
 		arg.HolidayExceptions,
 		arg.PrepMinutes,
 		arg.IsActive,
+		arg.Slug,
+		arg.Description,
+		arg.Timezone,
+		arg.ShowOnline,
 	)
 	var i Branch
 	err := row.Scan(
@@ -148,6 +200,59 @@ func (q *Queries) CreateBranch(ctx context.Context, arg CreateBranchParams) (Bra
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Timezone,
+		&i.Slug,
+		&i.Description,
+		&i.ShowOnline,
+	)
+	return i, err
+}
+
+const createBranchImage = `-- name: CreateBranchImage :one
+INSERT INTO branch_images (
+    uuid, organization_id, branch_id, object_key, filename, content_type, size_bytes, sort_order
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    COALESCE((
+        SELECT MAX(sort_order) + 1 FROM branch_images
+        WHERE organization_id = $2 AND branch_id = $3
+    ), 0)
+)
+RETURNING id, uuid, organization_id, branch_id, object_key, filename, content_type, size_bytes, sort_order, created_at
+`
+
+type CreateBranchImageParams struct {
+	Uuid           uuid.UUID `json:"uuid"`
+	OrganizationID int64     `json:"organization_id"`
+	BranchID       int64     `json:"branch_id"`
+	ObjectKey      string    `json:"object_key"`
+	Filename       string    `json:"filename"`
+	ContentType    string    `json:"content_type"`
+	SizeBytes      int64     `json:"size_bytes"`
+}
+
+func (q *Queries) CreateBranchImage(ctx context.Context, arg CreateBranchImageParams) (BranchImage, error) {
+	row := q.db.QueryRow(ctx, createBranchImage,
+		arg.Uuid,
+		arg.OrganizationID,
+		arg.BranchID,
+		arg.ObjectKey,
+		arg.Filename,
+		arg.ContentType,
+		arg.SizeBytes,
+	)
+	var i BranchImage
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.BranchID,
+		&i.ObjectKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.SortOrder,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -207,6 +312,27 @@ func (q *Queries) CreateServicePoint(ctx context.Context, arg CreateServicePoint
 	return i, err
 }
 
+const deleteBranchImage = `-- name: DeleteBranchImage :execrows
+DELETE FROM branch_images
+WHERE organization_id = $1
+  AND branch_id = $2
+  AND uuid = $3
+`
+
+type DeleteBranchImageParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	BranchID       int64     `json:"branch_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBranchImage, arg.OrganizationID, arg.BranchID, arg.Uuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteServicePoint = `-- name: DeleteServicePoint :execrows
 DELETE FROM service_points
 WHERE organization_id = $1
@@ -229,7 +355,7 @@ func (q *Queries) DeleteServicePoint(ctx context.Context, arg DeleteServicePoint
 }
 
 const getBranchByCode = `-- name: GetBranchByCode :one
-SELECT id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone FROM branches
+SELECT id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone, slug, description, show_online FROM branches
 WHERE organization_id = $1
   AND code = $2
   AND deleted_at IS NULL
@@ -264,12 +390,15 @@ func (q *Queries) GetBranchByCode(ctx context.Context, arg GetBranchByCodeParams
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Timezone,
+		&i.Slug,
+		&i.Description,
+		&i.ShowOnline,
 	)
 	return i, err
 }
 
 const getBranchByUUID = `-- name: GetBranchByUUID :one
-SELECT id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone FROM branches
+SELECT id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone, slug, description, show_online FROM branches
 WHERE organization_id = $1
   AND uuid = $2
   AND deleted_at IS NULL
@@ -304,6 +433,40 @@ func (q *Queries) GetBranchByUUID(ctx context.Context, arg GetBranchByUUIDParams
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Timezone,
+		&i.Slug,
+		&i.Description,
+		&i.ShowOnline,
+	)
+	return i, err
+}
+
+const getBranchImage = `-- name: GetBranchImage :one
+SELECT id, uuid, organization_id, branch_id, object_key, filename, content_type, size_bytes, sort_order, created_at FROM branch_images
+WHERE organization_id = $1
+  AND branch_id = $2
+  AND uuid = $3
+`
+
+type GetBranchImageParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	BranchID       int64     `json:"branch_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) GetBranchImage(ctx context.Context, arg GetBranchImageParams) (BranchImage, error) {
+	row := q.db.QueryRow(ctx, getBranchImage, arg.OrganizationID, arg.BranchID, arg.Uuid)
+	var i BranchImage
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.BranchID,
+		&i.ObjectKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.SortOrder,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -348,6 +511,37 @@ func (q *Queries) GetBranchSearchDocument(ctx context.Context, arg GetBranchSear
 		&i.OrganizationID,
 		&i.OrganizationSlug,
 	)
+	return i, err
+}
+
+const getPublicBranchImage = `-- name: GetPublicBranchImage :one
+SELECT i.object_key, i.content_type, i.size_bytes
+FROM branch_images i
+JOIN branches b ON b.organization_id = i.organization_id AND b.id = i.branch_id
+JOIN organizations o ON o.id = i.organization_id
+WHERE o.uuid = $1
+  AND i.organization_id = o.id
+  AND i.uuid = $2
+  AND b.deleted_at IS NULL
+  AND o.deleted_at IS NULL
+`
+
+type GetPublicBranchImageParams struct {
+	OrganizationUuid uuid.UUID `json:"organization_uuid"`
+	Uuid             uuid.UUID `json:"uuid"`
+}
+
+type GetPublicBranchImageRow struct {
+	ObjectKey   string `json:"object_key"`
+	ContentType string `json:"content_type"`
+	SizeBytes   int64  `json:"size_bytes"`
+}
+
+// Public media route: the image of a live branch of an active organization.
+func (q *Queries) GetPublicBranchImage(ctx context.Context, arg GetPublicBranchImageParams) (GetPublicBranchImageRow, error) {
+	row := q.db.QueryRow(ctx, getPublicBranchImage, arg.OrganizationUuid, arg.Uuid)
+	var i GetPublicBranchImageRow
+	err := row.Scan(&i.ObjectKey, &i.ContentType, &i.SizeBytes)
 	return i, err
 }
 
@@ -426,6 +620,49 @@ func (q *Queries) ListBranchCityFacets(ctx context.Context, arg ListBranchCityFa
 	return items, nil
 }
 
+const listBranchImages = `-- name: ListBranchImages :many
+SELECT id, uuid, organization_id, branch_id, object_key, filename, content_type, size_bytes, sort_order, created_at FROM branch_images
+WHERE organization_id = $1
+  AND branch_id = ANY($2::bigint[])
+ORDER BY branch_id, sort_order ASC, id ASC
+`
+
+type ListBranchImagesParams struct {
+	OrganizationID int64   `json:"organization_id"`
+	BranchIds      []int64 `json:"branch_ids"`
+}
+
+func (q *Queries) ListBranchImages(ctx context.Context, arg ListBranchImagesParams) ([]BranchImage, error) {
+	rows, err := q.db.Query(ctx, listBranchImages, arg.OrganizationID, arg.BranchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BranchImage{}
+	for rows.Next() {
+		var i BranchImage
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.BranchID,
+			&i.ObjectKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.SortOrder,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBranchSearchDocuments = `-- name: ListBranchSearchDocuments :many
 SELECT b.id, b.uuid, b.code, b.name, b.city, b.district, b.is_active, b.organization_id, o.slug AS organization_slug
 FROM branches b
@@ -490,6 +727,7 @@ WHERE b.organization_id = $1
     $5::text IS NULL
     OR b.code ILIKE '%' || $5 || '%'
     OR b.name ILIKE '%' || $5 || '%'
+    OR b.slug ILIKE '%' || $5 || '%'
     OR b.city ILIKE '%' || $5 || '%'
     OR b.district ILIKE '%' || $5 || '%'
     OR b.phone ILIKE '%' || $5 || '%'
@@ -537,7 +775,7 @@ func (q *Queries) ListBranchUUIDs(ctx context.Context, arg ListBranchUUIDsParams
 
 const listBranches = `-- name: ListBranches :many
 SELECT
-    b.id, b.uuid, b.organization_id, b.code, b.name, b.address, b.city, b.district, b.latitude, b.longitude, b.phone, b.email, b.working_hours, b.holiday_exceptions, b.prep_minutes, b.is_active, b.created_at, b.updated_at, b.deleted_at, b.timezone,
+    b.id, b.uuid, b.organization_id, b.code, b.name, b.address, b.city, b.district, b.latitude, b.longitude, b.phone, b.email, b.working_hours, b.holiday_exceptions, b.prep_minutes, b.is_active, b.created_at, b.updated_at, b.deleted_at, b.timezone, b.slug, b.description, b.show_online,
     (
         SELECT COUNT(*) FROM service_points sp
         WHERE sp.organization_id = b.organization_id AND sp.branch_id = b.id
@@ -553,6 +791,7 @@ WHERE b.organization_id = $1
     $5::text IS NULL
     OR b.code ILIKE '%' || $5 || '%'
     OR b.name ILIKE '%' || $5 || '%'
+    OR b.slug ILIKE '%' || $5 || '%'
     OR b.city ILIKE '%' || $5 || '%'
     OR b.district ILIKE '%' || $5 || '%'
     OR b.phone ILIKE '%' || $5 || '%'
@@ -610,6 +849,9 @@ type ListBranchesRow struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 	Timezone           pgtype.Text        `json:"timezone"`
+	Slug               string             `json:"slug"`
+	Description        string             `json:"description"`
+	ShowOnline         bool               `json:"show_online"`
 	ServicePointsCount int64              `json:"service_points_count"`
 }
 
@@ -653,6 +895,9 @@ func (q *Queries) ListBranches(ctx context.Context, arg ListBranchesParams) ([]L
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.Timezone,
+			&i.Slug,
+			&i.Description,
+			&i.ShowOnline,
 			&i.ServicePointsCount,
 		); err != nil {
 			return nil, err
@@ -666,7 +911,7 @@ func (q *Queries) ListBranches(ctx context.Context, arg ListBranchesParams) ([]L
 }
 
 const listBranchesForExport = `-- name: ListBranchesForExport :many
-SELECT id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone
+SELECT id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone, slug, description, show_online
 FROM branches b
 WHERE b.organization_id = $1
   AND b.deleted_at IS NULL
@@ -678,6 +923,7 @@ WHERE b.organization_id = $1
     $5::text IS NULL
     OR b.code ILIKE '%' || $5 || '%'
     OR b.name ILIKE '%' || $5 || '%'
+    OR b.slug ILIKE '%' || $5 || '%'
     OR b.city ILIKE '%' || $5 || '%'
     OR b.district ILIKE '%' || $5 || '%'
     OR b.phone ILIKE '%' || $5 || '%'
@@ -730,6 +976,9 @@ func (q *Queries) ListBranchesForExport(ctx context.Context, arg ListBranchesFor
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.Timezone,
+			&i.Slug,
+			&i.Description,
+			&i.ShowOnline,
 		); err != nil {
 			return nil, err
 		}
@@ -793,7 +1042,7 @@ SET is_active = $1
 WHERE organization_id = $2
   AND uuid = $3
   AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone
+RETURNING id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone, slug, description, show_online
 `
 
 type SetBranchActiveParams struct {
@@ -826,8 +1075,39 @@ func (q *Queries) SetBranchActive(ctx context.Context, arg SetBranchActiveParams
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Timezone,
+		&i.Slug,
+		&i.Description,
+		&i.ShowOnline,
 	)
 	return i, err
+}
+
+const setBranchImageSort = `-- name: SetBranchImageSort :execrows
+UPDATE branch_images
+SET sort_order = $1
+WHERE organization_id = $2
+  AND branch_id = $3
+  AND uuid = $4
+`
+
+type SetBranchImageSortParams struct {
+	SortOrder      int32     `json:"sort_order"`
+	OrganizationID int64     `json:"organization_id"`
+	BranchID       int64     `json:"branch_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) SetBranchImageSort(ctx context.Context, arg SetBranchImageSortParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setBranchImageSort,
+		arg.SortOrder,
+		arg.OrganizationID,
+		arg.BranchID,
+		arg.Uuid,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const softDeleteBranch = `-- name: SoftDeleteBranch :execrows
@@ -851,6 +1131,23 @@ func (q *Queries) SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchPara
 	return result.RowsAffected(), nil
 }
 
+const touchBranch = `-- name: TouchBranch :exec
+UPDATE branches
+SET updated_at = NOW()
+WHERE organization_id = $1
+  AND id = $2
+`
+
+type TouchBranchParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) TouchBranch(ctx context.Context, arg TouchBranchParams) error {
+	_, err := q.db.Exec(ctx, touchBranch, arg.OrganizationID, arg.ID)
+	return err
+}
+
 const updateBranch = `-- name: UpdateBranch :one
 UPDATE branches
 SET code = $1,
@@ -865,11 +1162,15 @@ SET code = $1,
     working_hours = $10,
     holiday_exceptions = $11,
     prep_minutes = $12,
-    is_active = $13
-WHERE organization_id = $14
-  AND uuid = $15
+    is_active = $13,
+    slug = $14,
+    description = $15,
+    timezone = $16,
+    show_online = $17
+WHERE organization_id = $18
+  AND uuid = $19
   AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone
+RETURNING id, uuid, organization_id, code, name, address, city, district, latitude, longitude, phone, email, working_hours, holiday_exceptions, prep_minutes, is_active, created_at, updated_at, deleted_at, timezone, slug, description, show_online
 `
 
 type UpdateBranchParams struct {
@@ -886,6 +1187,10 @@ type UpdateBranchParams struct {
 	HolidayExceptions []byte         `json:"holiday_exceptions"`
 	PrepMinutes       int32          `json:"prep_minutes"`
 	IsActive          bool           `json:"is_active"`
+	Slug              string         `json:"slug"`
+	Description       string         `json:"description"`
+	Timezone          pgtype.Text    `json:"timezone"`
+	ShowOnline        bool           `json:"show_online"`
 	OrganizationID    int64          `json:"organization_id"`
 	Uuid              uuid.UUID      `json:"uuid"`
 }
@@ -905,6 +1210,10 @@ func (q *Queries) UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Bra
 		arg.HolidayExceptions,
 		arg.PrepMinutes,
 		arg.IsActive,
+		arg.Slug,
+		arg.Description,
+		arg.Timezone,
+		arg.ShowOnline,
 		arg.OrganizationID,
 		arg.Uuid,
 	)
@@ -930,6 +1239,9 @@ func (q *Queries) UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Bra
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.Timezone,
+		&i.Slug,
+		&i.Description,
+		&i.ShowOnline,
 	)
 	return i, err
 }

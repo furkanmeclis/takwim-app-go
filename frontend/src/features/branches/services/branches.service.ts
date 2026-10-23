@@ -2,6 +2,7 @@ import type { ResourceMeta } from "@/features/io/types";
 import type {
   Branch,
   BranchActivityPage,
+  BranchImage,
   BranchCreateRequest,
   BranchFacets,
   BranchPage,
@@ -11,7 +12,7 @@ import type {
   ServicePointCreateRequest,
   ServicePointPatchRequest,
 } from "@/features/branches/types";
-import { tenantRequest } from "@/lib/api/tenant-request";
+import { tenantFormRequest, tenantRequest } from "@/lib/api/tenant-request";
 
 const BASE = "/v1/tenant/branches";
 
@@ -102,6 +103,34 @@ export const branchesService = {
       slug,
       "DELETE",
       `${BASE}/${uuid}/service-points/${pointUuid}`,
+    );
+  },
+
+  uploadImage(slug: string, uuid: string, file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return tenantFormRequest<BranchImage>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/images`,
+      form,
+    );
+  },
+
+  reorderImages(slug: string, uuid: string, imageUuids: string[]) {
+    return tenantRequest<{ items: BranchImage[] }>(
+      slug,
+      "PUT",
+      `${BASE}/${uuid}/images/order`,
+      { body: { image_uuids: imageUuids } },
+    );
+  },
+
+  removeImage(slug: string, uuid: string, imageUuid: string) {
+    return tenantRequest<{ status: string }>(
+      slug,
+      "DELETE",
+      `${BASE}/${uuid}/images/${imageUuid}`,
     );
   },
 };

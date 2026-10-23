@@ -164,3 +164,41 @@ export function useDeleteServicePoint(branchUuid: string) {
     },
   });
 }
+
+export function useUploadBranchImage(branchUuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateBranches();
+  return useMutation({
+    mutationFn: (file: File) =>
+      branchesService.uploadImage(slug, branchUuid, file),
+    onSuccess: () => {
+      appToast.success(t("branches.gallery.toast.uploaded"));
+      void invalidate();
+    },
+  });
+}
+
+export function useReorderBranchImages(branchUuid: string) {
+  const { slug } = useTenant();
+  const invalidate = useInvalidateBranches();
+  return useMutation({
+    mutationFn: (imageUuids: string[]) =>
+      branchesService.reorderImages(slug, branchUuid, imageUuids),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+export function useDeleteBranchImage(branchUuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateBranches();
+  return useMutation({
+    mutationFn: (imageUuid: string) =>
+      branchesService.removeImage(slug, branchUuid, imageUuid),
+    onSuccess: () => {
+      appToast.success(t("branches.gallery.toast.deleted"));
+      void invalidate();
+    },
+  });
+}

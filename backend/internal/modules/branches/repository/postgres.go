@@ -20,6 +20,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrCodeTaken is returned when a branch code is already used in the organization.
 	ErrCodeTaken = errors.New("branch code taken")
+	// ErrSlugTaken is returned when a branch slug is already used in the organization.
+	ErrSlugTaken = errors.New("branch slug taken")
 )
 
 // BranchFields are the writable columns of a branch.
@@ -37,6 +39,11 @@ type BranchFields struct {
 	HolidayExceptions []byte
 	PrepMinutes       int32
 	IsActive          bool
+	Slug              string
+	Description       string
+	// Timezone is NULL when the branch follows the business zone.
+	Timezone   pgtype.Text
+	ShowOnline bool
 }
 
 // ServicePointFields are the writable columns of a service point.
@@ -146,12 +153,21 @@ func (r *Postgres) CodeTaken(ctx context.Context, orgID int64, code string, excl
 	return r.q.BranchCodeTaken(ctx, db.BranchCodeTakenParams{OrganizationID: orgID, Code: code, ExcludeUuid: ex})
 }
 
+func (r *Postgres) SlugTaken(ctx context.Context, orgID int64, slug string, exclude *uuid.UUID) (bool, error) {
+	ex := pgtype.UUID{}
+	if exclude != nil {
+		ex = pgtype.UUID{Bytes: *exclude, Valid: true}
+	}
+	return r.q.BranchSlugTaken(ctx, db.BranchSlugTakenParams{OrganizationID: orgID, Slug: slug, ExcludeUuid: ex})
+}
+
 func (r *Postgres) CreateBranch(ctx context.Context, orgID int64, f BranchFields) (db.Branch, error) {
 	row, err := r.q.CreateBranch(ctx, db.CreateBranchParams{
 		OrganizationID: orgID, Code: f.Code, Name: f.Name, Address: f.Address, City: f.City,
 		District: f.District, Latitude: f.Latitude, Longitude: f.Longitude, Phone: f.Phone, Email: f.Email,
 		WorkingHours: f.WorkingHours, HolidayExceptions: f.HolidayExceptions, PrepMinutes: f.PrepMinutes,
-		IsActive: f.IsActive,
+		IsActive: f.IsActive, Slug: f.Slug, Description: f.Description, Timezone: f.Timezone,
+		ShowOnline: f.ShowOnline,
 	})
 	return row, mapErr(err)
 }
@@ -161,7 +177,8 @@ func (r *Postgres) UpdateBranch(ctx context.Context, orgID int64, id uuid.UUID, 
 		OrganizationID: orgID, Uuid: id, Code: f.Code, Name: f.Name, Address: f.Address, City: f.City,
 		District: f.District, Latitude: f.Latitude, Longitude: f.Longitude, Phone: f.Phone, Email: f.Email,
 		WorkingHours: f.WorkingHours, HolidayExceptions: f.HolidayExceptions, PrepMinutes: f.PrepMinutes,
-		IsActive: f.IsActive,
+		IsActive: f.IsActive, Slug: f.Slug, Description: f.Description, Timezone: f.Timezone,
+		ShowOnline: f.ShowOnline,
 	})
 	return row, mapErr(err)
 }
@@ -238,6 +255,84 @@ func (r *Postgres) ListActivity(ctx context.Context, orgID int64, branchUUID uui
 	return rows, total, nil
 }
 
+// --- images ---------------------------------------------------------------
+
+// ImageFields are the columns of a new branch image.
+type ImageFields struct {
+	UUID        uuid.UUID
+	ObjectKey   string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+}
+
+// ImagesByBranches returns the images of the given branches, ordered.
+func (r *Postgres) ImagesByBranches(ctx context.Context, orgID int64, branchIDs []int64) (map[int64][]db.BranchImage, error) {
+	out := map[int64][]db.BranchImage{}
+	if len(branchIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.q.ListBranchImages(ctx, db.ListBranchImagesParams{OrganizationID: orgID, BranchIds: branchIDs})
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		out[row.BranchID] = append(out[row.BranchID], row)
+	}
+	return out, nil
+}
+
+func (r *Postgres) CountImages(ctx context.Context, orgID, branchID int64) (int64, error) {
+	return r.q.CountBranchImages(ctx, db.CountBranchImagesParams{OrganizationID: orgID, BranchID: branchID})
+}
+
+func (r *Postgres) CreateImage(ctx context.Context, orgID, branchID int64, f ImageFields) (db.BranchImage, error) {
+	row, err := r.q.CreateBranchImage(ctx, db.CreateBranchImageParams{
+		Uuid: f.UUID, OrganizationID: orgID, BranchID: branchID, ObjectKey: f.ObjectKey,
+		Filename: f.Filename, ContentType: f.ContentType, SizeBytes: f.SizeBytes,
+	})
+	return row, mapErr(err)
+}
+
+func (r *Postgres) GetImage(ctx context.Context, orgID, branchID int64, id uuid.UUID) (db.BranchImage, error) {
+	row, err := r.q.GetBranchImage(ctx, db.GetBranchImageParams{OrganizationID: orgID, BranchID: branchID, Uuid: id})
+	return row, mapErr(err)
+}
+
+func (r *Postgres) DeleteImage(ctx context.Context, orgID, branchID int64, id uuid.UUID) error {
+	n, err := r.q.DeleteBranchImage(ctx, db.DeleteBranchImageParams{OrganizationID: orgID, BranchID: branchID, Uuid: id})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Postgres) SetImageSort(ctx context.Context, orgID, branchID int64, id uuid.UUID, order int32) error {
+	n, err := r.q.SetBranchImageSort(ctx, db.SetBranchImageSortParams{
+		OrganizationID: orgID, BranchID: branchID, Uuid: id, SortOrder: order,
+	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Postgres) TouchBranch(ctx context.Context, orgID, branchID int64) error {
+	return r.q.TouchBranch(ctx, db.TouchBranchParams{OrganizationID: orgID, ID: branchID})
+}
+
+// PublicImage resolves an image of a live branch for the public media route.
+func (r *Postgres) PublicImage(ctx context.Context, orgUUID, id uuid.UUID) (db.GetPublicBranchImageRow, error) {
+	row, err := r.q.GetPublicBranchImage(ctx, db.GetPublicBranchImageParams{OrganizationUuid: orgUUID, Uuid: id})
+	return row, mapErr(err)
+}
+
 func mapErr(err error) error {
 	if err == nil {
 		return nil
@@ -246,8 +341,13 @@ func mapErr(err error) error {
 		return ErrNotFound
 	}
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_branches_organization_code" {
-		return ErrCodeTaken
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		switch pgErr.ConstraintName {
+		case "uq_branches_organization_code":
+			return ErrCodeTaken
+		case "uq_branches_organization_slug":
+			return ErrSlugTaken
+		}
 	}
 	return err
 }

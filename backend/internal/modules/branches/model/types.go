@@ -77,23 +77,35 @@ type HolidayException struct {
 
 // Branch is the API projection of a branch.
 type Branch struct {
-	UUID               uuid.UUID          `json:"uuid"`
-	Code               string             `json:"code"`
-	Name               string             `json:"name"`
-	Address            string             `json:"address"`
-	City               string             `json:"city"`
-	District           string             `json:"district"`
-	Latitude           *float64           `json:"latitude"`
-	Longitude          *float64           `json:"longitude"`
-	Phone              string             `json:"phone"`
-	Email              string             `json:"email"`
-	WorkingHours       WeeklyHours        `json:"working_hours"`
-	HolidayExceptions  []HolidayException `json:"holiday_exceptions"`
-	PrepMinutes        int32              `json:"prep_minutes"`
-	IsActive           bool               `json:"is_active"`
-	ServicePointsCount int64              `json:"service_points_count"`
-	CreatedAt          time.Time          `json:"created_at"`
-	UpdatedAt          time.Time          `json:"updated_at"`
+	UUID              uuid.UUID          `json:"uuid"`
+	Code              string             `json:"code"`
+	Name              string             `json:"name"`
+	Slug              string             `json:"slug"`
+	Description       string             `json:"description"`
+	Address           string             `json:"address"`
+	City              string             `json:"city"`
+	District          string             `json:"district"`
+	Latitude          *float64           `json:"latitude"`
+	Longitude         *float64           `json:"longitude"`
+	Phone             string             `json:"phone"`
+	Email             string             `json:"email"`
+	WorkingHours      WeeklyHours        `json:"working_hours"`
+	HolidayExceptions []HolidayException `json:"holiday_exceptions"`
+	PrepMinutes       int32              `json:"prep_minutes"`
+	IsActive          bool               `json:"is_active"`
+	// Timezone is the branch's own IANA zone; null follows the business
+	// zone. EffectiveTimezone is the zone calendar decisions use.
+	Timezone          *string `json:"timezone"`
+	EffectiveTimezone string  `json:"effective_timezone"`
+	// ShowOnline lists the branch on the customer booking screens.
+	ShowOnline bool `json:"show_online"`
+	// CoverURL is the first gallery image (API-owned public URL) or null.
+	CoverURL *string `json:"cover_url"`
+	// Images is the gallery, filled on the detail response only.
+	Images             []BranchImage `json:"images,omitempty"`
+	ServicePointsCount int64         `json:"service_points_count"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
 }
 
 // ServicePoint is the API projection of a service point.
@@ -113,6 +125,42 @@ type ServicePoint struct {
 	IsActive         bool         `json:"is_active"`
 	CreatedAt        time.Time    `json:"created_at"`
 	UpdatedAt        time.Time    `json:"updated_at"`
+}
+
+// BranchImage is one gallery photo of a branch; the first one is the cover.
+type BranchImage struct {
+	UUID        uuid.UUID `json:"uuid"`
+	PublicURL   string    `json:"public_url"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	SortOrder   int32     `json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// ImageOrderInput is the body of PUT …/images/order.
+type ImageOrderInput struct {
+	ImageUUIDs []uuid.UUID `json:"image_uuids"`
+}
+
+// OptionalString distinguishes an absent JSON field from an explicit null.
+type OptionalString struct {
+	Set   bool
+	Value *string
+}
+
+func (o *OptionalString) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		o.Value = nil
+		return nil
+	}
+	var v string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	o.Value = &v
+	return nil
 }
 
 // OptionalFloat distinguishes an absent JSON field from an explicit null.
@@ -171,6 +219,12 @@ type BranchInput struct {
 	HolidayExceptions *[]HolidayException `json:"holiday_exceptions"`
 	PrepMinutes       *int32              `json:"prep_minutes"`
 	IsActive          *bool               `json:"is_active"`
+	// Slug is generated from the name when empty on create.
+	Slug        *string `json:"slug"`
+	Description *string `json:"description"`
+	// Timezone null (or "") follows the business zone.
+	Timezone   OptionalString `json:"timezone"`
+	ShowOnline *bool          `json:"show_online"`
 }
 
 // ServicePointInput is the create / patch body of a service point.

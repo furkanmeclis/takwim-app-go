@@ -3,6 +3,7 @@
 # (enforced by internal/database/queries_test.go).
 branches
 service_points
+branch_images
 organization_member_roles
 organization_member_branches
 organization_settings_versions

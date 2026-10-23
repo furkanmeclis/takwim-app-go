@@ -22,6 +22,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -33,6 +34,7 @@ var (
 	ErrNotFound             = errors.New("branch not found")
 	ErrServicePointNotFound = errors.New("service point not found")
 	ErrCodeTaken            = errors.New("branch code is already used in this organization")
+	ErrSlugTaken            = errors.New("branch slug is already used in this organization")
 	// ErrAllBranchesRequired is returned when a branch-restricted member
 	// tries an action that needs every branch (creating a branch).
 	ErrAllBranchesRequired = errors.New("this action needs access to every branch")
@@ -77,6 +79,7 @@ type Repository interface {
 	GetBranch(ctx context.Context, orgID int64, id uuid.UUID) (db.Branch, error)
 	GetBranchByCode(ctx context.Context, orgID int64, code string) (db.Branch, error)
 	CodeTaken(ctx context.Context, orgID int64, code string, exclude *uuid.UUID) (bool, error)
+	SlugTaken(ctx context.Context, orgID int64, slug string, exclude *uuid.UUID) (bool, error)
 	CreateBranch(ctx context.Context, orgID int64, f repository.BranchFields) (db.Branch, error)
 	UpdateBranch(ctx context.Context, orgID int64, id uuid.UUID, f repository.BranchFields) (db.Branch, error)
 	SetBranchActive(ctx context.Context, orgID int64, id uuid.UUID, active bool) (db.Branch, error)
@@ -100,6 +103,8 @@ type Service struct {
 	repo    Repository
 	indexer SearchIndexer
 	limits  BranchLimiter
+	images  ImageRepository
+	storage storage.Driver
 }
 
 // BranchLimiter enforces the branch limit of the plan (TEC-883).
@@ -135,10 +140,15 @@ func (s *Service) List(ctx context.Context, orgID int64, f model.ListFilter) ([]
 		return nil, 0, err
 	}
 	out := make([]model.Branch, 0, len(rows))
+	ids := make([]int64, 0, len(rows))
 	for _, row := range rows {
-		b := MapBranch(row.Branch)
+		b := withZone(ctx, MapBranch(row.Branch))
 		b.ServicePointsCount = row.ServicePointsCount
 		out = append(out, b)
+		ids = append(ids, row.ID)
+	}
+	if err := s.attachCovers(ctx, orgID, ids, out); err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }
@@ -162,8 +172,11 @@ func (s *Service) Get(ctx context.Context, orgID int64, id uuid.UUID) (model.Bra
 	if err != nil {
 		return model.Branch{}, err
 	}
-	b := MapBranch(row)
+	b := withZone(ctx, MapBranch(row))
 	b.ServicePointsCount = int64(len(points))
+	if err := s.attachImages(ctx, orgID, row.ID, &b); err != nil {
+		return model.Branch{}, err
+	}
 	return b, nil
 }
 
@@ -182,7 +195,7 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.BranchInput)
 		}
 	}
 	fields := repository.BranchFields{
-		PrepMinutes: 60, IsActive: true,
+		PrepMinutes: 60, IsActive: true, ShowOnline: true,
 		WorkingHours: mustJSON(model.DefaultWeeklyHours()), HolidayExceptions: []byte("[]"),
 	}
 	if err := applyBranchInput(&fields, in, true); err != nil {
@@ -193,12 +206,15 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.BranchInput)
 	} else if taken {
 		return model.Branch{}, ErrCodeTaken
 	}
+	if err := s.assignSlug(ctx, orgID, &fields, in.Slug, nil); err != nil {
+		return model.Branch{}, err
+	}
 	row, err := s.repo.CreateBranch(ctx, orgID, fields)
 	if err != nil {
 		return model.Branch{}, mapCodeTaken(err)
 	}
 	s.index(ctx, orgID, row.Uuid)
-	return MapBranch(row), nil
+	return withZone(ctx, MapBranch(row)), nil
 }
 
 // Patch updates the given fields of a branch.
@@ -216,6 +232,11 @@ func (s *Service) Patch(ctx context.Context, orgID int64, id uuid.UUID, in model
 			return model.Branch{}, err
 		} else if taken {
 			return model.Branch{}, ErrCodeTaken
+		}
+	}
+	if in.Slug != nil {
+		if err := s.assignSlug(ctx, orgID, &fields, in.Slug, &id); err != nil {
+			return model.Branch{}, err
 		}
 	}
 	row, err := s.repo.UpdateBranch(ctx, orgID, id, fields)
@@ -433,7 +454,7 @@ func (s *Service) index(ctx context.Context, orgID int64, id uuid.UUID) {
 // DefaultBranchFields is the branch every new organization starts with.
 func DefaultBranchFields() repository.BranchFields {
 	return repository.BranchFields{
-		Code: "MRK", Name: "Merkez", PrepMinutes: 60, IsActive: true,
+		Code: "MRK", Name: "Merkez", Slug: "merkez", PrepMinutes: 60, IsActive: true, ShowOnline: true,
 		WorkingHours: mustJSON(model.DefaultWeeklyHours()), HolidayExceptions: []byte("[]"),
 	}
 }
@@ -442,6 +463,7 @@ func DefaultBranchFields() repository.BranchFields {
 
 var (
 	codeRE  = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,31}$`)
+	slugRE  = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	timeRE  = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 	moneyRE = regexp.MustCompile(`^[0-9]{1,12}(\.[0-9]{1,2})?$`)
 )
@@ -539,6 +561,24 @@ func applyBranchInput(f *repository.BranchFields, in model.BranchInput, create b
 	}
 	if in.IsActive != nil {
 		f.IsActive = *in.IsActive
+	}
+	setText("description", in.Description, &f.Description, 2000)
+	if in.Timezone.Set {
+		zone := ""
+		if in.Timezone.Value != nil {
+			zone = strings.TrimSpace(*in.Timezone.Value)
+		}
+		switch {
+		case zone == "":
+			f.Timezone = pgtype.Text{}
+		case !validTimezone(zone):
+			ve.add("timezone", "invalid", "timezone must be an IANA time zone such as Europe/Istanbul")
+		default:
+			f.Timezone = pgtype.Text{String: zone, Valid: true}
+		}
+	}
+	if in.ShowOnline != nil {
+		f.ShowOnline = *in.ShowOnline
 	}
 	return ve.orNil()
 }
@@ -673,8 +713,14 @@ func MapBranch(row db.Branch) model.Branch {
 		UUID: row.Uuid, Code: row.Code, Name: row.Name, Address: row.Address, City: row.City,
 		District: row.District, Latitude: numericToFloat(row.Latitude), Longitude: numericToFloat(row.Longitude),
 		Phone: row.Phone, Email: row.Email, PrepMinutes: row.PrepMinutes, IsActive: row.IsActive,
+		Slug: row.Slug, Description: row.Description, ShowOnline: row.ShowOnline,
 		HolidayExceptions: []model.HolidayException{},
 		CreatedAt:         row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
+	}
+	if row.Timezone.Valid && row.Timezone.String != "" {
+		zone := row.Timezone.String
+		b.Timezone = &zone
+		b.EffectiveTimezone = zone
 	}
 	b.WorkingHours = decodeHours(row.WorkingHours)
 	if len(row.HolidayExceptions) > 0 {
@@ -706,6 +752,7 @@ func fieldsFromBranch(row db.Branch) repository.BranchFields {
 		Latitude: row.Latitude, Longitude: row.Longitude, Phone: row.Phone, Email: row.Email,
 		WorkingHours: row.WorkingHours, HolidayExceptions: row.HolidayExceptions,
 		PrepMinutes: row.PrepMinutes, IsActive: row.IsActive,
+		Slug: row.Slug, Description: row.Description, Timezone: row.Timezone, ShowOnline: row.ShowOnline,
 	}
 }
 
@@ -782,8 +829,77 @@ func mapNotFound(err, target error) error {
 }
 
 func mapCodeTaken(err error) error {
-	if errors.Is(err, repository.ErrCodeTaken) {
+	switch {
+	case errors.Is(err, repository.ErrCodeTaken):
 		return ErrCodeTaken
+	case errors.Is(err, repository.ErrSlugTaken):
+		return ErrSlugTaken
 	}
 	return err
 }
+
+// assignSlug sets f.Slug from the request or, when the request leaves it
+// empty, from the name with -2, -3 … on a clash. An explicit slug that is
+// taken is an error.
+func (s *Service) assignSlug(ctx context.Context, orgID int64, f *repository.BranchFields, requested *string, exclude *uuid.UUID) error {
+	explicit := ""
+	if requested != nil {
+		explicit = strings.ToLower(strings.TrimSpace(*requested))
+	}
+	if explicit != "" {
+		if !slugRE.MatchString(explicit) || len(explicit) > maxSlugLen {
+			ve := &ValidationError{}
+			ve.add("slug", "invalid", "slug must be 1-64 lowercase letters, digits and single dashes")
+			return ve
+		}
+		taken, err := s.repo.SlugTaken(ctx, orgID, explicit, exclude)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrSlugTaken
+		}
+		f.Slug = explicit
+		return nil
+	}
+	base := Slugify(f.Name)
+	if base == "" {
+		base = Slugify(f.Code)
+	}
+	if base == "" {
+		base = "sube"
+	}
+	candidate := base
+	for n := 2; ; n++ {
+		taken, err := s.repo.SlugTaken(ctx, orgID, candidate, exclude)
+		if err != nil {
+			return err
+		}
+		if !taken {
+			f.Slug = candidate
+			return nil
+		}
+		if n > 1000 {
+			return ErrSlugTaken
+		}
+		candidate = withSuffix(base, n)
+	}
+}
+
+// withZone fills the effective time zone: the branch's own, else the
+// business zone of the request scope.
+func withZone(ctx context.Context, b model.Branch) model.Branch {
+	if b.Timezone != nil && *b.Timezone != "" {
+		b.EffectiveTimezone = *b.Timezone
+		return b
+	}
+	if scope, ok := orgctx.From(ctx); ok && scope.Timezone != "" {
+		b.EffectiveTimezone = scope.Timezone
+		return b
+	}
+	b.EffectiveTimezone = defaultTimezone
+	return b
+}
+
+// defaultTimezone matches the organizations.timezone column default.
+const defaultTimezone = "Europe/Istanbul"

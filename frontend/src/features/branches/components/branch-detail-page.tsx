@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { BranchActivityCard } from "@/features/branches/components/branch-activity-card";
+import { BranchGalleryCard } from "@/features/branches/components/branch-gallery-card";
 import { ServicePointsCard } from "@/features/branches/components/service-points-card";
 import {
   HolidayExceptionsView,
@@ -170,6 +171,32 @@ export function BranchDetailPage({ uuid }: { uuid: string }) {
                         value: branch.name,
                       },
                       {
+                        key: "slug",
+                        label: t("branches.fields.slug"),
+                        value: branch.slug,
+                      },
+                      {
+                        key: "show_online",
+                        label: t("branches.fields.show_online"),
+                        value: branch.show_online
+                          ? t("branches.online.visible")
+                          : t("branches.online.hidden"),
+                      },
+                      {
+                        key: "timezone",
+                        label: t("branches.fields.timezone"),
+                        value: branch.timezone
+                          ? branch.effective_timezone
+                          : t("branches.fields.timezone_business", {
+                              zone: branch.effective_timezone,
+                            }),
+                      },
+                      {
+                        key: "description",
+                        label: t("branches.fields.description"),
+                        value: branch.description || "—",
+                      },
+                      {
                         key: "address",
                         label: t("branches.fields.address"),
                         value: branch.address || "—",
@@ -247,6 +274,8 @@ export function BranchDetailPage({ uuid }: { uuid: string }) {
               </div>
             </EntitySectionCard>
           </div>
+
+          <BranchGalleryCard branchUuid={uuid} images={branch.images ?? []} />
 
           <ServicePointsCard
             branchUuid={uuid}
