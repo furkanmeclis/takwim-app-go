@@ -23,5 +23,7 @@
   "prefix_resources": "kaynak",
   "specs_resources": "Kaynaklar",
   "prefix_services": "hizmet",
-  "specs_services": "Hizmetler"
+  "specs_services": "Hizmetler",
+  "prefix_customers": "müşteri",
+  "specs_customers": "Müşteriler"
 }

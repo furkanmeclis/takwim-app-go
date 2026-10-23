@@ -3,7 +3,7 @@
 import { Controller, get, useFormContext } from "react-hook-form";
 
 import { FormFieldShell } from "@/components/forms/form-field";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DatePicker, type DatePickerProps } from "@/components/ui/date-picker";
 
 type AppDatePickerProps = {
   name: string;
@@ -14,6 +14,8 @@ type AppDatePickerProps = {
   disabled?: boolean;
   /** Date and time (local `yyyy-MM-dd'T'HH:mm`). */
   withTime?: boolean;
+  /** `dropdown` adds month / year selects (birth dates and other far dates). */
+  captionLayout?: DatePickerProps["captionLayout"];
 };
 
 /**
@@ -28,6 +30,7 @@ export function AppDatePicker({
   className,
   disabled,
   withTime,
+  captionLayout,
 }: AppDatePickerProps) {
   const {
     control,
@@ -54,6 +57,7 @@ export function AppDatePicker({
             placeholder={placeholder}
             disabled={disabled}
             withTime={withTime}
+            captionLayout={captionLayout}
             aria-invalid={Boolean(error)}
             className={error ? "border-destructive" : undefined}
           />

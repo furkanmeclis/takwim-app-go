@@ -54,6 +54,7 @@ export type BulkResource =
   | "tenant.staff"
   | "tenant.resources"
   | "tenant.services"
+  | "tenant.customers"
   | "platform.organizations";
 
 /**
@@ -68,6 +69,7 @@ export const BULK_PATHS: Record<BulkResource, string> = {
   "tenant.staff": "/v1/tenant/staff/bulk",
   "tenant.resources": "/v1/tenant/resources/bulk",
   "tenant.services": "/v1/tenant/services/bulk",
+  "tenant.customers": "/v1/tenant/customers/bulk",
 };
 
 export type SelectionScope =

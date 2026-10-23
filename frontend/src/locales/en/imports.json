@@ -109,5 +109,6 @@
   "resources.platform.organizations": "Businesses",
   "resources.tenant.staff": "Staff",
   "resources.tenant.resources": "Resources",
-  "resources.tenant.services": "Services"
+  "resources.tenant.services": "Services",
+  "resources.tenant.customers": "Customers"
 }

@@ -108,10 +108,15 @@ const (
 	PermTenantSchedulesOwn      = "tenant.schedules.own"
 	PermTenantCustomersRead     = "tenant.customers.read"
 	PermTenantCustomersWrite    = "tenant.customers.write"
-	PermTenantFinanceRead       = "tenant.finance.read"
-	PermTenantFinanceWrite      = "tenant.finance.write"
-	PermTenantEarningsRead      = "tenant.earnings.read"
-	PermTenantEarningsOwn       = "tenant.earnings.own"
+	// Customer engines (TEC-896).
+	PermTenantCustomersExport     = "tenant.customers.export"
+	PermTenantCustomersImport     = "tenant.customers.import"
+	PermTenantCustomersBulkTag    = "tenant.customers.bulk.tag"
+	PermTenantCustomersBulkDelete = "tenant.customers.bulk.delete"
+	PermTenantFinanceRead         = "tenant.finance.read"
+	PermTenantFinanceWrite        = "tenant.finance.write"
+	PermTenantEarningsRead        = "tenant.earnings.read"
+	PermTenantEarningsOwn         = "tenant.earnings.own"
 	// Sensitive actions of later tenant modules (TEC-689), separate from the
 	// resource read/write slugs so roles can grant them one by one.
 	PermTenantPriceOverride    = "tenant.price.override"

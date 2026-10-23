@@ -94,6 +94,10 @@ export const Permission = {
   TenantSchedulesOwn: "tenant.schedules.own",
   TenantCustomersRead: "tenant.customers.read",
   TenantCustomersWrite: "tenant.customers.write",
+  TenantCustomersExport: "tenant.customers.export",
+  TenantCustomersImport: "tenant.customers.import",
+  TenantCustomersBulkTag: "tenant.customers.bulk.tag",
+  TenantCustomersBulkDelete: "tenant.customers.bulk.delete",
   TenantFinanceRead: "tenant.finance.read",
   TenantFinanceWrite: "tenant.finance.write",
   TenantEarningsRead: "tenant.earnings.read",
@@ -269,6 +273,10 @@ export const permissions = {
     customers: {
       read: Permission.TenantCustomersRead,
       write: Permission.TenantCustomersWrite,
+      export: Permission.TenantCustomersExport,
+      import: Permission.TenantCustomersImport,
+      bulkTag: Permission.TenantCustomersBulkTag,
+      bulkDelete: Permission.TenantCustomersBulkDelete,
     },
     finance: {
       read: Permission.TenantFinanceRead,

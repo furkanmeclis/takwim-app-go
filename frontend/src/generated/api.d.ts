@@ -3937,6 +3937,210 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/customers/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer list metadata
+         * @description Table contract of `GET /v1/tenant/customers` (`tenant.customers.read`, `customers` module).
+         */
+        get: operations["getTenantCustomersMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer faceted filter options
+         * @description Tags and sources (with counts) in use in the organization.
+         */
+        get: operations["getTenantCustomersFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List customers of the organization
+         * @description The business's own customer records (`tenant.customers.read`); every
+         *     reader sees every record of the business. `q` searches the full
+         *     name, the email and, when it looks like a phone fragment, the phone
+         *     (a leading national `0` is ignored). Records of other businesses
+         *     are never listed, even for the same person.
+         */
+        get: operations["getTenantCustomers"];
+        put?: never;
+        /**
+         * Create a customer
+         * @description `tenant.customers.write`. The phone is normalized to E.164 (numbers
+         *     without a country code are read as Turkish); one live record per
+         *     phone in a business (`409`, detail `phone` / `taken`). A record
+         *     created here is never verified: only the person proving the phone
+         *     (OTP, customer panel) links it.
+         */
+        post: operations["postTenantCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export customers
+         * @description Queues an export of the organization's customers
+         *     (`tenant.customers.export`). `query` honours `q`, `tag`, `source`,
+         *     `verified`, `sms_consent` and `email_consent`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantCustomersExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a customer import file
+         * @description Creates an import job (`tenant.customers.import`). A row whose phone
+         *     matches a live customer updates it, any other row creates one with
+         *     source `import`. Imported phones stay unverified. Continue with
+         *     `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+         */
+        post: operations["postTenantCustomersImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a customer import sample */
+        get: operations["getTenantCustomersImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on customers
+         * @description Actions `add_tag` and `remove_tag` (`tenant.customers.bulk.tag`,
+         *     the tag in `target.params.tag`) and `delete`
+         *     (`tenant.customers.bulk.delete`, restored on rollback); all
+         *     reversible. Targets are resolved inside the organization only.
+         */
+        post: operations["postTenantCustomersBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customers/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a customer
+         * @description A uuid of another organization answers `404`.
+         */
+        get: operations["getTenantCustomer"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a customer (soft)
+         * @description `tenant.customers.write`. The phone becomes free for a new record.
+         */
+        delete: operations["deleteTenantCustomer"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a customer
+         * @description `tenant.customers.write`. Omitted fields are unchanged; `phone` and
+         *     `birth_date` take `null` to clear. Changes stay in this business.
+         *     Changing the phone of a verified record removes the verification.
+         */
+        patch: operations["patchTenantCustomer"];
+        trace?: never;
+    };
+    "/v1/tenant/customers/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity of a customer */
+        get: operations["getTenantCustomerActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -7602,6 +7806,101 @@ export interface components {
             data: components["schemas"]["NotificationPreferences"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @description The record is linked to a person who proved the phone. The shared identity itself is never exposed. */
+        TenantCustomerVerification: {
+            /** @enum {string} */
+            source: "otp" | "panel_login";
+            /** Format: date-time */
+            verified_at: string;
+        };
+        TenantCustomer: {
+            /** Format: uuid */
+            uuid: string;
+            first_name: string;
+            last_name: string;
+            full_name: string;
+            /**
+             * @description E.164
+             * @example +905321234567
+             */
+            phone: string | null;
+            /**
+             * @description National format for local numbers, international otherwise
+             * @example 0532 123 45 67
+             */
+            phone_display: string;
+            email: string;
+            /** Format: date */
+            birth_date: string | null;
+            notes: string;
+            tags: string[];
+            sms_consent: boolean;
+            email_consent: boolean;
+            /** Format: date-time */
+            consent_updated_at: string | null;
+            /** @enum {string} */
+            source: "panel" | "import" | "online";
+            verification: components["schemas"]["TenantCustomerVerification"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TenantCustomerPatchRequest: {
+            first_name?: string;
+            last_name?: string;
+            /** @description Any common spelling; stored as E.164 */
+            phone?: string | null;
+            email?: string;
+            /** Format: date */
+            birth_date?: string | null;
+            notes?: string;
+            tags?: string[];
+            sms_consent?: boolean;
+            email_consent?: boolean;
+        };
+        TenantCustomerCreateRequest: {
+            first_name: string;
+            last_name?: string;
+            /** @description Any common spelling; stored as E.164 */
+            phone?: string | null;
+            email?: string;
+            /** Format: date */
+            birth_date?: string | null;
+            notes?: string;
+            tags?: string[];
+            sms_consent?: boolean;
+            email_consent?: boolean;
+        };
+        TenantCustomerPage: {
+            items: components["schemas"]["TenantCustomer"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        TenantCustomerFacets: {
+            tag: components["schemas"]["TenantResourceFacet"][];
+            source: components["schemas"]["TenantResourceFacet"][];
+        };
+        EnvelopeTenantCustomer: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantCustomer"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantCustomerPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantCustomerPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantCustomerFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantCustomerFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeResourceMeta: {
             /** @enum {boolean} */
             success: true;
@@ -7623,6 +7922,10 @@ export interface components {
             scope: "ids" | "query";
             ids?: string[];
             query?: {
+                [key: string]: string;
+            };
+            /** @description Arguments of a parameterised action (for example `tag` of the customer `add_tag` action). */
+            params?: {
                 [key: string]: string;
             };
         };
@@ -14916,6 +15219,424 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeTenantService"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantCustomersMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomersFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCustomerFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCustomers: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `phone`, `email`, `source`, `created_at`, `updated_at`; prefix `-` for descending. Default: first name, last name. */
+                sort?: string;
+                /** @description Tags (exact, any of); comma-separate or repeat */
+                tag?: string;
+                /** @description Sources (`panel`, `import`, `online`); comma-separate or repeat */
+                source?: string;
+                /** @description Linked to a person who proved the phone */
+                verified?: boolean;
+                sms_consent?: boolean;
+                email_consent?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCustomerPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCustomer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantCustomerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created customer */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCustomer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCustomersExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCustomersImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomersImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCustomersBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCustomer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantCustomer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantCustomer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantCustomerPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated customer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCustomer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCustomerActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchActivityPage"];
                 };
             };
             400: components["responses"]["BadRequest"];

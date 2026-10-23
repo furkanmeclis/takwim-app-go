@@ -48,5 +48,9 @@
   "confirm.resources.deactivate": "Deactivate {{count}} selected resources? They can no longer be picked for new bookings.",
   "actions.services.activate": "Activate services",
   "actions.services.deactivate": "Deactivate services",
-  "confirm.services.deactivate": "Deactivate {{count}} selected services? They cannot be picked for new bookings."
+  "confirm.services.deactivate": "Deactivate {{count}} selected services? They cannot be picked for new bookings.",
+  "actions.customers.add_tag": "Add tag",
+  "actions.customers.remove_tag": "Remove tag",
+  "actions.customers.delete": "Delete customers",
+  "confirm.customers.delete": "Delete the {{count}} selected customers? You can undo it within the rollback window."
 }

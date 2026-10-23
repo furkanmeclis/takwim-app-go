@@ -23,5 +23,7 @@
   "prefix_resources": "resource",
   "specs_resources": "Resources",
   "prefix_services": "service",
-  "specs_services": "Services"
+  "specs_services": "Services",
+  "prefix_customers": "customer",
+  "specs_customers": "Customers"
 }

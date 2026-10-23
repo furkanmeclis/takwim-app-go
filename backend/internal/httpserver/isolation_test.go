@@ -71,6 +71,8 @@ var isolationAllowlist = map[string]string{
 	"POST /v1/tenant/resources/import":       "imports match branch codes and names inside the organization (resources DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/services/import":        "imports match names, category names and branch codes inside the organization (services DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/service-categories":     "body has no foreign references (name, description, sort order)",
+	"POST /v1/tenant/customers":              "body has no foreign references (name, contact, notes, tags, consent)",
+	"POST /v1/tenant/customers/import":       "imports match phones inside the organization (customers DB tests); the job is the {uuid} cases",
 	"PATCH /v1/tenant/organization":          "profile of the caller's organization (name only); no foreign references",
 	"PUT /v1/tenant/organization/logo":       "logo of the caller's organization; the key is built from the scope (storage prefix check)",
 	"DELETE /v1/tenant/organization/logo":    "logo of the caller's organization; no ids",
@@ -303,6 +305,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		cover := must(upload(o, http.MethodPut, "/v1/tenant/services/"+ids["service"]+"/image", "file", "cover.png",
 			png, nil), http.StatusOK, "upload service image")
 		ids["serviceImageURL"] = str(cover, "image_url")
+		ids["customerPhone"] = map[bool]string{true: "+905320000001", false: "+905320000002"}[o == orgA]
+		ids["customer"] = str(must(call(o, http.MethodPost, "/v1/tenant/customers", map[string]any{
+			"first_name": m, "last_name": "Müşteri", "phone": ids["customerPhone"], "notes": m, "tags": []string{m},
+		}), http.StatusCreated, "create customer"), "uuid")
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -493,6 +499,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/integrations":     {"?q=" + orgB.marker},
 		"GET /v1/tenant/integration-jobs": {"?status=failed"},
 		"GET /v1/tenant/services":         {"?category=" + orgB.ids["serviceCategory"], "?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/customers":        {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -539,6 +546,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/services", map[string]any{"name": "X1", "duration_minutes": 30, "price": "1", "category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"POST /v1/tenant/services", map[string]any{"name": "X2", "duration_minutes": 30, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/services/bulk", bulkIDs("service"), nil},
+		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
 	}
 	for _, c := range cases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -738,6 +746,8 @@ func paramKey(prev, name string) string {
 		return "service"
 	case "service-categories/uuid":
 		return "serviceCategory"
+	case "customers/uuid":
+		return "customer"
 	}
 	return ""
 }

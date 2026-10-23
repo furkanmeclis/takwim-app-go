@@ -138,5 +138,10 @@ export function applyAutoDefaults(
   ) {
     if (!mapping.is_active && !next.is_active) next.is_active = "true";
   }
+  if (resource === "tenant.customers") {
+    if (!mapping.sms_consent && !next.sms_consent) next.sms_consent = "false";
+    if (!mapping.email_consent && !next.email_consent)
+      next.email_consent = "false";
+  }
   return next;
 }
