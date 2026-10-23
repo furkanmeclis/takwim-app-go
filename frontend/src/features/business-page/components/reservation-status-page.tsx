@@ -29,6 +29,7 @@ import {
   usePublicReservation,
 } from "@/features/business-page/hooks/use-public-booking";
 import { readAccessToken } from "@/features/business-page/lib/access";
+import { seatingLabel } from "@/features/business-page/lib/wizard";
 import type {
   PublicBusiness,
   PublicReservation,
@@ -152,8 +153,13 @@ function ReservationView({
             })}
           </CardTitle>
           <CardDescription>
-            {r.branch.name} ·{" "}
-            {t("business_page.status.number", { number: r.number })}
+            {[
+              r.branch.name,
+              seatingLabel(t, r.party_size, r.zone),
+              t("business_page.status.number", { number: r.number }),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 px-4">

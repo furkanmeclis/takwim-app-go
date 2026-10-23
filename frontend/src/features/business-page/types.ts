@@ -21,7 +21,14 @@ export type PaymentMethod =
 
 /** Wizard steps the business page shows (subset of the sector flow). */
 export type WizardStep =
-  "branch" | "service" | "staff" | "datetime" | "contact" | "summary";
+  | "branch"
+  | "party_size"
+  | "area"
+  | "service"
+  | "staff"
+  | "datetime"
+  | "contact"
+  | "summary";
 
 /** Contact form of the booking (phone OTP comes with TEC-909 / TEC-910). */
 export type ContactValues = {

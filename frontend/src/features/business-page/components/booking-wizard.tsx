@@ -15,7 +15,10 @@ import {
   CONTACT_FORM_ID,
   ContactStep,
 } from "@/features/business-page/components/steps/contact-step";
+import { LargePartyHint } from "@/features/business-page/components/large-party-hint";
+import { AreaStep } from "@/features/business-page/components/steps/area-step";
 import { DatetimeStep } from "@/features/business-page/components/steps/datetime-step";
+import { PartyStep } from "@/features/business-page/components/steps/party-step";
 import { ServiceStep } from "@/features/business-page/components/steps/service-step";
 import { StaffStep } from "@/features/business-page/components/steps/staff-step";
 import { SummaryStep } from "@/features/business-page/components/steps/summary-step";
@@ -35,13 +38,16 @@ import {
 import {
   WINDOW_DAYS,
   checkoutPrices,
+  flowHasParty,
   flowHasService,
   flowHasStaff,
+  hasAreaChoice,
   paymentChoices,
   serviceStepKey,
   staffCandidates,
   sumAmounts,
   toLines,
+  validParty,
   wizardSteps,
 } from "@/features/business-page/lib/wizard";
 import { toBookingRequest } from "@/features/business-page/schemas/contact-form";
@@ -88,6 +94,8 @@ export function BookingWizard({
   const [branchUuid, setBranchUuid] = useState(
     branches.length === 1 ? branches[0]!.uuid : "",
   );
+  const [partyText, setPartyText] = useState("2");
+  const [zone, setZone] = useState("");
   const [pickedServices, setPickedServices] = useState<string[]>([]);
   const [staffBy, setStaffBy] = useState<Record<string, string | null>>({});
   const [windowStart, setWindowStart] = useState(today);
@@ -118,8 +126,17 @@ export function BookingWizard({
   const staffChoice =
     flowHasStaff(business.flow) &&
     selected.some((s) => staffCandidates(s, staffUuids).length > 0);
+  const byParty = flowHasParty(business.flow);
+  const branch = branches.find((b) => b.uuid === branchUuid);
+  const areaChoice = hasAreaChoice(branch);
+  const partySize = byParty ? validParty(Number(partyText)) : null;
+  // An area that is no longer offered (other branch) means any area.
+  const activeZone =
+    byParty && areaChoice && branch?.zones.includes(zone) ? zone : "";
   const steps = wizardSteps({
     branchCount: branches.length,
+    partySize: byParty,
+    areaChoice,
     serviceChoice: !autoService,
     staffChoice,
   });
@@ -127,9 +144,17 @@ export function BookingWizard({
   const index = steps.indexOf(current);
 
   const lines = toLines(serviceUuids, staffBy);
+  // Party and area of a party sector; the checkout keeps them for the
+  // booking.
+  const seating = byParty
+    ? { party_size: partySize, ...(activeZone ? { zone: activeZone } : {}) }
+    : {};
   const windowEnd = addDays(windowStart, WINDOW_DAYS - 1);
   const availabilityBody: PublicAvailabilityRequest | null =
-    current === "datetime" && branchUuid && lines.length > 0
+    current === "datetime" &&
+    branchUuid &&
+    lines.length > 0 &&
+    (!byParty || partySize !== null)
       ? {
           branch_uuid: branchUuid,
           lines,
@@ -137,6 +162,7 @@ export function BookingWizard({
           to: windowEnd,
           step_minutes: 15,
           channel: "web",
+          ...seating,
         }
       : null;
   const availability = usePublicAvailability(slug, availabilityBody);
@@ -199,6 +225,7 @@ export function BookingWizard({
           lines,
           starts_at: slot.starts_at,
           channel: "web",
+          ...seating,
         },
         uuid(),
       );
@@ -242,13 +269,15 @@ export function BookingWizard({
   const canContinue =
     current === "branch"
       ? Boolean(branchUuid)
-      : current === "service"
-        ? serviceUuids.length > 0
-        : current === "datetime"
-          ? Boolean(slot)
-          : current === "summary"
-            ? Boolean(checkout && contact)
-            : true;
+      : current === "party_size"
+        ? partySize !== null
+        : current === "service"
+          ? serviceUuids.length > 0
+          : current === "datetime"
+            ? Boolean(slot)
+            : current === "summary"
+              ? Boolean(checkout && contact)
+              : true;
 
   const next = () => {
     if (current === "datetime") {
@@ -273,8 +302,30 @@ export function BookingWizard({
         value={branchUuid}
         onChange={(value) => {
           setBranchUuid(value);
+          setZone("");
           setPickedServices([]);
           setStaffBy({});
+          resetTime();
+        }}
+      />
+    );
+  } else if (current === "party_size") {
+    body = (
+      <PartyStep
+        value={partyText}
+        onChange={(value) => {
+          setPartyText(value);
+          resetTime();
+        }}
+      />
+    );
+  } else if (current === "area") {
+    body = (
+      <AreaStep
+        zones={branch?.zones ?? []}
+        value={activeZone}
+        onChange={(value) => {
+          setZone(value);
           resetTime();
         }}
       />
@@ -350,6 +401,14 @@ export function BookingWizard({
           setWindowStart(addDays(windowStart, WINDOW_DAYS));
           resetTime();
         }}
+        noSlotsHint={
+          byParty && partySize !== null ? (
+            <LargePartyHint
+              partySize={partySize}
+              phone={branch?.phone || business.contact.phone}
+            />
+          ) : undefined
+        }
       />
     );
   } else if (current === "contact") {
