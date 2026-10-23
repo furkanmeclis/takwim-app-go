@@ -28,6 +28,8 @@ type EntitySectionCardProps = {
   defaultOpen?: boolean;
   /** Optional count badge next to the title (e.g. permission total). */
   badge?: string | number;
+  /** Optional header actions (right side; non-collapsible cards only). */
+  actions?: ReactNode;
 };
 
 /**
@@ -41,11 +43,18 @@ export function EntitySectionCard({
   collapsible = false,
   defaultOpen = true,
   badge,
+  actions,
 }: EntitySectionCardProps) {
   if (!collapsible) {
     return (
       <Card className={cn("shadow-none", className)}>
-        <CardHeader>
+        <CardHeader
+          className={
+            actions
+              ? "flex flex-row items-center justify-between gap-2 space-y-0"
+              : undefined
+          }
+        >
           <CardTitle className="flex items-center gap-2">
             <span>{title}</span>
             {badge != null ? (
@@ -54,6 +63,9 @@ export function EntitySectionCard({
               </Badge>
             ) : null}
           </CardTitle>
+          {actions ? (
+            <div className="flex shrink-0 gap-2">{actions}</div>
+          ) : null}
         </CardHeader>
         <CardContent className={contentClassName}>{children}</CardContent>
       </Card>

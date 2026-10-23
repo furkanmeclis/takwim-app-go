@@ -117,6 +117,8 @@
   "diff.title": "Sürüm {{older}} → {{newer}}",
   "diff.description": "Değişen alanlar; kaydedilmiş sürümler değiştirilemez.",
   "diff.field": "Alan",
+  "diff.before": "Önceki",
+  "diff.after": "Yeni",
   "diff.no_changes": "Bu iki sürüm arasında fark yok.",
   "diff.load_failed": "Sürümler yüklenemedi.",
   "diff.yes": "Evet",
