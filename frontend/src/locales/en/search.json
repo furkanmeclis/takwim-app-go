@@ -29,5 +29,7 @@
   "prefix_customers": "customer",
   "specs_customers": "Customers",
   "prefix_reservations": "reservation",
-  "specs_reservations": "Reservations"
+  "specs_reservations": "Reservations",
+  "prefix_cash_accounts": "cash",
+  "specs_cash_accounts": "Cash and bank accounts"
 }

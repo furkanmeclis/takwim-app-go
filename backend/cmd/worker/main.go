@@ -17,6 +17,9 @@ import (
 	branchrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/repository"
 	branchusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/usecase"
 	bulkusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/usecase"
+	cashadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/adapters"
+	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
+	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
 	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
 	customersrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/repository"
 	customersusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/usecase"
@@ -154,6 +157,7 @@ func main() {
 	reservationHolds := availabilityusecase.NewHolds(pool, queries, orgSettings)
 	reservationHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
 	reservationsSvc := reservationsusecase.New(reservationHolds, queries, orgSettings)
+	cashSvc := cashusecase.New(cashrepository.NewPostgres(pool, queries), nil)
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
@@ -175,6 +179,8 @@ func main() {
 		productsadapters.NewIO(productsSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
+		cashadapters.NewAccountsIO(cashSvc),
+		cashadapters.NewMovementsIO(cashSvc),
 		orgadapters.NewIO(jobScopes),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
@@ -189,6 +195,7 @@ func main() {
 		productsadapters.NewBulk(productsSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
+		cashadapters.NewBulk(cashSvc),
 		orgadapters.NewBulk(jobScopes),
 	)
 	bulkSvc := bulkusecase.New(queries, bulkReg, nil, notifSvc, activityRec, cfg.Bulk, log)
@@ -208,6 +215,7 @@ func main() {
 		productsadapters.NewSearch(queries),
 		customersadapters.NewSearch(queries),
 		reservationsadapters.NewSearch(queries),
+		cashadapters.NewSearch(queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, nil, log)

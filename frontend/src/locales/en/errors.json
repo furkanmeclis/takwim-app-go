@@ -52,5 +52,18 @@
   "codes.INVITATION_EMAIL_MISMATCH": "This invitation was sent to another e-mail address.",
   "codes.ACCOUNT_EXISTS": "An account with this e-mail already exists.",
   "codes.PLAN_LIMIT_REACHED": "Your plan's limit is reached. Upgrade the plan to add more.",
-  "codes.MODULE_NOT_ENABLED": "This module is not part of your plan."
+  "codes.MODULE_NOT_ENABLED": "This module is not part of your plan.",
+  "details.name.taken": "An account with this name already exists in this branch.",
+  "details.amount.insufficient_funds": "Not enough money in the till; a till cannot go negative.",
+  "details.account.archived": "An archived account takes no movements.",
+  "details.movement_date.day_closed": "This day is closed; no movements on or before a closed day.",
+  "details.business_date.already_closed": "This day is already closed.",
+  "details.movement.already_reversed": "This movement is already reversed.",
+  "details.movement.not_reversible": "This movement cannot be reversed here; correct it from its source record.",
+  "details.closing.not_latest": "Only the latest closing can be reopened.",
+  "details.closing.reopened": "This closing is already reopened.",
+  "details.account.not_closable": "Only tills have a daily closing.",
+  "details.status.balance_not_zero": "An account with a non-zero balance cannot be archived.",
+  "details.to_account_uuid.currency_mismatch": "Transfers need two accounts in the same currency.",
+  "details.idempotency_key.reused": "This idempotency key was used for another record."
 }

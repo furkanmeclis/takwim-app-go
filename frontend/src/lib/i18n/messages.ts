@@ -9,6 +9,7 @@ import enResources from "@/locales/en/resources.json";
 import enProducts from "@/locales/en/products.json";
 import enServices from "@/locales/en/services.json";
 import enCustomers from "@/locales/en/customers.json";
+import enCash from "@/locales/en/cash.json";
 import enReservations from "@/locales/en/reservations.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
@@ -51,6 +52,7 @@ import trResources from "@/locales/tr/resources.json";
 import trProducts from "@/locales/tr/products.json";
 import trServices from "@/locales/tr/services.json";
 import trCustomers from "@/locales/tr/customers.json";
+import trCash from "@/locales/tr/cash.json";
 import trReservations from "@/locales/tr/reservations.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
@@ -127,6 +129,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     services: trServices,
     products: trProducts,
     customers: trCustomers,
+    cash: trCash,
     reservations: trReservations,
     tenant_members: trTenantMembers,
     tenant_roles: trTenantRoles,
@@ -171,6 +174,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     services: enServices,
     products: enProducts,
     customers: enCustomers,
+    cash: enCash,
     reservations: enReservations,
     tenant_members: enTenantMembers,
     tenant_roles: enTenantRoles,

@@ -1,4 +1,6 @@
 import {
+  Archive,
+  ArchiveRestore,
   BadgeMinus,
   BadgePlus,
   Ban,
@@ -62,6 +64,10 @@ const bulkActionIconCatalog: Record<
     accept: CalendarCheck,
     reject: CalendarX,
     cancel: Ban,
+  },
+  "tenant.cash_accounts": {
+    archive: Archive,
+    activate: ArchiveRestore,
   },
 };
 

@@ -22,6 +22,16 @@ type Querier interface {
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams) (bool, error)
 	BranchSlugTaken(ctx context.Context, arg BranchSlugTakenParams) (bool, error)
+	// Balance before the day and the day's money in / out of one account.
+	// Closing differences of the day (and their reversals after a reopen) are
+	// left out of the day's totals: they follow a count, not a payment.
+	CashAccountDayTotals(ctx context.Context, arg CashAccountDayTotalsParams) (CashAccountDayTotalsRow, error)
+	CashAccountHasActivity(ctx context.Context, arg CashAccountHasActivityParams) (pgtype.Bool, error)
+	CashAccountNameTaken(ctx context.Context, arg CashAccountNameTakenParams) (bool, error)
+	// One row per account of the scope for a day: balance before the day,
+	// money in / out split into transfers, closing differences and the rest,
+	// and the closing of the day.
+	CashDailySummary(ctx context.Context, arg CashDailySummaryParams) ([]CashDailySummaryRow, error)
 	// Moves a pending / failed job to processing (one worker at a time).
 	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
@@ -38,6 +48,10 @@ type Querier interface {
 	CountBranchImages(ctx context.Context, arg CountBranchImagesParams) (int64, error)
 	CountBranches(ctx context.Context, arg CountBranchesParams) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
+	CountCashAccountMovements(ctx context.Context, arg CountCashAccountMovementsParams) (int64, error)
+	CountCashAccounts(ctx context.Context, arg CountCashAccountsParams) (int64, error)
+	CountCashClosings(ctx context.Context, arg CountCashClosingsParams) (int64, error)
+	CountCashMovements(ctx context.Context, arg CountCashMovementsParams) (int64, error)
 	CountCustomers(ctx context.Context, arg CountCustomersParams) (int64, error)
 	// Live branches and staff seats of a business: members, open invitations
 	// and staff without an account (a staff record linked to a member uses the
@@ -86,6 +100,11 @@ type Querier interface {
 	CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error)
 	CreateCapacityAllocation(ctx context.Context, arg CreateCapacityAllocationParams) error
 	CreateCapacityHold(ctx context.Context, arg CreateCapacityHoldParams) (CapacityHold, error)
+	// Cash and bank accounts, movements and daily closings (TEC-914). Every
+	// query filters by organization_id. Branch scope: accounts of a branch
+	// outside the caller's scope, and business-wide accounts (branch_id NULL)
+	// for a branch-limited member, are left out.
+	CreateCashAccount(ctx context.Context, arg CreateCashAccountParams) (CreateCashAccountRow, error)
 	// Tenant resource: customers (TEC-896). Every query on customers and
 	// customer_identity_links filters by organization_id. customer_identities is
 	// platform-level: only the link use case touches it, and no tenant response
@@ -200,6 +219,12 @@ type Querier interface {
 	GetBulkJobByUUID(ctx context.Context, argUuid uuid.UUID) (BulkJob, error)
 	GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams) (GetCapacityHoldRow, error)
 	GetCapacityHoldByIDForUpdate(ctx context.Context, arg GetCapacityHoldByIDForUpdateParams) (CapacityHold, error)
+	GetCashAccount(ctx context.Context, arg GetCashAccountParams) (GetCashAccountRow, error)
+	GetCashAccountByID(ctx context.Context, arg GetCashAccountByIDParams) (GetCashAccountByIDRow, error)
+	GetCashAccountSearchDocument(ctx context.Context, arg GetCashAccountSearchDocumentParams) (GetCashAccountSearchDocumentRow, error)
+	GetCashClosing(ctx context.Context, arg GetCashClosingParams) (GetCashClosingRow, error)
+	GetCashMovement(ctx context.Context, arg GetCashMovementParams) (GetCashMovementRow, error)
+	GetCashMovementByIdempotencyKey(ctx context.Context, arg GetCashMovementByIdempotencyKeyParams) (GetCashMovementByIdempotencyKeyRow, error)
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
 	GetCurrentOrganizationSettings(ctx context.Context, organizationID int64) (GetCurrentOrganizationSettingsRow, error)
@@ -309,6 +334,10 @@ type Querier interface {
 	InsertActivityEvent(ctx context.Context, arg InsertActivityEventParams) (ActivityEvent, error)
 	InsertAppLog(ctx context.Context, arg InsertAppLogParams) error
 	InsertBulkChange(ctx context.Context, arg InsertBulkChangeParams) (BulkChange, error)
+	// ------------------------------------------------------------- closings
+	InsertCashClosing(ctx context.Context, arg InsertCashClosingParams) (InsertCashClosingRow, error)
+	// ------------------------------------------------------------ movements
+	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
 	InsertImportChange(ctx context.Context, arg InsertImportChangeParams) (ImportChange, error)
 	// Integration accounts and jobs (TEC-880). Accounts are organization-owned
 	// (every query filters by organization_id); jobs are mixed scope
@@ -328,6 +357,7 @@ type Querier interface {
 	InsertStorageTrash(ctx context.Context, arg InsertStorageTrashParams) (StorageTrash, error)
 	InsertUserRole(ctx context.Context, arg InsertUserRoleParams) error
 	InvalidateActiveOTPs(ctx context.Context, arg InvalidateActiveOTPsParams) error
+	LatestCashClosingDate(ctx context.Context, arg LatestCashClosingDateParams) (pgtype.Date, error)
 	LatestOrganizationSettingsVersion(ctx context.Context, organizationID int64) (int32, error)
 	ListActivePublicKeys(ctx context.Context, keys []string) ([]string, error)
 	ListActivePublicLinks(ctx context.Context) ([]StorageLink, error)
@@ -381,6 +411,20 @@ type Querier interface {
 	ListCalendarStaff(ctx context.Context, arg ListCalendarStaffParams) ([]ListCalendarStaffRow, error)
 	ListCapacityHoldAllocations(ctx context.Context, arg ListCapacityHoldAllocationsParams) ([]ListCapacityHoldAllocationsRow, error)
 	ListCapacityHoldStaffIDs(ctx context.Context, arg ListCapacityHoldStaffIDsParams) ([]int64, error)
+	// Branches with their account count; business-wide accounts have a NULL uuid.
+	ListCashAccountBranchFacets(ctx context.Context, arg ListCashAccountBranchFacetsParams) ([]ListCashAccountBranchFacetsRow, error)
+	// The movements of one account with the balance after each one (book
+	// order: date, then entry order), newest first.
+	ListCashAccountMovements(ctx context.Context, arg ListCashAccountMovementsParams) ([]ListCashAccountMovementsRow, error)
+	// Every account of the scope (pickers: transfer target, movement filter).
+	ListCashAccountOptions(ctx context.Context, arg ListCashAccountOptionsParams) ([]ListCashAccountOptionsRow, error)
+	ListCashAccountSearchDocuments(ctx context.Context, organizationID int64) ([]ListCashAccountSearchDocumentsRow, error)
+	ListCashAccountUUIDs(ctx context.Context, arg ListCashAccountUUIDsParams) ([]uuid.UUID, error)
+	ListCashAccounts(ctx context.Context, arg ListCashAccountsParams) ([]ListCashAccountsRow, error)
+	ListCashClosings(ctx context.Context, arg ListCashClosingsParams) ([]ListCashClosingsRow, error)
+	ListCashMovementKindFacets(ctx context.Context, arg ListCashMovementKindFacetsParams) ([]ListCashMovementKindFacetsRow, error)
+	ListCashMovements(ctx context.Context, arg ListCashMovementsParams) ([]ListCashMovementsRow, error)
+	ListCashTransferLegs(ctx context.Context, arg ListCashTransferLegsParams) ([]ListCashTransferLegsRow, error)
 	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)
 	ListCustomerSourceFacets(ctx context.Context, organizationID int64) ([]ListCustomerSourceFacetsRow, error)
 	ListCustomerTagFacets(ctx context.Context, organizationID int64) ([]ListCustomerTagFacetsRow, error)
@@ -557,6 +601,9 @@ type Querier interface {
 	// Serialises the writers of one organization inside a transaction (the
 	// exclusion constraints stay the correctness argument).
 	LockCapacity(ctx context.Context, organizationID int64) error
+	// Locks the accounts in id order (concurrent transfers in opposite
+	// directions cannot deadlock).
+	LockCashAccounts(ctx context.Context, arg LockCashAccountsParams) ([]LockCashAccountsRow, error)
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
 	// Claims a job for one provider call (one worker at a time; an expired
@@ -605,6 +652,7 @@ type Querier interface {
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
 	RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldParams) (CapacityHold, error)
+	ReopenCashClosing(ctx context.Context, arg ReopenCashClosingParams) (int64, error)
 	// A change of time / services / staff: the new commitment and times.
 	ReplaceReservationSchedule(ctx context.Context, arg ReplaceReservationScheduleParams) (Reservation, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
@@ -629,6 +677,7 @@ type Querier interface {
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)
 	SetBranchImageSort(ctx context.Context, arg SetBranchImageSortParams) (int64, error)
+	SetCashAccountStatus(ctx context.Context, arg SetCashAccountStatusParams) error
 	SetCustomerTags(ctx context.Context, arg SetCustomerTagsParams) error
 	SetIntegrationAccountCheck(ctx context.Context, arg SetIntegrationAccountCheckParams) error
 	SetIntegrationAccountStatus(ctx context.Context, arg SetIntegrationAccountStatusParams) (int64, error)
@@ -675,6 +724,7 @@ type Querier interface {
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error)
+	UpdateCashAccount(ctx context.Context, arg UpdateCashAccountParams) (int64, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateGitHubAppSettings(ctx context.Context, arg UpdateGitHubAppSettingsParams) (GithubAppSetting, error)
 	UpdateImportJobFileKey(ctx context.Context, arg UpdateImportJobFileKeyParams) (ImportJob, error)

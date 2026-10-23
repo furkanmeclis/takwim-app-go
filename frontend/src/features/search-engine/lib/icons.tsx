@@ -16,6 +16,7 @@ import {
   Store,
   Upload,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ const ICONS: Record<string, LucideIcon> = {
   services: ConciergeBell,
   customers: UserRound,
   reservations: CalendarClock,
+  cash: Wallet,
 };
 
 export function resolveSearchIcon(name?: string): LucideIcon {

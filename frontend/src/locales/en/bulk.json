@@ -62,5 +62,8 @@
   "actions.reservations.cancel": "Cancel",
   "confirm.reservations.accept": "Accept the {{count}} selected requests? Anything that is not a pending request is skipped.",
   "confirm.reservations.reject": "Reject the {{count}} selected requests? Their times are freed; anything that is not a pending request is skipped. This cannot be undone.",
-  "confirm.reservations.cancel": "Cancel the {{count}} selected reservations? Their times are freed; anything that is not a request or an active booking is skipped. This cannot be undone."
+  "confirm.reservations.cancel": "Cancel the {{count}} selected reservations? Their times are freed; anything that is not a request or an active booking is skipped. This cannot be undone.",
+  "actions.cash_accounts.archive": "Archive accounts",
+  "actions.cash_accounts.activate": "Activate accounts",
+  "confirm.cash_accounts.archive": "Archive {{count}} selected accounts? Accounts with a non-zero balance are skipped."
 }

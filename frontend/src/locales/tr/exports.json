@@ -78,5 +78,7 @@
   "resources.tenant.services": "Hizmetler",
   "resources.tenant.customers": "Müşteriler",
   "resources.tenant.reservations": "Rezervasyonlar",
-  "resources.tenant.products": "Ürünler"
+  "resources.tenant.products": "Ürünler",
+  "resources.tenant.cash_accounts": "Kasa ve banka hesapları",
+  "resources.tenant.cash_movements": "Kasa hareketleri"
 }
