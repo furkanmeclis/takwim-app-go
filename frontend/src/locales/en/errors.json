@@ -24,6 +24,7 @@
   "codes.PASSWORD_RESET_FAILED": "Password could not be reset.",
   "codes.NO_TENANT_MEMBERSHIP": "You are not a member of this business.",
   "codes.ORGANIZATION_REQUIRED": "Choose a business first.",
+  "codes.BRANCH_NOT_ALLOWED": "The selected branch is no longer available; showing all branches.",
   "codes.ORGANIZATION_SUSPENDED": "This business has been suspended.",
   "codes.ORGANIZATION_ACCESS_EXPIRED": "The access period of this business has ended.",
   "codes.REALTIME_DISABLED": "Live connection is disabled.",

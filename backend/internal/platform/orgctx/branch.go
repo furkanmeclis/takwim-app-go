@@ -4,7 +4,15 @@ import (
 	"context"
 	"errors"
 	"slices"
+
+	"github.com/google/uuid"
 )
+
+// BranchHeaderName is the optional request header that narrows tenant lists
+// to one branch (the branch picker in the panel header; a mobile client
+// sends the same header). Its value is the branch uuid; no header means all
+// branches the caller may access.
+const BranchHeaderName = "X-Branch"
 
 // Branch scope values of organization_members.branch_scope.
 const (
@@ -20,6 +28,31 @@ var (
 	ErrAllBranchesRequired = errors.New("orgctx: action needs access to every branch")
 )
 
+// BranchSelector looks up a live branch of an organization by uuid for the
+// X-Branch header. It returns ErrBranchNotAllowed when there is none.
+type BranchSelector interface {
+	BranchIDByUUID(ctx context.Context, organizationID int64, branchUUID uuid.UUID) (int64, error)
+}
+
+// SelectBranch returns the scope narrowed to branchID for lists, or
+// ErrBranchNotAllowed when the branch is outside the caller's branch scope.
+func (s Scope) SelectBranch(branchID int64) (Scope, error) {
+	if branchID <= 0 || !s.AllowsBranch(branchID) {
+		return s, ErrBranchNotAllowed
+	}
+	s.SelectedBranchID = branchID
+	return s, nil
+}
+
+// SelectedBranch returns the branch picked with X-Branch, if any.
+func SelectedBranch(ctx context.Context) (int64, bool) {
+	s, ok := From(ctx)
+	if !ok || s.SelectedBranchID <= 0 {
+		return 0, false
+	}
+	return s.SelectedBranchID, true
+}
+
 // AllBranches reports whether the scope covers every branch.
 func (s Scope) AllBranches() bool {
 	return s.BranchIDs == nil
@@ -30,8 +63,9 @@ func (s Scope) AllowsBranch(branchID int64) bool {
 	return s.BranchIDs == nil || slices.Contains(s.BranchIDs, branchID)
 }
 
-// BranchScope returns the branch restriction of ctx: nil means every branch,
-// a non-nil slice (possibly empty) lists the allowed branch ids.
+// BranchScope returns the branch restriction of ctx for lists: nil means
+// every branch, a non-nil slice (possibly empty) lists the allowed branch
+// ids. A branch picked with X-Branch narrows it to that one branch.
 //
 // Branch-bound modules pass it to their list/count/export/uuid queries as
 //
@@ -43,7 +77,13 @@ func (s Scope) AllowsBranch(branchID int64) bool {
 // context with WithJobScope first.
 func BranchScope(ctx context.Context) []int64 {
 	s, ok := From(ctx)
-	if !ok || s.BranchIDs == nil {
+	if !ok {
+		return nil
+	}
+	if s.SelectedBranchID > 0 {
+		return []int64{s.SelectedBranchID}
+	}
+	if s.BranchIDs == nil {
 		return nil
 	}
 	return slices.Clone(s.BranchIDs)

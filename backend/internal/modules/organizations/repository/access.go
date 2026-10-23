@@ -101,6 +101,7 @@ func (r *Postgres) ListTenantMembers(ctx context.Context, params db.ListTenantMe
 	}
 	total, err := r.q.CountTenantMembers(ctx, db.CountTenantMembersParams{
 		OrganizationID: params.OrganizationID, Q: params.Q, BranchScope: params.BranchScope, RoleIds: params.RoleIds,
+		BranchID: params.BranchID,
 	})
 	if err != nil {
 		return nil, 0, err

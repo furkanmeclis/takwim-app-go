@@ -1,6 +1,11 @@
 import { apiConfig } from "@/config/api";
 import { unwrap } from "@/lib/api/client";
 import { parseContentDispositionFilename } from "@/lib/api/content-disposition";
+import {
+  BRANCH_HEADER,
+  getSelectedBranch,
+  setSelectedBranch,
+} from "@/lib/api/branch-selection";
 import { withStepUpRetry } from "@/features/step-up-engine/lib/step-up-interceptor";
 
 /** Header that names the organization of a `/v1/tenant/*` request. */
@@ -14,14 +19,30 @@ type TenantRequestOptions = {
   /** Skip the global error toast (callers render the error themselves). */
   silent?: boolean;
   signal?: AbortSignal;
+  /**
+   * Send the branch picked in the header (`X-Branch`). Default true; the
+   * branch picker itself lists every accessible branch with false.
+   */
+  branch?: boolean;
 };
+
+/** API answer when `X-Branch` names a branch the member cannot use. */
+const BRANCH_NOT_ALLOWED = "BRANCH_NOT_ALLOWED";
+
+function errorCode(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const error = (payload as { error?: { code?: unknown } }).error;
+  return typeof error?.code === "string" ? error.code : undefined;
+}
 
 /**
  * BFF fetch for organization-scoped endpoints. `slug` is the organization of
  * the current `/t/{slug}` route; it is sent as `X-Organization` so every
  * request names its organization and tabs on different organizations stay
- * independent. Only `/v1/tenant/*` paths are accepted: the BFF forwards the
- * header on those paths only.
+ * independent. The branch picked in the header goes along as `X-Branch`; a
+ * stale pick (branch deleted or out of scope) is dropped and the request
+ * retried for all branches. Only `/v1/tenant/*` paths are accepted: the BFF
+ * forwards the headers on those paths only.
  */
 export async function tenantRequest<T>(
   slug: string,
@@ -52,22 +73,37 @@ export async function tenantRequest<T>(
       if (qs) url += `?${qs}`;
     }
 
-    const response = await fetch(url, {
-      method,
-      credentials: "include",
-      signal: options?.signal,
-      headers: {
-        Accept: "application/json",
-        [ORGANIZATION_HEADER]: slug,
-        ...(options?.body !== undefined
-          ? { "Content-Type": "application/json" }
-          : {}),
-      },
-      body:
-        options?.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
+    const send = (branch: string | null) =>
+      fetch(url, {
+        method,
+        credentials: "include",
+        signal: options?.signal,
+        headers: {
+          Accept: "application/json",
+          [ORGANIZATION_HEADER]: slug,
+          ...(branch ? { [BRANCH_HEADER]: branch } : {}),
+          ...(options?.body !== undefined
+            ? { "Content-Type": "application/json" }
+            : {}),
+        },
+        body:
+          options?.body !== undefined
+            ? JSON.stringify(options.body)
+            : undefined,
+      });
 
-    const payload = await response.json().catch(() => undefined);
+    const branch = options?.branch === false ? null : getSelectedBranch(slug);
+    let response = await send(branch);
+    let payload = await response.json().catch(() => undefined);
+    if (
+      branch &&
+      response.status === 403 &&
+      errorCode(payload) === BRANCH_NOT_ALLOWED
+    ) {
+      setSelectedBranch(slug, null);
+      response = await send(null);
+      payload = await response.json().catch(() => undefined);
+    }
     return unwrap<T>({ data: payload, response }, { silent: options?.silent });
   });
 }

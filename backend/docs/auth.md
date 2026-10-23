@@ -203,7 +203,10 @@ Behind `TENANCY_ENABLED` (default `false`). Design: [`docs/design/tenant-core.md
 | Unknown organization, or not a member | `403 NO_TENANT_MEMBERSHIP` (same answer for both: no organization enumeration) |
 | Organization suspended | `403 ORGANIZATION_SUSPENDED` |
 | Outside the access window (`access_starts_at` / `access_ends_at`) | `403 ORGANIZATION_ACCESS_EXPIRED` |
+| `X-Branch` names a branch that is unknown or outside the member's branch scope | `403 BRANCH_NOT_ALLOWED` |
 | Tenant permission missing in this organization | `403 FORBIDDEN` |
+
+**Branch picker.** The optional `X-Branch` header (branch uuid) is the branch picked in the panel header. `RequireOrganization` checks it against the member's branch scope and sets `Scope.SelectedBranchID`; `orgctx.BranchScope(ctx)` then returns only that branch, so every branch-bound list, count, facet, export and the overview narrow to it. Access checks on single records (`CheckBranch`, `RequireAllBranches`) keep using the member's full scope. No header = all branches the member may access.
 
 **Per-organization permissions.** Platform permissions (`platform.*`, global roles) are unchanged. Tenant permissions (`tenant.*`) come only from the membership role in the **current** organization: an owner of A who is a member of B has member rights in B. `super_admin` is not exempt: it needs a membership (or impersonation) like everyone else, and `RequireTenantPermission` has no super-admin bypass. Tenant slugs follow the same triad rule (migration + `internal/platform/rbac` + `frontend/src/config/permissions.ts`).
 

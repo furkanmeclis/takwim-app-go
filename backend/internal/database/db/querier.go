@@ -42,6 +42,10 @@ type Querier interface {
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountInvitations(ctx context.Context, arg CountInvitationsParams) (int64, error)
+	// Central panel (TEC-892): per-branch and total counts of the branches the
+	// caller sees (branch scope, narrowed by the X-Branch header).
+	CountMembersByBranch(ctx context.Context, arg CountMembersByBranchParams) ([]CountMembersByBranchRow, error)
+	CountMembersInBranches(ctx context.Context, arg CountMembersInBranchesParams) (int64, error)
 	CountNotificationsForUser(ctx context.Context, arg CountNotificationsForUserParams) (int64, error)
 	CountOrganizationMembersByOrg(ctx context.Context, arg CountOrganizationMembersByOrgParams) (int64, error)
 	// Members holding the template owner role (any of their roles).

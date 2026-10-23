@@ -10,6 +10,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 	"github.com/getsentry/sentry-go"
+	"github.com/google/uuid"
 )
 
 // maxOrganizationRefLen bounds the X-Organization value: slugs are at most
@@ -50,10 +51,48 @@ func RequireOrganization(resolver orgctx.Resolver) func(http.Handler) http.Handl
 				writeOrganizationError(w, r, err)
 				return
 			}
+			if scope, ok = selectBranch(w, r, resolver, scope); !ok {
+				return
+			}
 			tagOrganization(r, scope)
 			next.ServeHTTP(w, r.WithContext(orgctx.WithScope(r.Context(), scope)))
 		})
 	}
+}
+
+// selectBranch applies the optional X-Branch header (branch uuid). A branch
+// that does not exist, belongs to another organization or is outside the
+// caller's branch scope answers 403 BRANCH_NOT_ALLOWED, so the panel can
+// drop a stale selection. Resolvers without branch lookup ignore the header.
+func selectBranch(w http.ResponseWriter, r *http.Request, resolver orgctx.Resolver, scope orgctx.Scope) (orgctx.Scope, bool) {
+	raw := strings.TrimSpace(r.Header.Get(orgctx.BranchHeaderName))
+	selector, ok := resolver.(orgctx.BranchSelector)
+	if raw == "" || !ok {
+		return scope, true
+	}
+	branchUUID, err := uuid.Parse(raw)
+	if err != nil {
+		writeBranchNotAllowed(w, r, err)
+		return scope, false
+	}
+	branchID, err := selector.BranchIDByUUID(r.Context(), scope.ID, branchUUID)
+	if err == nil {
+		scope, err = scope.SelectBranch(branchID)
+	}
+	if err != nil {
+		if errors.Is(err, orgctx.ErrBranchNotAllowed) {
+			writeBranchNotAllowed(w, r, err)
+		} else {
+			response.InternalErr(w, r, err, "")
+		}
+		return scope, false
+	}
+	return scope, true
+}
+
+func writeBranchNotAllowed(w http.ResponseWriter, r *http.Request, err error) {
+	response.RecordFailure(w, err)
+	response.Error(w, r, http.StatusForbidden, response.CodeBranchNotAllowed, "The selected branch is not available")
 }
 
 // RequireTenantPermission requires a tenant permission slug in the current

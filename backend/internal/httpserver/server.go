@@ -69,6 +69,7 @@ import (
 	orgsettingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/handler"
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
+	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
 	searchmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search"
 	searchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/handler"
@@ -330,6 +331,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	orgsettingsmodule.RegisterRoutes(mux, orgsettingshandler.New(
 		orgsettingsusecase.New(orgsettingsrepository.NewPostgres(deps.DB, deps.Queries)), activityRec,
 	), tokens, loader, tenantResolver)
+	// Central panel (TEC-892): branches one by one and in total.
+	overviewmodule.RegisterRoutes(mux, overviewmodule.NewHandler(overviewmodule.New(branchSvc, deps.Queries)), tokens, loader, tenantResolver)
 
 	// External work skeleton (TEC-880): provider accounts with sealed
 	// credentials, the integration job runner (queue steps when a queue is

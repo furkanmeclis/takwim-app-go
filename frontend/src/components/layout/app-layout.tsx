@@ -13,6 +13,7 @@ import {
 } from "@/features/search-engine";
 import { ImpersonationBanner } from "@/features/auth/components/impersonation-banner";
 import { NotificationLiveBridge } from "@/features/notifications/components/notification-live-bridge";
+import { BranchPicker } from "@/features/tenant/components/branch-picker";
 import { OrganizationSwitcher } from "@/features/tenant/components/organization-switcher";
 import { useWebPushSync } from "@/hooks/use-web-push-sync";
 
@@ -38,7 +39,12 @@ export function AppLayout({
         >
           <Header fixed>
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              {variant === "tenant" ? <OrganizationSwitcher /> : null}
+              {variant === "tenant" ? (
+                <>
+                  <OrganizationSwitcher />
+                  <BranchPicker />
+                </>
+              ) : null}
               <SearchTrigger />
             </div>
           </Header>

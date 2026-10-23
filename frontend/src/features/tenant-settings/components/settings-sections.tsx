@@ -4,7 +4,6 @@ import { useWatch } from "react-hook-form";
 
 import {
   AppInput,
-  AppRadioGroup,
   AppSelect,
   AppSwitch,
   AppTextarea,
@@ -22,7 +21,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 type SectionProps = { disabled?: boolean };
 
-/** Firma: legal / billing identity printed on contracts and invoices. */
+/** Firma: legal / billing identity and the public contact details. */
 export function CompanySection({ disabled }: SectionProps) {
   const { t } = useLocale();
   return (
@@ -69,15 +68,30 @@ export function CompanySection({ disabled }: SectionProps) {
         label={t("tenant_settings.fields.email")}
         disabled={disabled}
       />
+      <AppInput
+        name="company.website"
+        type="url"
+        label={t("tenant_settings.fields.website")}
+        placeholder="https://"
+        className="sm:col-span-2"
+        disabled={disabled}
+      />
     </FormSection>
   );
 }
 
-/** Rezervasyon & ödeme: online flow rules and the prepayment rule. */
+/**
+ * Rezervasyon kuralları & ödeme: the business-wide default booking rules.
+ * The review window only applies to staff approval and the payment hold only
+ * to online payment, so those fields show when they matter.
+ */
 export function ReservationSection({ disabled }: SectionProps) {
   const { t } = useLocale();
-  const rule = useWatch<SettingsFormValues, "payment.prepayment_rule">({
-    name: "payment.prepayment_rule",
+  const approval = useWatch<SettingsFormValues, "reservation.approval_mode">({
+    name: "reservation.approval_mode",
+  });
+  const payOnline = useWatch<SettingsFormValues, "payment.pay_online">({
+    name: "payment.pay_online",
   });
   return (
     <div className="space-y-4">
@@ -102,28 +116,48 @@ export function ReservationSection({ disabled }: SectionProps) {
           ]}
           disabled={disabled}
         />
+        {approval === "staff" ? (
+          <AppInput
+            name="reservation.staff_review_window_minutes"
+            type="number"
+            min={1}
+            label={t("tenant_settings.fields.staff_review_window_minutes")}
+            description={t("tenant_settings.fields.staff_review_window_hint")}
+            disabled={disabled}
+          />
+        ) : (
+          <div className="hidden sm:block" />
+        )}
         <AppInput
-          name="reservation.staff_review_window_minutes"
+          name="reservation.min_lead_minutes"
           type="number"
-          min={1}
-          label={t("tenant_settings.fields.staff_review_window_minutes")}
-          description={t("tenant_settings.fields.staff_review_window_hint")}
+          min={0}
+          label={t("tenant_settings.fields.min_lead_minutes")}
+          description={t("tenant_settings.fields.min_lead_hint")}
           disabled={disabled}
         />
         <AppInput
-          name="reservation.payment_hold_minutes"
+          name="reservation.max_advance_days"
           type="number"
           min={1}
-          label={t("tenant_settings.fields.payment_hold_minutes")}
-          description={t("tenant_settings.fields.payment_hold_hint")}
+          label={t("tenant_settings.fields.max_advance_days")}
+          description={t("tenant_settings.fields.max_advance_hint")}
           disabled={disabled}
         />
         <AppInput
-          name="reservation.quote_validity_minutes"
+          name="reservation.cancel_cutoff_minutes"
           type="number"
-          min={1}
-          label={t("tenant_settings.fields.quote_validity_minutes")}
-          description={t("tenant_settings.fields.quote_validity_hint")}
+          min={0}
+          label={t("tenant_settings.fields.cancel_cutoff_minutes")}
+          description={t("tenant_settings.fields.cutoff_hint")}
+          disabled={disabled}
+        />
+        <AppInput
+          name="reservation.change_cutoff_minutes"
+          type="number"
+          min={0}
+          label={t("tenant_settings.fields.change_cutoff_minutes")}
+          description={t("tenant_settings.fields.cutoff_hint")}
           disabled={disabled}
         />
       </FormSection>
@@ -132,118 +166,62 @@ export function ReservationSection({ disabled }: SectionProps) {
         description={t("tenant_settings.sections.payment_desc")}
         columns={2}
       >
-        <AppRadioGroup
-          name="payment.prepayment_rule"
-          label={t("tenant_settings.fields.prepayment_rule")}
-          options={[
-            {
-              value: "none",
-              label: t("tenant_settings.prepayment_rules.none"),
-            },
-            {
-              value: "fixed",
-              label: t("tenant_settings.prepayment_rules.fixed"),
-            },
-            {
-              value: "percent",
-              label: t("tenant_settings.prepayment_rules.percent"),
-            },
-          ]}
-        />
-        {rule === "none" ? (
-          <div />
-        ) : (
-          <AppInput
-            name="payment.prepayment_value"
-            inputMode="decimal"
-            label={
-              rule === "fixed"
-                ? t("tenant_settings.fields.prepayment_amount")
-                : t("tenant_settings.fields.prepayment_percent")
-            }
-            disabled={disabled}
-          />
-        )}
         <AppSwitch
-          name="payment.full_payment_allowed"
-          label={t("tenant_settings.fields.full_payment_allowed")}
-          description={t("tenant_settings.fields.full_payment_allowed_hint")}
-          className="sm:col-span-2"
+          name="payment.pay_at_venue"
+          label={t("tenant_settings.fields.pay_at_venue")}
+          description={t("tenant_settings.fields.pay_at_venue_hint")}
           disabled={disabled}
         />
+        <AppSwitch
+          name="payment.pay_online"
+          label={t("tenant_settings.fields.pay_online")}
+          description={t("tenant_settings.fields.pay_online_hint")}
+          disabled={disabled}
+        />
+        {payOnline ? (
+          <AppInput
+            name="reservation.payment_hold_minutes"
+            type="number"
+            min={1}
+            label={t("tenant_settings.fields.payment_hold_minutes")}
+            description={t("tenant_settings.fields.payment_hold_hint")}
+            disabled={disabled}
+          />
+        ) : null}
       </FormSection>
     </div>
   );
 }
 
-/** Politikalar: customer-facing policy texts and late return rules. */
+/** Politikalar: customer-facing policy texts. */
 export function PoliciesSection({ disabled }: SectionProps) {
   const { t } = useLocale();
   return (
-    <div className="space-y-4">
-      <FormSection
-        title={t("tenant_settings.sections.late_return")}
-        description={t("tenant_settings.sections.late_return_desc")}
-        columns={2}
-      >
-        <AppInput
-          name="policies.late_return_grace_minutes"
-          type="number"
-          min={0}
-          label={t("tenant_settings.fields.late_return_grace_minutes")}
-          disabled={disabled}
-        />
-        <AppInput
-          name="policies.extra_hour_fee"
-          inputMode="decimal"
-          label={t("tenant_settings.fields.extra_hour_fee")}
-          description={t("tenant_settings.fields.extra_hour_fee_hint")}
-          disabled={disabled}
-        />
-      </FormSection>
-      <FormSection
-        title={t("tenant_settings.sections.policies")}
-        description={t("tenant_settings.sections.policies_desc")}
-        columns={2}
-      >
-        <AppTextarea
-          name="policies.cancellation"
-          label={t("tenant_settings.fields.cancellation")}
-          rows={4}
-          disabled={disabled}
-        />
-        <AppTextarea
-          name="policies.no_show"
-          label={t("tenant_settings.fields.no_show")}
-          rows={4}
-          disabled={disabled}
-        />
-        <AppTextarea
-          name="policies.early_return"
-          label={t("tenant_settings.fields.early_return")}
-          rows={4}
-          disabled={disabled}
-        />
-        <AppTextarea
-          name="policies.extension"
-          label={t("tenant_settings.fields.extension")}
-          rows={4}
-          disabled={disabled}
-        />
-        <AppTextarea
-          name="policies.fuel"
-          label={t("tenant_settings.fields.fuel")}
-          rows={4}
-          disabled={disabled}
-        />
-        <AppTextarea
-          name="policies.mileage"
-          label={t("tenant_settings.fields.mileage")}
-          rows={4}
-          disabled={disabled}
-        />
-      </FormSection>
-    </div>
+    <FormSection
+      title={t("tenant_settings.sections.policies")}
+      description={t("tenant_settings.sections.policies_desc")}
+      columns={2}
+    >
+      <AppTextarea
+        name="policies.cancellation"
+        label={t("tenant_settings.fields.cancellation")}
+        rows={4}
+        disabled={disabled}
+      />
+      <AppTextarea
+        name="policies.no_show"
+        label={t("tenant_settings.fields.no_show")}
+        rows={4}
+        disabled={disabled}
+      />
+      <AppTextarea
+        name="policies.change"
+        label={t("tenant_settings.fields.change")}
+        rows={4}
+        className="sm:col-span-2"
+        disabled={disabled}
+      />
+    </FormSection>
   );
 }
 

@@ -418,6 +418,8 @@ function isQRSessionCreatePath(path: string, method: string) {
 
 /** Organization (tenant) of a /v1/tenant/* request: slug or uuid. */
 const ORGANIZATION_HEADER = "X-Organization";
+/** Branch picked in the tenant header (uuid), /v1/tenant/* only. */
+const BRANCH_HEADER = "X-Branch";
 
 function isTenantPath(segments: string[]) {
   return segments[0] === "tenant";
@@ -490,11 +492,13 @@ export async function proxyToUpstream(
   if (idempotencyKey && request.method !== "GET" && request.method !== "HEAD") {
     headers.set("Idempotency-Key", idempotencyKey);
   }
-  // Only tenant routes read the organization header; it is never forwarded
-  // elsewhere.
+  // Only tenant routes read the organization and branch headers; they are
+  // never forwarded elsewhere.
   if (isTenantPath(pathSegments)) {
     const organization = request.headers.get(ORGANIZATION_HEADER)?.trim();
     if (organization) headers.set(ORGANIZATION_HEADER, organization);
+    const branch = request.headers.get(BRANCH_HEADER)?.trim();
+    if (branch) headers.set(BRANCH_HEADER, branch);
   }
 
   if (accessToken && !isAuthPublicTokenPath(path)) {

@@ -98,6 +98,10 @@ func (s *Service) ListTenantMembers(ctx context.Context, scope orgctx.Scope, f o
 		OrganizationID: scope.ID, Q: pgText(f.Q), BranchScope: pgText(f.BranchScope),
 		SortField: f.SortField, SortDesc: f.SortDesc, LimitCount: f.Limit, OffsetCount: f.Offset,
 	}
+	// Branch picked in the panel header: members who can work there.
+	if scope.SelectedBranchID > 0 {
+		params.BranchID = pgtype.Int8{Int64: scope.SelectedBranchID, Valid: true}
+	}
 	if len(f.RoleUUIDs) > 0 {
 		ids := []int64{}
 		for _, id := range f.RoleUUIDs {

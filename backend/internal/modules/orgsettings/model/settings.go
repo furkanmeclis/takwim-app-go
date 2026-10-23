@@ -1,7 +1,11 @@
-// Package model holds the typed organization settings document (TEC-690):
-// company / billing identity, reservation and payment rules, policies,
-// sales channels and tax mapping. The document is stored as JSONB in
+// Package model holds the typed organization settings document (TEC-690,
+// reworked for Takwim in TEC-892): company / billing identity, the default
+// booking rules, payment options, customer-facing policies, sales channels
+// and tax mapping. The document is stored as JSONB in
 // organization_settings_versions; every save is a new immutable version.
+//
+// These are the business-wide defaults. Branch, service and booking-flow
+// overrides (TEC-905) read them as their fallback.
 package model
 
 import (
@@ -19,23 +23,15 @@ const (
 	ApprovalStaff = "staff"
 )
 
-// Prepayment rules.
-const (
-	PrepaymentNone    = "none"
-	PrepaymentFixed   = "fixed"
-	PrepaymentPercent = "percent"
-)
-
-// SalesChannels are the channels an organization can sell through, in
-// display order.
-var SalesChannels = []string{"web", "widget", "api", "branch", "yolcu360", "obilet"}
+// SalesChannels are the online channels an organization can take bookings
+// through, in display order: the takwim.link page, the embedded widget and
+// the public API. Bookings entered in the panel are always allowed.
+var SalesChannels = []string{"web", "widget", "api"}
 
 // InvoiceItemTypes are the invoice line kinds that need an accounting
 // mapping (codes are filled in by the organization; placeholders for the
 // e-invoice integration).
-var InvoiceItemTypes = []string{
-	"rental", "extra_service", "insurance", "delivery", "fuel", "mileage", "late_return", "damage", "deposit",
-}
+var InvoiceItemTypes = []string{"service", "product", "package"}
 
 // Settings is the full settings document.
 type Settings struct {
@@ -47,7 +43,7 @@ type Settings struct {
 	Tax           Tax            `json:"tax"`
 }
 
-// Company is the legal / billing identity printed on contracts and invoices.
+// Company is the legal / billing identity and the public contact details.
 type Company struct {
 	LegalName string `json:"legal_name"`
 	// TaxNumber is a VKN (10 digits) or, for sole proprietors, a TCKN
@@ -57,39 +53,45 @@ type Company struct {
 	Address   string `json:"address"`
 	Phone     string `json:"phone"`
 	Email     string `json:"email"`
+	Website   string `json:"website"`
 }
 
-// Reservation holds the online reservation flow rules. All four values are
-// required before online sales can be published (Readiness).
+// Reservation holds the default booking rules (requirements §6 and §8).
+// A nil value means "not configured"; Readiness lists the ones online
+// bookings need.
 type Reservation struct {
-	// ApprovalMode is "auto" (confirmed on payment) or "staff" (an employee
-	// confirms within StaffReviewWindowMinutes); empty = not configured.
+	// ApprovalMode is "auto" (accepted immediately) or "staff" (the customer
+	// leaves a request, an employee accepts it within
+	// StaffReviewWindowMinutes while the capacity is held); empty = not
+	// configured.
 	ApprovalMode             string `json:"approval_mode"`
 	StaffReviewWindowMinutes *int   `json:"staff_review_window_minutes"`
-	PaymentHoldMinutes       *int   `json:"payment_hold_minutes"`
-	QuoteValidityMinutes     *int   `json:"quote_validity_minutes"`
+	// PaymentHoldMinutes is how long a booking waiting for online payment
+	// keeps its capacity.
+	PaymentHoldMinutes *int `json:"payment_hold_minutes"`
+	// MinLeadMinutes is the earliest bookable start, counted from now.
+	MinLeadMinutes *int `json:"min_lead_minutes"`
+	// MaxAdvanceDays is the latest bookable day, counted from today.
+	MaxAdvanceDays *int `json:"max_advance_days"`
+	// CancelCutoffMinutes / ChangeCutoffMinutes: the customer may cancel /
+	// ask for a change until this many minutes before the start; nil = no
+	// limit.
+	CancelCutoffMinutes *int `json:"cancel_cutoff_minutes"`
+	ChangeCutoffMinutes *int `json:"change_cutoff_minutes"`
 }
 
-// Payment holds the prepayment rule.
+// Payment says how customers may pay. Online payment is always the full
+// amount in the beta (no deposits).
 type Payment struct {
-	// PrepaymentRule is none, fixed (PrepaymentValue is an amount) or percent
-	// (PrepaymentValue is a percentage of the total).
-	PrepaymentRule     string `json:"prepayment_rule"`
-	PrepaymentValue    string `json:"prepayment_value"`
-	FullPaymentAllowed bool   `json:"full_payment_allowed"`
+	PayAtVenue bool `json:"pay_at_venue"`
+	PayOnline  bool `json:"pay_online"`
 }
 
-// Policies are customer-facing policy texts and the late return rules.
+// Policies are customer-facing policy texts.
 type Policies struct {
-	Cancellation           string `json:"cancellation"`
-	NoShow                 string `json:"no_show"`
-	EarlyReturn            string `json:"early_return"`
-	Extension              string `json:"extension"`
-	LateReturnGraceMinutes *int   `json:"late_return_grace_minutes"`
-	// ExtraHourFee is a decimal amount ("150.00"); empty = not charged.
-	ExtraHourFee string `json:"extra_hour_fee"`
-	Fuel         string `json:"fuel"`
-	Mileage      string `json:"mileage"`
+	Cancellation string `json:"cancellation"`
+	NoShow       string `json:"no_show"`
+	Change       string `json:"change"`
 }
 
 // SalesChannel switches one channel on or off.
@@ -148,38 +150,45 @@ type SaveInput struct {
 	BaseVersion *int     `json:"base_version"`
 }
 
-// Defaults returns the settings of an organization that never saved any.
+// Defaults returns the settings of an organization that never saved any:
+// payment at the venue, every online channel off.
 func Defaults() Settings {
 	channels := make([]SalesChannel, 0, len(SalesChannels))
 	for _, c := range SalesChannels {
-		channels = append(channels, SalesChannel{Code: c, IsActive: c == "branch"})
+		channels = append(channels, SalesChannel{Code: c})
 	}
 	mappings := make([]InvoiceItemMapping, 0, len(InvoiceItemTypes))
 	for _, t := range InvoiceItemTypes {
 		mappings = append(mappings, InvoiceItemMapping{ItemType: t})
 	}
 	return Settings{
-		Payment:       Payment{PrepaymentRule: PrepaymentNone, FullPaymentAllowed: true},
+		Payment:       Payment{PayAtVenue: true},
 		SalesChannels: channels,
 		Tax:           Tax{InvoiceItemMappings: mappings},
 	}
 }
 
-// Readiness reports whether online sales can be published and which
-// settings are still missing (dot paths of the form fields).
+// Readiness reports whether online bookings can be published and which
+// settings are still missing (dot paths of the form fields). The review
+// window only matters for staff approval and the payment hold only when
+// online payment is on.
 func Readiness(s Settings) (bool, []string) {
 	missing := []string{}
-	if s.Reservation.ApprovalMode == "" {
+	r := s.Reservation
+	if r.ApprovalMode == "" {
 		missing = append(missing, "reservation.approval_mode")
 	}
-	if s.Reservation.StaffReviewWindowMinutes == nil {
+	if r.ApprovalMode == ApprovalStaff && r.StaffReviewWindowMinutes == nil {
 		missing = append(missing, "reservation.staff_review_window_minutes")
 	}
-	if s.Reservation.PaymentHoldMinutes == nil {
+	if s.Payment.PayOnline && r.PaymentHoldMinutes == nil {
 		missing = append(missing, "reservation.payment_hold_minutes")
 	}
-	if s.Reservation.QuoteValidityMinutes == nil {
-		missing = append(missing, "reservation.quote_validity_minutes")
+	if r.MinLeadMinutes == nil {
+		missing = append(missing, "reservation.min_lead_minutes")
+	}
+	if r.MaxAdvanceDays == nil {
+		missing = append(missing, "reservation.max_advance_days")
 	}
 	return len(missing) == 0, missing
 }

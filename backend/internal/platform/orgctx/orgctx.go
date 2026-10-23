@@ -77,6 +77,10 @@ type Scope struct {
 	// branch of the organization (branch_scope 'all'); a non-nil slice,
 	// possibly empty, limits branch-bound data to those ids. See branch.go.
 	BranchIDs []int64
+	// SelectedBranchID is the branch picked in the panel header
+	// (X-Branch, always inside BranchIDs); 0 = all accessible branches. It
+	// narrows lists only (BranchScope); access checks keep using BranchIDs.
+	SelectedBranchID int64
 }
 
 // Has reports whether the scope grants a tenant permission slug.
