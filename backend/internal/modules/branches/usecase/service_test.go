@@ -131,11 +131,21 @@ func (f *fakeRepo) CodeTaken(_ context.Context, orgID int64, code string, exclud
 	return false, nil
 }
 
+func (f *fakeRepo) SlugTaken(_ context.Context, orgID int64, slug string, exclude *uuid.UUID) (bool, error) {
+	for _, b := range f.live(orgID) {
+		if b.Slug == slug && (exclude == nil || b.Uuid != *exclude) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (f *fakeRepo) apply(b *db.Branch, fields repository.BranchFields) {
 	b.Code, b.Name, b.Address, b.City, b.District = fields.Code, fields.Name, fields.Address, fields.City, fields.District
 	b.Latitude, b.Longitude, b.Phone, b.Email = fields.Latitude, fields.Longitude, fields.Phone, fields.Email
 	b.WorkingHours, b.HolidayExceptions = fields.WorkingHours, fields.HolidayExceptions
 	b.PrepMinutes, b.IsActive = fields.PrepMinutes, fields.IsActive
+	b.Slug, b.Description, b.Timezone, b.ShowOnline = fields.Slug, fields.Description, fields.Timezone, fields.ShowOnline
 	b.UpdatedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
 }
 

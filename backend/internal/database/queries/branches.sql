@@ -4,12 +4,14 @@
 -- name: CreateBranch :one
 INSERT INTO branches (
     organization_id, code, name, address, city, district, latitude, longitude,
-    phone, email, working_hours, holiday_exceptions, prep_minutes, is_active
+    phone, email, working_hours, holiday_exceptions, prep_minutes, is_active,
+    slug, description, timezone, show_online
 ) VALUES (
     sqlc.arg(organization_id), sqlc.arg(code), sqlc.arg(name), sqlc.arg(address),
     sqlc.arg(city), sqlc.arg(district), sqlc.narg(latitude), sqlc.narg(longitude),
     sqlc.arg(phone), sqlc.arg(email), sqlc.arg(working_hours), sqlc.arg(holiday_exceptions),
-    sqlc.arg(prep_minutes), sqlc.arg(is_active)
+    sqlc.arg(prep_minutes), sqlc.arg(is_active),
+    sqlc.arg(slug), sqlc.arg(description), sqlc.narg(timezone), sqlc.arg(show_online)
 )
 RETURNING *;
 
@@ -34,6 +36,15 @@ SELECT EXISTS (
       AND (sqlc.narg(exclude_uuid)::uuid IS NULL OR uuid <> sqlc.narg(exclude_uuid))
 )::boolean;
 
+-- name: BranchSlugTaken :one
+SELECT EXISTS (
+    SELECT 1 FROM branches
+    WHERE organization_id = sqlc.arg(organization_id)
+      AND slug = sqlc.arg(slug)
+      AND deleted_at IS NULL
+      AND (sqlc.narg(exclude_uuid)::uuid IS NULL OR uuid <> sqlc.narg(exclude_uuid))
+)::boolean;
+
 -- name: ListBranches :many
 SELECT
     b.*,
@@ -52,6 +63,7 @@ WHERE b.organization_id = sqlc.arg(organization_id)
     sqlc.narg(q)::text IS NULL
     OR b.code ILIKE '%' || sqlc.narg(q) || '%'
     OR b.name ILIKE '%' || sqlc.narg(q) || '%'
+    OR b.slug ILIKE '%' || sqlc.narg(q) || '%'
     OR b.city ILIKE '%' || sqlc.narg(q) || '%'
     OR b.district ILIKE '%' || sqlc.narg(q) || '%'
     OR b.phone ILIKE '%' || sqlc.narg(q) || '%'
@@ -88,6 +100,7 @@ WHERE b.organization_id = sqlc.arg(organization_id)
     sqlc.narg(q)::text IS NULL
     OR b.code ILIKE '%' || sqlc.narg(q) || '%'
     OR b.name ILIKE '%' || sqlc.narg(q) || '%'
+    OR b.slug ILIKE '%' || sqlc.narg(q) || '%'
     OR b.city ILIKE '%' || sqlc.narg(q) || '%'
     OR b.district ILIKE '%' || sqlc.narg(q) || '%'
     OR b.phone ILIKE '%' || sqlc.narg(q) || '%'
@@ -117,6 +130,7 @@ WHERE b.organization_id = sqlc.arg(organization_id)
     sqlc.narg(q)::text IS NULL
     OR b.code ILIKE '%' || sqlc.narg(q) || '%'
     OR b.name ILIKE '%' || sqlc.narg(q) || '%'
+    OR b.slug ILIKE '%' || sqlc.narg(q) || '%'
     OR b.city ILIKE '%' || sqlc.narg(q) || '%'
     OR b.district ILIKE '%' || sqlc.narg(q) || '%'
     OR b.phone ILIKE '%' || sqlc.narg(q) || '%'
@@ -138,6 +152,7 @@ WHERE b.organization_id = sqlc.arg(organization_id)
     sqlc.narg(q)::text IS NULL
     OR b.code ILIKE '%' || sqlc.narg(q) || '%'
     OR b.name ILIKE '%' || sqlc.narg(q) || '%'
+    OR b.slug ILIKE '%' || sqlc.narg(q) || '%'
     OR b.city ILIKE '%' || sqlc.narg(q) || '%'
     OR b.district ILIKE '%' || sqlc.narg(q) || '%'
     OR b.phone ILIKE '%' || sqlc.narg(q) || '%'
@@ -159,7 +174,11 @@ SET code = sqlc.arg(code),
     working_hours = sqlc.arg(working_hours),
     holiday_exceptions = sqlc.arg(holiday_exceptions),
     prep_minutes = sqlc.arg(prep_minutes),
-    is_active = sqlc.arg(is_active)
+    is_active = sqlc.arg(is_active),
+    slug = sqlc.arg(slug),
+    description = sqlc.arg(description),
+    timezone = sqlc.narg(timezone),
+    show_online = sqlc.arg(show_online)
 WHERE organization_id = sqlc.arg(organization_id)
   AND uuid = sqlc.arg(uuid)
   AND deleted_at IS NULL
@@ -238,3 +257,64 @@ DELETE FROM service_points
 WHERE organization_id = sqlc.arg(organization_id)
   AND branch_id = sqlc.arg(branch_id)
   AND uuid = sqlc.arg(uuid);
+
+-- name: ListBranchImages :many
+SELECT * FROM branch_images
+WHERE organization_id = sqlc.arg(organization_id)
+  AND branch_id = ANY(sqlc.arg(branch_ids)::bigint[])
+ORDER BY branch_id, sort_order ASC, id ASC;
+
+-- name: CountBranchImages :one
+SELECT COUNT(*)::bigint FROM branch_images
+WHERE organization_id = sqlc.arg(organization_id)
+  AND branch_id = sqlc.arg(branch_id);
+
+-- name: CreateBranchImage :one
+INSERT INTO branch_images (
+    uuid, organization_id, branch_id, object_key, filename, content_type, size_bytes, sort_order
+) VALUES (
+    sqlc.arg(uuid), sqlc.arg(organization_id), sqlc.arg(branch_id), sqlc.arg(object_key),
+    sqlc.arg(filename), sqlc.arg(content_type), sqlc.arg(size_bytes),
+    COALESCE((
+        SELECT MAX(sort_order) + 1 FROM branch_images
+        WHERE organization_id = sqlc.arg(organization_id) AND branch_id = sqlc.arg(branch_id)
+    ), 0)
+)
+RETURNING *;
+
+-- name: GetBranchImage :one
+SELECT * FROM branch_images
+WHERE organization_id = sqlc.arg(organization_id)
+  AND branch_id = sqlc.arg(branch_id)
+  AND uuid = sqlc.arg(uuid);
+
+-- name: DeleteBranchImage :execrows
+DELETE FROM branch_images
+WHERE organization_id = sqlc.arg(organization_id)
+  AND branch_id = sqlc.arg(branch_id)
+  AND uuid = sqlc.arg(uuid);
+
+-- name: SetBranchImageSort :execrows
+UPDATE branch_images
+SET sort_order = sqlc.arg(sort_order)
+WHERE organization_id = sqlc.arg(organization_id)
+  AND branch_id = sqlc.arg(branch_id)
+  AND uuid = sqlc.arg(uuid);
+
+-- name: TouchBranch :exec
+UPDATE branches
+SET updated_at = NOW()
+WHERE organization_id = sqlc.arg(organization_id)
+  AND id = sqlc.arg(id);
+
+-- name: GetPublicBranchImage :one
+-- Public media route: the image of a live branch of an active organization.
+SELECT i.object_key, i.content_type, i.size_bytes
+FROM branch_images i
+JOIN branches b ON b.organization_id = i.organization_id AND b.id = i.branch_id
+JOIN organizations o ON o.id = i.organization_id
+WHERE o.uuid = sqlc.arg(organization_uuid)
+  AND i.organization_id = o.id
+  AND i.uuid = sqlc.arg(uuid)
+  AND b.deleted_at IS NULL
+  AND o.deleted_at IS NULL;

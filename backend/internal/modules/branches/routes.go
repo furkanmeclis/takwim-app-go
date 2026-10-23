@@ -33,6 +33,8 @@ func RegisterRoutes(
 	loader middleware.IdentityLoader,
 	resolver orgctx.Resolver,
 ) {
+	// Branch photos are public media (booking pages, the mobile app).
+	mux.HandleFunc("GET /v1/public/media/branches/{orgUuid}/images/{imageUuid}", h.PublicImage)
 	if resolver == nil {
 		return
 	}
@@ -68,6 +70,9 @@ func RegisterRoutes(
 	route("PATCH /v1/tenant/branches/{uuid}", h.Patch, write)
 	route("DELETE /v1/tenant/branches/{uuid}", h.Delete, write)
 	route("GET /v1/tenant/branches/{uuid}/activity", h.Activity, read)
+	route("POST /v1/tenant/branches/{uuid}/images", h.UploadImage, write)
+	route("PUT /v1/tenant/branches/{uuid}/images/order", h.ReorderImages, write)
+	route("DELETE /v1/tenant/branches/{uuid}/images/{imageUuid}", h.DeleteImage, write)
 	route("GET /v1/tenant/branches/{uuid}/service-points", h.ListServicePoints, read)
 	route("POST /v1/tenant/branches/{uuid}/service-points", h.CreateServicePoint, write)
 	route("PATCH /v1/tenant/branches/{uuid}/service-points/{pointUuid}", h.PatchServicePoint, write)

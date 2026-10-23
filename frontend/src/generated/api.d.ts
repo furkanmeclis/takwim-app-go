@@ -3124,6 +3124,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/branches/{uuid}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a photo to a branch gallery
+         * @description `tenant.branches.write`. JPEG, PNG or WebP (sniffed) up to 5 MiB; at most 12 photos. Appended last.
+         */
+        post: operations["postTenantBranchImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/branches/{uuid}/images/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder a branch gallery
+         * @description `tenant.branches.write`. The first photo becomes the cover.
+         */
+        put: operations["putTenantBranchImageOrder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/branches/{uuid}/images/{imageUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a photo from a branch gallery
+         * @description `tenant.branches.write`.
+         */
+        delete: operations["deleteTenantBranchImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/media/branches/{orgUuid}/images/{imageUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Branch photo
+         * @description No authentication; booking pages and the mobile app show branch photos. Clients use the `public_url` / `cover_url` the API returns. Immutable (cached for a year).
+         */
+        get: operations["getPublicBranchImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/branches/{uuid}/service-points": {
         parameters: {
             query?: never;
@@ -3778,6 +3858,28 @@ export interface components {
             code: string;
             /** @example Merkez */
             name: string;
+            /**
+             * @description URL name on the booking page; unique in the business
+             * @example merkez
+             */
+            slug: string;
+            description: string;
+            /**
+             * @description The branch's own IANA zone; `null` follows the business zone
+             * @example Europe/Istanbul
+             */
+            timezone: string | null;
+            /**
+             * @description Zone calendar decisions use (own or business)
+             * @example Europe/Istanbul
+             */
+            effective_timezone: string;
+            /** @description Listed on the customer booking screens */
+            show_online: boolean;
+            /** @description API-owned public URL of the first gallery image */
+            cover_url: string | null;
+            /** @description Gallery in display order (detail response only); the first image is the cover */
+            images?: components["schemas"]["BranchImage"][];
             address: string;
             /** @example İstanbul */
             city: string;
@@ -3792,7 +3894,7 @@ export interface components {
             working_hours: components["schemas"]["WeeklyHours"];
             holiday_exceptions: components["schemas"]["HolidayException"][];
             /**
-             * @description Vehicle preparation time in minutes
+             * @description Preparation / cleanup buffer in minutes
              * @example 60
              */
             prep_minutes: number;
@@ -3818,6 +3920,33 @@ export interface components {
             holiday_exceptions?: components["schemas"]["HolidayException"][];
             prep_minutes?: number;
             is_active?: boolean;
+            /** @description Empty on create = generated from the name (with -2, -3 … on a clash) */
+            slug?: string;
+            description?: string;
+            /** @description IANA zone; `null` or empty follows the business zone */
+            timezone?: string | null;
+            show_online?: boolean;
+        };
+        BranchImage: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description API-owned public URL; clients use it as is */
+            public_url: string;
+            filename: string;
+            /** @enum {string} */
+            content_type: "image/jpeg" | "image/png" | "image/webp";
+            /** Format: int64 */
+            size_bytes: number;
+            sort_order: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        BranchImageList: {
+            items: components["schemas"]["BranchImage"][];
+        };
+        BranchImageOrderRequest: {
+            /** @description Every image of the branch once, in the new order */
+            image_uuids: string[];
         };
         BranchCreateRequest: {
             code: string;
@@ -3833,6 +3962,12 @@ export interface components {
             holiday_exceptions?: components["schemas"]["HolidayException"][];
             prep_minutes?: number;
             is_active?: boolean;
+            /** @description Empty on create = generated from the name (with -2, -3 … on a clash) */
+            slug?: string;
+            description?: string;
+            /** @description IANA zone; `null` or empty follows the business zone */
+            timezone?: string | null;
+            show_online?: boolean;
         };
         BranchPage: {
             items: components["schemas"]["Branch"][];
@@ -4044,6 +4179,18 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["ServicePointList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeBranchImage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["BranchImage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeBranchImageList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["BranchImageList"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeBranchActivityPage: {
@@ -11324,6 +11471,143 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantBranchImage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored photo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchImage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTenantBranchImageOrder: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BranchImageOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Gallery in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchImageList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantBranchImage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                imageUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicBranchImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgUuid: string;
+                imageUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
             404: components["responses"]["NotFound"];
         };
     };

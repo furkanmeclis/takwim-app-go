@@ -51,6 +51,13 @@ func OrganizationImportSourceObjectKey(orgUUID, jobUUID, ext string) string {
 	return fmt.Sprintf("%simports/%s/source.%s", OrganizationPrefix(orgUUID), jobUUID, trimExt(ext))
 }
 
+// BranchImageObjectKey builds
+// organizations/{orgUUID}/branches/{branchUUID}/images/{imageUUID}.{ext} for
+// branch gallery photos (served through the API's public media route).
+func BranchImageObjectKey(orgUUID, branchUUID, imageUUID, ext string) string {
+	return fmt.Sprintf("%sbranches/%s/images/%s.%s", OrganizationPrefix(orgUUID), branchUUID, imageUUID, trimExt(ext))
+}
+
 // ImportSourceObjectKey builds imports/{jobUUID}/source.{ext}.
 func ImportSourceObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("imports/%s/source.%s", jobUUID, trimExt(ext))

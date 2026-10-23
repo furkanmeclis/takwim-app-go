@@ -4,6 +4,7 @@ import { CalendarOff, Clock, MapPin, Store } from "lucide-react";
 import { useMemo } from "react";
 
 import {
+  AppCombobox,
   AppForm,
   AppInput,
   AppSwitch,
@@ -14,12 +15,14 @@ import {
   createFormSections,
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
+import { timeZones } from "@/config/regional";
 import { HolidayExceptionsEditor } from "@/features/branches/components/holiday-exceptions-editor";
 import { WeeklyHoursEditor } from "@/features/branches/components/weekly-hours-editor";
 import {
   createBranchFormSchema,
   type BranchFormValues,
 } from "@/features/branches/schemas/branch-form";
+import { useOptionalTenant } from "@/features/tenant/components/tenant-provider";
 import { useLocale } from "@/providers/locale-provider";
 
 type BranchFormProps = {
@@ -40,6 +43,11 @@ export function BranchForm({
 }: BranchFormProps) {
   const { t } = useLocale();
   const schema = useMemo(() => createBranchFormSchema(t), [t]);
+  const businessZone = useOptionalTenant()?.organization?.timezone ?? null;
+  const zoneOptions = useMemo(
+    () => timeZones().map((zone) => ({ value: zone, label: zone })),
+    [],
+  );
   const sections = useMemo(
     () =>
       createFormSections([
@@ -89,6 +97,12 @@ export function BranchForm({
             />
             <AppInput name="name" label={t("branches.fields.name")} />
             <AppInput
+              name="slug"
+              label={t("branches.fields.slug")}
+              description={t("branches.fields.slug_hint")}
+              autoCapitalize="none"
+            />
+            <AppInput
               name="prep_minutes"
               type="number"
               min={0}
@@ -100,6 +114,17 @@ export function BranchForm({
               name="is_active"
               label={t("branches.fields.is_active")}
               description={t("branches.fields.is_active_hint")}
+            />
+            <AppSwitch
+              name="show_online"
+              label={t("branches.fields.show_online")}
+              description={t("branches.fields.show_online_hint")}
+            />
+            <AppTextarea
+              name="description"
+              label={t("branches.fields.description")}
+              description={t("branches.fields.description_hint")}
+              className="sm:col-span-2"
             />
           </FormSection>
 
@@ -137,6 +162,22 @@ export function BranchForm({
               inputMode="decimal"
               label={t("branches.fields.longitude")}
               placeholder="28.978359"
+            />
+            <AppCombobox
+              name="timezone"
+              label={t("branches.fields.timezone")}
+              description={t("branches.fields.timezone_hint")}
+              options={zoneOptions}
+              placeholder={
+                businessZone
+                  ? t("branches.fields.timezone_business", {
+                      zone: businessZone,
+                    })
+                  : t("branches.fields.timezone_business_generic")
+              }
+              searchPlaceholder={t("branches.fields.timezone_search")}
+              clearable
+              className="sm:col-span-2"
             />
           </FormSection>
 

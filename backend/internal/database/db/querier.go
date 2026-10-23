@@ -20,6 +20,7 @@ type Querier interface {
 	AddOrganizationUsage(ctx context.Context, arg AddOrganizationUsageParams) (OrganizationUsage, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams) (bool, error)
+	BranchSlugTaken(ctx context.Context, arg BranchSlugTakenParams) (bool, error)
 	// Moves a pending / failed job to processing (one worker at a time).
 	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
@@ -32,6 +33,7 @@ type Querier interface {
 	CountAllImportJobs(ctx context.Context) (int64, error)
 	CountAppLogs(ctx context.Context, arg CountAppLogsParams) (int64, error)
 	CountAppLogsByLevel(ctx context.Context) ([]CountAppLogsByLevelRow, error)
+	CountBranchImages(ctx context.Context, arg CountBranchImagesParams) (int64, error)
 	CountBranches(ctx context.Context, arg CountBranchesParams) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	// Live branches and staff seats (members plus open invitations) of a
@@ -61,6 +63,7 @@ type Querier interface {
 	// Tenant resource: branches and service points.
 	// Every query filters by organization_id (see docs/design/tenant-core.md §8).
 	CreateBranch(ctx context.Context, arg CreateBranchParams) (Branch, error)
+	CreateBranchImage(ctx context.Context, arg CreateBranchImageParams) (BranchImage, error)
 	CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
 	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
@@ -83,6 +86,7 @@ type Querier interface {
 	DeleteAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteAppLogsByUUIDs(ctx context.Context, uuids []uuid.UUID) (int64, error)
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
+	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
 	DeleteLogPurgeRule(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteMemberBranches(ctx context.Context, arg DeleteMemberBranchesParams) error
 	DeleteMemberRoles(ctx context.Context, arg DeleteMemberRolesParams) error
@@ -120,6 +124,7 @@ type Querier interface {
 	GetAuthSettings(ctx context.Context) (GetAuthSettingsRow, error)
 	GetBranchByCode(ctx context.Context, arg GetBranchByCodeParams) (Branch, error)
 	GetBranchByUUID(ctx context.Context, arg GetBranchByUUIDParams) (Branch, error)
+	GetBranchImage(ctx context.Context, arg GetBranchImageParams) (BranchImage, error)
 	GetBranchSearchDocument(ctx context.Context, arg GetBranchSearchDocumentParams) (GetBranchSearchDocumentRow, error)
 	GetBulkJobByID(ctx context.Context, id int64) (BulkJob, error)
 	GetBulkJobByUUID(ctx context.Context, argUuid uuid.UUID) (BulkJob, error)
@@ -149,6 +154,8 @@ type Querier interface {
 	GetOrganizationMemberByUserUUID(ctx context.Context, arg GetOrganizationMemberByUserUUIDParams) (GetOrganizationMemberByUserUUIDRow, error)
 	GetOrganizationSettingsVersion(ctx context.Context, arg GetOrganizationSettingsVersionParams) (GetOrganizationSettingsVersionRow, error)
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
+	// Public media route: the image of a live branch of an active organization.
+	GetPublicBranchImage(ctx context.Context, arg GetPublicBranchImageParams) (GetPublicBranchImageRow, error)
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleBySlug(ctx context.Context, slug string) (Role, error)
 	GetRoleByUUID(ctx context.Context, argUuid uuid.UUID) (Role, error)
@@ -211,6 +218,7 @@ type Querier interface {
 	ListAppLogs(ctx context.Context, arg ListAppLogsParams) ([]AppLog, error)
 	ListBranchCityFacets(ctx context.Context, arg ListBranchCityFacetsParams) ([]ListBranchCityFacetsRow, error)
 	ListBranchIDsByUUIDs(ctx context.Context, arg ListBranchIDsByUUIDsParams) ([]ListBranchIDsByUUIDsRow, error)
+	ListBranchImages(ctx context.Context, arg ListBranchImagesParams) ([]BranchImage, error)
 	ListBranchSearchDocuments(ctx context.Context, organizationID int64) ([]ListBranchSearchDocumentsRow, error)
 	ListBranchUUIDs(ctx context.Context, arg ListBranchUUIDsParams) ([]uuid.UUID, error)
 	ListBranches(ctx context.Context, arg ListBranchesParams) ([]ListBranchesRow, error)
@@ -348,6 +356,7 @@ type Querier interface {
 	SaveRunnerJob(ctx context.Context, arg SaveRunnerJobParams) error
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)
+	SetBranchImageSort(ctx context.Context, arg SetBranchImageSortParams) (int64, error)
 	SetIntegrationAccountCheck(ctx context.Context, arg SetIntegrationAccountCheckParams) error
 	SetIntegrationAccountStatus(ctx context.Context, arg SetIntegrationAccountStatusParams) (int64, error)
 	SetMemberBranchScope(ctx context.Context, arg SetMemberBranchScopeParams) error
@@ -361,6 +370,7 @@ type Querier interface {
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
+	TouchBranch(ctx context.Context, arg TouchBranchParams) error
 	UnlockRunnerJob(ctx context.Context, arg UnlockRunnerJobParams) error
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)

@@ -58,4 +58,5 @@ export function defaultWeeklyHours(): WeeklyHours {
 
 export const TIME_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 export const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
+export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const MONEY_PATTERN = /^[0-9]{1,12}([.,][0-9]{1,2})?$/;

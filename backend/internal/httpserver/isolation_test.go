@@ -261,6 +261,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["point"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/"+ids["branch"]+"/service-points", map[string]any{
 			"type": "airport", "name": m + " SAW",
 		}), http.StatusCreated, "create service point"), "uuid")
+		ids["branchImage"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/"+ids["branch"]+"/images", "file", "photo.png",
+			png, nil), http.StatusCreated, "upload branch image"), "uuid")
 		ids["role"] = str(must(call(o, http.MethodPost, "/v1/tenant/roles", map[string]any{
 			"key": "iso_role", "name": m + " Rol", "permissions": []string{rbac.PermTenantMembersRead},
 		}), http.StatusCreated, "create role"), "uuid")
@@ -647,6 +649,8 @@ func paramKey(prev, name string) string {
 		return "branch"
 	case "service-points/pointUuid":
 		return "point"
+	case "images/imageUuid":
+		return "branchImage"
 	case "invitations/uuid":
 		return "invitation"
 	case "roles/uuid":

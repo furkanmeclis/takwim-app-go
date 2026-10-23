@@ -15,6 +15,7 @@ export type ServicePointCreateRequest = Schemas["ServicePointCreateRequest"];
 export type ServicePointPatchRequest = Schemas["ServicePointPatchRequest"];
 export type BranchActivityEntry = Schemas["BranchActivityEntry"];
 export type BranchActivityPage = Schemas["BranchActivityPage"];
+export type BranchImage = Schemas["BranchImage"];
 
 export type ServicePointType = ServicePoint["type"];
 

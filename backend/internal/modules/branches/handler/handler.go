@@ -310,6 +310,10 @@ func changedFields(in model.BranchInput) []string {
 	add(in.HolidayExceptions != nil, "holiday_exceptions")
 	add(in.PrepMinutes != nil, "prep_minutes")
 	add(in.IsActive != nil, "is_active")
+	add(in.Slug != nil, "slug")
+	add(in.Description != nil, "description")
+	add(in.Timezone.Set, "timezone")
+	add(in.ShowOnline != nil, "show_online")
 	return out
 }
 
@@ -366,6 +370,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
 			Field: "code", Message: err.Error(), Code: "taken",
 		}})
+	case errors.Is(err, usecase.ErrSlugTaken):
+		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
+			Field: "slug", Message: err.Error(), Code: "taken",
+		}})
+	case errors.Is(err, usecase.ErrImageNotFound):
+		response.NotFound(w, r, "Image was not found")
+	case errors.Is(err, usecase.ErrStorageUnavailable):
+		response.ServiceUnavailable(w, r, response.CodeInternalError, "storage is not configured")
 	default:
 		response.InternalErr(w, r, err, "Unexpected server error")
 	}

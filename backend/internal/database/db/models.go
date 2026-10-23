@@ -84,6 +84,22 @@ type Branch struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 	Timezone          pgtype.Text        `json:"timezone"`
+	Slug              string             `json:"slug"`
+	Description       string             `json:"description"`
+	ShowOnline        bool               `json:"show_online"`
+}
+
+type BranchImage struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	ObjectKey      string             `json:"object_key"`
+	Filename       string             `json:"filename"`
+	ContentType    string             `json:"content_type"`
+	SizeBytes      int64              `json:"size_bytes"`
+	SortOrder      int32              `json:"sort_order"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type BulkChange struct {

@@ -11,6 +11,7 @@ import {
   type BranchRowActionHandlers,
 } from "@/features/branches/components/branch-row-actions";
 import type { Branch, BranchFacets } from "@/features/branches/types";
+import { assertServiceMediaURL } from "@/lib/media/urls";
 import { datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
@@ -49,7 +50,31 @@ export function useBranchesColumns({
           enableSorting: true,
           gridPrimary: true,
           cell: ({ row }) => (
-            <span className="font-medium">{row.original.name}</span>
+            <div className="flex items-center gap-2">
+              {row.original.cover_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- API media URL, no image optimizer
+                <img
+                  src={
+                    assertServiceMediaURL(row.original.cover_url) ?? undefined
+                  }
+                  alt=""
+                  className="size-8 shrink-0 rounded object-cover"
+                  loading="lazy"
+                />
+              ) : null}
+              <span className="font-medium">{row.original.name}</span>
+            </div>
+          ),
+        }),
+        createColumn<Branch>({
+          accessorKey: "slug",
+          labelKey: "branches.columns.slug",
+          enableSorting: false,
+          defaultHidden: true,
+          cell: ({ row }) => (
+            <code className="text-muted-foreground text-xs">
+              {row.original.slug}
+            </code>
           ),
         }),
         createColumn<Branch>({
@@ -128,6 +153,28 @@ export function useBranchesColumns({
               tone={row.original.is_active ? "success" : "default"}
             />
           ),
+        }),
+        createColumn<Branch>({
+          accessorKey: "show_online",
+          labelKey: "branches.columns.show_online",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <StatusChip
+              label={
+                row.original.show_online
+                  ? t("branches.online.visible")
+                  : t("branches.online.hidden")
+              }
+              tone={row.original.show_online ? "success" : "default"}
+            />
+          ),
+        }),
+        createColumn<Branch>({
+          accessorKey: "effective_timezone",
+          labelKey: "branches.columns.timezone",
+          enableSorting: false,
+          defaultHidden: true,
+          cell: ({ row }) => row.original.effective_timezone,
         }),
         createColumn<Branch>({
           accessorKey: "created_at",
