@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { MAX_LINES, MAX_NOTE } from "@/features/reservations/constants";
+import {
+  MAX_LINES,
+  MAX_NOTE,
+  MAX_PARTY_SIZE,
+  MIN_PARTY_SIZE,
+} from "@/features/reservations/constants";
 
 type Translate = (key: string) => string;
 
@@ -16,7 +21,28 @@ export function createActionSchema(t: Translate) {
 
 export type ActionFormValues = z.infer<ReturnType<typeof createActionSchema>>;
 
-export function createBookingSchema(t: Translate) {
+/**
+ * Guests as typed. Required (a whole number in range) when the sector books
+ * by party size; otherwise empty or a valid number.
+ */
+function partySizeField(t: Translate, required: boolean) {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        (!required && value === "") ||
+        (/^\d+$/.test(value) &&
+          Number(value) >= MIN_PARTY_SIZE &&
+          Number(value) <= MAX_PARTY_SIZE),
+      t("reservations.validation.party_size"),
+    );
+}
+
+export function createBookingSchema(
+  t: Translate,
+  { party = false }: { party?: boolean } = {},
+) {
   return z.object({
     branch_uuid: z
       .string()
@@ -36,6 +62,9 @@ export function createBookingSchema(t: Translate) {
       )
       .min(1, t("reservations.validation.service_required"))
       .max(MAX_LINES),
+    party_size: partySizeField(t, party),
+    /** ANY_ZONE = any area of the branch. */
+    zone: z.string(),
     date: z.string().min(1, t("reservations.validation.date_required")),
     /** ISO instant of the picked slot. */
     starts_at: z.string().min(1, t("reservations.validation.slot_required")),
@@ -66,6 +95,22 @@ export type NotesFormValues = z.infer<ReturnType<typeof createNotesSchema>>;
 /** Select value for "anyone free" (Radix Select has no empty value). */
 export const ANY_STAFF = "any";
 
+/** Select value for "any area" of the branch. */
+export const ANY_ZONE = "any";
+
+/** Typed guests for the API (undefined when empty or not a valid count). */
+export function toPartySize(value: string) {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const count = Number(trimmed);
+  return count >= MIN_PARTY_SIZE && count <= MAX_PARTY_SIZE ? count : undefined;
+}
+
+/** ANY_ZONE = no area asked (undefined for the API). */
+export function toZone(value: string) {
+  return value && value !== ANY_ZONE ? value : undefined;
+}
+
 /** ANY_STAFF = anyone free (null for the API). */
 export function toLineInputs(
   lines: { service_uuid: string; staff_uuid: string }[],
@@ -77,11 +122,15 @@ export function toLineInputs(
   }));
 }
 
-export function createRescheduleSchema(t: Translate) {
+export function createRescheduleSchema(
+  t: Translate,
+  { party = false }: { party?: boolean } = {},
+) {
   return z.object({
     lines: z.array(
       z.object({ service_uuid: z.string(), staff_uuid: z.string() }),
     ),
+    party_size: partySizeField(t, party),
     date: z.string().min(1, t("reservations.validation.date_required")),
     starts_at: z.string().min(1, t("reservations.validation.slot_required")),
     note: z.string().max(MAX_NOTE, t("reservations.validation.note_max")),

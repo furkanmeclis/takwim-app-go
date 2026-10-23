@@ -31,4 +31,4 @@ Both carry `organization_id` with composite foreign keys (`branches`, `resources
 
 ## Later
 
-Availability of a resource for a service is planned by the slot engine ([availability.md](./availability.md)); party sizes come with restaurant bookings; a service names the resource kinds it needs (`resource_kinds`, see [services.md](./services.md)). There is no plan limit on resources.
+Availability of a resource for a service is planned by the slot engine ([availability.md](./availability.md)), which seats a party at the best fitting table and joins `combinable` tables of one zone on the panel (TEC-903); a service names the resource kinds it needs (`resource_kinds`, see [services.md](./services.md)). There is no plan limit on resources.

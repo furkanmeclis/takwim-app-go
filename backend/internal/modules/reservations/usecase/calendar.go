@@ -167,6 +167,7 @@ func (s *Service) Calendar(ctx context.Context, orgID int64, f model.CalendarFil
 			BufferBeforeMinutes: int(row.BufferBeforeMinutes), BufferAfterMinutes: int(row.BufferAfterMinutes),
 			Status: row.Status, ApprovalStatus: row.ApprovalStatus, ConfirmationStatus: row.ConfirmationStatus,
 			PaymentStatus: row.PaymentStatus, Source: row.Source, Version: int(row.Version),
+			PartySize: partyOf(row.PartySize),
 		}
 		if row.StaffName.Valid {
 			item.StaffName = &row.StaffName.String

@@ -174,7 +174,7 @@ func (q *Queries) ListAvailabilityResourceClosures(ctx context.Context, arg List
 }
 
 const listAvailabilityResources = `-- name: ListAvailabilityResources :many
-SELECT id, uuid, name, kind, zone, show_online, working_hours
+SELECT id, uuid, name, kind, zone, show_online, working_hours, min_capacity, capacity, combinable
 FROM resources
 WHERE organization_id = $1 AND branch_id = $2
   AND kind = ANY($3::TEXT[]) AND deleted_at IS NULL AND is_active
@@ -195,6 +195,9 @@ type ListAvailabilityResourcesRow struct {
 	Zone         string    `json:"zone"`
 	ShowOnline   bool      `json:"show_online"`
 	WorkingHours []byte    `json:"working_hours"`
+	MinCapacity  int32     `json:"min_capacity"`
+	Capacity     int32     `json:"capacity"`
+	Combinable   bool      `json:"combinable"`
 }
 
 func (q *Queries) ListAvailabilityResources(ctx context.Context, arg ListAvailabilityResourcesParams) ([]ListAvailabilityResourcesRow, error) {
@@ -214,6 +217,9 @@ func (q *Queries) ListAvailabilityResources(ctx context.Context, arg ListAvailab
 			&i.Zone,
 			&i.ShowOnline,
 			&i.WorkingHours,
+			&i.MinCapacity,
+			&i.Capacity,
+			&i.Combinable,
 		); err != nil {
 			return nil, err
 		}

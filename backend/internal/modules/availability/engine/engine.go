@@ -74,6 +74,13 @@ type Staff struct {
 type Resource struct {
 	ID   int64
 	Kind string
+	// MinCapacity–Capacity is the people range the resource seats; Zone the
+	// free-text area (iç salon, bahçe); Combinable marks tables the business
+	// may join for a large party. Used only when the request has a party.
+	MinCapacity int
+	Capacity    int
+	Zone        string
+	Combinable  bool
 	// Open is when the resource can be used (own hours or the branch's).
 	Open []Interval
 	// Busy holds closures, bookings and holds.
@@ -119,6 +126,15 @@ type Request struct {
 	// NotAfter is the instant at and after which nothing starts (end of the
 	// latest bookable day); zero = none.
 	NotAfter time.Time
+	// PartySize > 0 asks every resource to seat the party (restaurant):
+	// one resource whose range holds it, the smallest that fits first;
+	// with Combine, combinable resources of one zone are joined when no
+	// single one is large enough (the panel; online the business keeps
+	// combining to itself).
+	PartySize int
+	Combine   bool
+	// Zone narrows the resources to one area (the customer's choice).
+	Zone string
 }
 
 // Assignment is who and what serves one line of a slot.
@@ -457,7 +473,9 @@ func (p *planner) staffFree(id int64, held Interval) bool {
 
 // pickResources takes one free resource of each kind, keeping the resource
 // an earlier line of the booking already uses (same chair for the whole
-// visit) and otherwise the first free one in input order.
+// visit) and otherwise the first free one in input order. With a party the
+// resource must seat it (see Request.PartySize) and a kind may take several
+// joined resources.
 func (p *planner) pickResources(kinds []string, held Interval, earlier []Assignment) ([]int64, bool) {
 	if len(kinds) == 0 {
 		return []int64{}, true
@@ -471,26 +489,99 @@ func (p *planner) pickResources(kinds []string, held Interval, earlier []Assignm
 	picked := make([]int64, 0, len(kinds))
 	taken := map[int64]bool{}
 	for _, kind := range kinds {
-		var choice *Resource
+		var free []*Resource
 		for _, r := range p.resources[kind] {
 			if taken[r.ID] || !insideAny(held, r.Open) || overlapsAny(held, r.Busy) {
 				continue
 			}
-			if used[r.ID] {
-				choice = r
-				break
+			if p.req.Zone != "" && r.Zone != p.req.Zone {
+				continue
 			}
-			if choice == nil {
-				choice = r
+			free = append(free, r)
+		}
+		var choice []*Resource
+		if p.req.PartySize > 0 {
+			choice = p.seat(free, used)
+		} else {
+			for _, r := range free {
+				if used[r.ID] {
+					choice = []*Resource{r}
+					break
+				}
+				if choice == nil {
+					choice = []*Resource{r}
+				}
 			}
 		}
 		if choice == nil {
 			return nil, false
 		}
-		taken[choice.ID] = true
-		picked = append(picked, choice.ID)
+		for _, r := range choice {
+			taken[r.ID] = true
+			picked = append(picked, r.ID)
+		}
 	}
 	return picked, true
+}
+
+// MaxJoined is the most resources joined for one party.
+const MaxJoined = 4
+
+// seat picks the resources for the party among free ones: a resource an
+// earlier line uses when it still fits, else the single best fit (smallest
+// capacity, then the highest minimum, then input order), else with Combine
+// the fewest combinable resources of one zone whose capacities add up to
+// the party (largest first).
+func (p *planner) seat(free []*Resource, used map[int64]bool) []*Resource {
+	party := p.req.PartySize
+	fits := func(r *Resource) bool { return r.MinCapacity <= party && party <= r.Capacity }
+	var best *Resource
+	for _, r := range free {
+		if !fits(r) {
+			continue
+		}
+		if used[r.ID] {
+			return []*Resource{r}
+		}
+		if best == nil || r.Capacity < best.Capacity || (r.Capacity == best.Capacity && r.MinCapacity > best.MinCapacity) {
+			best = r
+		}
+	}
+	if best != nil {
+		return []*Resource{best}
+	}
+	if !p.req.Combine {
+		return nil
+	}
+	zones := map[string][]*Resource{}
+	var order []string
+	for _, r := range free {
+		if !r.Combinable {
+			continue
+		}
+		if _, ok := zones[r.Zone]; !ok {
+			order = append(order, r.Zone)
+		}
+		zones[r.Zone] = append(zones[r.Zone], r)
+	}
+	var out []*Resource
+	for _, zone := range order {
+		list := slices.Clone(zones[zone])
+		sort.SliceStable(list, func(a, b int) bool { return list[a].Capacity > list[b].Capacity })
+		seats := 0
+		var group []*Resource
+		for _, r := range list {
+			if len(group) == MaxJoined || seats >= party {
+				break
+			}
+			group = append(group, r)
+			seats += r.Capacity
+		}
+		if seats >= party && len(group) > 1 && (out == nil || len(group) < len(out)) {
+			out = group
+		}
+	}
+	return out
 }
 
 // insideAny reports whether i lies inside the union of the intervals

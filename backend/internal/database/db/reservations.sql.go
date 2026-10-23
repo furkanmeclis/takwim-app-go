@@ -87,15 +87,16 @@ const createReservation = `-- name: CreateReservation :one
 INSERT INTO reservations (
     organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status,
     confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields,
-    customer_note, internal_note, created_by
+    customer_note, internal_note, created_by, party_size, zone
 )
 VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
     $10, $11, $12, $13, $14,
-    $15, $16, $17, $18, $19
+    $15, $16, $17, $18, $19,
+    $20, $21
 )
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone
 `
 
 type CreateReservationParams struct {
@@ -118,6 +119,8 @@ type CreateReservationParams struct {
 	CustomerNote       string             `json:"customer_note"`
 	InternalNote       string             `json:"internal_note"`
 	CreatedBy          pgtype.Int8        `json:"created_by"`
+	PartySize          pgtype.Int4        `json:"party_size"`
+	Zone               string             `json:"zone"`
 }
 
 func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error) {
@@ -141,6 +144,8 @@ func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationPa
 		arg.CustomerNote,
 		arg.InternalNote,
 		arg.CreatedBy,
+		arg.PartySize,
+		arg.Zone,
 	)
 	var i Reservation
 	err := row.Scan(
@@ -169,6 +174,8 @@ func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationPa
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
@@ -301,7 +308,7 @@ func (q *Queries) GetAgendaStaff(ctx context.Context, arg GetAgendaStaffParams) 
 }
 
 const getReservation = `-- name: GetReservation :one
-SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, b.uuid AS branch_uuid, b.name AS branch_name,
+SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, r.party_size, r.zone, b.uuid AS branch_uuid, b.name AS branch_name,
        c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
        h.expires_at AS hold_expires_at
 FROM reservations r
@@ -342,6 +349,8 @@ type GetReservationRow struct {
 	CreatedBy          pgtype.Int8        `json:"created_by"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	PartySize          pgtype.Int4        `json:"party_size"`
+	Zone               string             `json:"zone"`
 	BranchUuid         uuid.UUID          `json:"branch_uuid"`
 	BranchName         string             `json:"branch_name"`
 	CustomerUuid       uuid.UUID          `json:"customer_uuid"`
@@ -379,6 +388,8 @@ func (q *Queries) GetReservation(ctx context.Context, arg GetReservationParams) 
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 		&i.BranchUuid,
 		&i.BranchName,
 		&i.CustomerUuid,
@@ -430,7 +441,7 @@ func (q *Queries) GetReservationCustomer(ctx context.Context, arg GetReservation
 }
 
 const getReservationForUpdate = `-- name: GetReservationForUpdate :one
-SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at FROM reservations
+SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone FROM reservations
 WHERE organization_id = $1 AND uuid = $2
 FOR UPDATE
 `
@@ -469,6 +480,8 @@ func (q *Queries) GetReservationForUpdate(ctx context.Context, arg GetReservatio
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
@@ -521,7 +534,7 @@ func (q *Queries) GetReservationLineService(ctx context.Context, arg GetReservat
 }
 
 const getReservationRecord = `-- name: GetReservationRecord :one
-SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at FROM reservations
+SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone FROM reservations
 WHERE organization_id = $1 AND uuid = $2
 `
 
@@ -559,6 +572,8 @@ func (q *Queries) GetReservationRecord(ctx context.Context, arg GetReservationRe
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
@@ -567,7 +582,7 @@ const listAgendaLines = `-- name: ListAgendaLines :many
 SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.ends_at,
        l.buffer_before_minutes, l.buffer_after_minutes,
        r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
-       r.source, r.version, r.customer_note,
+       r.source, r.version, r.party_size, r.customer_note,
        b.uuid AS branch_uuid, b.name AS branch_name,
        c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone
 FROM reservation_lines l
@@ -607,6 +622,7 @@ type ListAgendaLinesRow struct {
 	PaymentStatus       string             `json:"payment_status"`
 	Source              string             `json:"source"`
 	Version             int32              `json:"version"`
+	PartySize           pgtype.Int4        `json:"party_size"`
 	CustomerNote        string             `json:"customer_note"`
 	BranchUuid          uuid.UUID          `json:"branch_uuid"`
 	BranchName          string             `json:"branch_name"`
@@ -650,6 +666,7 @@ func (q *Queries) ListAgendaLines(ctx context.Context, arg ListAgendaLinesParams
 			&i.PaymentStatus,
 			&i.Source,
 			&i.Version,
+			&i.PartySize,
 			&i.CustomerNote,
 			&i.BranchUuid,
 			&i.BranchName,
@@ -785,7 +802,7 @@ SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.e
        l.buffer_before_minutes, l.buffer_after_minutes,
        st.uuid AS staff_uuid,
        r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
-       r.source, r.version,
+       r.source, r.version, r.party_size,
        b.uuid AS branch_uuid,
        c.first_name AS customer_first_name, c.last_name AS customer_last_name
 FROM reservation_lines l
@@ -829,6 +846,7 @@ type ListCalendarLinesRow struct {
 	PaymentStatus       string             `json:"payment_status"`
 	Source              string             `json:"source"`
 	Version             int32              `json:"version"`
+	PartySize           pgtype.Int4        `json:"party_size"`
 	BranchUuid          uuid.UUID          `json:"branch_uuid"`
 	CustomerFirstName   string             `json:"customer_first_name"`
 	CustomerLastName    string             `json:"customer_last_name"`
@@ -872,6 +890,7 @@ func (q *Queries) ListCalendarLines(ctx context.Context, arg ListCalendarLinesPa
 			&i.PaymentStatus,
 			&i.Source,
 			&i.Version,
+			&i.PartySize,
 			&i.BranchUuid,
 			&i.CustomerFirstName,
 			&i.CustomerLastName,
@@ -1276,7 +1295,7 @@ func (q *Queries) ListReservationStaffIDs(ctx context.Context, arg ListReservati
 }
 
 const listReservations = `-- name: ListReservations :many
-SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, b.uuid AS branch_uuid, b.name AS branch_name,
+SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, r.party_size, r.zone, b.uuid AS branch_uuid, b.name AS branch_name,
        c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
        c.phone_e164 AS customer_phone,
        COALESCE((SELECT string_agg(l.service_name, ', ' ORDER BY l.line_index) FROM reservation_lines l
@@ -1374,6 +1393,8 @@ type ListReservationsRow struct {
 	CreatedBy          pgtype.Int8        `json:"created_by"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	PartySize          pgtype.Int4        `json:"party_size"`
+	Zone               string             `json:"zone"`
 	BranchUuid         uuid.UUID          `json:"branch_uuid"`
 	BranchName         string             `json:"branch_name"`
 	CustomerUuid       uuid.UUID          `json:"customer_uuid"`
@@ -1442,6 +1463,8 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PartySize,
+			&i.Zone,
 			&i.BranchUuid,
 			&i.BranchName,
 			&i.CustomerUuid,
@@ -1462,7 +1485,7 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 }
 
 const listReservationsByHolds = `-- name: ListReservationsByHolds :many
-SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at FROM reservations
+SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone FROM reservations
 WHERE organization_id = $1 AND hold_id = ANY($2::BIGINT[])
 FOR UPDATE
 `
@@ -1508,6 +1531,8 @@ func (q *Queries) ListReservationsByHolds(ctx context.Context, arg ListReservati
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PartySize,
+			&i.Zone,
 		); err != nil {
 			return nil, err
 		}
@@ -1537,9 +1562,10 @@ func (q *Queries) NextReservationNumber(ctx context.Context, organizationID int6
 const replaceReservationSchedule = `-- name: ReplaceReservationSchedule :one
 UPDATE reservations
 SET hold_id = $1, starts_at = $2, ends_at = $3,
-    total_price = $4, version = version + 1
-WHERE organization_id = $5 AND id = $6
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at
+    total_price = $4, party_size = $5, zone = $6,
+    version = version + 1
+WHERE organization_id = $7 AND id = $8
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone
 `
 
 type ReplaceReservationScheduleParams struct {
@@ -1547,6 +1573,8 @@ type ReplaceReservationScheduleParams struct {
 	StartsAt       pgtype.Timestamptz `json:"starts_at"`
 	EndsAt         pgtype.Timestamptz `json:"ends_at"`
 	TotalPrice     pgtype.Numeric     `json:"total_price"`
+	PartySize      pgtype.Int4        `json:"party_size"`
+	Zone           string             `json:"zone"`
 	OrganizationID int64              `json:"organization_id"`
 	ID             int64              `json:"id"`
 }
@@ -1558,6 +1586,8 @@ func (q *Queries) ReplaceReservationSchedule(ctx context.Context, arg ReplaceRes
 		arg.StartsAt,
 		arg.EndsAt,
 		arg.TotalPrice,
+		arg.PartySize,
+		arg.Zone,
 		arg.OrganizationID,
 		arg.ID,
 	)
@@ -1588,6 +1618,8 @@ func (q *Queries) ReplaceReservationSchedule(ctx context.Context, arg ReplaceRes
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
@@ -1597,7 +1629,7 @@ UPDATE reservations
 SET customer_note = $1, internal_note = $2,
     custom_fields = $3, version = version + 1
 WHERE organization_id = $4 AND id = $5
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone
 `
 
 type UpdateReservationNotesParams struct {
@@ -1643,6 +1675,8 @@ func (q *Queries) UpdateReservationNotes(ctx context.Context, arg UpdateReservat
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
@@ -1653,7 +1687,7 @@ SET status = $1, approval_status = $2,
     payment_status = $3, cancel_reason = $4,
     version = version + 1
 WHERE organization_id = $5 AND id = $6
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone
 `
 
 type UpdateReservationStateParams struct {
@@ -1702,6 +1736,8 @@ func (q *Queries) UpdateReservationState(ctx context.Context, arg UpdateReservat
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }

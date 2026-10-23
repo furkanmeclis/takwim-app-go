@@ -141,6 +141,8 @@ type Branch struct {
 	// SpecialDays are today's and later dated exceptions.
 	SpecialDays []SpecialDay `json:"special_days"`
 	Images      []Image      `json:"images"`
+	// Zones are the areas a party may ask for (restaurant tables).
+	Zones []string `json:"zones"`
 }
 
 // ServiceOffer is a service in one branch.
@@ -193,6 +195,9 @@ type AvailabilityInput struct {
 	To          string                   `json:"to"`
 	StepMinutes *int                     `json:"step_minutes"`
 	Channel     string                   `json:"channel"`
+	// PartySize (restaurant: required) and the preferred area.
+	PartySize *int   `json:"party_size"`
+	Zone      string `json:"zone"`
 }
 
 // SlotLine is who serves one line of a slot.
@@ -243,6 +248,8 @@ type CheckoutInput struct {
 	Lines      []availability.LineInput `json:"lines"`
 	StartsAt   *time.Time               `json:"starts_at"`
 	Channel    string                   `json:"channel"`
+	PartySize  *int                     `json:"party_size"`
+	Zone       string                   `json:"zone"`
 }
 
 // CheckoutLine is a planned line of a checkout (stored as JSON).
@@ -263,6 +270,8 @@ type Checkout struct {
 	EndsAt    time.Time      `json:"ends_at"`
 	ExpiresAt *time.Time     `json:"expires_at"`
 	Lines     []CheckoutLine `json:"lines"`
+	PartySize *int           `json:"party_size"`
+	Zone      string         `json:"zone"`
 	// ReservationUUID is set once the checkout was booked.
 	ReservationUUID *uuid.UUID `json:"reservation_uuid"`
 }
@@ -321,6 +330,8 @@ type Reservation struct {
 	TotalPrice         money.Money `json:"total_price"`
 	Currency           string      `json:"currency"`
 	CustomerNote       string      `json:"customer_note"`
+	PartySize          *int        `json:"party_size"`
+	Zone               string      `json:"zone"`
 	// ExpiresAt: a request waiting for the business or for online payment
 	// lets its time go at this instant.
 	ExpiresAt    *time.Time `json:"expires_at"`

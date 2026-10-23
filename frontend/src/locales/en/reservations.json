@@ -215,5 +215,14 @@
   "errors.other_staff": "A colleague also serves this visit; you can change only your own service.",
   "errors.taken": "The chosen time is no longer free. Pick another time.",
   "errors.stale": "The visit changed while you were looking. The page was refreshed; try again.",
-  "errors.invalid_transition": "This action is not possible in the visit's current state."
+  "errors.invalid_transition": "This action is not possible in the visit's current state.",
+  "columns.party": "Party / area",
+  "fields.party_size": "Guests",
+  "fields.party_size_hint": "The table is picked by the system from the number of guests.",
+  "fields.party_size_zone_hint": "The table is picked from the number of guests, in the {{zone}} area.",
+  "fields.zone": "Area",
+  "fields.zone_hint": "Such as the hall or the garden; leave as is for any area that fits.",
+  "fields.zone_any": "Any area",
+  "validation.party_size": "Enter between 1 and 1000 guests.",
+  "party_count": "{{count}} guests"
 }

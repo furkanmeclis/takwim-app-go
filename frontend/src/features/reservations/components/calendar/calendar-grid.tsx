@@ -397,6 +397,9 @@ export function CalendarGrid({
                   </span>
                   <span className="truncate font-medium">
                     {item.customer_name}
+                    {item.party_size != null
+                      ? ` · ${t("reservations.party_count", { count: item.party_size })}`
+                      : ""}
                   </span>
                   <span className="truncate opacity-80">
                     {item.service_name}

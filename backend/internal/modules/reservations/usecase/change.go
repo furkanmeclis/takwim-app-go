@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -112,9 +113,16 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 				return err
 			}
 		}
+		party, zone := partyOf(full.PartySize), full.Zone
+		if in.PartySize != nil {
+			party = in.PartySize
+		}
+		if in.Zone != nil {
+			zone = strings.TrimSpace(*in.Zone)
+		}
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
 			BranchUUID: full.BranchUuid, Lines: lines, Channel: availabilitymodel.ChannelPanel,
-			StartsAt: in.StartsAt, Reason: reason, Minutes: minutes,
+			StartsAt: in.StartsAt, Reason: reason, Minutes: minutes, PartySize: party, Zone: zone,
 		}, caller, actorID)
 		if err != nil {
 			return err
@@ -150,7 +158,7 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		}
 		updated, err := tx.Q.ReplaceReservationSchedule(ctx, db.ReplaceReservationScheduleParams{
 			OrganizationID: orgID, ID: row.ID, HoldID: pgInt8(created.ID), StartsAt: ts(created.Slot.StartsAt),
-			EndsAt: ts(created.Slot.EndsAt), TotalPrice: total.Numeric(),
+			EndsAt: ts(created.Slot.EndsAt), TotalPrice: total.Numeric(), PartySize: pgParty(party), Zone: zone,
 		})
 		if err != nil {
 			return err

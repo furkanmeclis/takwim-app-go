@@ -712,6 +712,8 @@ type PublicCheckout struct {
 	ReservationID  pgtype.Int8        `json:"reservation_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	PartySize      pgtype.Int4        `json:"party_size"`
+	Zone           string             `json:"zone"`
 }
 
 type PushDevice struct {
@@ -788,6 +790,8 @@ type Reservation struct {
 	CreatedBy          pgtype.Int8        `json:"created_by"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	PartySize          pgtype.Int4        `json:"party_size"`
+	Zone               string             `json:"zone"`
 }
 
 type ReservationEvent struct {

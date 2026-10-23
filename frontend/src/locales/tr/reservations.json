@@ -215,5 +215,14 @@
   "errors.other_staff": "Bu randevuda başka bir çalışanın da hizmeti var; yalnızca kendi hizmetinizi değiştirebilirsiniz.",
   "errors.taken": "Seçilen saat artık müsait değil. Başka bir saat seçin.",
   "errors.stale": "Randevu siz bakarken değişti. Sayfa yenilendi; tekrar deneyin.",
-  "errors.invalid_transition": "Randevunun şu anki durumunda bu işlem yapılamaz."
+  "errors.invalid_transition": "Randevunun şu anki durumunda bu işlem yapılamaz.",
+  "columns.party": "Kişi / alan",
+  "fields.party_size": "Kişi sayısı",
+  "fields.party_size_hint": "Masa, kişi sayısına göre sistem tarafından seçilir.",
+  "fields.party_size_zone_hint": "Masa, kişi sayısına göre {{zone}} alanında seçilir.",
+  "fields.zone": "Alan",
+  "fields.zone_hint": "Salon, bahçe gibi; boş bırakılırsa uygun herhangi bir alan.",
+  "fields.zone_any": "Fark etmez",
+  "validation.party_size": "1 ile 1000 arasında bir kişi sayısı girin.",
+  "party_count": "{{count}} kişi"
 }

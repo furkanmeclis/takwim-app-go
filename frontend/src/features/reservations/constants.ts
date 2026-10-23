@@ -128,3 +128,6 @@ export function canReschedule(status: ReservationStatus) {
 
 export const MAX_LINES = 10;
 export const MAX_NOTE = 2000;
+/** Guests of one booking (restaurant flow), as the API allows. */
+export const MIN_PARTY_SIZE = 1;
+export const MAX_PARTY_SIZE = 1000;

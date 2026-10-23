@@ -79,7 +79,7 @@ func (s *Service) List(ctx context.Context, orgID int64, f model.ListFilter, cal
 			Customer: model.Customer{UUID: r.CustomerUuid, Name: strings.TrimSpace(r.CustomerFirstName + " " + r.CustomerLastName)},
 			Services: r.Services, Staff: r.StaffNames, StartsAt: r.StartsAt.Time.UTC(), EndsAt: r.EndsAt.Time.UTC(),
 			TotalPrice: money.FromNumericOrZero(r.TotalPrice), Currency: r.Currency, Version: int(r.Version),
-			CreatedAt: r.CreatedAt.Time.UTC(),
+			CreatedAt: r.CreatedAt.Time.UTC(), PartySize: partyOf(r.PartySize), Zone: r.Zone,
 		}
 		if r.CustomerPhone.Valid {
 			item.Customer.Phone = &r.CustomerPhone.String

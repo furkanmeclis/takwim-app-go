@@ -15248,6 +15248,15 @@ components:
       additionalProperties: false
       required: [branch_uuid, lines]
       properties:
+        party_size:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party.
+        zone:
+          type: string
+          maxLength: 64
+          description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
         lines:
           type: array
@@ -15357,6 +15366,15 @@ components:
       additionalProperties: false
       required: [branch_uuid, lines, starts_at, reason]
       properties:
+        party_size:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party.
+        zone:
+          type: string
+          maxLength: 64
+          description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
         lines:
           type: array
@@ -15431,6 +15449,15 @@ components:
       additionalProperties: false
       required: [branch_uuid, customer_uuid, lines, starts_at]
       properties:
+        party_size:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party.
+        zone:
+          type: string
+          maxLength: 64
+          description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
         customer_uuid: { type: string, format: uuid }
         lines:
@@ -15450,6 +15477,15 @@ components:
       additionalProperties: false
       required: [starts_at]
       properties:
+        party_size:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: New number of people; omitted or null keeps the booked party.
+        zone:
+          type: [string, "null"]
+          maxLength: 64
+          description: New area; omitted or null keeps the booked one.
         starts_at: { type: string, format: date-time }
         lines:
           type: array
@@ -15497,8 +15533,10 @@ components:
 
     TenantReservationListItem:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, source, branch, customer, services, staff, starts_at, ends_at, total_price, currency, version, created_at]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, source, branch, customer, services, staff, starts_at, ends_at, total_price, currency, version, created_at, party_size, zone]
       properties:
+        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        zone: { type: string, description: Area asked for; empty = any. }
         uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/TenantReservationStatus" }
@@ -15578,8 +15616,9 @@ components:
       required:
         [reservation_uuid, number, line_index, columns, branch_uuid, service_name, staff_name, customer_name,
          starts_at, ends_at, buffer_before_minutes, buffer_after_minutes, status, approval_status,
-         confirmation_status, payment_status, source, version]
+         confirmation_status, payment_status, source, version, party_size]
       properties:
+        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
         reservation_uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         line_index: { type: integer }
@@ -15671,8 +15710,10 @@ components:
 
     TenantReservation:
       type: object
-      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, events, created_at, updated_at]
+      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, events, created_at, updated_at, party_size, zone]
       properties:
+        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        zone: { type: string, description: Area asked for; empty = any. }
         uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         status: { $ref: "#/components/schemas/TenantReservationStatus" }
@@ -16016,8 +16057,12 @@ components:
 
     PublicBranch:
       type: object
-      required: [uuid, slug, name, description, address, city, district, latitude, longitude, phone, email, timezone, working_hours, special_days, images]
+      required: [uuid, slug, name, description, address, city, district, latitude, longitude, phone, email, timezone, working_hours, special_days, images, zones]
       properties:
+        zones:
+          type: array
+          description: Areas a party may ask for (zones of the online tables and areas), for the restaurant flow's area step.
+          items: { type: string }
         uuid: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
@@ -16130,6 +16175,15 @@ components:
       additionalProperties: false
       required: [branch_uuid, lines]
       properties:
+        party_size:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party.
+        zone:
+          type: string
+          maxLength: 64
+          description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
         lines:
           type: array
@@ -16200,6 +16254,15 @@ components:
       additionalProperties: false
       required: [branch_uuid, lines, starts_at]
       properties:
+        party_size:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 1000
+          description: Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party.
+        zone:
+          type: string
+          maxLength: 64
+          description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
         lines:
           type: array
@@ -16211,8 +16274,10 @@ components:
 
     PublicCheckout:
       type: object
-      required: [token, status, channel, branch, starts_at, ends_at, expires_at, lines, reservation_uuid]
+      required: [token, status, channel, branch, starts_at, ends_at, expires_at, lines, reservation_uuid, party_size, zone]
       properties:
+        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        zone: { type: string, description: Area asked for; empty = any. }
         token: { type: string, format: uuid, description: "The checkout token (secret of the client)." }
         status: { type: string, enum: [active, expired, released, booked] }
         channel: { $ref: "#/components/schemas/PublicChannel" }
@@ -16249,8 +16314,10 @@ components:
 
     PublicReservation:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, lines, created_at]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, lines, created_at, party_size, zone]
       properties:
+        party_size: { type: [integer, "null"], description: Number of people (restaurant). }
+        zone: { type: string, description: Area asked for; empty = any. }
         uuid: { type: string, format: uuid }
         number: { type: integer, format: int64 }
         status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }

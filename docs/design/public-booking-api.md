@@ -60,6 +60,10 @@ Otherwise the answer is `409 BOOKING_UNAVAILABLE` with detail `channel` / reason
 3. **One booking per checkout.** A retry answers `200` with the same reservation and `Idempotent-Replayed: true`. This holds even without an `Idempotency-Key`.
 4. **Source.** `widget` bookings are `embed`, `web` and `api` bookings are `online`. The reservation has no creator user.
 
+## Restaurant flow (TEC-903)
+
+In a party sector, availability and checkouts take `party_size` (required when a line needs a table) and an optional `zone`; the branch list answers each branch's `zones` (areas of its online tables and areas) for the area step. The checkout stores both and the booking reads them from the checkout, so the reservation keeps the party and area. Online bookings are seated at one table; joining tables is left to the business on the panel. A free service cannot be paid online (`payment` / `not_allowed`).
+
 ## Customer by phone
 
 The phone is normalized to E.164 (`pkg/phone`; a number without a country code is Turkish).
