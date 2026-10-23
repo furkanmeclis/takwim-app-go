@@ -20,6 +20,8 @@ export type TenantOrganization = {
   uuid: string;
   slug: string;
   name: string;
+  /** API-owned logo stream (`/v1/organizations/{uuid}/logo?v=…`). */
+  logoUrl: string | null;
   status: "active" | "suspended";
   accessEndsAt: string | null;
 };
@@ -60,6 +62,7 @@ function fromMembership(org: AuthOrganization): TenantOrganization {
     uuid: org.uuid,
     slug: org.slug,
     name: org.name,
+    logoUrl: org.logoUrl ?? null,
     status: org.status,
     accessEndsAt: org.accessEndsAt,
   };
@@ -123,7 +126,8 @@ export function TenantProvider({
         organization: {
           uuid: data.organization.uuid,
           slug: data.organization.slug,
-          name: data.organization.name,
+          name: membership?.name ?? data.organization.name,
+          logoUrl: membership?.logoUrl ?? null,
           status: data.organization.status,
           accessEndsAt: data.organization.access_ends_at ?? null,
         },

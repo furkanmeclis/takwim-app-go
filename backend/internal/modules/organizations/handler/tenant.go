@@ -101,9 +101,23 @@ func (h *Handler) TenantRolesMetaH(w http.ResponseWriter, r *http.Request) {
 // TenantListMembers serves GET /v1/tenant/members.
 func (h *Handler) TenantListMembers(w http.ResponseWriter, r *http.Request) {
 	scope := orgctx.Must(r.Context())
-	q, ok := parseListQuery(w, r, apiquery.SortColumns(orgusecase.MemberSortColumns))
+	f, ok := tenantMemberFilter(w, r)
 	if !ok {
 		return
+	}
+	items, total, err := h.svc.ListTenantMembers(r.Context(), scope, f)
+	if err != nil {
+		writeTenantError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, apiquery.NewPage(items, total, f.Limit, f.Offset))
+}
+
+// tenantMemberFilter parses the member list query (tenant and platform).
+func tenantMemberFilter(w http.ResponseWriter, r *http.Request) (orgmodel.TenantMemberListFilter, bool) {
+	q, ok := parseListQuery(w, r, apiquery.SortColumns(orgusecase.MemberSortColumns))
+	if !ok {
+		return orgmodel.TenantMemberListFilter{}, false
 	}
 	values := r.URL.Query()
 	f := orgmodel.TenantMemberListFilter{
@@ -116,7 +130,7 @@ func (h *Handler) TenantListMembers(w http.ResponseWriter, r *http.Request) {
 			f.BranchScope = v
 		} else if v != "all,selected" && v != "selected,all" {
 			response.ValidationError(w, r, []response.Detail{{Field: "branch_scope", Message: "branch_scope must be all or selected", Code: "invalid"}})
-			return
+			return orgmodel.TenantMemberListFilter{}, false
 		}
 	}
 	for _, raw := range values["role"] {
@@ -128,17 +142,12 @@ func (h *Handler) TenantListMembers(w http.ResponseWriter, r *http.Request) {
 			id, err := uuid.Parse(part)
 			if err != nil {
 				response.ValidationError(w, r, []response.Detail{{Field: "role", Message: "role must be a role uuid", Code: "invalid"}})
-				return
+				return orgmodel.TenantMemberListFilter{}, false
 			}
 			f.RoleUUIDs = append(f.RoleUUIDs, id)
 		}
 	}
-	items, total, err := h.svc.ListTenantMembers(r.Context(), scope, f)
-	if err != nil {
-		writeTenantError(w, r, err)
-		return
-	}
-	response.JSON(w, r, http.StatusOK, apiquery.NewPage(items, total, q.Limit, q.Offset))
+	return f, true
 }
 
 // TenantGetMember serves GET /v1/tenant/members/{userUuid}.
@@ -367,6 +376,8 @@ func (h *Handler) publishPlatformMember(r *http.Request, orgUUID uuid.UUID, acti
 		tenantAction = "members.updated"
 	}
 	h.publishTenant(ctx, tenantAction, &userUUID)
+	// Member counts and the owner column of the platform list.
+	h.publishPlatform(r.Context(), resourceevents.ActionUpdated, orgUUID)
 }
 
 func writeTenantError(w http.ResponseWriter, r *http.Request, err error) {
@@ -384,6 +395,9 @@ func writeTenantError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, orgusecase.ErrForbidden), errors.Is(err, orgusecase.ErrRoleReadOnly):
 		response.RecordFailure(w, err)
 		response.Forbidden(w, r, err.Error())
+	case errors.Is(err, orgusecase.ErrRateLimited):
+		response.RecordFailure(w, err)
+		response.Error(w, r, http.StatusTooManyRequests, response.CodeRateLimited, err.Error())
 	case errors.Is(err, orgusecase.ErrRoleInUse):
 		response.RecordFailure(w, err)
 		response.Conflict(w, r, response.CodeConflict, err.Error())

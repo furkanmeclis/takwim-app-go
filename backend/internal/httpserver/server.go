@@ -55,6 +55,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/providers"
 	notifusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/usecase"
 	organizationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations"
+	orgadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/adapters"
 	orghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/handler"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
@@ -130,6 +131,7 @@ type Server struct {
 	githubSvc     *githubusecase.Service
 	oauthProvSvc  *oauthproviderusecase.Service
 	authSettings  *authsettingsusecase.Service
+	mux           *http.ServeMux
 	http          *http.Server
 }
 
@@ -152,6 +154,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		realtime:    deps.Realtime,
 		worker:      deps.Worker,
 		events:      eventBus,
+		mux:         mux,
 	}
 
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
@@ -172,7 +175,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		providers.NoopProvider{Name: "sms", Log: log},
 		providers.NoopProvider{Name: "push", Log: log},
 	}
-	notifSvc := notifusecase.New(deps.Queries, deps.Queue, provs, log)
+	// Job queue of the engines; nil (no Redis queue) runs jobs inline. A nil
+	// *queue.Client must not reach the use cases as a non-nil interface.
+	var jobQueue exportusecase.Enqueuer
+	if deps.Queue != nil {
+		jobQueue = deps.Queue
+	}
+	notifSvc := notifusecase.New(deps.Queries, jobQueue, provs, log)
 	notifSvc.WithActionSigner(cfg.JWT.AccessSecret, 0)
 	notifSvc.WithVAPID(notifusecase.VAPIDConfig{
 		PublicKey:  cfg.VAPID.PublicKey,
@@ -280,9 +289,20 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		branchusecase.NewOrganizationHooks(searchIndexer),
 	)
 	uc.SetOrganizationsLister(orgSvc)
+	// Staff invitations, organization logo and the platform management views.
+	orgMgmt := orgusecase.NewManagement(orgSvc, orgrepository.NewPostgres(deps.DB, deps.Queries), orgusecase.ManagementConfig{
+		FrontendURL: cfg.Auth.FrontendURL,
+	})
+	orgMgmt.SetNotifier(notifSvc)
+	orgMgmt.SetAccounts(uc)
+	orgMgmt.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	orgMgmt.SetLogger(log)
 	orgH := orghandler.New(orgSvc, activityRec)
+	orgH.SetManagement(orgMgmt)
+	orgH.SetStorage(deps.Storage)
+	orgH.SetRegistrationLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	orgH.SetResourceEvents(resourceEvents)
-	organizationsmodule.RegisterRoutes(mux, orgH, tokens, loader)
+	organizationsmodule.RegisterPlatformLiveResources(liveResources)
 	var tenantResolver orgctx.Resolver
 	if cfg.Tenancy.Enabled {
 		orgCache := orgcache.New(orgSvc, deps.Redis, cfg.Tenancy.CacheTTL, cfg.App.Env)
@@ -329,15 +349,17 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		ioadapters.NewNotifications(deps.Queries),
 		ioadapters.NewActivity(deps.Queries),
 		branchadapters.NewIO(branchSvc),
+		orgadapters.NewIO(orgSvc),
 	)
-	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, deps.Queue, notifSvc, activityRec, log)
-	importSvc := importusecase.New(deps.Queries, deps.Storage, ioReg, deps.Queue, notifSvc, activityRec, log)
+	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
+	importSvc := importusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
 	bulkReg := bulkengine.NewRegistry(
 		bulkadapters.NewUsers(deps.Queries),
 		bulkadapters.NewRoles(deps.Queries),
 		branchadapters.NewBulk(branchSvc),
+		orgadapters.NewBulk(orgSvc),
 	)
-	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, deps.Queue, notifSvc, activityRec, cfg.Bulk, log)
+	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, jobQueue, notifSvc, activityRec, cfg.Bulk, log)
 	// Tenant jobs run with the requester's current membership (permissions
 	// and branch scope).
 	exportSvc.SetJobScopeLoader(orgSvc)
@@ -363,6 +385,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	exportH := exporthandler.New(exportSvc)
 	importH := importhandler.New(importSvc)
 	bulkH := bulkhandler.New(bulkSvc)
+	organizationsmodule.RegisterRoutes(mux, orgH, organizationsmodule.PlatformEngineHandlers{
+		Export: exportH.PlatformExport(orgadapters.Resource, orgadapters.ExportQueryKeys...),
+		Bulk:   bulkH.Execute(orgadapters.Resource),
+		StepUp: middleware.RequireStepUp(stepUpSvc),
+	}, tokens, loader)
 	exportmodule.RegisterRoutes(mux, exportH, tokens, loader, stepUpSvc)
 	importmodule.RegisterRoutes(mux, importH, tokens, loader)
 	bulkmodule.RegisterRoutes(mux, bulkH, tokens, loader)

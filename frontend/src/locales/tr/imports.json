@@ -103,5 +103,8 @@
   "diff.empty": "Gösterilecek satır yok",
   "diff.columns.row": "Satır",
   "diff.columns.op": "İşlem",
-  "diff.columns.changes": "Değişecek alanlar"
+  "diff.columns.changes": "Değişecek alanlar",
+  "resources.tenant.transfers": "Transferler",
+  "resources.tenant.one_way_rules": "Tek yön kuralları",
+  "resources.platform.organizations": "İşletmeler"
 }

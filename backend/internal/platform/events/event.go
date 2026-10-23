@@ -8,15 +8,15 @@ import (
 
 // Event is the standard envelope published on the platform bus.
 type Event struct {
-	Name        string
-	TenantID    *int64
-	ActorUserID *int64
-	EntityType  string
-	EntityID    *int64
-	EntityUUID  *uuid.UUID
-	Payload     map[string]any
-	OccurredAt  time.Time
-	EventID     uuid.UUID
+	Name           string
+	OrganizationID *int64
+	ActorUserID    *int64
+	EntityType     string
+	EntityID       *int64
+	EntityUUID     *uuid.UUID
+	Payload        map[string]any
+	OccurredAt     time.Time
+	EventID        uuid.UUID
 }
 
 // New builds an Event with a fresh EventID and UTC OccurredAt.
@@ -29,9 +29,11 @@ func New(name string) Event {
 	}
 }
 
-// WithTenant sets TenantID.
-func (e Event) WithTenant(tenantID int64) Event {
-	e.TenantID = &tenantID
+// WithOrganization stamps the event with the organization it belongs to
+// (tenant events); handlers pass it on, e.g. to organization-stamped
+// notifications. Platform events leave it nil.
+func (e Event) WithOrganization(organizationID int64) Event {
+	e.OrganizationID = &organizationID
 	return e
 }
 

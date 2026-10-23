@@ -46,6 +46,12 @@ const (
 	CodeQRSessionClaimed          = "QR_SESSION_CLAIMED"
 	CodeQRLoginInvalid            = "QR_LOGIN_INVALID"
 	CodeLastSignInMethod          = "LAST_SIGN_IN_METHOD"
+	CodeInvitationExpired         = "INVITATION_EXPIRED"
+	CodeInvitationUsed            = "INVITATION_USED"
+	CodeInvitationRevoked         = "INVITATION_REVOKED"
+	CodeInvitationEmailMismatch   = "INVITATION_EMAIL_MISMATCH"
+	CodeAlreadyMember             = "ALREADY_MEMBER"
+	CodeAccountExists             = "ACCOUNT_EXISTS"
 )
 
 // RequestIDFunc resolves the correlation id from request context.

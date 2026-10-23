@@ -129,5 +129,21 @@
   "validation.money": "Geçerli bir tutar girin (en fazla 2 ondalık).",
   "validation.prepayment_amount": "Sıfırdan büyük bir ön ödeme tutarı girin.",
   "validation.prepayment_percent": "0'dan büyük, 100'den küçük ya da eşit bir oran girin.",
-  "toast.saved": "Ayarlar kaydedildi (sürüm {{version}})"
+  "toast.saved": "Ayarlar kaydedildi (sürüm {{version}})",
+  "profile.title": "İşletme profili",
+  "profile.name": "İşletme adı",
+  "profile.name_hint": "Panelde ve davetlerde görünür. Adres (/t/{{slug}}) değişmez.",
+  "profile.save": "Adı kaydet",
+  "profile.logo_upload": "Logo yükle",
+  "profile.logo_replace": "Logoyu değiştir",
+  "profile.logo_remove": "Logoyu kaldır",
+  "profile.logo_hint": "PNG, JPEG, WebP veya SVG; en fazla 2 MB.",
+  "profile.logo_too_large": "Logo en fazla 2 MB olabilir.",
+  "profile.logo_remove_title": "Logo kaldırılsın mı?",
+  "profile.logo_remove_description": "Kenar çubuğunda ve işletme seçicide yerine simge gösterilir.",
+  "profile.validation.name_required": "İşletme adı zorunludur.",
+  "profile.validation.name_too_long": "İşletme adı en fazla 255 karakter olabilir.",
+  "profile.toast.renamed": "İşletme adı güncellendi.",
+  "profile.toast.logo_uploaded": "Logo yüklendi.",
+  "profile.toast.logo_removed": "Logo kaldırıldı."
 }

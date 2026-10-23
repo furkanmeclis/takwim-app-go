@@ -129,5 +129,21 @@
   "validation.money": "Enter a valid amount (at most 2 decimals).",
   "validation.prepayment_amount": "Enter a prepayment amount above zero.",
   "validation.prepayment_percent": "Enter a rate above 0 and at most 100.",
-  "toast.saved": "Settings saved (version {{version}})"
+  "toast.saved": "Settings saved (version {{version}})",
+  "profile.title": "Business profile",
+  "profile.name": "Business name",
+  "profile.name_hint": "Shown in the panel and in invitations. The address (/t/{{slug}}) does not change.",
+  "profile.save": "Save name",
+  "profile.logo_upload": "Upload logo",
+  "profile.logo_replace": "Replace logo",
+  "profile.logo_remove": "Remove logo",
+  "profile.logo_hint": "PNG, JPEG, WebP or SVG; at most 2 MB.",
+  "profile.logo_too_large": "The logo can be at most 2 MB.",
+  "profile.logo_remove_title": "Remove the logo?",
+  "profile.logo_remove_description": "An icon is shown in the sidebar and the business switcher instead.",
+  "profile.validation.name_required": "Name is required.",
+  "profile.validation.name_too_long": "Name can be at most 255 characters.",
+  "profile.toast.renamed": "Business name updated.",
+  "profile.toast.logo_uploaded": "Logo uploaded.",
+  "profile.toast.logo_removed": "Logo removed."
 }

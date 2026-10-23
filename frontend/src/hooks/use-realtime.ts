@@ -214,9 +214,8 @@ export function useRealtimeDebug(): RealtimeDebugSnapshot {
 export function useDefaultRealtimeChannels(options: {
   isPlatform: boolean;
   userId?: number | string | null;
-  dealerId?: number | string | null;
 }) {
-  const { isPlatform, userId, dealerId } = options;
+  const { isPlatform, userId } = options;
 
   const channels: string[] = [];
   if (isPlatform) {
@@ -224,9 +223,6 @@ export function useDefaultRealtimeChannels(options: {
   }
   if (userId != null && userId !== "") {
     channels.push(RealtimeChannels.user(userId));
-  }
-  if (dealerId != null && dealerId !== "") {
-    channels.push(RealtimeChannels.dealer(dealerId));
   }
   return channels;
 }

@@ -266,7 +266,7 @@ func (f *fakeRepo) SlugExists(_ context.Context, slug string) (bool, error) {
 	return f.existingSlugs[slug], nil
 }
 
-func (f *fakeRepo) ListOrganizations(context.Context, db.ListOrganizationsFilteredParams) ([]db.Organization, int64, error) {
+func (f *fakeRepo) ListOrganizations(context.Context, db.ListOrganizationsWithStatsParams) ([]db.ListOrganizationsWithStatsRow, int64, error) {
 	return nil, 0, nil
 }
 

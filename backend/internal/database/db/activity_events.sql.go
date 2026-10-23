@@ -15,7 +15,8 @@ import (
 
 const countActivityEvents = `-- name: CountActivityEvents :one
 SELECT COUNT(*)::bigint FROM activity_events
-WHERE ($1::bigint IS NULL OR actor_user_id = $1)
+WHERE organization_id IS NULL
+  AND ($1::bigint IS NULL OR actor_user_id = $1)
   AND ($2::text IS NULL OR resource = $2)
   AND ($3::text IS NULL OR action = $3)
   AND (
@@ -112,7 +113,8 @@ func (q *Queries) InsertActivityEvent(ctx context.Context, arg InsertActivityEve
 
 const listActivityEvents = `-- name: ListActivityEvents :many
 SELECT id, uuid, actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, created_at, organization_id FROM activity_events
-WHERE ($1::bigint IS NULL OR actor_user_id = $1)
+WHERE organization_id IS NULL
+  AND ($1::bigint IS NULL OR actor_user_id = $1)
   AND ($2::text IS NULL OR resource = $2)
   AND ($3::text IS NULL OR action = $3)
   AND (
@@ -133,6 +135,8 @@ type ListActivityEventsParams struct {
 	LimitCount  int32       `json:"limit_count"`
 }
 
+// Platform audit feed: platform events only. Organization events are read
+// per resource through ListOrganizationResourceActivity.
 func (q *Queries) ListActivityEvents(ctx context.Context, arg ListActivityEventsParams) ([]ActivityEvent, error) {
 	rows, err := q.db.Query(ctx, listActivityEvents,
 		arg.ActorUserID,

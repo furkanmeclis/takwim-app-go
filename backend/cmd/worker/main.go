@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/cache"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/config"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/logging"
@@ -20,6 +21,7 @@ import (
 	notifmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/providers"
 	notifusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/usecase"
+	orgadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/adapters"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
@@ -31,6 +33,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	ioadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/mail"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx/orgcache"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/outbox"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
@@ -116,12 +119,22 @@ func main() {
 	activityRec := activity.NewRecorder(queries, log)
 	// Tenant resources: adapters read the organization from the job row.
 	branchSvc := branchusecase.New(branchrepository.NewPostgres(queries), nil)
+	// Platform organizations (export, bulk activate / suspend). Status
+	// changes invalidate the API's organization cache when Redis is up.
+	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
+	if rdb, err := cache.NewRedisClient(ctx, cfg.Redis); err == nil {
+		defer func() { _ = rdb.Close() }()
+		jobScopes.SetInvalidator(orgcache.New(jobScopes, rdb, cfg.Tenancy.CacheTTL, cfg.App.Env))
+	} else {
+		log.Warn("worker_redis_unavailable", "error", err)
+	}
 	ioReg := ioengine.NewRegistry(
 		ioadapters.NewUsers(queries),
 		ioadapters.NewRoles(queries),
 		ioadapters.NewNotifications(queries),
 		ioadapters.NewActivity(queries),
 		branchadapters.NewIO(branchSvc),
+		orgadapters.NewIO(jobScopes),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
 	importSvc := importusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
@@ -129,11 +142,11 @@ func main() {
 		bulkadapters.NewUsers(queries),
 		bulkadapters.NewRoles(queries),
 		branchadapters.NewBulk(branchSvc),
+		orgadapters.NewBulk(jobScopes),
 	)
 	bulkSvc := bulkusecase.New(queries, bulkReg, nil, notifSvc, activityRec, cfg.Bulk, log)
 	// Tenant jobs run with the requester's current membership (permissions
 	// and branch scope), re-resolved from the job's actor.
-	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
 	exportSvc.SetJobScopeLoader(jobScopes)
 	importSvc.SetJobScopeLoader(jobScopes)
 	bulkSvc.SetJobScopeLoader(jobScopes)

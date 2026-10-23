@@ -115,7 +115,7 @@ func TestTenantMembersRolesLiveEvents(t *testing.T) {
 	}
 	loader := operatorLoader{alice.Uuid: alice.ID, bob.Uuid: bob.ID}
 	mux := http.NewServeMux()
-	organizations.RegisterRoutes(mux, h, tokens, loader)
+	organizations.RegisterRoutes(mux, h, organizations.PlatformEngineHandlers{}, tokens, loader)
 	organizations.RegisterTenantRoutes(mux, h, tokens, loader, orgSvc)
 
 	call := func(method, path string, tenant bool, body any) (int, map[string]any) {
@@ -171,7 +171,11 @@ func TestTenantMembersRolesLiveEvents(t *testing.T) {
 		"user_uuid": bobID, "role_key": orgctx.RoleMember,
 	})
 	must(http.StatusCreated, code, "platform add member")
-	expect("platform add member", pub(members, resourceevents.ActionCreated, bobID), pub(roles, resourceevents.ActionBulk))
+	platformList := strings.Join([]string{
+		resourceevents.DefaultChannel(orghandler.ResourcePlatformOrganizations), orghandler.ResourcePlatformOrganizations,
+		resourceevents.ActionUpdated, org.UUID.String(),
+	}, " ")
+	expect("platform add member", pub(members, resourceevents.ActionCreated, bobID), pub(roles, resourceevents.ActionBulk), platformList)
 
 	code, _ = call(http.MethodPatch, "/v1/tenant/members/"+bobID, true, map[string]any{"branch_scope": "all"})
 	must(http.StatusOK, code, "patch member")

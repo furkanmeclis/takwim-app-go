@@ -6,6 +6,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -27,7 +28,16 @@ export type DatePickerProps = {
   captionLayout?: React.ComponentProps<typeof Calendar>["captionLayout"];
   align?: React.ComponentProps<typeof PopoverContent>["align"];
   "aria-invalid"?: boolean;
+  /**
+   * Date and time: the value becomes local `yyyy-MM-dd'T'HH:mm` and a time
+   * field appears under the calendar (callers convert to ISO for the API).
+   */
+  withTime?: boolean;
+  /** Time used when a day is picked before any time (withTime). */
+  defaultTime?: string;
 };
+
+const TIME_RE = /^\d{2}:\d{2}$/;
 
 function parseDateValue(value: string | undefined): Date | undefined {
   if (!value) return undefined;
@@ -35,9 +45,15 @@ function parseDateValue(value: string | undefined): Date | undefined {
   return isValid(parsed) ? parsed : undefined;
 }
 
+function timeOf(value: string | undefined): string {
+  const time = value?.split("T")[1]?.slice(0, 5) ?? "";
+  return TIME_RE.test(time) ? time : "";
+}
+
 /**
  * Shared date picker (Popover + Calendar).
- * Value is always `yyyy-MM-dd` (empty string when cleared).
+ * Value is `yyyy-MM-dd` (empty string when cleared), or local
+ * `yyyy-MM-dd'T'HH:mm` with `withTime`.
  * Calendar labels follow the active app locale (`tr` / `en`).
  */
 export function DatePicker({
@@ -51,10 +67,14 @@ export function DatePicker({
   captionLayout,
   align = "start",
   "aria-invalid": ariaInvalid,
+  withTime = false,
+  defaultTime = "09:00",
 }: DatePickerProps) {
   const { locale, t } = useLocale();
   const selected = parseDateValue(value);
   const dfLocale = dateFnsLocale(locale);
+  const time = timeOf(value) || defaultTime;
+  const pattern = displayFormat ?? (withTime ? "PPP HH:mm" : "PPP");
 
   return (
     <Popover>
@@ -73,7 +93,7 @@ export function DatePicker({
         >
           <CalendarIcon className="text-muted-foreground size-4" />
           {selected
-            ? format(selected, displayFormat ?? "PPP", { locale: dfLocale })
+            ? format(selected, pattern, { locale: dfLocale })
             : (placeholder ?? t("form.pick_date"))}
         </Button>
       </PopoverTrigger>
@@ -83,11 +103,27 @@ export function DatePicker({
           locale={dayPickerLocale(locale)}
           selected={selected}
           onSelect={(date) => {
-            onChange?.(date ? format(date, "yyyy-MM-dd") : "");
+            const day = date ? format(date, "yyyy-MM-dd") : "";
+            onChange?.(day && withTime ? `${day}T${time}` : day);
           }}
           defaultMonth={selected}
           captionLayout={captionLayout}
         />
+        {withTime ? (
+          <div className="border-t p-3">
+            <Input
+              type="time"
+              aria-label={t("form.pick_time")}
+              value={time}
+              disabled={disabled || !selected}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!selected || !TIME_RE.test(next)) return;
+                onChange?.(`${format(selected, "yyyy-MM-dd")}T${next}`);
+              }}
+            />
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

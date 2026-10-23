@@ -1,0 +1,52 @@
+# sqlc queries on mixed-scope tables (mixed_scope_tables.txt) that do not
+# name the scope themselves. Format: QueryName reason. Every entry needs the
+# reason the caller enforces the organization scope; stale entries fail the
+# test (internal/database/queries_test.go).
+
+# Engine jobs: request paths load by uuid and answer 404 unless
+# orgctx.SameEngineScope(ctx, row.organization_id); workers address the row
+# by id and re-scope their context from it (orgctx.WithJobScope).
+GetExportJobByUUID         caller checks orgctx.SameEngineScope
+GetExportJobByID           worker: re-scopes from the row
+MarkExportJobProcessing    worker: row by id
+MarkExportJobCompleted     worker: row by id
+MarkExportJobFailed        worker: row by id
+GetImportJobByUUID         caller checks orgctx.SameEngineScope
+GetImportJobByID           worker / caller after SameEngineScope
+UpdateImportJobFileKey     job created in the same request (stamped by EngineScope)
+UpdateImportJobMapping     caller loaded the job with SameEngineScope
+UpdateImportJobPreview     caller loaded the job with SameEngineScope
+QueueImportJob             caller loaded the job with SameEngineScope
+MarkImportJobApplying      worker: row by id
+MarkImportJobApplied       worker: row by id
+MarkImportJobFailed        worker: row by id
+MarkImportJobRolledBack    caller loaded the job with SameEngineScope
+GetBulkJobByUUID           caller checks orgctx.SameEngineScope
+GetBulkJobByID             worker: re-scopes from the row
+MarkBulkJobProcessing      worker: row by id
+MarkBulkJobCompleted       worker: row by id
+MarkBulkJobFailed          worker: row by id
+MarkBulkJobRolledBack      caller loaded the job with SameEngineScope
+
+# Notifications belong to a user: lookups check user_id (any organization
+# of the user's own inbox), delivery workers address rows by id.
+GetNotificationByUUID      owner check on user_id (GetOwned / RedeemAction)
+GetNotificationByID        delivery worker: row by id
+MarkNotificationRead       filtered by uuid AND user_id
+MarkNotificationProcessing delivery worker: row by id
+MarkNotificationSent       delivery worker: row by id
+MarkNotificationFailed     delivery worker: row by id
+ListStuckProcessingNotificationIDs delivery sweep over every row
+
+# Organization invitations: the token / uuid flows compare the invitation's
+# organization with the caller's scope in the organizations use case.
+
+# Platform roles: user_roles and auth_settings only ever reference platform
+# roles (tenant roles are assigned through organization_member_roles).
+GetAuthSettings            default_role_id is a platform role
+CreateRole                 scope defaults to 'platform'
+ListUsersFiltered          user_roles hold platform roles only
+CountUsers                 user_roles hold platform roles only
+CountUsersWithRole         user_roles hold platform roles only
+ListUsersForExport         user_roles hold platform roles only
+ListUserUUIDsForBulk       user_roles hold platform roles only

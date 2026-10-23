@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
@@ -10,11 +11,13 @@ import {
   EntityToolbar,
   useServerListState,
 } from "@/components/entity";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { MemberAccessDrawer } from "@/features/tenant-members/components/member-access-drawer";
 import type { MemberRowActionHandlers } from "@/features/tenant-members/components/member-row-actions";
 import { useMembersColumns } from "@/features/tenant-members/components/members-columns";
+import { TenantInvitationsTab } from "@/features/tenant-members/components/tenant-invitations-tab";
 import {
   useRemoveTenantMember,
   useTenantMembersList,
@@ -36,15 +39,31 @@ function filterValues(value: unknown): string[] {
   return [];
 }
 
+type MembersTab = "members" | "invitations";
+
 /**
- * Organization members (TEC-689): roles, branch access and last sign-in,
- * with server-side search / sort / faceted filters and a drawer to change
- * roles and branch scope. Invitations live elsewhere.
+ * Organization members (TEC-689): roles, branch access, status and last
+ * sign-in, with server-side search / sort / faceted filters and a drawer to
+ * change roles and branch scope. The "Davetler" tab (TEC-671) lists staff
+ * invitations; the active tab is mirrored to `?tab=`.
  */
 export function MembersPage() {
   const { t } = useLocale();
   const { slug, organization } = useTenant();
   const { can } = usePermission();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tab: MembersTab =
+    searchParams.get("tab") === "invitations" ? "invitations" : "members";
+  const setTab = (next: string) => {
+    router.replace(
+      next === "invitations" ? `${pathname}?tab=invitations` : pathname,
+      {
+        scroll: false,
+      },
+    );
+  };
 
   const listState = useServerListState({
     initialSort: "created_at",
@@ -124,36 +143,51 @@ export function MembersPage() {
         { label: t("tenant_members.title") },
       ]}
     >
-      <EntityTable
-        columns={columns}
-        data={listQuery.data?.items ?? []}
-        getRowId={(row) => row.user.uuid}
-        onRowClick={openAccess}
-        isLoading={listQuery.isLoading}
-        isError={listQuery.isError}
-        errorDescription={t("tenant_members.load_failed")}
-        onRetry={() => void listQuery.refetch()}
-        realtime={listState.realtimeFor(() => listQuery.refetch())}
-        emptyTitle={
-          hasFilters
-            ? t("tenant_members.empty_filtered_title")
-            : t("tenant_members.empty_title")
-        }
-        emptyDescription={
-          hasFilters
-            ? t("tenant_members.empty_filtered_description")
-            : t("tenant_members.empty_description")
-        }
-        pageCount={pageCount}
-        state={listState.tableState}
-        features={{ persistKey: "tenant-members-v1", viewMode: true }}
-        toolbarExtra={
-          <EntityToolbar
-            onRefresh={() => void listQuery.refetch()}
-            refreshDisabled={listQuery.isFetching}
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="members">
+            {t("tenant_members.tabs.members")}
+          </TabsTrigger>
+          <TabsTrigger value="invitations">
+            {t("tenant_members.tabs.invitations")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="members">
+          <EntityTable
+            columns={columns}
+            data={listQuery.data?.items ?? []}
+            getRowId={(row) => row.user.uuid}
+            onRowClick={openAccess}
+            isLoading={listQuery.isLoading}
+            isError={listQuery.isError}
+            errorDescription={t("tenant_members.load_failed")}
+            onRetry={() => void listQuery.refetch()}
+            realtime={listState.realtimeFor(() => listQuery.refetch())}
+            emptyTitle={
+              hasFilters
+                ? t("tenant_members.empty_filtered_title")
+                : t("tenant_members.empty_title")
+            }
+            emptyDescription={
+              hasFilters
+                ? t("tenant_members.empty_filtered_description")
+                : t("tenant_members.empty_description")
+            }
+            pageCount={pageCount}
+            state={listState.tableState}
+            features={{ persistKey: "tenant-members-v1", viewMode: true }}
+            toolbarExtra={
+              <EntityToolbar
+                onRefresh={() => void listQuery.refetch()}
+                refreshDisabled={listQuery.isFetching}
+              />
+            }
           />
-        }
-      />
+        </TabsContent>
+        <TabsContent value="invitations">
+          <TenantInvitationsTab active={tab === "invitations"} />
+        </TabsContent>
+      </Tabs>
 
       <MemberAccessDrawer
         member={editing}

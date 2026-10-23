@@ -1,12 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Building2,
-  Check,
-  ChevronsUpDown,
-  LayoutDashboard,
-} from "lucide-react";
+import { Check, ChevronsUpDown, LayoutDashboard } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { routes } from "@/config/routes";
+import { OrganizationAvatar } from "@/features/tenant/components/organization-avatar";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantRoleLabel } from "@/features/tenant/lib/role-label";
 import {
@@ -50,7 +46,10 @@ export function OrganizationSwitcher() {
           className="h-9 max-w-64 min-w-0 gap-2 px-2"
           aria-label={t("tenant.switcher.label")}
         >
-          <Building2 className="size-4 shrink-0" />
+          <OrganizationAvatar
+            logoUrl={tenant.organization?.logoUrl}
+            className="size-6 rounded-md"
+          />
           <span className="truncate text-sm font-medium">{currentName}</span>
           <ChevronsUpDown className="text-muted-foreground size-3.5 shrink-0" />
         </Button>
@@ -76,7 +75,10 @@ export function OrganizationSwitcher() {
                     aria-current={current ? "page" : undefined}
                     className="flex items-center gap-2"
                   >
-                    <Building2 className="size-4 shrink-0 opacity-70" />
+                    <OrganizationAvatar
+                      logoUrl={org.logoUrl}
+                      className="size-6 rounded-md"
+                    />
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate">{org.name}</span>
                       <span className="text-muted-foreground truncate text-xs">

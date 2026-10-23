@@ -42,5 +42,12 @@
   "sign_in": "Giriş yap",
   "back_to_login": "Girişe dön",
   "continue": "Devam et",
-  "area_requires": "Bu alan yalnızca {{area}} erişimi gerektirir."
+  "area_requires": "Bu alan yalnızca {{area}} erişimi gerektirir.",
+  "codes.LAST_ORGANIZATION_OWNER": "İşletmenin son sahibi çıkarılamaz veya rolü düşürülemez.",
+  "codes.ALREADY_MEMBER": "Bu kişi zaten işletmenin üyesi.",
+  "codes.INVITATION_EXPIRED": "Davetin süresi doldu.",
+  "codes.INVITATION_USED": "Bu davet zaten kullanıldı.",
+  "codes.INVITATION_REVOKED": "Bu davet iptal edildi.",
+  "codes.INVITATION_EMAIL_MISMATCH": "Bu davet başka bir e-posta adresine gönderildi.",
+  "codes.ACCOUNT_EXISTS": "Bu e-posta ile bir hesap zaten var."
 }

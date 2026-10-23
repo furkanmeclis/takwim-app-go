@@ -64,6 +64,9 @@ type CreateOrganizationInput struct {
 	// OwnerUserUUID selects the owner; when zero, OwnerUserID is used.
 	OwnerUserUUID uuid.UUID
 	OwnerUserID   int64
+	// NoOwner creates the organization without a member (the owner joins
+	// later through an invitation).
+	NoOwner bool
 }
 
 type PatchOrganizationInput struct {
@@ -73,12 +76,14 @@ type PatchOrganizationInput struct {
 }
 
 type ListFilter struct {
-	Limit     int32
-	Offset    int32
-	Q         string
-	Status    string
-	SortField string
-	SortDesc  bool
+	Limit        int32
+	Offset       int32
+	Q            string
+	Statuses     []string
+	AccessStates []string
+	Windows      []string
+	SortField    string
+	SortDesc     bool
 }
 
 type MemberListFilter struct {

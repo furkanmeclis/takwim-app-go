@@ -142,6 +142,26 @@ Forms: `AppForm` + zod; dates only through `AppDatePicker` / `DatePicker` (`.age
 - Database tests (`TEST_DATABASE_URL`, skipped otherwise): repository isolation and composite FK, OrganizationHooks seed, adapter round trip, and an HTTP end-to-end test over the real resolver (`branches/integration_test.go`).
 - Route test: member without write gets 403, missing header 400, non-member 403.
 
+### Isolation checklist (what a new module must pass)
+
+Two guard rails run in `go test ./...`; a new module is not done until both pass with its routes and queries in them.
+
+1. **Query guard** (`internal/database/queries_test.go`, no database needed):
+   - new table → `queries/tenant_tables.txt`. Every query on it references `organization_id`; an aliased reference needs `alias.organization_id` (joins of a second tenant table too). Composite FKs are not a substitute in the query.
+   - a table that holds platform and organization rows (organization_id NULL = platform) → `queries/mixed_scope_tables.txt` with its scope markers. A query that legitimately skips the scope (worker by id, lookup followed by `orgctx.SameEngineScope`) goes into `queries/isolation_exempt.txt` **with the reason**.
+   - hand-written SQL in Go (pgx `Exec`/`Query` literals) on a tenant table is scanned the same way; prefer sqlc.
+2. **RT-A01** (`internal/httpserver/isolation_test.go`, `TEST_DATABASE_URL`): the real server with two organizations; every `/v1/tenant` route is enumerated from the route literals (cross-checked with the mux and `openapi.yaml`). It fails on an uncovered route, so for a new module:
+   - seed the resource for both organizations in `seed()` (through the API) and map each new path parameter in `paramKey` (`"<segment>/<param>"` → seed key). Then, automatically: `X-Organization` of a foreign organization → 403; the other organization's uuids in the path (and own parent + foreign child) → **404** with none of its identifiers in the body; every GET without path parameters is scanned for foreign identifiers; B's records read the same afterwards.
+   - a mutation without path parameters whose body names records (`*_uuid`, bulk `ids`, bulk `params`) → a case in `cases` with the other organization's uuids (expect 400/404/422, or a bulk run with 0 succeeded); one that names nothing (create with codes only, settings) → `isolationAllowlist` with the reason.
+   - list filters taking uuids → a `probes` entry (must answer 200, or a `not_found` detail, and leak nothing); export routes are run and their files scanned automatically.
+3. Module rules the tests rely on:
+   - every uuid in a body, query or bulk param is resolved with the caller's `organization_id` (unknown → validation `not_found` on that field, never a cross-organization row); bulk params are validated in `ResolveTargets`.
+   - object keys live under `organizations/{org_uuid}/` (`storage.*ObjectKey` helpers); streaming endpoints check `storage.OrganizationOwnsKey` before serving a key read from a row.
+   - search documents carry `OrganizationID` and `searchengine.TenantDocumentID`.
+   - jobs never take an organization id from the client; workers re-scope from the job row.
+   - platform lists over mixed tables show platform rows only (`organization_id IS NULL`).
+4. Database tests clean up their own rows and never rewrite shared tables: `TRUNCATE ... CASCADE` empties every referencing table under the other packages' tests. Use `dbtest.FreshDatabase(t, dsn)` for a private migrated database when a test needs empty tables.
+
 ## 9. Verify
 
 `.agents/skills/verify-changes`, plus `TEST_DATABASE_URL=… go test ./internal/modules/<name>/...` and the migration round trip.

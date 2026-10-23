@@ -54,17 +54,17 @@ func enqueueAssigned(ctx context.Context, svc *notifusecase.Service, event event
 		return nil
 	}
 	customerName := customerLabel(event)
-	tid := event.TenantID
+	orgID := event.OrganizationID
 	_, err := svc.Enqueue(ctx, notifmodel.EnqueueInput{
-		TenantID:     tid,
-		UserID:       &userID,
-		Channels:     []string{notifmodel.ChannelInapp},
-		Priority:     notifmodel.PriorityNormal,
-		Title:        "Müşteri atandı",
-		Body:         customerName + " size atandı.",
-		TemplateCode: "customers.assigned",
-		TemplateVars: map[string]string{"customer_name": customerName},
-		SourceEvent:  events.CustomersAssigned,
+		OrganizationID: orgID,
+		UserID:         &userID,
+		Channels:       []string{notifmodel.ChannelInapp},
+		Priority:       notifmodel.PriorityNormal,
+		Title:          "Müşteri atandı",
+		Body:           customerName + " size atandı.",
+		TemplateCode:   "customers.assigned",
+		TemplateVars:   map[string]string{"customer_name": customerName},
+		SourceEvent:    events.CustomersAssigned,
 		Payload: map[string]any{
 			"customer_event_uuid": event.Payload["customer_event_uuid"],
 			"customer_uuid":       entityUUIDString(event.EntityUUID),
@@ -81,17 +81,17 @@ func enqueueConversationAssigned(ctx context.Context, svc *notifusecase.Service,
 	if !ok || userID <= 0 {
 		return nil // unassign — no inapp
 	}
-	tid := event.TenantID
+	orgID := event.OrganizationID
 	_, err := svc.Enqueue(ctx, notifmodel.EnqueueInput{
-		TenantID:     tid,
-		UserID:       &userID,
-		Channels:     []string{notifmodel.ChannelInapp},
-		Priority:     notifmodel.PriorityNormal,
-		Title:        "Konuşma atandı",
-		Body:         "Bir konuşma size atandı.",
-		TemplateCode: "conversations.assigned",
-		TemplateVars: map[string]string{},
-		SourceEvent:  events.ConversationsAssigned,
+		OrganizationID: orgID,
+		UserID:         &userID,
+		Channels:       []string{notifmodel.ChannelInapp},
+		Priority:       notifmodel.PriorityNormal,
+		Title:          "Konuşma atandı",
+		Body:           "Bir konuşma size atandı.",
+		TemplateCode:   "conversations.assigned",
+		TemplateVars:   map[string]string{},
+		SourceEvent:    events.ConversationsAssigned,
 		Payload: map[string]any{
 			"conversation_uuid": entityUUIDString(event.EntityUUID),
 			"assigned_user_id":  userID,
@@ -113,17 +113,17 @@ func enqueueStatusBlocked(ctx context.Context, svc *notifusecase.Service, event 
 		return nil
 	}
 	customerName := customerLabel(event)
-	tid := event.TenantID
+	orgID := event.OrganizationID
 	_, err := svc.Enqueue(ctx, notifmodel.EnqueueInput{
-		TenantID:     tid,
-		UserID:       &userID,
-		Channels:     []string{notifmodel.ChannelInapp},
-		Priority:     notifmodel.PriorityHigh,
-		Title:        "Müşteri engellendi",
-		Body:         customerName + " durumu blocked olarak güncellendi.",
-		TemplateCode: "customers.status_blocked",
-		TemplateVars: map[string]string{"customer_name": customerName},
-		SourceEvent:  events.CustomersStatusChanged,
+		OrganizationID: orgID,
+		UserID:         &userID,
+		Channels:       []string{notifmodel.ChannelInapp},
+		Priority:       notifmodel.PriorityHigh,
+		Title:          "Müşteri engellendi",
+		Body:           customerName + " durumu blocked olarak güncellendi.",
+		TemplateCode:   "customers.status_blocked",
+		TemplateVars:   map[string]string{"customer_name": customerName},
+		SourceEvent:    events.CustomersStatusChanged,
 		Payload: map[string]any{
 			"customer_event_uuid": event.Payload["customer_event_uuid"],
 			"customer_uuid":       entityUUIDString(event.EntityUUID),
@@ -141,19 +141,19 @@ func enqueueAIEscalated(ctx context.Context, svc *notifusecase.Service, event ev
 	if len(userIDs) == 0 {
 		return nil
 	}
-	tid := event.TenantID
+	orgID := event.OrganizationID
 	for _, userID := range userIDs {
 		uid := userID
 		_, err := svc.Enqueue(ctx, notifmodel.EnqueueInput{
-			TenantID:     tid,
-			UserID:       &uid,
-			Channels:     []string{notifmodel.ChannelInapp},
-			Priority:     notifmodel.PriorityHigh,
-			Title:        "AI escalate",
-			Body:         "Bir konuşma AI tarafından ekibe iletildi.",
-			TemplateCode: "ai.pipeline.escalated",
-			TemplateVars: map[string]string{},
-			SourceEvent:  events.AIPipelineEscalated,
+			OrganizationID: orgID,
+			UserID:         &uid,
+			Channels:       []string{notifmodel.ChannelInapp},
+			Priority:       notifmodel.PriorityHigh,
+			Title:          "AI escalate",
+			Body:           "Bir konuşma AI tarafından ekibe iletildi.",
+			TemplateCode:   "ai.pipeline.escalated",
+			TemplateVars:   map[string]string{},
+			SourceEvent:    events.AIPipelineEscalated,
 			Payload: map[string]any{
 				"conversation_uuid": entityUUIDString(event.EntityUUID),
 				"intent":            stringFromPayload(event.Payload, "intent"),
@@ -171,19 +171,19 @@ func enqueueAIDraftPending(ctx context.Context, svc *notifusecase.Service, event
 	if len(userIDs) == 0 {
 		return nil
 	}
-	tid := event.TenantID
+	orgID := event.OrganizationID
 	for _, userID := range userIDs {
 		uid := userID
 		_, err := svc.Enqueue(ctx, notifmodel.EnqueueInput{
-			TenantID:     tid,
-			UserID:       &uid,
-			Channels:     []string{notifmodel.ChannelInapp},
-			Priority:     notifmodel.PriorityNormal,
-			Title:        "AI draft bekliyor",
-			Body:         "İncelemeniz için yeni bir AI yanıt taslağı oluşturuldu.",
-			TemplateCode: "ai.draft.pending",
-			TemplateVars: map[string]string{},
-			SourceEvent:  events.AIDraftCreated,
+			OrganizationID: orgID,
+			UserID:         &uid,
+			Channels:       []string{notifmodel.ChannelInapp},
+			Priority:       notifmodel.PriorityNormal,
+			Title:          "AI draft bekliyor",
+			Body:           "İncelemeniz için yeni bir AI yanıt taslağı oluşturuldu.",
+			TemplateCode:   "ai.draft.pending",
+			TemplateVars:   map[string]string{},
+			SourceEvent:    events.AIDraftCreated,
 			Payload: map[string]any{
 				"conversation_uuid": entityUUIDString(event.EntityUUID),
 				"draft_uuid":        stringFromPayload(event.Payload, "draft_uuid"),

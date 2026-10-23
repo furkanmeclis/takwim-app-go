@@ -238,6 +238,38 @@ func (u *AuthUseCase) Register(ctx context.Context, in model.RegisterInput) (mod
 	return user, nil
 }
 
+// RegisterInvited creates the password account of an organization invitee
+// (POST /v1/invitations/{token}/register). The organization invitation is
+// the admission, so the public self-registration switch does not apply, but
+// everything else follows Register: the e-mail stays unverified and the
+// welcome + verification e-mails go out. No platform default role is
+// assigned: invitees are organization staff, not self-registered users.
+func (u *AuthUseCase) RegisterInvited(ctx context.Context, email, name, surname, plainPassword string) (int64, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	name, surname = strings.TrimSpace(name), strings.TrimSpace(surname)
+	if email == "" || name == "" || surname == "" || strings.TrimSpace(plainPassword) == "" {
+		return 0, fmt.Errorf("%w: email, name, surname and password are required", ErrInvalidRequest)
+	}
+	if _, err := u.repo.FindUserByEmail(ctx, email); err == nil {
+		return 0, fmt.Errorf("%w: email already registered", ErrConflict)
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return 0, err
+	}
+	hash, err := password.Hash(plainPassword)
+	if err != nil {
+		return 0, err
+	}
+	user, err := u.repo.CreateUser(ctx, model.User{
+		Email: email, PasswordHash: hash, Name: name, Surname: surname, Status: "active",
+	}, false)
+	if err != nil {
+		return 0, err
+	}
+	u.userCreated(ctx, user.UUID.String())
+	u.notifyWelcome(ctx, user)
+	return user.ID, nil
+}
+
 func (u *AuthUseCase) assignDefaultRole(ctx context.Context, userID int64) error {
 	if u.authSettings == nil {
 		return nil

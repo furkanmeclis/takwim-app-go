@@ -12,9 +12,14 @@ type AppDatePickerProps = {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /** Date and time (local `yyyy-MM-dd'T'HH:mm`). */
+  withTime?: boolean;
 };
 
-/** Form-bound date field. Value stored as `yyyy-MM-dd`. */
+/**
+ * Form-bound date field. Value stored as `yyyy-MM-dd`, or local
+ * `yyyy-MM-dd'T'HH:mm` with `withTime`.
+ */
 export function AppDatePicker({
   name,
   label,
@@ -22,6 +27,7 @@ export function AppDatePicker({
   placeholder,
   className,
   disabled,
+  withTime,
 }: AppDatePickerProps) {
   const {
     control,
@@ -47,6 +53,7 @@ export function AppDatePicker({
             onChange={field.onChange}
             placeholder={placeholder}
             disabled={disabled}
+            withTime={withTime}
             aria-invalid={Boolean(error)}
             className={error ? "border-destructive" : undefined}
           />

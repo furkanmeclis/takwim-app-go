@@ -71,8 +71,11 @@ WHERE user_id = sqlc.arg(user_id)
   AND status NOT IN ('cancelled', 'failed');
 
 -- name: ListPlatformNotifications :many
+-- Platform rows only: organization-stamped notifications show in their
+-- organization's panel (/v1/tenant/notifications), never here.
 SELECT * FROM notifications
-WHERE (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+WHERE organization_id IS NULL
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (sqlc.narg(channel)::text IS NULL OR channel = sqlc.narg(channel))
   AND (sqlc.narg(user_id)::bigint IS NULL OR user_id = sqlc.narg(user_id))
   AND (
@@ -85,7 +88,8 @@ LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountPlatformNotifications :one
 SELECT COUNT(*)::bigint FROM notifications
-WHERE (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+WHERE organization_id IS NULL
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (sqlc.narg(channel)::text IS NULL OR channel = sqlc.narg(channel))
   AND (sqlc.narg(user_id)::bigint IS NULL OR user_id = sqlc.narg(user_id))
   AND (
@@ -96,7 +100,8 @@ WHERE (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
 
 -- name: ListPlatformNotificationsForExport :many
 SELECT * FROM notifications
-WHERE (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+WHERE organization_id IS NULL
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (sqlc.narg(channel)::text IS NULL OR channel = sqlc.narg(channel))
   AND (sqlc.narg(user_id)::bigint IS NULL OR user_id = sqlc.narg(user_id))
   AND (

@@ -103,13 +103,15 @@ export type IoResource =
   | "platform.roles"
   | "platform.notifications"
   | "platform.activity"
-  | "tenant.branches";
+  | "tenant.branches"
+  | "platform.organizations";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
   "platform.users": "/v1/platform/users/export",
   "platform.roles": "/v1/platform/roles/export",
   "platform.notifications": "/v1/platform/notifications/export",
   "platform.activity": "/v1/platform/activity/export",
+  "platform.organizations": "/v1/platform/organizations/export",
   "tenant.branches": "/v1/tenant/branches/export",
 };
 
@@ -160,7 +162,4 @@ export const IMPORT_SCHEMA: Partial<
     { key: "prep_minutes", labelKey: "branches.fields.prep_minutes" },
     { key: "is_active", labelKey: "branches.fields.is_active" },
   ],
-  // İdes fleet XLSX: plaka, şasi, marka, model, tip / kasko kodu, model yılı,
-  // renk, vites, yakıt, şube, mülkiyet, km. type_code before type_name so a
-  // "Tip/Kasko Kodu" header maps to the code.
 };

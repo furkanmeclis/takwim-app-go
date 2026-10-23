@@ -39,5 +39,8 @@
   "section_tenant_settings": "Ayarlar",
   "nav_tenant_settings_general": "Genel",
   "nav_tenant_settings_members": "Üyeler",
-  "nav_tenant_settings_roles": "Roller"
+  "nav_tenant_settings_roles": "Roller",
+  "nav_fleet_transfers": "Transferler",
+  "nav_fleet_one_way_rules": "Tek yön kuralları",
+  "nav_organizations": "İşletmeler"
 }

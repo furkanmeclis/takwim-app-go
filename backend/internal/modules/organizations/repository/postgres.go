@@ -77,12 +77,14 @@ func (r *Postgres) SlugExists(ctx context.Context, slug string) (bool, error) {
 	return r.q.SlugExists(ctx, slug)
 }
 
-func (r *Postgres) ListOrganizations(ctx context.Context, params db.ListOrganizationsFilteredParams) ([]db.Organization, int64, error) {
-	rows, err := r.q.ListOrganizationsFiltered(ctx, params)
+func (r *Postgres) ListOrganizations(ctx context.Context, params db.ListOrganizationsWithStatsParams) ([]db.ListOrganizationsWithStatsRow, int64, error) {
+	rows, err := r.q.ListOrganizationsWithStats(ctx, params)
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := r.q.CountOrganizations(ctx, db.CountOrganizationsParams{Status: params.Status, Q: params.Q})
+	total, err := r.q.CountOrganizationsWithStats(ctx, db.CountOrganizationsWithStatsParams{
+		OrganizationUuid: params.OrganizationUuid, Statuses: params.Statuses, AccessStates: params.AccessStates, Windows: params.Windows, Q: params.Q,
+	})
 	if err != nil {
 		return nil, 0, err
 	}

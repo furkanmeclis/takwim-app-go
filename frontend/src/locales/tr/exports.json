@@ -66,5 +66,11 @@
   "tenant_download.state_downloading": "Dosya indiriliyor…",
   "tenant_download.state_done": "İndirme başladı. Dosyayı tekrar indirebilirsiniz.",
   "tenant_download.state_failed": "Dosya indirilemedi. Tekrar deneyin.",
-  "tenant_download.again": "Tekrar indir"
+  "tenant_download.again": "Tekrar indir",
+  "resources.tenant.vehicles": "Araçlar",
+  "resources.tenant.vehicle_documents": "Araç belgeleri",
+  "resources.tenant.vehicle_maintenance": "Araç bakımları",
+  "resources.tenant.transfers": "Transferler",
+  "resources.tenant.one_way_rules": "Tek yön kuralları",
+  "resources.platform.organizations": "İşletmeler"
 }

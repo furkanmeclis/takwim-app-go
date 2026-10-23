@@ -27,32 +27,6 @@ func ParseUserChannel(channel string) (uuid.UUID, bool) {
 	return id, true
 }
 
-// ParseWorkspaceChannel returns the workspace UUID from "workspace:{uuid}".
-func ParseWorkspaceChannel(channel string) (uuid.UUID, bool) {
-	raw, ok := stripPrefix(channel, "workspace:")
-	if !ok {
-		return uuid.Nil, false
-	}
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
-// ParseConversationChannel returns the conversation UUID from "conversation:{uuid}".
-func ParseConversationChannel(channel string) (uuid.UUID, bool) {
-	raw, ok := stripPrefix(channel, "conversation:")
-	if !ok {
-		return uuid.Nil, false
-	}
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
 func stripPrefix(channel, prefix string) (string, bool) {
 	channel = strings.TrimSpace(channel)
 	if !strings.HasPrefix(channel, prefix) {

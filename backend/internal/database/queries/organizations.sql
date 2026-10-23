@@ -25,41 +25,6 @@ SELECT EXISTS(
     SELECT 1 FROM organizations WHERE slug = $1 AND deleted_at IS NULL
 )::boolean AS exists;
 
--- name: ListOrganizationsFiltered :many
-SELECT *
-FROM organizations
-WHERE deleted_at IS NULL
-  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
-  AND (
-    sqlc.narg(q)::text IS NULL
-    OR name ILIKE '%' || sqlc.narg(q) || '%'
-    OR slug ILIKE '%' || sqlc.narg(q) || '%'
-  )
-ORDER BY
-  CASE WHEN sqlc.arg(sort_field)::text = 'name' AND NOT sqlc.arg(sort_desc)::boolean THEN name END ASC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'name' AND sqlc.arg(sort_desc)::boolean THEN name END DESC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'slug' AND NOT sqlc.arg(sort_desc)::boolean THEN slug END ASC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'slug' AND sqlc.arg(sort_desc)::boolean THEN slug END DESC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'status' AND NOT sqlc.arg(sort_desc)::boolean THEN status END ASC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'status' AND sqlc.arg(sort_desc)::boolean THEN status END DESC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'updated_at' AND NOT sqlc.arg(sort_desc)::boolean THEN updated_at END ASC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'updated_at' AND sqlc.arg(sort_desc)::boolean THEN updated_at END DESC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'created_at' AND NOT sqlc.arg(sort_desc)::boolean THEN created_at END ASC,
-  CASE WHEN sqlc.arg(sort_field)::text = 'created_at' AND sqlc.arg(sort_desc)::boolean THEN created_at END DESC,
-  created_at DESC
-LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
-
--- name: CountOrganizations :one
-SELECT COUNT(*)::bigint
-FROM organizations
-WHERE deleted_at IS NULL
-  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
-  AND (
-    sqlc.narg(q)::text IS NULL
-    OR name ILIKE '%' || sqlc.narg(q) || '%'
-    OR slug ILIKE '%' || sqlc.narg(q) || '%'
-  );
-
 -- name: UpdateOrganization :one
 UPDATE organizations
 SET name = COALESCE(sqlc.narg(name), name),
@@ -217,26 +182,6 @@ FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)
 INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
 WHERE o.slug = sqlc.arg(slug) AND o.deleted_at IS NULL;
-
--- name: CreateOrganizationInvitation :one
-INSERT INTO organization_invitations (
-    organization_id, email, role_id, token_hash, expires_at, invited_by
-) VALUES (
-    $1, $2, $3, $4, $5, sqlc.narg(invited_by)
-)
-RETURNING *;
-
--- name: GetOrganizationInvitationByUUID :one
-SELECT * FROM organization_invitations
-WHERE uuid = $1;
-
--- name: ListOrganizationInvitations :many
-SELECT oi.*, r.slug AS role_key, r.name AS role_name
-FROM organization_invitations oi
-INNER JOIN roles r ON r.id = oi.role_id AND r.scope = 'tenant'
-WHERE oi.organization_id = $1
-ORDER BY oi.created_at DESC
-LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: ListLiveOrganizationIDs :many
 SELECT id FROM organizations

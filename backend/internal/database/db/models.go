@@ -316,6 +316,25 @@ type OrganizationInvitation struct {
 	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
 	InvitedBy      pgtype.Int8        `json:"invited_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	BranchScope    string             `json:"branch_scope"`
+	AcceptedBy     pgtype.Int8        `json:"accepted_by"`
+	RevokedBy      pgtype.Int8        `json:"revoked_by"`
+	LastSentAt     pgtype.Timestamptz `json:"last_sent_at"`
+	SendCount      int32              `json:"send_count"`
+}
+
+type OrganizationInvitationBranch struct {
+	OrganizationID int64              `json:"organization_id"`
+	InvitationID   int64              `json:"invitation_id"`
+	BranchID       int64              `json:"branch_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrganizationInvitationRole struct {
+	OrganizationID int64              `json:"organization_id"`
+	InvitationID   int64              `json:"invitation_id"`
+	RoleID         int64              `json:"role_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type OrganizationMember struct {
