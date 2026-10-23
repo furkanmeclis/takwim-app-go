@@ -49,6 +49,24 @@ Lapsed holds are expired by the minute sweep and by every writer before it works
 
 Releasing products and session rights on cancel comes with those modules; capacity is released here.
 
+## Rescheduling and notes (TEC-900)
+
+`Reschedule` moves a request or an active booking in one transaction: it lets the old hold go, plans the new start (panel channel) and takes it again; for a booking it confirms at once, for a request it keeps the hold reason and the time left. Lines with the same service and person keep their old price; changed lines take today's price. Lines are rewritten, `version` goes up and a `rescheduled` event is written, so jobs planned against the old version (confirmation messages) no longer apply. If the new start is taken, nothing changes. `UpdateNotes` changes the customer and internal notes (`notes_updated` event).
+
+## Panel API (TEC-900)
+
+| Route                                                                               | What                                                                                                                                   |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/tenant/reservations`                                                       | List with search (number, customer, phone), filters (branch, staff, status, approval, payment, source, customer, start range) and sort |
+| `GET /v1/tenant/reservations/meta`, `/facets`                                       | List metadata; branch and staff facets                                                                                                 |
+| `POST /v1/tenant/reservations`                                                      | Panel booking: always source `panel`, paid at the business, confirmed at once                                                          |
+| `GET /v1/tenant/reservations/{uuid}`                                                | Record with lines and history                                                                                                          |
+| `PATCH /v1/tenant/reservations/{uuid}`                                              | Notes                                                                                                                                  |
+| `POST /v1/tenant/reservations/{uuid}/{accept,reject,cancel,start,complete,no-show}` | Transitions; optional `expected_version`, `note`, `reason` (cancel)                                                                    |
+| `POST /v1/tenant/reservations/{uuid}/reschedule`                                    | New start, optionally other people per line                                                                                            |
+
+Errors: a taken start is `409 starts_at/taken`, a stale version `409 expected_version/stale`, a transition the state does not allow `409 status/invalid_transition`. Reads need `tenant.reservations.read` or `.own`, writes `.write` or `.own`; the module must be on. The list is live (`tenant.reservations` channel) for members with read. Export, bulk actions and search come in a later change.
+
 ## Visibility
 
 Every read and write checks the business and the caller's branch scope; a member with only `tenant.reservations.own` sees the reservations it created or serves. Anything else is `ErrNotFound`.

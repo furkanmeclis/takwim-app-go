@@ -49,5 +49,6 @@
   "nav_staff": "Personel",
   "nav_resources": "Kaynaklar",
   "nav_services": "Hizmetler",
-  "nav_customers": "Müşteriler"
+  "nav_customers": "Müşteriler",
+  "nav_reservations": "Rezervasyonlar"
 }

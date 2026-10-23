@@ -12,6 +12,77 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countReservations = `-- name: CountReservations :one
+SELECT count(*)
+FROM reservations r
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE r.organization_id = $1
+  AND ($2::bigint[] IS NULL OR r.branch_id = ANY($2::bigint[]))
+  AND ($3::bigint IS NULL OR r.created_by = $3 OR EXISTS (
+        SELECT 1 FROM reservation_lines ol
+        WHERE ol.organization_id = r.organization_id AND ol.reservation_id = r.id AND ol.staff_id = $4))
+  AND ($5::uuid[] IS NULL OR b.uuid = ANY($5::uuid[]))
+  AND ($6::uuid IS NULL OR c.uuid = $6)
+  AND ($7::uuid[] IS NULL OR EXISTS (
+        SELECT 1 FROM reservation_lines sl
+        JOIN staff st ON st.organization_id = sl.organization_id AND st.id = sl.staff_id
+        WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id AND st.uuid = ANY($7::uuid[])))
+  AND ($8::text[] IS NULL OR r.status = ANY($8::text[]))
+  AND ($9::text[] IS NULL OR r.approval_status = ANY($9::text[]))
+  AND ($10::text[] IS NULL OR r.payment_status = ANY($10::text[]))
+  AND ($11::text[] IS NULL OR r.source = ANY($11::text[]))
+  AND ($12::timestamptz IS NULL OR r.starts_at >= $12)
+  AND ($13::timestamptz IS NULL OR r.starts_at < $13)
+  AND (
+    $14::text IS NULL
+    OR r.number::text = $14
+    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || $14 || '%'
+    OR ($15::text IS NOT NULL AND c.phone_e164 LIKE '%' || $15 || '%')
+  )
+`
+
+type CountReservationsParams struct {
+	OrganizationID   int64              `json:"organization_id"`
+	BranchIds        []int64            `json:"branch_ids"`
+	OwnUserID        pgtype.Int8        `json:"own_user_id"`
+	OwnStaffID       pgtype.Int8        `json:"own_staff_id"`
+	Branches         []uuid.UUID        `json:"branches"`
+	CustomerUuid     pgtype.UUID        `json:"customer_uuid"`
+	Staff            []uuid.UUID        `json:"staff"`
+	Statuses         []string           `json:"statuses"`
+	ApprovalStatuses []string           `json:"approval_statuses"`
+	PaymentStatuses  []string           `json:"payment_statuses"`
+	Sources          []string           `json:"sources"`
+	StartsFrom       pgtype.Timestamptz `json:"starts_from"`
+	StartsTo         pgtype.Timestamptz `json:"starts_to"`
+	Q                pgtype.Text        `json:"q"`
+	QDigits          pgtype.Text        `json:"q_digits"`
+}
+
+func (q *Queries) CountReservations(ctx context.Context, arg CountReservationsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countReservations,
+		arg.OrganizationID,
+		arg.BranchIds,
+		arg.OwnUserID,
+		arg.OwnStaffID,
+		arg.Branches,
+		arg.CustomerUuid,
+		arg.Staff,
+		arg.Statuses,
+		arg.ApprovalStatuses,
+		arg.PaymentStatuses,
+		arg.Sources,
+		arg.StartsFrom,
+		arg.StartsTo,
+		arg.Q,
+		arg.QDigits,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createReservation = `-- name: CreateReservation :one
 INSERT INTO reservations (
     organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status,
@@ -182,6 +253,20 @@ func (q *Queries) CreateReservationLine(ctx context.Context, arg CreateReservati
 		arg.BufferAfterMinutes,
 		arg.UnitPrice,
 	)
+	return err
+}
+
+const deleteReservationLines = `-- name: DeleteReservationLines :exec
+DELETE FROM reservation_lines WHERE organization_id = $1 AND reservation_id = $2
+`
+
+type DeleteReservationLinesParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ReservationID  int64 `json:"reservation_id"`
+}
+
+func (q *Queries) DeleteReservationLines(ctx context.Context, arg DeleteReservationLinesParams) error {
+	_, err := q.db.Exec(ctx, deleteReservationLines, arg.OrganizationID, arg.ReservationID)
 	return err
 }
 
@@ -448,6 +533,48 @@ func (q *Queries) GetReservationRecord(ctx context.Context, arg GetReservationRe
 	return i, err
 }
 
+const listReservationBranchFacets = `-- name: ListReservationBranchFacets :many
+SELECT b.uuid AS value, b.name AS label, count(*) AS count
+FROM reservations r
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+WHERE r.organization_id = $1
+  AND ($2::bigint[] IS NULL OR r.branch_id = ANY($2::bigint[]))
+GROUP BY b.uuid, b.name
+ORDER BY b.name
+`
+
+type ListReservationBranchFacetsParams struct {
+	OrganizationID int64   `json:"organization_id"`
+	BranchIds      []int64 `json:"branch_ids"`
+}
+
+type ListReservationBranchFacetsRow struct {
+	Value uuid.UUID `json:"value"`
+	Label string    `json:"label"`
+	Count int64     `json:"count"`
+}
+
+// Branches with reservations (in the caller's scope) for the list filter.
+func (q *Queries) ListReservationBranchFacets(ctx context.Context, arg ListReservationBranchFacetsParams) ([]ListReservationBranchFacetsRow, error) {
+	rows, err := q.db.Query(ctx, listReservationBranchFacets, arg.OrganizationID, arg.BranchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReservationBranchFacetsRow{}
+	for rows.Next() {
+		var i ListReservationBranchFacetsRow
+		if err := rows.Scan(&i.Value, &i.Label, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReservationEvents = `-- name: ListReservationEvents :many
 SELECT e.id, e.organization_id, e.reservation_id, e.version, e.type, e.from_status, e.to_status, e.actor_id, e.note, e.created_at, COALESCE(TRIM(u.name || ' ' || u.surname), '')::TEXT AS actor_name
 FROM reservation_events e
@@ -496,6 +623,49 @@ func (q *Queries) ListReservationEvents(ctx context.Context, arg ListReservation
 			&i.Note,
 			&i.CreatedAt,
 			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReservationLinePrices = `-- name: ListReservationLinePrices :many
+SELECT line_index, service_id, staff_id, unit_price FROM reservation_lines
+WHERE organization_id = $1 AND reservation_id = $2
+ORDER BY line_index
+`
+
+type ListReservationLinePricesParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ReservationID  int64 `json:"reservation_id"`
+}
+
+type ListReservationLinePricesRow struct {
+	LineIndex int32          `json:"line_index"`
+	ServiceID pgtype.Int8    `json:"service_id"`
+	StaffID   pgtype.Int8    `json:"staff_id"`
+	UnitPrice pgtype.Numeric `json:"unit_price"`
+}
+
+func (q *Queries) ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error) {
+	rows, err := q.db.Query(ctx, listReservationLinePrices, arg.OrganizationID, arg.ReservationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReservationLinePricesRow{}
+	for rows.Next() {
+		var i ListReservationLinePricesRow
+		if err := rows.Scan(
+			&i.LineIndex,
+			&i.ServiceID,
+			&i.StaffID,
+			&i.UnitPrice,
 		); err != nil {
 			return nil, err
 		}
@@ -583,6 +753,48 @@ func (q *Queries) ListReservationLines(ctx context.Context, arg ListReservationL
 	return items, nil
 }
 
+const listReservationStaffFacets = `-- name: ListReservationStaffFacets :many
+SELECT st.uuid AS value, st.name AS label, count(DISTINCT r.id) AS count
+FROM reservations r
+JOIN reservation_lines l ON l.organization_id = r.organization_id AND l.reservation_id = r.id
+JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+WHERE r.organization_id = $1
+  AND ($2::bigint[] IS NULL OR r.branch_id = ANY($2::bigint[]))
+GROUP BY st.uuid, st.name
+ORDER BY st.name
+`
+
+type ListReservationStaffFacetsParams struct {
+	OrganizationID int64   `json:"organization_id"`
+	BranchIds      []int64 `json:"branch_ids"`
+}
+
+type ListReservationStaffFacetsRow struct {
+	Value uuid.UUID `json:"value"`
+	Label string    `json:"label"`
+	Count int64     `json:"count"`
+}
+
+func (q *Queries) ListReservationStaffFacets(ctx context.Context, arg ListReservationStaffFacetsParams) ([]ListReservationStaffFacetsRow, error) {
+	rows, err := q.db.Query(ctx, listReservationStaffFacets, arg.OrganizationID, arg.BranchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReservationStaffFacetsRow{}
+	for rows.Next() {
+		var i ListReservationStaffFacetsRow
+		if err := rows.Scan(&i.Value, &i.Label, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReservationStaffIDs = `-- name: ListReservationStaffIDs :many
 SELECT DISTINCT staff_id::BIGINT FROM reservation_lines
 WHERE organization_id = $1 AND reservation_id = $2 AND staff_id IS NOT NULL
@@ -606,6 +818,192 @@ func (q *Queries) ListReservationStaffIDs(ctx context.Context, arg ListReservati
 			return nil, err
 		}
 		items = append(items, staff_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReservations = `-- name: ListReservations :many
+SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, b.uuid AS branch_uuid, b.name AS branch_name,
+       c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
+       c.phone_e164 AS customer_phone,
+       COALESCE((SELECT string_agg(l.service_name, ', ' ORDER BY l.line_index) FROM reservation_lines l
+                 WHERE l.organization_id = r.organization_id AND l.reservation_id = r.id), '')::TEXT AS services,
+       COALESCE((SELECT string_agg(DISTINCT l.staff_name, ', ') FROM reservation_lines l
+                 WHERE l.organization_id = r.organization_id AND l.reservation_id = r.id AND l.staff_name IS NOT NULL), '')::TEXT AS staff_names
+FROM reservations r
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE r.organization_id = $1
+  AND ($2::bigint[] IS NULL OR r.branch_id = ANY($2::bigint[]))
+  AND ($3::bigint IS NULL OR r.created_by = $3 OR EXISTS (
+        SELECT 1 FROM reservation_lines ol
+        WHERE ol.organization_id = r.organization_id AND ol.reservation_id = r.id AND ol.staff_id = $4))
+  AND ($5::uuid[] IS NULL OR b.uuid = ANY($5::uuid[]))
+  AND ($6::uuid IS NULL OR c.uuid = $6)
+  AND ($7::uuid[] IS NULL OR EXISTS (
+        SELECT 1 FROM reservation_lines sl
+        JOIN staff st ON st.organization_id = sl.organization_id AND st.id = sl.staff_id
+        WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id AND st.uuid = ANY($7::uuid[])))
+  AND ($8::text[] IS NULL OR r.status = ANY($8::text[]))
+  AND ($9::text[] IS NULL OR r.approval_status = ANY($9::text[]))
+  AND ($10::text[] IS NULL OR r.payment_status = ANY($10::text[]))
+  AND ($11::text[] IS NULL OR r.source = ANY($11::text[]))
+  AND ($12::timestamptz IS NULL OR r.starts_at >= $12)
+  AND ($13::timestamptz IS NULL OR r.starts_at < $13)
+  AND (
+    $14::text IS NULL
+    OR r.number::text = $14
+    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || $14 || '%'
+    OR ($15::text IS NOT NULL AND c.phone_e164 LIKE '%' || $15 || '%')
+  )
+ORDER BY
+  CASE WHEN $16::text = 'starts_at' AND NOT $17::boolean THEN r.starts_at END ASC,
+  CASE WHEN $16::text = 'starts_at' AND $17::boolean THEN r.starts_at END DESC,
+  CASE WHEN $16::text = 'number' AND NOT $17::boolean THEN r.number END ASC,
+  CASE WHEN $16::text = 'number' AND $17::boolean THEN r.number END DESC,
+  CASE WHEN $16::text = 'customer' AND NOT $17::boolean THEN lower(c.first_name || ' ' || c.last_name) END ASC,
+  CASE WHEN $16::text = 'customer' AND $17::boolean THEN lower(c.first_name || ' ' || c.last_name) END DESC,
+  CASE WHEN $16::text = 'status' AND NOT $17::boolean THEN r.status END ASC,
+  CASE WHEN $16::text = 'status' AND $17::boolean THEN r.status END DESC,
+  CASE WHEN $16::text = 'total_price' AND NOT $17::boolean THEN r.total_price END ASC,
+  CASE WHEN $16::text = 'total_price' AND $17::boolean THEN r.total_price END DESC,
+  CASE WHEN $16::text = 'created_at' AND NOT $17::boolean THEN r.created_at END ASC,
+  CASE WHEN $16::text = 'created_at' AND $17::boolean THEN r.created_at END DESC,
+  r.starts_at DESC, r.id DESC
+LIMIT $19 OFFSET $18
+`
+
+type ListReservationsParams struct {
+	OrganizationID   int64              `json:"organization_id"`
+	BranchIds        []int64            `json:"branch_ids"`
+	OwnUserID        pgtype.Int8        `json:"own_user_id"`
+	OwnStaffID       pgtype.Int8        `json:"own_staff_id"`
+	Branches         []uuid.UUID        `json:"branches"`
+	CustomerUuid     pgtype.UUID        `json:"customer_uuid"`
+	Staff            []uuid.UUID        `json:"staff"`
+	Statuses         []string           `json:"statuses"`
+	ApprovalStatuses []string           `json:"approval_statuses"`
+	PaymentStatuses  []string           `json:"payment_statuses"`
+	Sources          []string           `json:"sources"`
+	StartsFrom       pgtype.Timestamptz `json:"starts_from"`
+	StartsTo         pgtype.Timestamptz `json:"starts_to"`
+	Q                pgtype.Text        `json:"q"`
+	QDigits          pgtype.Text        `json:"q_digits"`
+	SortField        string             `json:"sort_field"`
+	SortDesc         bool               `json:"sort_desc"`
+	OffsetCount      int32              `json:"offset_count"`
+	LimitCount       int32              `json:"limit_count"`
+}
+
+type ListReservationsRow struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	Number             int64              `json:"number"`
+	BranchID           int64              `json:"branch_id"`
+	CustomerID         int64              `json:"customer_id"`
+	HoldID             pgtype.Int8        `json:"hold_id"`
+	Status             string             `json:"status"`
+	ApprovalMode       string             `json:"approval_mode"`
+	ApprovalStatus     string             `json:"approval_status"`
+	ConfirmationStatus string             `json:"confirmation_status"`
+	PaymentStatus      string             `json:"payment_status"`
+	Source             string             `json:"source"`
+	StartsAt           pgtype.Timestamptz `json:"starts_at"`
+	EndsAt             pgtype.Timestamptz `json:"ends_at"`
+	TotalPrice         pgtype.Numeric     `json:"total_price"`
+	Currency           string             `json:"currency"`
+	CustomFields       []byte             `json:"custom_fields"`
+	CustomerNote       string             `json:"customer_note"`
+	InternalNote       string             `json:"internal_note"`
+	Version            int32              `json:"version"`
+	CancelReason       pgtype.Text        `json:"cancel_reason"`
+	CreatedBy          pgtype.Int8        `json:"created_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	BranchUuid         uuid.UUID          `json:"branch_uuid"`
+	BranchName         string             `json:"branch_name"`
+	CustomerUuid       uuid.UUID          `json:"customer_uuid"`
+	CustomerFirstName  string             `json:"customer_first_name"`
+	CustomerLastName   string             `json:"customer_last_name"`
+	CustomerPhone      pgtype.Text        `json:"customer_phone"`
+	Services           string             `json:"services"`
+	StaffNames         string             `json:"staff_names"`
+}
+
+// The panel list (TEC-900). branch_ids = the caller's branch scope (NULL =
+// every branch); own_user_id / own_staff_id narrow to an own calendar
+// member (created by the member or served by its staff record).
+func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsParams) ([]ListReservationsRow, error) {
+	rows, err := q.db.Query(ctx, listReservations,
+		arg.OrganizationID,
+		arg.BranchIds,
+		arg.OwnUserID,
+		arg.OwnStaffID,
+		arg.Branches,
+		arg.CustomerUuid,
+		arg.Staff,
+		arg.Statuses,
+		arg.ApprovalStatuses,
+		arg.PaymentStatuses,
+		arg.Sources,
+		arg.StartsFrom,
+		arg.StartsTo,
+		arg.Q,
+		arg.QDigits,
+		arg.SortField,
+		arg.SortDesc,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReservationsRow{}
+	for rows.Next() {
+		var i ListReservationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.Number,
+			&i.BranchID,
+			&i.CustomerID,
+			&i.HoldID,
+			&i.Status,
+			&i.ApprovalMode,
+			&i.ApprovalStatus,
+			&i.ConfirmationStatus,
+			&i.PaymentStatus,
+			&i.Source,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.TotalPrice,
+			&i.Currency,
+			&i.CustomFields,
+			&i.CustomerNote,
+			&i.InternalNote,
+			&i.Version,
+			&i.CancelReason,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BranchUuid,
+			&i.BranchName,
+			&i.CustomerUuid,
+			&i.CustomerFirstName,
+			&i.CustomerLastName,
+			&i.CustomerPhone,
+			&i.Services,
+			&i.StaffNames,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -684,6 +1082,119 @@ func (q *Queries) NextReservationNumber(ctx context.Context, organizationID int6
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const replaceReservationSchedule = `-- name: ReplaceReservationSchedule :one
+UPDATE reservations
+SET hold_id = $1, starts_at = $2, ends_at = $3,
+    total_price = $4, version = version + 1
+WHERE organization_id = $5 AND id = $6
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at
+`
+
+type ReplaceReservationScheduleParams struct {
+	HoldID         pgtype.Int8        `json:"hold_id"`
+	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+	TotalPrice     pgtype.Numeric     `json:"total_price"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// A change of time / services / staff: the new commitment and times.
+func (q *Queries) ReplaceReservationSchedule(ctx context.Context, arg ReplaceReservationScheduleParams) (Reservation, error) {
+	row := q.db.QueryRow(ctx, replaceReservationSchedule,
+		arg.HoldID,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.TotalPrice,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	var i Reservation
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Number,
+		&i.BranchID,
+		&i.CustomerID,
+		&i.HoldID,
+		&i.Status,
+		&i.ApprovalMode,
+		&i.ApprovalStatus,
+		&i.ConfirmationStatus,
+		&i.PaymentStatus,
+		&i.Source,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.TotalPrice,
+		&i.Currency,
+		&i.CustomFields,
+		&i.CustomerNote,
+		&i.InternalNote,
+		&i.Version,
+		&i.CancelReason,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateReservationNotes = `-- name: UpdateReservationNotes :one
+UPDATE reservations
+SET customer_note = $1, internal_note = $2,
+    custom_fields = $3, version = version + 1
+WHERE organization_id = $4 AND id = $5
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at
+`
+
+type UpdateReservationNotesParams struct {
+	CustomerNote   string `json:"customer_note"`
+	InternalNote   string `json:"internal_note"`
+	CustomFields   []byte `json:"custom_fields"`
+	OrganizationID int64  `json:"organization_id"`
+	ID             int64  `json:"id"`
+}
+
+func (q *Queries) UpdateReservationNotes(ctx context.Context, arg UpdateReservationNotesParams) (Reservation, error) {
+	row := q.db.QueryRow(ctx, updateReservationNotes,
+		arg.CustomerNote,
+		arg.InternalNote,
+		arg.CustomFields,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	var i Reservation
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Number,
+		&i.BranchID,
+		&i.CustomerID,
+		&i.HoldID,
+		&i.Status,
+		&i.ApprovalMode,
+		&i.ApprovalStatus,
+		&i.ConfirmationStatus,
+		&i.PaymentStatus,
+		&i.Source,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.TotalPrice,
+		&i.Currency,
+		&i.CustomFields,
+		&i.CustomerNote,
+		&i.InternalNote,
+		&i.Version,
+		&i.CancelReason,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateReservationState = `-- name: UpdateReservationState :one

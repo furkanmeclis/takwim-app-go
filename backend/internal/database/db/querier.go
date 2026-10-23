@@ -61,6 +61,7 @@ type Querier interface {
 	CountPermissions(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
+	CountReservations(ctx context.Context, arg CountReservationsParams) (int64, error)
 	CountResourceClosures(ctx context.Context, arg CountResourceClosuresParams) (int64, error)
 	CountResources(ctx context.Context, arg CountResourcesParams) (int64, error)
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
@@ -137,6 +138,7 @@ type Querier interface {
 	DeletePushDeviceForUser(ctx context.Context, arg DeletePushDeviceForUserParams) (int64, error)
 	DeletePushSubscription(ctx context.Context, arg DeletePushSubscriptionParams) error
 	DeletePushTickets(ctx context.Context, ids []int64) error
+	DeleteReservationLines(ctx context.Context, arg DeleteReservationLinesParams) error
 	DeleteResourceClosure(ctx context.Context, arg DeleteResourceClosureParams) (int64, error)
 	DeleteRole(ctx context.Context, argUuid uuid.UUID) error
 	DeleteServiceBranch(ctx context.Context, arg DeleteServiceBranchParams) error
@@ -390,9 +392,17 @@ type Querier interface {
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
+	// Branches with reservations (in the caller's scope) for the list filter.
+	ListReservationBranchFacets(ctx context.Context, arg ListReservationBranchFacetsParams) ([]ListReservationBranchFacetsRow, error)
 	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
+	ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error)
 	ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error)
+	ListReservationStaffFacets(ctx context.Context, arg ListReservationStaffFacetsParams) ([]ListReservationStaffFacetsRow, error)
 	ListReservationStaffIDs(ctx context.Context, arg ListReservationStaffIDsParams) ([]int64, error)
+	// The panel list (TEC-900). branch_ids = the caller's branch scope (NULL =
+	// every branch); own_user_id / own_staff_id narrow to an own calendar
+	// member (created by the member or served by its staff record).
+	ListReservations(ctx context.Context, arg ListReservationsParams) ([]ListReservationsRow, error)
 	// Records waiting on holds that just lapsed (the expiry hook).
 	ListReservationsByHolds(ctx context.Context, arg ListReservationsByHoldsParams) ([]Reservation, error)
 	// Branches with their resource count, inside the caller's branch scope.
@@ -508,6 +518,8 @@ type Querier interface {
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
 	RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldParams) (CapacityHold, error)
+	// A change of time / services / staff: the new commitment and times.
+	ReplaceReservationSchedule(ctx context.Context, arg ReplaceReservationScheduleParams) (Reservation, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
@@ -578,6 +590,7 @@ type Querier interface {
 	// PUT semantics: every value is replaced; NULL limits mean the plan default.
 	UpdateOrganizationEntitlements(ctx context.Context, arg UpdateOrganizationEntitlementsParams) (Organization, error)
 	UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error)
+	UpdateReservationNotes(ctx context.Context, arg UpdateReservationNotesParams) (Reservation, error)
 	// One transition: the new fields and version + 1.
 	UpdateReservationState(ctx context.Context, arg UpdateReservationStateParams) (Reservation, error)
 	UpdateResource(ctx context.Context, arg UpdateResourceParams) (Resource, error)

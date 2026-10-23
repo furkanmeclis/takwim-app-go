@@ -108,3 +108,128 @@ RETURNING *;
 SELECT * FROM reservations
 WHERE organization_id = sqlc.arg(organization_id) AND hold_id = ANY(sqlc.arg(hold_ids)::BIGINT[])
 FOR UPDATE;
+
+-- name: ListReservations :many
+-- The panel list (TEC-900). branch_ids = the caller's branch scope (NULL =
+-- every branch); own_user_id / own_staff_id narrow to an own calendar
+-- member (created by the member or served by its staff record).
+SELECT r.*, b.uuid AS branch_uuid, b.name AS branch_name,
+       c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
+       c.phone_e164 AS customer_phone,
+       COALESCE((SELECT string_agg(l.service_name, ', ' ORDER BY l.line_index) FROM reservation_lines l
+                 WHERE l.organization_id = r.organization_id AND l.reservation_id = r.id), '')::TEXT AS services,
+       COALESCE((SELECT string_agg(DISTINCT l.staff_name, ', ') FROM reservation_lines l
+                 WHERE l.organization_id = r.organization_id AND l.reservation_id = r.id AND l.staff_name IS NOT NULL), '')::TEXT AS staff_names
+FROM reservations r
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(own_user_id)::bigint IS NULL OR r.created_by = sqlc.narg(own_user_id) OR EXISTS (
+        SELECT 1 FROM reservation_lines ol
+        WHERE ol.organization_id = r.organization_id AND ol.reservation_id = r.id AND ol.staff_id = sqlc.narg(own_staff_id)))
+  AND (sqlc.narg(branches)::uuid[] IS NULL OR b.uuid = ANY(sqlc.narg(branches)::uuid[]))
+  AND (sqlc.narg(customer_uuid)::uuid IS NULL OR c.uuid = sqlc.narg(customer_uuid))
+  AND (sqlc.narg(staff)::uuid[] IS NULL OR EXISTS (
+        SELECT 1 FROM reservation_lines sl
+        JOIN staff st ON st.organization_id = sl.organization_id AND st.id = sl.staff_id
+        WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id AND st.uuid = ANY(sqlc.narg(staff)::uuid[])))
+  AND (sqlc.narg(statuses)::text[] IS NULL OR r.status = ANY(sqlc.narg(statuses)::text[]))
+  AND (sqlc.narg(approval_statuses)::text[] IS NULL OR r.approval_status = ANY(sqlc.narg(approval_statuses)::text[]))
+  AND (sqlc.narg(payment_statuses)::text[] IS NULL OR r.payment_status = ANY(sqlc.narg(payment_statuses)::text[]))
+  AND (sqlc.narg(sources)::text[] IS NULL OR r.source = ANY(sqlc.narg(sources)::text[]))
+  AND (sqlc.narg(starts_from)::timestamptz IS NULL OR r.starts_at >= sqlc.narg(starts_from))
+  AND (sqlc.narg(starts_to)::timestamptz IS NULL OR r.starts_at < sqlc.narg(starts_to))
+  AND (
+    sqlc.narg(q)::text IS NULL
+    OR r.number::text = sqlc.narg(q)
+    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || sqlc.narg(q) || '%'
+    OR (sqlc.narg(q_digits)::text IS NOT NULL AND c.phone_e164 LIKE '%' || sqlc.narg(q_digits) || '%')
+  )
+ORDER BY
+  CASE WHEN sqlc.arg(sort_field)::text = 'starts_at' AND NOT sqlc.arg(sort_desc)::boolean THEN r.starts_at END ASC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'starts_at' AND sqlc.arg(sort_desc)::boolean THEN r.starts_at END DESC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'number' AND NOT sqlc.arg(sort_desc)::boolean THEN r.number END ASC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'number' AND sqlc.arg(sort_desc)::boolean THEN r.number END DESC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'customer' AND NOT sqlc.arg(sort_desc)::boolean THEN lower(c.first_name || ' ' || c.last_name) END ASC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'customer' AND sqlc.arg(sort_desc)::boolean THEN lower(c.first_name || ' ' || c.last_name) END DESC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'status' AND NOT sqlc.arg(sort_desc)::boolean THEN r.status END ASC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'status' AND sqlc.arg(sort_desc)::boolean THEN r.status END DESC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'total_price' AND NOT sqlc.arg(sort_desc)::boolean THEN r.total_price END ASC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'total_price' AND sqlc.arg(sort_desc)::boolean THEN r.total_price END DESC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'created_at' AND NOT sqlc.arg(sort_desc)::boolean THEN r.created_at END ASC,
+  CASE WHEN sqlc.arg(sort_field)::text = 'created_at' AND sqlc.arg(sort_desc)::boolean THEN r.created_at END DESC,
+  r.starts_at DESC, r.id DESC
+LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
+
+-- name: CountReservations :one
+SELECT count(*)
+FROM reservations r
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(own_user_id)::bigint IS NULL OR r.created_by = sqlc.narg(own_user_id) OR EXISTS (
+        SELECT 1 FROM reservation_lines ol
+        WHERE ol.organization_id = r.organization_id AND ol.reservation_id = r.id AND ol.staff_id = sqlc.narg(own_staff_id)))
+  AND (sqlc.narg(branches)::uuid[] IS NULL OR b.uuid = ANY(sqlc.narg(branches)::uuid[]))
+  AND (sqlc.narg(customer_uuid)::uuid IS NULL OR c.uuid = sqlc.narg(customer_uuid))
+  AND (sqlc.narg(staff)::uuid[] IS NULL OR EXISTS (
+        SELECT 1 FROM reservation_lines sl
+        JOIN staff st ON st.organization_id = sl.organization_id AND st.id = sl.staff_id
+        WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id AND st.uuid = ANY(sqlc.narg(staff)::uuid[])))
+  AND (sqlc.narg(statuses)::text[] IS NULL OR r.status = ANY(sqlc.narg(statuses)::text[]))
+  AND (sqlc.narg(approval_statuses)::text[] IS NULL OR r.approval_status = ANY(sqlc.narg(approval_statuses)::text[]))
+  AND (sqlc.narg(payment_statuses)::text[] IS NULL OR r.payment_status = ANY(sqlc.narg(payment_statuses)::text[]))
+  AND (sqlc.narg(sources)::text[] IS NULL OR r.source = ANY(sqlc.narg(sources)::text[]))
+  AND (sqlc.narg(starts_from)::timestamptz IS NULL OR r.starts_at >= sqlc.narg(starts_from))
+  AND (sqlc.narg(starts_to)::timestamptz IS NULL OR r.starts_at < sqlc.narg(starts_to))
+  AND (
+    sqlc.narg(q)::text IS NULL
+    OR r.number::text = sqlc.narg(q)
+    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || sqlc.narg(q) || '%'
+    OR (sqlc.narg(q_digits)::text IS NOT NULL AND c.phone_e164 LIKE '%' || sqlc.narg(q_digits) || '%')
+  );
+
+-- name: ListReservationBranchFacets :many
+-- Branches with reservations (in the caller's scope) for the list filter.
+SELECT b.uuid AS value, b.name AS label, count(*) AS count
+FROM reservations r
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+GROUP BY b.uuid, b.name
+ORDER BY b.name;
+
+-- name: ListReservationStaffFacets :many
+SELECT st.uuid AS value, st.name AS label, count(DISTINCT r.id) AS count
+FROM reservations r
+JOIN reservation_lines l ON l.organization_id = r.organization_id AND l.reservation_id = r.id
+JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+GROUP BY st.uuid, st.name
+ORDER BY st.name;
+
+-- name: ReplaceReservationSchedule :one
+-- A change of time / services / staff: the new commitment and times.
+UPDATE reservations
+SET hold_id = sqlc.arg(hold_id), starts_at = sqlc.arg(starts_at), ends_at = sqlc.arg(ends_at),
+    total_price = sqlc.arg(total_price), version = version + 1
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
+RETURNING *;
+
+-- name: DeleteReservationLines :exec
+DELETE FROM reservation_lines WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(reservation_id);
+
+-- name: ListReservationLinePrices :many
+SELECT line_index, service_id, staff_id, unit_price FROM reservation_lines
+WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(reservation_id)
+ORDER BY line_index;
+
+-- name: UpdateReservationNotes :one
+UPDATE reservations
+SET customer_note = sqlc.arg(customer_note), internal_note = sqlc.arg(internal_note),
+    custom_fields = sqlc.arg(custom_fields), version = version + 1
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
+RETURNING *;

@@ -209,5 +209,15 @@
   "fields.tenant.customers.tags": "Tags",
   "fields.tenant.customers.sms_consent": "SMS consent",
   "fields.tenant.customers.email_consent": "Email consent",
-  "fields.tenant.customers.verified": "Verified phone"
+  "fields.tenant.customers.verified": "Verified phone",
+  "resources.tenant.reservations": "Reservations",
+  "actions.reservations.created": "Reservation created",
+  "actions.reservations.accepted": "Reservation accepted",
+  "actions.reservations.rejected": "Reservation rejected",
+  "actions.reservations.cancelled": "Reservation cancelled",
+  "actions.reservations.started": "Service started",
+  "actions.reservations.completed": "Reservation completed",
+  "actions.reservations.no_show": "Customer did not come",
+  "actions.reservations.rescheduled": "Reservation rescheduled",
+  "actions.reservations.updated": "Reservation notes updated"
 }
