@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { ChoiceCard } from "@/features/business-page/components/choice-card";
 import {
   checkoutPrices,
+  seatingLabel,
   sumAmounts,
 } from "@/features/business-page/lib/wizard";
 import type {
@@ -68,7 +69,12 @@ export function SummaryStep({
             })}
           </CardTitle>
           <p className="text-muted-foreground text-sm">
-            {checkout.branch.name}
+            {[
+              checkout.branch.name,
+              seatingLabel(t, checkout.party_size, checkout.zone),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </CardHeader>
         <CardContent className="space-y-3 px-4">

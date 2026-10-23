@@ -2,6 +2,7 @@
 
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
@@ -15,6 +16,9 @@ import type {
 import { date as formatDate, datetimeInZone } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
+
+/** Day statuses where calling the business may still find a table. */
+const FULL_STATUSES = ["full", "no_staff"];
 
 const DAY_STATUS_KEYS: Record<string, string> = {
   closed: "business_page.datetime.closed",
@@ -39,6 +43,7 @@ export function DatetimeStep({
   canGoForward,
   onPrevWindow,
   onNextWindow,
+  noSlotsHint,
 }: {
   query: UseQueryResult<PublicAvailability>;
   /** Picked day ("yyyy-MM-dd"). */
@@ -50,6 +55,8 @@ export function DatetimeStep({
   canGoForward: boolean;
   onPrevWindow: () => void;
   onNextWindow: () => void;
+  /** Shown under a day that is full for the request (large parties). */
+  noSlotsHint?: ReactNode;
 }) {
   const { t, locale } = useLocale();
   const data = query.data;
@@ -59,6 +66,13 @@ export function DatetimeStep({
   const day = data?.days.find((d) => d.date === date);
   const first = data?.days[0]?.date;
   const last = data?.days[data.days.length - 1]?.date;
+  // A closed or not yet bookable day is not about the party's size.
+  const showHint =
+    Boolean(noSlotsHint) &&
+    Boolean(data) &&
+    (day
+      ? day.slots.length === 0 && FULL_STATUSES.includes(day.status)
+      : data?.days.length === 0);
 
   if (query.isError && !data) {
     return (
@@ -193,6 +207,8 @@ export function DatetimeStep({
           description={t("business_page.datetime.try_other_day")}
         />
       ) : null}
+
+      {showHint ? noSlotsHint : null}
 
       {slot && data ? (
         <ul className="bg-muted/40 space-y-1 rounded-md border p-3 text-sm">

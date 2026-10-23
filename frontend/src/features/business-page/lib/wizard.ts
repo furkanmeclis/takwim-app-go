@@ -1,5 +1,6 @@
 import type {
   PaymentMethod,
+  PublicBranch,
   PublicBusiness,
   PublicCheckout,
   PublicLineInput,
@@ -39,25 +40,72 @@ export function flowHasStaff(flow: string[]) {
   return flow.some((step) => STAFF_STEPS.includes(step));
 }
 
+/** "4 kişi · Teras" for a party booking; empty without a party. */
+export function seatingLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  partySize: number | null | undefined,
+  zone: string | null | undefined,
+) {
+  if (!partySize) return "";
+  return [t("business_page.party.count", { count: partySize }), zone]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Fewest and most people of a party (API limits). */
+export const MIN_PARTY = 1;
+export const MAX_PARTY = 1000;
+
 /**
- * Steps of the wizard. The branch step is skipped with one branch; the
- * service step is skipped when the flow has none (restaurant) and the
- * branch offers exactly one service, which is then booked; the staff step
- * shows when the sector offers it and a picked service has people to
- * choose from. Party size, vehicle, area and product steps of the sector
- * flows have no public API yet and are not shown.
+ * Whether the sector books by party (restaurant). The public profile has
+ * no capacity block; the sector flow carries a `party_size` step exactly
+ * when the sector's capacity books by party.
+ */
+export function flowHasParty(flow: string[]) {
+  return flow.includes("party_size");
+}
+
+/** Whether the customer picks an area: the branch has more than one. */
+export function hasAreaChoice(branch: PublicBranch | undefined) {
+  return (branch?.zones.length ?? 0) > 1;
+}
+
+/** A typed party size inside the API limits, else null. */
+export function validParty(value: number) {
+  return Number.isInteger(value) && value >= MIN_PARTY && value <= MAX_PARTY
+    ? value
+    : null;
+}
+
+/**
+ * Steps of the wizard.
+ * - The branch step is skipped with one branch.
+ * - Party size follows the branch when the sector books by party; the area
+ *   comes right after it (only with more than one area), because the area
+ *   limits the free times the day step shows.
+ * - The service step is skipped when the flow has none (restaurant) and
+ *   the branch offers exactly one service, which is then booked.
+ * - The staff step shows when the sector offers it and a picked service
+ *   has people to choose from.
+ * Vehicle and product steps have no public API yet and are not shown.
  */
 export function wizardSteps({
   branchCount,
+  partySize,
+  areaChoice,
   serviceChoice,
   staffChoice,
 }: {
   branchCount: number;
+  partySize: boolean;
+  areaChoice: boolean;
   serviceChoice: boolean;
   staffChoice: boolean;
 }): WizardStep[] {
   const steps: WizardStep[] = [];
   if (branchCount > 1) steps.push("branch");
+  if (partySize) steps.push("party_size");
+  if (partySize && areaChoice) steps.push("area");
   if (serviceChoice) steps.push("service");
   if (staffChoice) steps.push("staff");
   steps.push("datetime", "contact", "summary");
