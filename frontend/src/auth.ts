@@ -47,6 +47,7 @@ function isGuestAuthPath(pathname: string) {
 function isProtectedPath(pathname: string) {
   if (pathname === routes.cms.root) return true;
   if (pathname.startsWith(`${routes.cms.profile.root}`)) return true;
+  if (pathname === "/t" || pathname.startsWith("/t/")) return true;
   if (pathname === routes.platform.root) return true;
   if (
     pathname.startsWith(`${routes.platform.root}/`) &&

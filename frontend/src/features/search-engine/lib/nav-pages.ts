@@ -1,5 +1,3 @@
-import type { AppLayoutVariant } from "@/components/layout/app-layout";
-import { cmsNav, platformNav, settingsNav } from "@/config/nav";
 import { isNavEntryVisible } from "@/features/nav-engine/lib/access";
 import { resolveSearchIcon } from "@/features/search-engine/lib/icons";
 import type { PaletteItem } from "@/features/search-engine/types";
@@ -12,13 +10,10 @@ type AccessFns = {
 };
 
 export function buildNavPageItems(
-  variant: AppLayoutVariant,
+  catalogs: NavCatalog[],
   access: AccessFns,
   t: (key: string) => string,
 ): PaletteItem[] {
-  // Platform palette also indexes the System Settings sub-pages.
-  const catalogs: NavCatalog[] =
-    variant === "cms" ? [cmsNav] : [platformNav, settingsNav];
   const items: PaletteItem[] = [];
   const seenHrefs = new Set<string>();
 

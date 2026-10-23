@@ -23,6 +23,15 @@ export const routes = {
       preferences: "/profile/preferences",
     },
   },
+  /**
+   * Organization (tenant) shell `/t/{slug}`. The slug in the URL picks the
+   * organization; API calls carry it as `X-Organization` (see
+   * `lib/api/tenant-request.ts`).
+   */
+  tenant: {
+    root: (slug: string) => `/t/${encodeURIComponent(slug)}`,
+    home: (slug: string) => `/t/${encodeURIComponent(slug)}`,
+  },
   platform: {
     root: "/platform",
     home: "/platform",

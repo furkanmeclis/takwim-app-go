@@ -13,9 +13,10 @@ import {
 } from "@/features/search-engine";
 import { ImpersonationBanner } from "@/features/auth/components/impersonation-banner";
 import { NotificationLiveBridge } from "@/features/notifications/components/notification-live-bridge";
+import { OrganizationSwitcher } from "@/features/tenant/components/organization-switcher";
 import { useWebPushSync } from "@/hooks/use-web-push-sync";
 
-export type AppLayoutVariant = "platform" | "cms";
+export type AppLayoutVariant = "platform" | "cms" | "tenant";
 
 export function AppLayout({
   children,
@@ -36,7 +37,10 @@ export function AppLayout({
           }
         >
           <Header fixed>
-            <SearchTrigger />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {variant === "tenant" ? <OrganizationSwitcher /> : null}
+              <SearchTrigger />
+            </div>
           </Header>
           <div className="flex min-w-0 flex-1 flex-col gap-4 px-4 pt-2 pb-6 md:px-6">
             <ImpersonationBanner />

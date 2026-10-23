@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createElement, useMemo, useState } from "react";
 
 import type { AppLayoutVariant } from "@/components/layout/app-layout";
+import { useShellNav } from "@/components/layout/use-shell-nav";
 import { buildNavPageItems } from "@/features/search-engine/lib/nav-pages";
 import { parsePaletteQuery } from "@/features/search-engine/lib/parse-query";
 import { readRecentItems } from "@/features/search-engine/lib/recent";
@@ -23,6 +24,7 @@ import { usePermission } from "@/providers/permission-provider";
 export function useCommandPaletteData(variant: AppLayoutVariant) {
   const { t } = useLocale();
   const { can, canAny } = usePermission();
+  const { paletteCatalogs } = useShellNav(variant);
   const [query, setQuery] = useState("");
   const [activeSpec, setActiveSpec] = useState<string | undefined>();
 
@@ -69,8 +71,8 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
   const searchText = parsed.text;
 
   const pageItems = useMemo(
-    () => buildNavPageItems(variant, access, t),
-    [access, t, variant],
+    () => buildNavPageItems(paletteCatalogs, access, t),
+    [access, paletteCatalogs, t],
   );
 
   const filteredPages = useMemo(() => {

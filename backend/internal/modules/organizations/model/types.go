@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,17 +17,17 @@ const (
 )
 
 type Organization struct {
-	ID             int64      `json:"-"`
-	UUID           uuid.UUID  `json:"uuid"`
-	Slug           string     `json:"slug"`
-	Name           string     `json:"name"`
-	LogoURL        *string    `json:"logo_url,omitempty"`
-	Status         string     `json:"status"`
-	AccessStartsAt time.Time  `json:"access_starts_at"`
-	AccessEndsAt   *time.Time `json:"access_ends_at,omitempty"`
-	Settings       []byte     `json:"settings,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             int64           `json:"-"`
+	UUID           uuid.UUID       `json:"uuid"`
+	Slug           string          `json:"slug"`
+	Name           string          `json:"name"`
+	LogoURL        *string         `json:"logo_url,omitempty"`
+	Status         string          `json:"status"`
+	AccessStartsAt time.Time       `json:"access_starts_at"`
+	AccessEndsAt   *time.Time      `json:"access_ends_at,omitempty"`
+	Settings       json.RawMessage `json:"settings,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 type User struct {

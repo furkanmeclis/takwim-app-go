@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,6 +112,36 @@ func TestLastOwnerGuard(t *testing.T) {
 	}
 	if err := svc.RemoveMember(context.Background(), org.Uuid, userUUID); !errors.Is(err, ErrLastOrganizationOwner) {
 		t.Fatalf("remove last owner err = %v", err)
+	}
+}
+
+func TestAddMemberRejectsExistingMember(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	f := newFakeRepo(now)
+	org := f.addOrg("acme", "active", now.Add(-time.Hour), nil)
+	userUUID := uuid.New()
+	f.users[10] = db.User{ID: 10, Uuid: userUUID, Email: "owner@example.test", Name: "Owner", Surname: "User", Status: "active"}
+	f.addMembership(org.ID, 10, "owner")
+	svc := New(f, nil)
+
+	if _, err := svc.AddMember(context.Background(), org.Uuid, userUUID, "member"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("add existing member err = %v", err)
+	}
+	if got := f.memberships[org.ID][10]; got != "owner" {
+		t.Fatalf("role changed to %q", got)
+	}
+}
+
+func TestOrganizationSettingsMarshalAsJSONObject(t *testing.T) {
+	t.Parallel()
+	org := mapOrganization(db.Organization{Settings: []byte(`{"locale":"tr"}`)})
+	out, err := json.Marshal(org)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(out), `"settings":{"locale":"tr"}`) {
+		t.Fatalf("settings not emitted as object: %s", out)
 	}
 }
 

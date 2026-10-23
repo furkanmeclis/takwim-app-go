@@ -40,11 +40,29 @@ function expandPermissionSet(permissions: string[]) {
   return set;
 }
 
-export function PermissionProvider({ children }: { children: ReactNode }) {
-  const permissions = useAuthStore(
+type PermissionProviderProps = {
+  children: ReactNode;
+  /**
+   * Scoped permission set. When given, it replaces the signed-in user's
+   * global permissions for everything below (the tenant shell passes the
+   * current organization's `tenant.*` permissions here).
+   */
+  permissions?: string[];
+  /** Scoped roles, used together with `permissions`. */
+  roles?: string[];
+};
+
+export function PermissionProvider({
+  children,
+  permissions: scopedPermissions,
+  roles: scopedRoles,
+}: PermissionProviderProps) {
+  const globalPermissions = useAuthStore(
     (s) => s.user?.permissions ?? EMPTY_PERMISSIONS,
   );
-  const roles = useAuthStore((s) => s.user?.roles ?? EMPTY_ROLES);
+  const globalRoles = useAuthStore((s) => s.user?.roles ?? EMPTY_ROLES);
+  const permissions = scopedPermissions ?? globalPermissions;
+  const roles = scopedPermissions ? (scopedRoles ?? EMPTY_ROLES) : globalRoles;
 
   const value = useMemo<PermissionContextValue>(() => {
     const permissionSet = expandPermissionSet(permissions);

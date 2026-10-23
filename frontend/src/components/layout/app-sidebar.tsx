@@ -13,8 +13,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { cmsNav, platformNav } from "@/config/nav";
-import { routes } from "@/config/routes";
+import { useShellNav } from "@/components/layout/use-shell-nav";
 import { NavEngine } from "@/features/nav-engine";
 
 export function AppSidebar({
@@ -22,9 +21,7 @@ export function AppSidebar({
 }: {
   variant?: AppLayoutVariant;
 }) {
-  const catalog = variant === "cms" ? cmsNav : platformNav;
-  const homeHref =
-    variant === "platform" ? routes.platform.home : routes.cms.home;
+  const { catalog, homeHref } = useShellNav(variant);
 
   return (
     <Sidebar collapsible="icon" variant="inset">
