@@ -98,6 +98,21 @@ type Holds struct {
 	settings SettingsReader
 	now      func() time.Time
 	lock     bool
+	onExpire ExpiryHook
+}
+
+// ExpiryHook runs in the transaction that expires holds (sweep or a
+// writer's lazy expiry), with the ids of the holds that just lapsed. The
+// reservation record cancels the requests they belonged to.
+type ExpiryHook func(ctx context.Context, q *db.Queries, orgID int64, holdIDs []int64, now time.Time) error
+
+// Tx is one capacity transaction of an organization: the queries bound to
+// it and the instant it runs at. Run opens it under the lock, after
+// expiring lapsed holds.
+type Tx struct {
+	Q     *db.Queries
+	OrgID int64
+	Now   time.Time
 }
 
 // NewHolds builds the writer.
@@ -116,37 +131,82 @@ func (h *Holds) SetLocking(on bool) {
 	h.lock = on
 }
 
+// SetExpiryHook registers the reaction to lapsed holds.
+func (h *Holds) SetExpiryHook(fn ExpiryHook) {
+	h.onExpire = fn
+}
+
 // Busy is the BusySource of searches outside a writer's transaction.
 func (h *Holds) Busy() BusySource {
 	return AllocationBusy{Q: h.q, Now: func() time.Time { return h.now() }}
 }
 
-func (h *Holds) inTx(ctx context.Context, orgID int64, fn func(q *db.Queries) error) error {
-	tx, err := h.pool.Begin(ctx)
+// Run opens a capacity transaction of the organization: it takes the
+// organization's advisory lock, expires lapsed holds (running the expiry
+// hook), calls fn and commits. fn runs in a savepoint: when it fails, what
+// it wrote is undone but the expiry is still committed (a lapsed hold reads
+// as expired afterwards). An exclusion violation maps to ErrSlotTaken.
+// Callers
+// that write their own records (reservations) do so inside fn, so the record
+// and its capacity commit together.
+func (h *Holds) Run(ctx context.Context, orgID int64, fn func(tx *Tx) error) error {
+	return mapWriteErr(h.run(ctx, orgID, true, fn))
+}
+
+func (h *Holds) run(ctx context.Context, orgID int64, expire bool, fn func(tx *Tx) error) error {
+	pgtx, err := h.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := h.q.WithTx(tx)
+	defer func() { _ = pgtx.Rollback(ctx) }()
+	q := h.q.WithTx(pgtx)
+	now := h.now()
 	if h.lock {
 		if err := q.LockCapacity(ctx, orgID); err != nil {
 			return err
 		}
 	}
-	if err := fn(q); err != nil {
+	expired := 0
+	if expire {
+		if expired, err = h.expireDue(ctx, q, orgID, now); err != nil {
+			return err
+		}
+	}
+	sp, err := pgtx.Begin(ctx)
+	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if fnErr := fn(&Tx{Q: h.q.WithTx(sp), OrgID: orgID, Now: now}); fnErr != nil {
+		_ = sp.Rollback(ctx)
+		if expired > 0 {
+			if err := pgtx.Commit(ctx); err != nil {
+				return err
+			}
+		}
+		return fnErr
+	}
+	if err := sp.Commit(ctx); err != nil {
+		return err
+	}
+	return pgtx.Commit(ctx)
 }
 
-// expireDue expires the organization's lapsed holds and frees their
-// allocations; every writer runs it first.
+// expireDue expires the organization's lapsed holds, frees their
+// allocations and runs the expiry hook; every writer runs it first.
 func (h *Holds) expireDue(ctx context.Context, q *db.Queries, orgID int64, now time.Time) (int, error) {
 	ids, err := q.ExpireDueCapacityHolds(ctx, db.ExpireDueCapacityHoldsParams{OrganizationID: orgID, Now: ts(now)})
 	if err != nil || len(ids) == 0 {
 		return 0, err
 	}
-	return len(ids), q.DeleteCapacityAllocations(ctx, db.DeleteCapacityAllocationsParams{OrganizationID: orgID, HoldIds: ids})
+	if err := q.DeleteCapacityAllocations(ctx, db.DeleteCapacityAllocationsParams{OrganizationID: orgID, HoldIds: ids}); err != nil {
+		return 0, err
+	}
+	if h.onExpire != nil {
+		if err := h.onExpire(ctx, q, orgID, ids, now); err != nil {
+			return 0, err
+		}
+	}
+	return len(ids), nil
 }
 
 func (h *Holds) holdMinutes(ctx context.Context, orgID int64, reason string, override *int) (int, error) {
@@ -222,10 +282,33 @@ func pieces(slot model.Slot) []piece {
 	return out
 }
 
+// Created is a hold written in a capacity transaction.
+type Created struct {
+	ID   int64
+	UUID uuid.UUID
+	// Slot is the plan: lines with their staff, resources and held times.
+	Slot model.Slot
+}
+
 // Create holds the capacity of one visit at in.StartsAt: a timed hold
 // ("opsiyon") until the reason's hold time passes. Nothing is written when
 // the start is not free (ErrSlotTaken).
 func (h *Holds) Create(ctx context.Context, orgID int64, in model.HoldInput, caller Caller, actorID int64) (model.Hold, error) {
+	var created Created
+	err := h.Run(ctx, orgID, func(tx *Tx) error {
+		var err error
+		created, err = h.CreateIn(ctx, tx, in, caller, actorID)
+		return err
+	})
+	if err != nil {
+		return model.Hold{}, err
+	}
+	return h.get(ctx, h.q, orgID, created.UUID)
+}
+
+// CreateIn writes a hold inside a capacity transaction: it re-plans the
+// start with the slot engine on the transaction's data.
+func (h *Holds) CreateIn(ctx context.Context, tx *Tx, in model.HoldInput, caller Caller, actorID int64) (Created, error) {
 	ve := &ValidationError{}
 	if in.StartsAt == nil {
 		ve.add("starts_at", "required", "start is required")
@@ -239,67 +322,59 @@ func (h *Holds) Create(ctx context.Context, orgID int64, in model.HoldInput, cal
 		ve.add("minutes", "invalid", "minutes must be between 1 and 1440")
 	}
 	if err := ve.orNil(); err != nil {
-		return model.Hold{}, err
+		return Created{}, err
 	}
-	minutes, err := h.holdMinutes(ctx, orgID, in.Reason, in.Minutes)
+	minutes, err := h.holdMinutes(ctx, tx.OrgID, in.Reason, in.Minutes)
 	if err != nil {
-		return model.Hold{}, err
+		return Created{}, err
 	}
-	search := model.SearchInput{BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: in.Channel}
 	channel := in.Channel
 	if channel == "" {
 		channel = model.ChannelPanel
 	}
-	var holdUUID uuid.UUID
-	err = h.inTx(ctx, orgID, func(q *db.Queries) error {
-		now := h.now()
-		if _, err := h.expireDue(ctx, q, orgID, now); err != nil {
-			return err
-		}
-		planner := New(q, h.settings)
-		planner.SetClock(func() time.Time { return now })
-		planner.SetBusySource(AllocationBusy{Q: q, Now: func() time.Time { return now }})
-		slot, ok, err := planner.Check(ctx, orgID, search, caller, *in.StartsAt)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrSlotTaken
-		}
-		row, err := q.CreateCapacityHold(ctx, db.CreateCapacityHoldParams{
-			OrganizationID: orgID, BranchID: slot.BranchID, Kind: model.KindHold,
-			Reason: pgtype.Text{String: in.Reason, Valid: true}, Channel: channel,
-			StartsAt: ts(slot.StartsAt), EndsAt: ts(slot.EndsAt),
-			ExpiresAt: ts(now.Add(time.Duration(minutes) * time.Minute)),
-			CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
-		})
-		if err != nil {
-			return err
-		}
-		for _, p := range pieces(slot) {
-			if err := q.CreateCapacityAllocation(ctx, db.CreateCapacityAllocationParams{
-				OrganizationID: orgID, HoldID: row.ID, LineIndex: int32(p.line),
-				StaffID:    pgtype.Int8{Int64: p.staffID, Valid: p.staffID != 0},
-				ResourceID: pgtype.Int8{Int64: p.resourceID, Valid: p.resourceID != 0},
-				StartsAt:   ts(p.start), EndsAt: ts(p.end),
-			}); err != nil {
-				return err
-			}
-		}
-		holdUUID = row.Uuid
-		return nil
+	now := tx.Now
+	planner := New(tx.Q, h.settings)
+	planner.SetClock(func() time.Time { return now })
+	planner.SetBusySource(AllocationBusy{Q: tx.Q, Now: func() time.Time { return now }})
+	search := model.SearchInput{BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: in.Channel}
+	slot, ok, err := planner.Check(ctx, tx.OrgID, search, caller, *in.StartsAt)
+	if err != nil {
+		return Created{}, err
+	}
+	if !ok {
+		return Created{}, ErrSlotTaken
+	}
+	row, err := tx.Q.CreateCapacityHold(ctx, db.CreateCapacityHoldParams{
+		OrganizationID: tx.OrgID, BranchID: slot.BranchID, Kind: model.KindHold,
+		Reason: pgtype.Text{String: in.Reason, Valid: true}, Channel: channel,
+		StartsAt: ts(slot.StartsAt), EndsAt: ts(slot.EndsAt),
+		ExpiresAt: ts(now.Add(time.Duration(minutes) * time.Minute)),
+		CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
 	})
 	if err != nil {
-		return model.Hold{}, mapWriteErr(err)
+		return Created{}, err
 	}
-	return h.get(ctx, h.q, orgID, holdUUID)
+	for _, p := range pieces(slot) {
+		if err := tx.Q.CreateCapacityAllocation(ctx, db.CreateCapacityAllocationParams{
+			OrganizationID: tx.OrgID, HoldID: row.ID, LineIndex: int32(p.line),
+			StaffID:    pgtype.Int8{Int64: p.staffID, Valid: p.staffID != 0},
+			ResourceID: pgtype.Int8{Int64: p.resourceID, Valid: p.resourceID != 0},
+			StartsAt:   ts(p.start), EndsAt: ts(p.end),
+		}); err != nil {
+			return Created{}, err
+		}
+	}
+	return Created{ID: row.ID, UUID: row.Uuid, Slot: slot}, nil
 }
 
 // mapWriteErr maps an exclusion violation (a concurrent writer took the
-// time) to ErrSlotTaken.
+// time) to ErrSlotTaken. Two writers that slipped past the lock with
+// overlapping allocations can also wait on each other's exclusion check;
+// PostgreSQL then aborts one of them with a deadlock. They competed for the
+// same capacity, so the aborted one lost it too.
 func mapWriteErr(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23P01" {
+	if errors.As(err, &pgErr) && (pgErr.Code == "23P01" || pgErr.Code == "40P01") {
 		return ErrSlotTaken
 	}
 	return err
@@ -388,60 +463,104 @@ func (h *Holds) get(ctx context.Context, q *db.Queries, orgID int64, id uuid.UUI
 	return out, nil
 }
 
-// change runs fn on an active commitment under the lock. A hold that
-// lapsed is expired (its capacity freed) and ErrHoldExpired returned.
-func (h *Holds) change(ctx context.Context, orgID int64, id uuid.UUID, caller Caller, needHold bool, fn func(q *db.Queries, row db.CapacityHold, now time.Time) error) (model.Hold, error) {
-	expired := false
-	err := h.inTx(ctx, orgID, func(q *db.Queries) error {
-		if _, err := h.visible(ctx, q, orgID, id, caller); err != nil {
-			return err
-		}
-		row, err := q.GetCapacityHoldForUpdate(ctx, db.GetCapacityHoldForUpdateParams{OrganizationID: orgID, Uuid: id})
+// activeIn locks a commitment in a capacity transaction and checks that it
+// is active (and a timed hold when needHold). Run has already expired lapsed
+// holds, so a lapsed hold reads as expired here.
+func (h *Holds) activeIn(ctx context.Context, tx *Tx, holdID int64, needHold bool) (db.CapacityHold, error) {
+	row, err := tx.Q.GetCapacityHoldByIDForUpdate(ctx, db.GetCapacityHoldByIDForUpdateParams{OrganizationID: tx.OrgID, ID: holdID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return row, ErrHoldNotFound
+	}
+	if err != nil {
+		return row, err
+	}
+	switch {
+	case row.Status == model.StatusExpired:
+		return row, ErrHoldExpired
+	case row.Status != model.StatusActive:
+		return row, ErrNotActive
+	case needHold && row.Kind != model.KindHold:
+		return row, ErrNotHold
+	}
+	return row, nil
+}
+
+// ConfirmIn turns a hold into a booking inside a capacity transaction: the
+// same allocations, no expiry, so the capacity is consumed once.
+func (h *Holds) ConfirmIn(ctx context.Context, tx *Tx, holdID int64, refType string, refUUID *uuid.UUID) error {
+	row, err := h.activeIn(ctx, tx, holdID, true)
+	if err != nil {
+		return err
+	}
+	params := db.ConfirmCapacityHoldParams{OrganizationID: tx.OrgID, ID: row.ID}
+	if refType != "" {
+		params.RefType = pgtype.Text{String: refType, Valid: true}
+	}
+	if refUUID != nil {
+		params.RefUuid = pgtype.UUID{Bytes: *refUUID, Valid: true}
+	}
+	_, err = tx.Q.ConfirmCapacityHold(ctx, params)
+	return err
+}
+
+// RenewIn gives an active hold a new reason and expiry (e.g. a request the
+// business accepted now waits for online payment). minutes nil = the
+// reason's hold time.
+func (h *Holds) RenewIn(ctx context.Context, tx *Tx, holdID int64, reason string, minutes *int) error {
+	row, err := h.activeIn(ctx, tx, holdID, true)
+	if err != nil {
+		return err
+	}
+	m, err := h.holdMinutes(ctx, tx.OrgID, reason, minutes)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Q.RenewCapacityHold(ctx, db.RenewCapacityHoldParams{
+		OrganizationID: tx.OrgID, ID: row.ID, Reason: pgtype.Text{String: reason, Valid: true},
+		ExpiresAt: ts(tx.Now.Add(time.Duration(m) * time.Minute)),
+	})
+	return err
+}
+
+// ReleaseIn frees a hold or booking exactly once inside a capacity
+// transaction (ErrNotActive after).
+func (h *Holds) ReleaseIn(ctx context.Context, tx *Tx, holdID int64, reason string) error {
+	if reason == "" {
+		reason = "released"
+	}
+	row, err := h.activeIn(ctx, tx, holdID, false)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Q.ReleaseCapacityHold(ctx, db.ReleaseCapacityHoldParams{
+		OrganizationID: tx.OrgID, ID: row.ID, Now: ts(tx.Now), ReleaseReason: pgtype.Text{String: reason, Valid: true},
+	}); err != nil {
+		return err
+	}
+	return tx.Q.DeleteCapacityAllocations(ctx, db.DeleteCapacityAllocationsParams{OrganizationID: tx.OrgID, HoldIds: []int64{row.ID}})
+}
+
+// change runs fn on a commitment the caller may see, in a capacity
+// transaction, and returns it afterwards.
+func (h *Holds) change(ctx context.Context, orgID int64, id uuid.UUID, caller Caller, fn func(tx *Tx, holdID int64) error) (model.Hold, error) {
+	err := h.Run(ctx, orgID, func(tx *Tx) error {
+		row, err := h.visible(ctx, tx.Q, orgID, id, caller)
 		if err != nil {
 			return err
 		}
-		now := h.now()
-		if row.Status == model.StatusActive && row.Kind == model.KindHold && row.ExpiresAt.Valid && !row.ExpiresAt.Time.After(now) {
-			if _, err := h.expireDue(ctx, q, orgID, now); err != nil {
-				return err
-			}
-			expired = true
-			return nil
-		}
-		switch {
-		case row.Status != model.StatusActive:
-			if row.Status == model.StatusExpired {
-				return ErrHoldExpired
-			}
-			return ErrNotActive
-		case needHold && row.Kind != model.KindHold:
-			return ErrNotHold
-		}
-		return fn(q, row, now)
+		return fn(tx, row.ID)
 	})
 	if err != nil {
 		return model.Hold{}, err
 	}
-	if expired {
-		return model.Hold{}, ErrHoldExpired
-	}
 	return h.get(ctx, h.q, orgID, id)
 }
 
-// Confirm turns a hold into a booking: the same allocations, no expiry, so
-// the capacity is consumed once. refType / refUUID name the record
+// Confirm turns a hold into a booking. refType / refUUID name the record
 // (reservation) when given.
 func (h *Holds) Confirm(ctx context.Context, orgID int64, id uuid.UUID, caller Caller, refType string, refUUID *uuid.UUID) (model.Hold, error) {
-	return h.change(ctx, orgID, id, caller, true, func(q *db.Queries, row db.CapacityHold, _ time.Time) error {
-		params := db.ConfirmCapacityHoldParams{OrganizationID: orgID, ID: row.ID}
-		if refType != "" {
-			params.RefType = pgtype.Text{String: refType, Valid: true}
-		}
-		if refUUID != nil {
-			params.RefUuid = pgtype.UUID{Bytes: *refUUID, Valid: true}
-		}
-		_, err := q.ConfirmCapacityHold(ctx, params)
-		return err
+	return h.change(ctx, orgID, id, caller, func(tx *Tx, holdID int64) error {
+		return h.ConfirmIn(ctx, tx, holdID, refType, refUUID)
 	})
 }
 
@@ -456,9 +575,13 @@ func (h *Holds) Extend(ctx context.Context, orgID int64, id uuid.UUID, caller Ca
 		ve.add("minutes", "invalid", "minutes must be between 1 and 1440")
 		return model.Hold{}, ve
 	}
-	return h.change(ctx, orgID, id, caller, true, func(q *db.Queries, row db.CapacityHold, now time.Time) error {
-		_, err := q.ExtendCapacityHold(ctx, db.ExtendCapacityHoldParams{
-			OrganizationID: orgID, ID: row.ID, ExpiresAt: ts(now.Add(time.Duration(minutes) * time.Minute)),
+	return h.change(ctx, orgID, id, caller, func(tx *Tx, holdID int64) error {
+		row, err := h.activeIn(ctx, tx, holdID, true)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Q.ExtendCapacityHold(ctx, db.ExtendCapacityHoldParams{
+			OrganizationID: tx.OrgID, ID: row.ID, ExpiresAt: ts(tx.Now.Add(time.Duration(minutes) * time.Minute)),
 		})
 		return err
 	})
@@ -466,16 +589,8 @@ func (h *Holds) Extend(ctx context.Context, orgID int64, id uuid.UUID, caller Ca
 
 // Release frees a hold or a booking exactly once (ErrNotActive after).
 func (h *Holds) Release(ctx context.Context, orgID int64, id uuid.UUID, caller Caller, reason string) (model.Hold, error) {
-	if reason == "" {
-		reason = "released"
-	}
-	return h.change(ctx, orgID, id, caller, false, func(q *db.Queries, row db.CapacityHold, now time.Time) error {
-		if _, err := q.ReleaseCapacityHold(ctx, db.ReleaseCapacityHoldParams{
-			OrganizationID: orgID, ID: row.ID, Now: ts(now), ReleaseReason: pgtype.Text{String: reason, Valid: true},
-		}); err != nil {
-			return err
-		}
-		return q.DeleteCapacityAllocations(ctx, db.DeleteCapacityAllocationsParams{OrganizationID: orgID, HoldIds: []int64{row.ID}})
+	return h.change(ctx, orgID, id, caller, func(tx *Tx, holdID int64) error {
+		return h.ReleaseIn(ctx, tx, holdID, reason)
 	})
 }
 
@@ -489,8 +604,8 @@ func (h *Holds) ExpireDue(ctx context.Context) (int, error) {
 	}
 	total := 0
 	for _, orgID := range orgs {
-		err := h.inTx(ctx, orgID, func(q *db.Queries) error {
-			n, err := h.expireDue(ctx, q, orgID, h.now())
+		err := h.run(ctx, orgID, false, func(tx *Tx) error {
+			n, err := h.expireDue(ctx, tx.Q, orgID, tx.Now)
 			total += n
 			return err
 		})

@@ -100,6 +100,9 @@ type Querier interface {
 	CreateOTPCode(ctx context.Context, arg CreateOTPCodeParams) (OtpCode, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
+	CreateReservationEvent(ctx context.Context, arg CreateReservationEventParams) error
+	CreateReservationLine(ctx context.Context, arg CreateReservationLineParams) error
 	// Tenant resource: resources (TEC-891). Every query filters by organization_id.
 	CreateResource(ctx context.Context, arg CreateResourceParams) (Resource, error)
 	CreateResourceClosure(ctx context.Context, arg CreateResourceClosureParams) (ResourceClosure, error)
@@ -179,7 +182,7 @@ type Querier interface {
 	GetBulkJobByID(ctx context.Context, id int64) (BulkJob, error)
 	GetBulkJobByUUID(ctx context.Context, argUuid uuid.UUID) (BulkJob, error)
 	GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams) (GetCapacityHoldRow, error)
-	GetCapacityHoldForUpdate(ctx context.Context, arg GetCapacityHoldForUpdateParams) (CapacityHold, error)
+	GetCapacityHoldByIDForUpdate(ctx context.Context, arg GetCapacityHoldByIDForUpdateParams) (CapacityHold, error)
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
 	GetCurrentOrganizationSettings(ctx context.Context, organizationID int64) (GetCurrentOrganizationSettingsRow, error)
@@ -218,6 +221,14 @@ type Querier interface {
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
 	// Public media route: the image of a live branch of an active organization.
 	GetPublicBranchImage(ctx context.Context, arg GetPublicBranchImageParams) (GetPublicBranchImageRow, error)
+	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
+	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
+	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)
+	GetReservationForUpdate(ctx context.Context, arg GetReservationForUpdateParams) (Reservation, error)
+	// The service of a planned line with its prices: personal (service_staff) ›
+	// branch offer (service_branches) › list price.
+	GetReservationLineService(ctx context.Context, arg GetReservationLineServiceParams) (GetReservationLineServiceRow, error)
+	GetReservationRecord(ctx context.Context, arg GetReservationRecordParams) (Reservation, error)
 	GetResource(ctx context.Context, arg GetResourceParams) (GetResourceRow, error)
 	// Import key: a resource of the branch with the same name.
 	GetResourceByBranchName(ctx context.Context, arg GetResourceByBranchNameParams) (GetResourceByBranchNameRow, error)
@@ -379,6 +390,11 @@ type Querier interface {
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
+	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
+	ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error)
+	ListReservationStaffIDs(ctx context.Context, arg ListReservationStaffIDsParams) ([]int64, error)
+	// Records waiting on holds that just lapsed (the expiry hook).
+	ListReservationsByHolds(ctx context.Context, arg ListReservationsByHoldsParams) ([]Reservation, error)
 	// Branches with their resource count, inside the caller's branch scope.
 	ListResourceBranchFacets(ctx context.Context, arg ListResourceBranchFacetsParams) ([]ListResourceBranchFacetsRow, error)
 	ListResourceClosures(ctx context.Context, arg ListResourceClosuresParams) ([]ResourceClosure, error)
@@ -482,11 +498,16 @@ type Querier interface {
 	MarkOutboxRetry(ctx context.Context, arg MarkOutboxRetryParams) error
 	// OAuth sign-up stores a random hash; the user never chose a password.
 	MarkUserPasswordUnset(ctx context.Context, id int64) error
+	// Reservation record (TEC-899). Every query filters by organization_id;
+	// joins by alias.organization_id too.
+	// Runs under the capacity lock of the organization (uq number guards).
+	NextReservationNumber(ctx context.Context, organizationID int64) (int64, error)
 	PingDB(ctx context.Context) (int32, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
 	ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHoldParams) (CapacityHold, error)
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
+	RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldParams) (CapacityHold, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
@@ -557,6 +578,8 @@ type Querier interface {
 	// PUT semantics: every value is replaced; NULL limits mean the plan default.
 	UpdateOrganizationEntitlements(ctx context.Context, arg UpdateOrganizationEntitlementsParams) (Organization, error)
 	UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error)
+	// One transition: the new fields and version + 1.
+	UpdateReservationState(ctx context.Context, arg UpdateReservationStateParams) (Reservation, error)
 	UpdateResource(ctx context.Context, arg UpdateResourceParams) (Resource, error)
 	UpdateResourceClosure(ctx context.Context, arg UpdateResourceClosureParams) (ResourceClosure, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, error)

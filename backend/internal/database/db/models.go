@@ -628,6 +628,67 @@ type RefreshToken struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type Reservation struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	Number             int64              `json:"number"`
+	BranchID           int64              `json:"branch_id"`
+	CustomerID         int64              `json:"customer_id"`
+	HoldID             pgtype.Int8        `json:"hold_id"`
+	Status             string             `json:"status"`
+	ApprovalMode       string             `json:"approval_mode"`
+	ApprovalStatus     string             `json:"approval_status"`
+	ConfirmationStatus string             `json:"confirmation_status"`
+	PaymentStatus      string             `json:"payment_status"`
+	Source             string             `json:"source"`
+	StartsAt           pgtype.Timestamptz `json:"starts_at"`
+	EndsAt             pgtype.Timestamptz `json:"ends_at"`
+	TotalPrice         pgtype.Numeric     `json:"total_price"`
+	Currency           string             `json:"currency"`
+	CustomFields       []byte             `json:"custom_fields"`
+	CustomerNote       string             `json:"customer_note"`
+	InternalNote       string             `json:"internal_note"`
+	Version            int32              `json:"version"`
+	CancelReason       pgtype.Text        `json:"cancel_reason"`
+	CreatedBy          pgtype.Int8        `json:"created_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ReservationEvent struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	ReservationID  int64              `json:"reservation_id"`
+	Version        int32              `json:"version"`
+	Type           string             `json:"type"`
+	FromStatus     pgtype.Text        `json:"from_status"`
+	ToStatus       pgtype.Text        `json:"to_status"`
+	ActorID        pgtype.Int8        `json:"actor_id"`
+	Note           string             `json:"note"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type ReservationLine struct {
+	ID                  int64              `json:"id"`
+	OrganizationID      int64              `json:"organization_id"`
+	ReservationID       int64              `json:"reservation_id"`
+	LineIndex           int32              `json:"line_index"`
+	ServiceID           pgtype.Int8        `json:"service_id"`
+	ServiceName         string             `json:"service_name"`
+	StaffID             pgtype.Int8        `json:"staff_id"`
+	StaffName           pgtype.Text        `json:"staff_name"`
+	Resources           []byte             `json:"resources"`
+	StartsAt            pgtype.Timestamptz `json:"starts_at"`
+	EndsAt              pgtype.Timestamptz `json:"ends_at"`
+	DurationMinutes     int32              `json:"duration_minutes"`
+	BufferBeforeMinutes int32              `json:"buffer_before_minutes"`
+	BufferAfterMinutes  int32              `json:"buffer_after_minutes"`
+	UnitPrice           pgtype.Numeric     `json:"unit_price"`
+	VatRate             pgtype.Numeric     `json:"vat_rate"`
+	StaffShareRate      pgtype.Numeric     `json:"staff_share_rate"`
+}
+
 type Resource struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`
