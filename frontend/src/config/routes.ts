@@ -59,6 +59,8 @@ export const routes = {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings`,
       members: (slug: string) =>
         `/t/${encodeURIComponent(slug)}/settings/members`,
+      integrations: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/settings/integrations`,
       roles: {
         root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/roles`,
         create: (slug: string) =>

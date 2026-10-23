@@ -2399,6 +2399,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/integrations/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connectable providers
+         * @description `tenant.integrations.manage`. Providers with their credential fields and modes.
+         */
+        get: operations["getTenantIntegrationsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List integration accounts
+         * @description `tenant.integrations.manage`. Credentials are never returned (masked hints only).
+         */
+        get: operations["getTenantIntegrations"];
+        put?: never;
+        /**
+         * Connect a provider account
+         * @description `tenant.integrations.manage`. Stores the organization's own credentials sealed with the field
+         *     cipher (purpose `integration.credentials`, bound to the organization and the account). One active
+         *     account per kind (`409`). Use `/test` to check the connection.
+         */
+        post: operations["postTenantIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Integration account
+         * @description `tenant.integrations.manage`.
+         */
+        get: operations["getTenantIntegration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename, switch mode, rotate credentials
+         * @description `tenant.integrations.manage`. Only the given credential keys are replaced; a rotation or mode change resets the last check.
+         */
+        patch: operations["patchTenantIntegration"];
+        trace?: never;
+    };
+    "/v1/tenant/integrations/{uuid}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the connection
+         * @description `tenant.integrations.manage`. An authenticated provider call that moves no money; the result is stored on the account. A failure answers `422 INTEGRATION_CHECK_FAILED` with the account in `data`.
+         */
+        post: operations["postTenantIntegrationTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/{uuid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable an account
+         * @description `tenant.integrations.manage`. Work of the kind needs an active account; jobs already created keep it.
+         */
+        post: operations["postTenantIntegrationDisable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/{uuid}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable an account
+         * @description `tenant.integrations.manage`. `409` when another account of the kind is active.
+         */
+        post: operations["postTenantIntegrationEnable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/{uuid}/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Integration jobs of an account
+         * @description `tenant.integrations.manage`. Outbound calls and inbound notifications (idempotency key, attempts,
+         *     deliveries, status). Live list resource `tenant.integration_jobs`.
+         */
+        get: operations["getTenantIntegrationJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integration-jobs/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An integration job with its attempts
+         * @description `tenant.integrations.manage`. Every provider call (submit / check_status) with its outcome, a short
+         *     request / response summary (references only: no secrets, codes or full numbers), the error and
+         *     timings.
+         */
+        get: operations["getTenantIntegrationJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integration-jobs/{uuid}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a job ("Yeniden dene")
+         * @description `tenant.integrations.manage`. Asks the provider for the job's status first (CheckStatus); the work
+         *     is submitted again only when the provider confirms it was not done (`action: resubmitted`). Done
+         *     → `already_done`, still in progress → `in_progress`. When the status cannot be confirmed (unknown
+         *     or unsupported) nothing is sent and the answer is `409 INTEGRATION_JOB_UNVERIFIED` with the job in
+         *     `data`. Succeeded jobs, inbound notifications and payment refunds answer
+         *     `409 INTEGRATION_JOB_NOT_RETRYABLE`; a job held by a worker `409 INTEGRATION_JOB_BUSY`. No tenant
+         *     step-up policy exists yet (docs/design/integration-jobs.md).
+         */
+        post: operations["postTenantIntegrationJobRetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integration-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Integration jobs of the organization
+         * @description `tenant.integrations.manage`. Jobs of every account (and account-less jobs). The work list of jobs
+         *     that need a person is `?status=failed,needs_verification`.
+         */
+        get: operations["listTenantIntegrationJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/organization": {
         parameters: {
             query?: never;
@@ -3760,6 +3980,208 @@ export interface components {
             success: true;
             data: components["schemas"]["ImportJob"];
             meta: components["schemas"]["ResponseMeta"];
+        };
+        IntegrationField: {
+            key: string;
+            label_key: string;
+            secret: boolean;
+            required: boolean;
+        };
+        IntegrationProvider: {
+            /** @enum {string} */
+            kind: "payment" | "sms" | "whatsapp" | "email";
+            provider: string;
+            fields: components["schemas"]["IntegrationField"][];
+            modes: ("sandbox" | "live")[];
+        };
+        EnvelopeIntegrationsMeta: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                providers: components["schemas"]["IntegrationProvider"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description Never carries secrets: `credentials_hint` holds masked values. */
+        IntegrationAccount: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "payment" | "sms" | "whatsapp" | "email";
+            provider: string;
+            display_name: string;
+            /** @enum {string} */
+            mode: "sandbox" | "live";
+            /** @enum {string} */
+            status: "active" | "disabled";
+            credentials_hint: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            last_checked_at: string | null;
+            /** @enum {string} */
+            last_check_status: "" | "ok" | "failed";
+            last_check_error: string;
+            fields?: components["schemas"]["IntegrationField"][];
+            created_by?: components["schemas"]["IntegrationActor"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        EnvelopeIntegrationAccount: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["IntegrationAccount"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeIntegrationAccountPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["IntegrationAccount"][];
+                /** Format: int64 */
+                total: number;
+                limit: number;
+                offset: number;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /**
+         * @description `pending` = pending_submit, `submitted` = accepted by the provider (final state from CheckStatus),
+         *     `needs_verification` = outcome unknown (only CheckStatus moves it on), `processing` = held by a
+         *     worker (payments), `ignored` = a notification that needs no action. Held (the runner never calls the
+         *     provider): `blocked` = required data is missing, `waiting_dependency` = no working adapter. Staff
+         *     resolutions (final): `reported_manually`, `reconciled`.
+         * @enum {string}
+         */
+        IntegrationJobStatus: "pending" | "processing" | "submitted" | "succeeded" | "failed" | "ignored" | "needs_verification" | "blocked" | "waiting_dependency" | "reported_manually" | "reconciled";
+        IntegrationJob: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            direction: "inbound" | "outbound";
+            provider: string;
+            kind: string;
+            status: components["schemas"]["IntegrationJobStatus"];
+            /** @enum {string} */
+            priority: "critical" | "normal";
+            attempts: number;
+            max_attempts: number;
+            deliveries: number;
+            last_error: string;
+            ref_type: string;
+            /** Format: uuid */
+            ref_uuid: string | null;
+            /** Format: date-time */
+            next_attempt_at: string | null;
+            /** Format: date-time */
+            submitted_at: string | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        IntegrationAttempt: {
+            /** Format: uuid */
+            uuid: string;
+            attempt_no: number;
+            /** @enum {string} */
+            operation: "submit" | "check_status";
+            /** @enum {string} */
+            trigger: "worker" | "sweep" | "retry" | "inline";
+            /** @enum {string} */
+            outcome: "succeeded" | "accepted" | "pending" | "failed" | "not_found" | "uncertain" | "unsupported";
+            request_summary: {
+                [key: string]: unknown;
+            };
+            response_summary: {
+                [key: string]: unknown;
+            };
+            error: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            duration_ms: number;
+        };
+        IntegrationJobDetail: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: uuid */
+            account_uuid: string | null;
+            /** @enum {string} */
+            direction: "inbound" | "outbound";
+            provider: string;
+            kind: string;
+            status: components["schemas"]["IntegrationJobStatus"];
+            /** @enum {string} */
+            priority: "critical" | "normal";
+            attempts: number;
+            max_attempts: number;
+            deliveries: number;
+            last_error: string;
+            provider_ref: string;
+            /** @description References and non-secret facts only. */
+            payload: {
+                [key: string]: unknown;
+            };
+            result: {
+                [key: string]: unknown;
+            };
+            ref_type: string;
+            /** Format: uuid */
+            ref_uuid: string | null;
+            /** Format: date-time */
+            next_attempt_at: string | null;
+            /** Format: date-time */
+            submitted_at: string | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description A staff retry applies (outbound, not a payment refund, not succeeded). */
+            retryable: boolean;
+            attempt_log: components["schemas"]["IntegrationAttempt"][];
+        };
+        EnvelopeIntegrationJobDetail: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["IntegrationJobDetail"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeIntegrationJobRetry: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                /** @enum {string} */
+                action: "already_done" | "in_progress" | "resubmitted";
+                job: components["schemas"]["IntegrationJobDetail"];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeIntegrationJobPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["IntegrationJob"][];
+                /** Format: int64 */
+                total: number;
+                limit: number;
+                offset: number;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        IntegrationActor: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            surname: string;
+            email: string;
         };
         TenantOrganization: {
             /** Format: uuid */
@@ -5304,6 +5726,24 @@ export interface components {
         };
     };
     responses: {
+        /** @description Integration account */
+        IntegrationAccountOK: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["EnvelopeIntegrationAccount"];
+            };
+        };
+        /** @description The request is well-formed but cannot be applied (e.g. the provider rejected the connection test) */
+        UnprocessableEntity: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description Validation or malformed request */
         BadRequest: {
             headers: {
@@ -9235,6 +9675,395 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTenantIntegrationsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationsMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantIntegrations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description `display_name` or `created_at`; prefix `-` for descending. */
+                sort?: string;
+                /** @description active, disabled */
+                status?: string;
+                /** @description payment, sms, whatsapp, email */
+                kind?: string;
+                /** @description Provider codes */
+                provider?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationAccountPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantIntegration: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Defaults to the provider's kind.
+                     * @enum {string}
+                     */
+                    kind?: "payment" | "sms" | "whatsapp" | "email";
+                    /** @description Provider code of a registered adapter (`GET /v1/tenant/integrations/meta`); `log` = development provider (no network call). */
+                    provider: string;
+                    display_name: string;
+                    /** @enum {string} */
+                    mode?: "sandbox" | "live";
+                    /** @description Fields of the provider (`GET /v1/tenant/integrations/meta`); log (development only): `sender`. Never returned: answers carry masked hints only. */
+                    credentials: {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            201: components["responses"]["IntegrationAccountOK"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantIntegration: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IntegrationAccountOK"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantIntegration: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    display_name?: string | null;
+                    /** @enum {string|null} */
+                    mode?: "sandbox" | "live" | null;
+                    credentials?: {
+                        [key: string]: string;
+                    } | null;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["IntegrationAccountOK"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantIntegrationTest: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IntegrationAccountOK"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    postTenantIntegrationDisable: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IntegrationAccountOK"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantIntegrationEnable: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IntegrationAccountOK"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantIntegrationJobs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description `created_at` or `updated_at`; prefix `-` for descending (default `-created_at`). */
+                sort?: string;
+                /** @description Comma-separated job statuses */
+                status?: string;
+                /** @description Comma-separated job kinds (sms.send, payment.webhook …) */
+                kind?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationJobPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantIntegrationJob: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationJobDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantIntegrationJobRetry: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retried */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationJobRetry"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listTenantIntegrationJobs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description `created_at` or `updated_at`; prefix `-` for descending (default `-created_at`). */
+                sort?: string;
+                /** @description Comma-separated job statuses */
+                status?: string;
+                /** @description Comma-separated job kinds */
+                kind?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationJobPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantOrganizationProfile: {

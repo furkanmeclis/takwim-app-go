@@ -22,6 +22,7 @@
   "actions.auth.account_deactivated": "Account deleted (deactivated)",
   "actions.integrations.github.updated": "GitHub integration settings updated",
   "actions.integrations.oauth.updated": "OAuth provider settings updated",
+  "actions.integrations.job_retried": "Integration job retried",
   "actions.auth.settings.updated": "Auth registration settings updated",
   "actions.users.impersonated": "User impersonation started",
   "actions.users.impersonation_stopped": "User impersonation ended",
