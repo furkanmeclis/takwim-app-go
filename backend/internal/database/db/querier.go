@@ -61,6 +61,7 @@ type Querier interface {
 	CountPermissions(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
+	CountProducts(ctx context.Context, arg CountProductsParams) (int64, error)
 	CountReservations(ctx context.Context, arg CountReservationsParams) (int64, error)
 	CountResourceClosures(ctx context.Context, arg CountResourceClosuresParams) (int64, error)
 	CountResources(ctx context.Context, arg CountResourcesParams) (int64, error)
@@ -69,6 +70,7 @@ type Querier interface {
 	// The linked account counts only while the user is a member.
 	CountStaff(ctx context.Context, arg CountStaffParams) (int64, error)
 	CountStaffTimeOff(ctx context.Context, arg CountStaffTimeOffParams) (int64, error)
+	CountStockMovements(ctx context.Context, arg CountStockMovementsParams) (int64, error)
 	CountStorageActivity(ctx context.Context, objectKey string) (int64, error)
 	CountStorageTrash(ctx context.Context) (int64, error)
 	CountTenantActivity(ctx context.Context, arg CountTenantActivityParams) (int64, error)
@@ -100,6 +102,14 @@ type Querier interface {
 	CreateOAuthAccount(ctx context.Context, arg CreateOAuthAccountParams) (OauthAccount, error)
 	CreateOTPCode(ctx context.Context, arg CreateOTPCodeParams) (OtpCode, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	// Tenant resource: products and stock (TEC-918). Every query filters by
+	// organization_id. The catalog (products, variants) is business-level;
+	// product_branches holds the branch offers, stock_levels the running
+	// balance per branch and stock item, stock_movements the append-only ledger.
+	// stock_branch_ids is the caller's branch scope (nil = every branch): the
+	// stock totals of a row only count those branches.
+	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
+	CreateProductVariant(ctx context.Context, arg CreateProductVariantParams) (ProductVariant, error)
 	CreatePublicCheckout(ctx context.Context, arg CreatePublicCheckoutParams) (PublicCheckout, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
@@ -136,6 +146,7 @@ type Querier interface {
 	DeleteOAuthAccountByProviderAccount(ctx context.Context, arg DeleteOAuthAccountByProviderAccountParams) error
 	DeleteOAuthAccountByUserProvider(ctx context.Context, arg DeleteOAuthAccountByUserProviderParams) error
 	DeleteOrganizationMember(ctx context.Context, arg DeleteOrganizationMemberParams) (int64, error)
+	DeleteProductBranch(ctx context.Context, arg DeleteProductBranchParams) error
 	DeletePushDeviceForUser(ctx context.Context, arg DeletePushDeviceForUserParams) (int64, error)
 	DeletePushSubscription(ctx context.Context, arg DeletePushSubscriptionParams) error
 	DeletePushTickets(ctx context.Context, ids []int64) error
@@ -162,6 +173,7 @@ type Querier interface {
 	// First device registration opts the user into push (the OS permission
 	// prompt is the consent). An existing preference row is left untouched.
 	EnsureNotificationPreferencesPushDefault(ctx context.Context, userID int64) error
+	EnsureStockLevel(ctx context.Context, arg EnsureStockLevelParams) error
 	ExpireDueCapacityHolds(ctx context.Context, arg ExpireDueCapacityHoldsParams) ([]int64, error)
 	ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHoldParams) (CapacityHold, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
@@ -224,6 +236,11 @@ type Querier interface {
 	GetOrganizationMemberByUserUUID(ctx context.Context, arg GetOrganizationMemberByUserUUIDParams) (GetOrganizationMemberByUserUUIDRow, error)
 	GetOrganizationSettingsVersion(ctx context.Context, arg GetOrganizationSettingsVersionParams) (GetOrganizationSettingsVersionRow, error)
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
+	GetProduct(ctx context.Context, arg GetProductParams) (GetProductRow, error)
+	GetProductBySKU(ctx context.Context, arg GetProductBySKUParams) (Product, error)
+	GetProductPublicImage(ctx context.Context, arg GetProductPublicImageParams) (GetProductPublicImageRow, error)
+	GetProductSearchDocument(ctx context.Context, arg GetProductSearchDocumentParams) (GetProductSearchDocumentRow, error)
+	GetProductVariant(ctx context.Context, arg GetProductVariantParams) (ProductVariant, error)
 	// Public media route: the image of a live branch of an active organization.
 	GetPublicBranchImage(ctx context.Context, arg GetPublicBranchImageParams) (GetPublicBranchImageRow, error)
 	GetPublicCheckout(ctx context.Context, arg GetPublicCheckoutParams) (GetPublicCheckoutRow, error)
@@ -268,6 +285,7 @@ type Querier interface {
 	GetStaffSearchDocument(ctx context.Context, arg GetStaffSearchDocumentParams) (GetStaffSearchDocumentRow, error)
 	GetStaffTimeOff(ctx context.Context, arg GetStaffTimeOffParams) (StaffTimeOff, error)
 	GetStepupSettings(ctx context.Context) (StepupSetting, error)
+	GetStockMovement(ctx context.Context, arg GetStockMovementParams) (GetStockMovementRow, error)
 	GetStorageLinkBySlug(ctx context.Context, slug pgtype.Text) (StorageLink, error)
 	GetStorageLinkByTokenHash(ctx context.Context, tokenHash pgtype.Text) (StorageLink, error)
 	GetStorageLinkByUUID(ctx context.Context, argUuid uuid.UUID) (StorageLink, error)
@@ -302,6 +320,7 @@ type Querier interface {
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (OutboxEvent, error)
 	InsertPushTicket(ctx context.Context, arg InsertPushTicketParams) error
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
+	InsertStockMovement(ctx context.Context, arg InsertStockMovementParams) (StockMovement, error)
 	InsertStorageActivity(ctx context.Context, arg InsertStorageActivityParams) (StorageActivity, error)
 	InsertStorageLink(ctx context.Context, arg InsertStorageLinkParams) (StorageLink, error)
 	InsertStorageShare(ctx context.Context, arg InsertStorageShareParams) (StorageShare, error)
@@ -422,6 +441,15 @@ type Querier interface {
 	ListPlatformNotificationsForExport(ctx context.Context, arg ListPlatformNotificationsForExportParams) ([]Notification, error)
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
+	ListProductBranchFacets(ctx context.Context, arg ListProductBranchFacetsParams) ([]ListProductBranchFacetsRow, error)
+	// Offers of the given products (list rows and the detail).
+	ListProductBranches(ctx context.Context, arg ListProductBranchesParams) ([]ListProductBranchesRow, error)
+	ListProductIDsByUUIDs(ctx context.Context, arg ListProductIDsByUUIDsParams) ([]ListProductIDsByUUIDsRow, error)
+	ListProductSearchDocuments(ctx context.Context, organizationID int64) ([]ListProductSearchDocumentsRow, error)
+	ListProductUUIDs(ctx context.Context, arg ListProductUUIDsParams) ([]uuid.UUID, error)
+	ListProductVariants(ctx context.Context, arg ListProductVariantsParams) ([]ProductVariant, error)
+	ListProducts(ctx context.Context, arg ListProductsParams) ([]ListProductsRow, error)
+	ListProductsForExport(ctx context.Context, arg ListProductsForExportParams) ([]ListProductsForExportRow, error)
 	ListPublicBranchImages(ctx context.Context, arg ListPublicBranchImagesParams) ([]ListPublicBranchImagesRow, error)
 	// Active branches shown on the customer screens.
 	ListPublicBranches(ctx context.Context, organizationID int64) ([]ListPublicBranchesRow, error)
@@ -493,6 +521,12 @@ type Querier interface {
 	ListStaffTimeOff(ctx context.Context, arg ListStaffTimeOffParams) ([]StaffTimeOff, error)
 	// The linked account counts only while the user is a member.
 	ListStaffUUIDs(ctx context.Context, arg ListStaffUUIDsParams) ([]uuid.UUID, error)
+	// Stock of the given products in the branches of the scope.
+	ListStockLevels(ctx context.Context, arg ListStockLevelsParams) ([]ListStockLevelsRow, error)
+	ListStockMovementBranchFacets(ctx context.Context, arg ListStockMovementBranchFacetsParams) ([]ListStockMovementBranchFacetsRow, error)
+	ListStockMovementKindFacets(ctx context.Context, arg ListStockMovementKindFacetsParams) ([]ListStockMovementKindFacetsRow, error)
+	ListStockMovementStaffFacets(ctx context.Context, arg ListStockMovementStaffFacetsParams) ([]ListStockMovementStaffFacetsRow, error)
+	ListStockMovements(ctx context.Context, arg ListStockMovementsParams) ([]ListStockMovementsRow, error)
 	ListStorageActivity(ctx context.Context, arg ListStorageActivityParams) ([]ListStorageActivityRow, error)
 	ListStorageLinksByKey(ctx context.Context, objectKey string) ([]StorageLink, error)
 	ListStorageSharesByKey(ctx context.Context, objectKey string) ([]ListStorageSharesByKeyRow, error)
@@ -530,6 +564,10 @@ type Querier interface {
 	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
 	// Serializes the shift edits of one person (A04 overlap check).
 	LockStaff(ctx context.Context, arg LockStaffParams) (int64, error)
+	LockStockLevel(ctx context.Context, arg LockStockLevelParams) (StockLevel, error)
+	// Barcode / SKU entry: the products and variants whose code or barcode is
+	// exactly the given text (case-insensitive SKU).
+	LookupStockCode(ctx context.Context, arg LookupStockCodeParams) ([]LookupStockCodeRow, error)
 	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) (int64, error)
 	MarkBulkJobCompleted(ctx context.Context, arg MarkBulkJobCompletedParams) (BulkJob, error)
 	MarkBulkJobFailed(ctx context.Context, arg MarkBulkJobFailedParams) (BulkJob, error)
@@ -561,6 +599,7 @@ type Querier interface {
 	// Runs under the capacity lock of the organization (uq number guards).
 	NextReservationNumber(ctx context.Context, organizationID int64) (int64, error)
 	PingDB(ctx context.Context) (int32, error)
+	ProductVariantNameTaken(ctx context.Context, arg ProductVariantNameTakenParams) (bool, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
 	ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHoldParams) (CapacityHold, error)
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
@@ -598,6 +637,9 @@ type Querier interface {
 	SetOrganizationAccessWindow(ctx context.Context, arg SetOrganizationAccessWindowParams) (Organization, error)
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
+	SetProductActive(ctx context.Context, arg SetProductActiveParams) error
+	// Returns the previous key so the caller can remove the old object.
+	SetProductImage(ctx context.Context, arg SetProductImageParams) (pgtype.Text, error)
 	SetPublicCheckoutReservation(ctx context.Context, arg SetPublicCheckoutReservationParams) error
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
 	SetRolePermissions(ctx context.Context, roleID int64) error
@@ -605,16 +647,24 @@ type Querier interface {
 	// Returns the previous key so the caller can remove the old object.
 	SetServiceImage(ctx context.Context, arg SetServiceImageParams) (pgtype.Text, error)
 	SetStaffActive(ctx context.Context, arg SetStaffActiveParams) error
+	SetStockLevelOnHand(ctx context.Context, arg SetStockLevelOnHandParams) error
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteCustomer(ctx context.Context, arg SoftDeleteCustomerParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
+	SoftDeleteProduct(ctx context.Context, arg SoftDeleteProductParams) (int64, error)
+	SoftDeleteProductVariant(ctx context.Context, arg SoftDeleteProductVariantParams) (int64, error)
 	SoftDeleteResource(ctx context.Context, arg SoftDeleteResourceParams) (int64, error)
 	SoftDeleteService(ctx context.Context, arg SoftDeleteServiceParams) (int64, error)
 	SoftDeleteServiceCategory(ctx context.Context, arg SoftDeleteServiceCategoryParams) (int64, error)
 	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
 	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
+	// SKUs are unique across products and variants of the organization.
+	StockCodeTaken(ctx context.Context, arg StockCodeTakenParams) (bool, error)
+	// Units on hand and reserved of one stock item over every branch (a
+	// product row with variant NULL, or one variant).
+	SumStockItem(ctx context.Context, arg SumStockItemParams) (SumStockItemRow, error)
 	// Distinct resources and actions (with counts) in the caller's scope, for
 	// the faceted filters.
 	TenantActivityFacets(ctx context.Context, arg TenantActivityFacetsParams) ([]TenantActivityFacetsRow, error)
@@ -639,6 +689,8 @@ type Querier interface {
 	// PUT semantics: every value is replaced; NULL limits mean the plan default.
 	UpdateOrganizationEntitlements(ctx context.Context, arg UpdateOrganizationEntitlementsParams) (Organization, error)
 	UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error)
+	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
+	UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) (ProductVariant, error)
 	UpdateReservationNotes(ctx context.Context, arg UpdateReservationNotesParams) (Reservation, error)
 	// One transition: the new fields and version + 1.
 	UpdateReservationState(ctx context.Context, arg UpdateReservationStateParams) (Reservation, error)
@@ -670,6 +722,7 @@ type Querier interface {
 	// counts the delivery and returns the existing row (inserted = false).
 	UpsertIntegrationJob(ctx context.Context, arg UpsertIntegrationJobParams) (UpsertIntegrationJobRow, error)
 	UpsertNotificationPreferences(ctx context.Context, arg UpsertNotificationPreferencesParams) (NotificationPreference, error)
+	UpsertProductBranch(ctx context.Context, arg UpsertProductBranchParams) error
 	// Mobile push devices (Expo) and their pending push tickets.
 	// A token moves to the calling user when the device switches accounts and is
 	// re-enabled on every registration.

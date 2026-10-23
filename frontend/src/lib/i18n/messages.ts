@@ -6,6 +6,7 @@ import enAuth from "@/locales/en/auth.json";
 import enBranches from "@/locales/en/branches.json";
 import enStaff from "@/locales/en/staff.json";
 import enResources from "@/locales/en/resources.json";
+import enProducts from "@/locales/en/products.json";
 import enServices from "@/locales/en/services.json";
 import enCustomers from "@/locales/en/customers.json";
 import enReservations from "@/locales/en/reservations.json";
@@ -47,6 +48,7 @@ import trAuth from "@/locales/tr/auth.json";
 import trBranches from "@/locales/tr/branches.json";
 import trStaff from "@/locales/tr/staff.json";
 import trResources from "@/locales/tr/resources.json";
+import trProducts from "@/locales/tr/products.json";
 import trServices from "@/locales/tr/services.json";
 import trCustomers from "@/locales/tr/customers.json";
 import trReservations from "@/locales/tr/reservations.json";
@@ -123,6 +125,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     staff: trStaff,
     resources: trResources,
     services: trServices,
+    products: trProducts,
     customers: trCustomers,
     reservations: trReservations,
     tenant_members: trTenantMembers,
@@ -166,6 +169,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     staff: enStaff,
     resources: enResources,
     services: enServices,
+    products: enProducts,
     customers: enCustomers,
     reservations: enReservations,
     tenant_members: enTenantMembers,

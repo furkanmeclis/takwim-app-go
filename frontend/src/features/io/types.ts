@@ -107,6 +107,7 @@ export type IoResource =
   | "tenant.staff"
   | "tenant.resources"
   | "tenant.services"
+  | "tenant.products"
   | "tenant.customers"
   | "tenant.reservations"
   | "platform.organizations";
@@ -121,6 +122,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.staff": "/v1/tenant/staff/export",
   "tenant.resources": "/v1/tenant/resources/export",
   "tenant.services": "/v1/tenant/services/export",
+  "tenant.products": "/v1/tenant/products/export",
   "tenant.customers": "/v1/tenant/customers/export",
   "tenant.reservations": "/v1/tenant/reservations/export",
 };
@@ -151,6 +153,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.services": {
     upload: "/v1/tenant/services/import",
     sample: "/v1/tenant/services/import/sample",
+  },
+  "tenant.products": {
+    upload: "/v1/tenant/products/import",
+    sample: "/v1/tenant/products/import/sample",
   },
   "tenant.customers": {
     upload: "/v1/tenant/customers/import",
@@ -230,6 +236,22 @@ export const IMPORT_SCHEMA: Partial<
     { key: "sms_consent", labelKey: "customers.fields.sms_consent" },
     { key: "email_consent", labelKey: "customers.fields.email_consent" },
     { key: "notes", labelKey: "customers.fields.notes" },
+  ],
+  "tenant.products": [
+    { key: "sku", labelKey: "products.fields.sku", required: true },
+    { key: "name", labelKey: "products.fields.name", required: true },
+    { key: "barcode", labelKey: "products.fields.barcode" },
+    { key: "unit", labelKey: "products.fields.unit" },
+    { key: "price", labelKey: "products.fields.price_short", required: true },
+    { key: "cost", labelKey: "products.fields.cost_short" },
+    {
+      key: "low_stock_threshold",
+      labelKey: "products.fields.low_stock_threshold",
+    },
+    { key: "branch_codes", labelKey: "products.fields.branch_codes" },
+    { key: "show_online", labelKey: "products.fields.show_online" },
+    { key: "is_active", labelKey: "products.fields.is_active" },
+    { key: "description", labelKey: "products.fields.description" },
   ],
   "tenant.services": [
     { key: "category", labelKey: "services.fields.category" },

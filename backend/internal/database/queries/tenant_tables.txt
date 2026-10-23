@@ -29,3 +29,8 @@ reservations
 reservation_lines
 reservation_events
 public_checkouts
+products
+product_variants
+product_branches
+stock_levels
+stock_movements

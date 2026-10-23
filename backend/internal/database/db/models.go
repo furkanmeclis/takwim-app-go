@@ -580,6 +580,57 @@ type PgExtension struct {
 	Extname string `json:"extname"`
 }
 
+type Product struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	Name              string             `json:"name"`
+	Description       string             `json:"description"`
+	Sku               string             `json:"sku"`
+	Barcode           string             `json:"barcode"`
+	Unit              string             `json:"unit"`
+	Price             pgtype.Numeric     `json:"price"`
+	Cost              pgtype.Numeric     `json:"cost"`
+	LowStockThreshold int32              `json:"low_stock_threshold"`
+	ShowOnline        bool               `json:"show_online"`
+	IsActive          bool               `json:"is_active"`
+	ImageUuid         pgtype.UUID        `json:"image_uuid"`
+	ImageKey          pgtype.Text        `json:"image_key"`
+	ImageContentType  pgtype.Text        `json:"image_content_type"`
+	ImageSizeBytes    pgtype.Int8        `json:"image_size_bytes"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ProductBranch struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	ProductID      int64              `json:"product_id"`
+	BranchID       int64              `json:"branch_id"`
+	Price          pgtype.Numeric     `json:"price"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProductVariant struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ProductID      int64              `json:"product_id"`
+	Name           string             `json:"name"`
+	Sku            string             `json:"sku"`
+	Barcode        string             `json:"barcode"`
+	Price          pgtype.Numeric     `json:"price"`
+	Cost           pgtype.Numeric     `json:"cost"`
+	IsActive       bool               `json:"is_active"`
+	SortOrder      int32              `json:"sort_order"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
 type PublicCheckout struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`
@@ -883,6 +934,42 @@ type StepupSetting struct {
 	PasswordLoginTotpRequired bool               `json:"password_login_totp_required"`
 	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StockLevel struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	ProductID      int64              `json:"product_id"`
+	VariantID      pgtype.Int8        `json:"variant_id"`
+	OnHand         int32              `json:"on_hand"`
+	Reserved       int32              `json:"reserved"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StockMovement struct {
+	ID                  int64              `json:"id"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	OrganizationID      int64              `json:"organization_id"`
+	BranchID            int64              `json:"branch_id"`
+	ProductID           int64              `json:"product_id"`
+	VariantID           pgtype.Int8        `json:"variant_id"`
+	Kind                string             `json:"kind"`
+	Quantity            int32              `json:"quantity"`
+	BalanceAfter        int32              `json:"balance_after"`
+	UnitPrice           pgtype.Numeric     `json:"unit_price"`
+	UnitCost            pgtype.Numeric     `json:"unit_cost"`
+	StaffID             pgtype.Int8        `json:"staff_id"`
+	CounterpartBranchID pgtype.Int8        `json:"counterpart_branch_id"`
+	TransferUuid        pgtype.UUID        `json:"transfer_uuid"`
+	Reason              string             `json:"reason"`
+	Note                string             `json:"note"`
+	Source              string             `json:"source"`
+	SourceUuid          pgtype.UUID        `json:"source_uuid"`
+	OccurredAt          pgtype.Timestamptz `json:"occurred_at"`
+	CreatedBy           pgtype.Int8        `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
 type StorageActivity struct {

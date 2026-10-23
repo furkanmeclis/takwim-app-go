@@ -71,6 +71,7 @@ var isolationAllowlist = map[string]string{
 	"POST /v1/tenant/resources/import":       "imports match branch codes and names inside the organization (resources DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/services/import":        "imports match names, category names and branch codes inside the organization (services DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/service-categories":     "body has no foreign references (name, description, sort order)",
+	"POST /v1/tenant/products/import":        "imports match stock codes and branch codes inside the organization (products DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/customers":              "body has no foreign references (name, contact, notes, tags, consent)",
 	"POST /v1/tenant/customers/import":       "imports match phones inside the organization (customers DB tests); the job is the {uuid} cases",
 	"PATCH /v1/tenant/organization":          "profile of the caller's organization (name only); no foreign references",
@@ -305,6 +306,23 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		cover := must(upload(o, http.MethodPut, "/v1/tenant/services/"+ids["service"]+"/image", "file", "cover.png",
 			png, nil), http.StatusOK, "upload service image")
 		ids["serviceImageURL"] = str(cover, "image_url")
+		ids["product"] = str(must(call(o, http.MethodPost, "/v1/tenant/products", map[string]any{
+			"name": m + " Ürün", "sku": m + "-SKU", "barcode": m + "-BAR", "price": "120.00", "cost": "60.00",
+			"branch_uuids": []string{ids["branch"]},
+		}), http.StatusCreated, "create product"), "uuid")
+		ids["productSKU"] = m + "-SKU"
+		variant := must(call(o, http.MethodPost, "/v1/tenant/products/"+ids["product"]+"/variants", map[string]any{
+			"name": m + " Varyant", "sku": m + "-VAR",
+		}), http.StatusCreated, "create variant")
+		ids["variant"] = variant.data.(map[string]any)["variants"].([]any)[0].(map[string]any)["uuid"].(string)
+		must(call(o, http.MethodPost, "/v1/tenant/stock-movements", map[string]any{
+			"kind": "receipt", "branch_uuid": ids["branch"], "product_uuid": ids["product"], "variant_uuid": ids["variant"],
+			"quantity": 5, "reason": m,
+		}), http.StatusCreated, "stock receipt")
+		must(call(o, http.MethodPost, "/v1/tenant/stock-movements", map[string]any{
+			"kind": "sale", "branch_uuid": ids["branch"], "product_uuid": ids["product"], "variant_uuid": ids["variant"],
+			"quantity": 1, "staff_uuid": ids["staff"], "reason": m,
+		}), http.StatusCreated, "stock sale")
 		ids["customerPhone"] = map[bool]string{true: "+905320000001", false: "+905320000002"}[o == orgA]
 		ids["customer"] = str(must(call(o, http.MethodPost, "/v1/tenant/customers", map[string]any{
 			"first_name": m, "last_name": "Müşteri", "phone": ids["customerPhone"], "notes": m, "tags": []string{m},
@@ -510,7 +528,11 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/integrations":     {"?q=" + orgB.marker},
 		"GET /v1/tenant/integration-jobs": {"?status=failed"},
 		"GET /v1/tenant/services":         {"?category=" + orgB.ids["serviceCategory"], "?branch=" + orgB.ids["branch"]},
-		"GET /v1/tenant/customers":        {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
+		"GET /v1/tenant/products":         {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/products/lookup":  {"?code=" + orgB.ids["productSKU"]},
+		"GET /v1/tenant/stock-movements": {"?branch=" + orgB.ids["branch"], "?product=" + orgB.ids["product"],
+			"?staff=" + orgB.ids["staff"]},
+		"GET /v1/tenant/customers": {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
 		"GET /v1/tenant/reservations": {"?q=" + orgB.ids["customerPhone"][3:], "?branch=" + orgB.ids["branch"],
 			"?staff=" + orgB.ids["staff"], "?customer_uuid=" + orgB.ids["customer"]},
 		"GET /v1/tenant/reservations/calendar": {"?from=2030-01-07&by=branch", "?from=2030-01-07&branch=" + orgB.ids["branch"],
@@ -562,6 +584,18 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/services", map[string]any{"name": "X1", "duration_minutes": 30, "price": "1", "category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"POST /v1/tenant/services", map[string]any{"name": "X2", "duration_minutes": 30, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/services/bulk", bulkIDs("service"), nil},
+		{"POST /v1/tenant/products", map[string]any{"name": "X", "sku": "ISO-X1", "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
+		{"POST /v1/tenant/products/bulk", bulkIDs("product"), nil},
+		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "receipt", "branch_uuid": orgA.ids["branch"],
+			"product_uuid": orgB.ids["product"], "variant_uuid": orgB.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "receipt", "branch_uuid": orgB.ids["branch"],
+			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "receipt", "branch_uuid": orgA.ids["branch"],
+			"product_uuid": orgA.ids["product"], "variant_uuid": orgB.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "transfer", "branch_uuid": orgA.ids["branch"], "to_branch_uuid": orgB.ids["branch"],
+			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "sale", "branch_uuid": orgA.ids["branch"], "staff_uuid": orgB.ids["staff"],
+			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1}, reject},
 		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
 		{"POST /v1/tenant/reservations/bulk", map[string]any{"action": "cancel", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["reservation"]}}}, nil},
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}},
@@ -607,6 +641,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/staff", map[string]any{"staff": []map[string]any{{"staff_uuid": orgB.ids["staff"]}}}, reject},
+		{"PUT /v1/tenant/products/" + orgA.ids["product"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
 		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
 			"lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}}, reject},
 		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
@@ -785,6 +820,10 @@ func paramKey(prev, name string) string {
 		return "serviceCategory"
 	case "customers/uuid":
 		return "customer"
+	case "products/uuid":
+		return "product"
+	case "variants/variantUuid":
+		return "variant"
 	case "holds/uuid":
 		return "hold"
 	case "reservations/uuid":

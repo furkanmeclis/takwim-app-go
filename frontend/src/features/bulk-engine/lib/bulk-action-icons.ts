@@ -49,6 +49,10 @@ const bulkActionIconCatalog: Record<
     activate: CircleCheck,
     deactivate: CircleOff,
   },
+  "tenant.products": {
+    activate: CircleCheck,
+    deactivate: CircleOff,
+  },
   "tenant.customers": {
     add_tag: BadgePlus,
     remove_tag: BadgeMinus,

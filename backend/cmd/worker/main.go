@@ -33,6 +33,9 @@ import (
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
+	productsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/adapters"
+	productsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/repository"
+	productsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/usecase"
 	reservationsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/adapters"
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
@@ -143,6 +146,7 @@ func main() {
 	staffSvc := staffusecase.New(staffrepository.NewPostgres(pool, queries), nil)
 	resourcesSvc := resourcesusecase.New(resourcesrepository.NewPostgres(pool, queries), nil)
 	servicesSvc := servicesusecase.New(servicesrepository.NewPostgres(pool, queries), nil)
+	productsSvc := productsusecase.New(productsrepository.NewPostgres(pool, queries), nil)
 	customersSvc := customersusecase.New(customersrepository.NewPostgres(pool, queries), nil)
 	// Reservation exports and bulk transitions (TEC-963) run with the
 	// business settings (payment hold times on accept).
@@ -168,6 +172,7 @@ func main() {
 		staffadapters.NewIO(staffSvc),
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
+		productsadapters.NewIO(productsSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
 		orgadapters.NewIO(jobScopes),
@@ -181,6 +186,7 @@ func main() {
 		staffadapters.NewBulk(staffSvc),
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
+		productsadapters.NewBulk(productsSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
 		orgadapters.NewBulk(jobScopes),
@@ -199,6 +205,7 @@ func main() {
 		staffadapters.NewSearch(queries),
 		resourcesadapters.NewSearch(queries),
 		servicesadapters.NewSearch(queries),
+		productsadapters.NewSearch(queries),
 		customersadapters.NewSearch(queries),
 		reservationsadapters.NewSearch(queries),
 	)
