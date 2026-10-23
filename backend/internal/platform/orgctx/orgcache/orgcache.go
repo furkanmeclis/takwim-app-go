@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -52,8 +53,9 @@ type CachedResolver struct {
 }
 
 var (
-	_ orgctx.Resolver    = (*CachedResolver)(nil)
-	_ orgctx.Invalidator = (*CachedResolver)(nil)
+	_ orgctx.Resolver       = (*CachedResolver)(nil)
+	_ orgctx.Invalidator    = (*CachedResolver)(nil)
+	_ orgctx.BranchSelector = (*CachedResolver)(nil)
 )
 
 // New wraps inner. rdb may be nil (pass-through, invalidation is a no-op).
@@ -124,6 +126,17 @@ func (c *CachedResolver) Resolve(ctx context.Context, ref string, userID int64) 
 		c.rdb.Set(ctx, key, raw, c.ttl)
 	}
 	return scope, nil
+}
+
+// BranchIDByUUID implements orgctx.BranchSelector by delegating to the inner
+// resolver (not cached: one indexed lookup, and a deleted branch must stop
+// matching at once).
+func (c *CachedResolver) BranchIDByUUID(ctx context.Context, organizationID int64, branchUUID uuid.UUID) (int64, error) {
+	sel, ok := c.inner.(orgctx.BranchSelector)
+	if !ok {
+		return 0, orgctx.ErrBranchNotAllowed
+	}
+	return sel.BranchIDByUUID(ctx, organizationID, branchUUID)
 }
 
 // InvalidateOrganization implements orgctx.Invalidator: it bumps the version

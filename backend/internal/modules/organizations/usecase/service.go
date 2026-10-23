@@ -536,6 +536,19 @@ func (s *Service) ListForUser(ctx context.Context, userID int64) ([]authmodel.Me
 	return out, nil
 }
 
+// BranchIDByUUID implements orgctx.BranchSelector (the X-Branch header):
+// the id of a live branch of organizationID, or orgctx.ErrBranchNotAllowed.
+func (s *Service) BranchIDByUUID(ctx context.Context, organizationID int64, branchUUID uuid.UUID) (int64, error) {
+	rows, err := s.repo.ListBranchIDsByUUIDs(ctx, organizationID, []uuid.UUID{branchUUID})
+	if err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, orgctx.ErrBranchNotAllowed
+	}
+	return rows[0].ID, nil
+}
+
 func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (orgctx.Scope, error) {
 	ref := strings.TrimSpace(orgRef)
 	if ref == "" {

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/big"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -39,16 +39,16 @@ func (e *ValidationError) add(field, code, msg string) {
 var (
 	digitsRE  = regexp.MustCompile(`^[0-9]+$`)
 	phoneRE   = regexp.MustCompile(`^\+?[0-9 ()\-]{7,32}$`)
-	moneyRE   = regexp.MustCompile(`^[0-9]{1,12}(\.[0-9]{1,2})?$`)
 	percentRE = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,2})?$`)
 )
 
-// Limits of the minute settings.
+// Limits of the minute / day settings.
 const (
 	maxReviewWindowMinutes = 7 * 24 * 60
 	maxPaymentHoldMinutes  = 7 * 24 * 60
-	maxQuoteValidity       = 30 * 24 * 60
-	maxGraceMinutes        = 24 * 60
+	maxLeadMinutes         = 30 * 24 * 60
+	maxAdvanceDays         = 730
+	maxCutoffMinutes       = 30 * 24 * 60
 	maxPolicyText          = 5000
 )
 
@@ -112,6 +112,7 @@ func Normalize(in model.Settings) (model.Settings, error) {
 	c.Address = strings.TrimSpace(c.Address)
 	c.Phone = strings.TrimSpace(c.Phone)
 	c.Email = strings.TrimSpace(c.Email)
+	c.Website = strings.TrimSpace(c.Website)
 	maxLen(ve, "company.legal_name", c.LegalName, 255)
 	maxLen(ve, "company.tax_office", c.TaxOffice, 128)
 	maxLen(ve, "company.address", c.Address, 1000)
@@ -136,6 +137,11 @@ func Normalize(in model.Settings) (model.Settings, error) {
 			ve.add("company.email", "invalid", "email is invalid")
 		}
 	}
+	if c.Website != "" {
+		if u, err := url.Parse(c.Website); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || len(c.Website) > 255 {
+			ve.add("company.website", "invalid", "website must be an http(s) address")
+		}
+	}
 
 	// --- reservation
 	r := &s.Reservation
@@ -145,32 +151,20 @@ func Normalize(in model.Settings) (model.Settings, error) {
 	}
 	minutes(ve, "reservation.staff_review_window_minutes", r.StaffReviewWindowMinutes, 1, maxReviewWindowMinutes)
 	minutes(ve, "reservation.payment_hold_minutes", r.PaymentHoldMinutes, 1, maxPaymentHoldMinutes)
-	minutes(ve, "reservation.quote_validity_minutes", r.QuoteValidityMinutes, 1, maxQuoteValidity)
-
-	// --- payment
-	p := &s.Payment
-	p.PrepaymentRule = strings.TrimSpace(p.PrepaymentRule)
-	p.PrepaymentValue = strings.TrimSpace(p.PrepaymentValue)
-	if p.PrepaymentRule == "" {
-		p.PrepaymentRule = model.PrepaymentNone
+	minutes(ve, "reservation.min_lead_minutes", r.MinLeadMinutes, 0, maxLeadMinutes)
+	if r.MaxAdvanceDays != nil && (*r.MaxAdvanceDays < 1 || *r.MaxAdvanceDays > maxAdvanceDays) {
+		ve.add("reservation.max_advance_days", "out_of_range", fmt.Sprintf("must be between 1 and %d days", maxAdvanceDays))
 	}
-	switch p.PrepaymentRule {
-	case model.PrepaymentNone:
-		p.PrepaymentValue = ""
-	case model.PrepaymentFixed:
-		if p.PrepaymentValue == "" {
-			ve.add("payment.prepayment_value", "required", "prepayment amount is required")
-		} else if !moneyRE.MatchString(p.PrepaymentValue) || isZero(p.PrepaymentValue) {
-			ve.add("payment.prepayment_value", "invalid", "prepayment amount must be a positive amount with at most 2 decimals")
-		}
-	case model.PrepaymentPercent:
-		if p.PrepaymentValue == "" {
-			ve.add("payment.prepayment_value", "required", "prepayment percent is required")
-		} else if !validPercent(p.PrepaymentValue) || isZero(p.PrepaymentValue) {
-			ve.add("payment.prepayment_value", "invalid", "prepayment percent must be between 0 and 100")
-		}
-	default:
-		ve.add("payment.prepayment_rule", "invalid", "prepayment rule must be none, fixed or percent")
+	minutes(ve, "reservation.cancel_cutoff_minutes", r.CancelCutoffMinutes, 0, maxCutoffMinutes)
+	minutes(ve, "reservation.change_cutoff_minutes", r.ChangeCutoffMinutes, 0, maxCutoffMinutes)
+	// The earliest bookable start must lie inside the booking window.
+	if r.MinLeadMinutes != nil && r.MaxAdvanceDays != nil && *r.MinLeadMinutes > *r.MaxAdvanceDays*24*60 {
+		ve.add("reservation.min_lead_minutes", "after_max_advance", "earliest booking must be within the booking window")
+	}
+
+	// --- payment: at least one way to pay.
+	if !s.Payment.PayAtVenue && !s.Payment.PayOnline {
+		ve.add("payment.pay_at_venue", "required", "enable payment at the venue or online payment")
 	}
 
 	// --- policies
@@ -179,17 +173,10 @@ func Normalize(in model.Settings) (model.Settings, error) {
 		field string
 		v     *string
 	}{
-		{"policies.cancellation", &pol.Cancellation}, {"policies.no_show", &pol.NoShow},
-		{"policies.early_return", &pol.EarlyReturn}, {"policies.extension", &pol.Extension},
-		{"policies.fuel", &pol.Fuel}, {"policies.mileage", &pol.Mileage},
+		{"policies.cancellation", &pol.Cancellation}, {"policies.no_show", &pol.NoShow}, {"policies.change", &pol.Change},
 	} {
 		*f.v = strings.TrimSpace(*f.v)
 		maxLen(ve, f.field, *f.v, maxPolicyText)
-	}
-	minutes(ve, "policies.late_return_grace_minutes", pol.LateReturnGraceMinutes, 0, maxGraceMinutes)
-	pol.ExtraHourFee = strings.TrimSpace(pol.ExtraHourFee)
-	if pol.ExtraHourFee != "" && !moneyRE.MatchString(pol.ExtraHourFee) {
-		ve.add("policies.extra_hour_fee", "invalid", "extra hour fee must be an amount with at most 2 decimals")
 	}
 
 	// --- sales channels: every known channel exactly once, in order.
@@ -273,9 +260,4 @@ func validPercent(v string) bool {
 	}
 	r, ok := new(big.Rat).SetString(v)
 	return ok && r.Sign() >= 0 && r.Cmp(big.NewRat(100, 1)) <= 0
-}
-
-func isZero(v string) bool {
-	f, err := strconv.ParseFloat(v, 64)
-	return err == nil && f == 0
 }

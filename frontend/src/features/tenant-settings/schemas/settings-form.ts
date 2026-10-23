@@ -18,7 +18,6 @@ type Translate = (
   params?: Record<string, string | number>,
 ) => string;
 
-const MONEY = /^\d{1,12}(\.\d{1,2})?$/;
 const PERCENT = /^\d{1,3}(\.\d{1,2})?$/;
 const MINUTES = /^\d{1,6}$/;
 
@@ -30,6 +29,17 @@ function minutesField(t: Translate, min: number, max: number) {
       (v) =>
         v === "" || (MINUTES.test(v) && Number(v) >= min && Number(v) <= max),
       t("tenant_settings.validation.minutes_range", { min, max }),
+    );
+}
+
+function daysField(t: Translate, min: number, max: number) {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (v) =>
+        v === "" || (MINUTES.test(v) && Number(v) >= min && Number(v) <= max),
+      t("tenant_settings.validation.days_range", { min, max }),
     );
 }
 
@@ -74,33 +84,32 @@ export function createSettingsSchema(t: Translate) {
             (v) => v === "" || z.email().safeParse(v).success,
             t("tenant_settings.validation.email"),
           ),
+        website: z
+          .string()
+          .trim()
+          .max(255)
+          .refine(
+            (v) => v === "" || /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(v),
+            t("tenant_settings.validation.website"),
+          ),
       }),
       reservation: z.object({
         approval_mode: z.enum(["", "auto", "staff"]),
         staff_review_window_minutes: minutesField(t, 1, 10080),
         payment_hold_minutes: minutesField(t, 1, 10080),
-        quote_validity_minutes: minutesField(t, 1, 43200),
+        min_lead_minutes: minutesField(t, 0, 43200),
+        max_advance_days: daysField(t, 1, 730),
+        cancel_cutoff_minutes: minutesField(t, 0, 43200),
+        change_cutoff_minutes: minutesField(t, 0, 43200),
       }),
       payment: z.object({
-        prepayment_rule: z.enum(["none", "fixed", "percent"]),
-        prepayment_value: z.string().trim(),
-        full_payment_allowed: z.boolean(),
+        pay_at_venue: z.boolean(),
+        pay_online: z.boolean(),
       }),
       policies: z.object({
         cancellation: z.string().max(5000),
         no_show: z.string().max(5000),
-        early_return: z.string().max(5000),
-        extension: z.string().max(5000),
-        late_return_grace_minutes: minutesField(t, 0, 1440),
-        extra_hour_fee: z
-          .string()
-          .trim()
-          .refine(
-            (v) => v === "" || MONEY.test(v),
-            t("tenant_settings.validation.money"),
-          ),
-        fuel: z.string().max(5000),
-        mileage: z.string().max(5000),
+        change: z.string().max(5000),
       }),
       sales_channels: z.array(
         z.object({ code: z.string(), is_active: z.boolean() }),
@@ -118,20 +127,20 @@ export function createSettingsSchema(t: Translate) {
       }),
     })
     .superRefine((values, ctx) => {
-      const { prepayment_rule: rule, prepayment_value: value } = values.payment;
-      if (rule === "none") return;
-      const ok =
-        rule === "fixed"
-          ? MONEY.test(value) && Number(value) > 0
-          : PERCENT.test(value) && Number(value) > 0 && Number(value) <= 100;
-      if (!ok) {
+      if (!values.payment.pay_at_venue && !values.payment.pay_online) {
         ctx.addIssue({
           code: "custom",
-          path: ["payment", "prepayment_value"],
-          message:
-            rule === "fixed"
-              ? t("tenant_settings.validation.prepayment_amount")
-              : t("tenant_settings.validation.prepayment_percent"),
+          path: ["payment", "pay_at_venue"],
+          message: t("tenant_settings.validation.payment_option"),
+        });
+      }
+      const { min_lead_minutes: lead, max_advance_days: days } =
+        values.reservation;
+      if (lead !== "" && days !== "" && Number(lead) > Number(days) * 1440) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["reservation", "min_lead_minutes"],
+          message: t("tenant_settings.validation.lead_after_window"),
         });
       }
     });
@@ -159,17 +168,17 @@ export function settingsToForm(s: OrganizationSettings): SettingsFormValues {
         s.reservation.staff_review_window_minutes,
       ),
       payment_hold_minutes: minutesToField(s.reservation.payment_hold_minutes),
-      quote_validity_minutes: minutesToField(
-        s.reservation.quote_validity_minutes,
+      min_lead_minutes: minutesToField(s.reservation.min_lead_minutes),
+      max_advance_days: minutesToField(s.reservation.max_advance_days),
+      cancel_cutoff_minutes: minutesToField(
+        s.reservation.cancel_cutoff_minutes,
+      ),
+      change_cutoff_minutes: minutesToField(
+        s.reservation.change_cutoff_minutes,
       ),
     },
     payment: { ...s.payment },
-    policies: {
-      ...s.policies,
-      late_return_grace_minutes: minutesToField(
-        s.policies.late_return_grace_minutes,
-      ),
-    },
+    policies: { ...s.policies },
     sales_channels: SALES_CHANNELS.map((code) => ({
       code,
       is_active: channels.get(code) ?? false,
@@ -209,23 +218,17 @@ export function formToSaveRequest(
         payment_hold_minutes: fieldToMinutes(
           values.reservation.payment_hold_minutes,
         ),
-        quote_validity_minutes: fieldToMinutes(
-          values.reservation.quote_validity_minutes,
+        min_lead_minutes: fieldToMinutes(values.reservation.min_lead_minutes),
+        max_advance_days: fieldToMinutes(values.reservation.max_advance_days),
+        cancel_cutoff_minutes: fieldToMinutes(
+          values.reservation.cancel_cutoff_minutes,
+        ),
+        change_cutoff_minutes: fieldToMinutes(
+          values.reservation.change_cutoff_minutes,
         ),
       },
-      payment: {
-        ...values.payment,
-        prepayment_value:
-          values.payment.prepayment_rule === "none"
-            ? ""
-            : values.payment.prepayment_value,
-      },
-      policies: {
-        ...values.policies,
-        late_return_grace_minutes: fieldToMinutes(
-          values.policies.late_return_grace_minutes,
-        ),
-      },
+      payment: { ...values.payment },
+      policies: { ...values.policies },
       sales_channels: values.sales_channels.map((c) => ({
         code: c.code as OrganizationSettings["sales_channels"][number]["code"],
         is_active: c.is_active,

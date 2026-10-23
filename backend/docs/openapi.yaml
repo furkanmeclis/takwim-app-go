@@ -3604,6 +3604,34 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/tenant/overview:
+    get:
+      tags: [Tenant]
+      operationId: getTenantOverview
+      summary: Central panel of the organization
+      description: |
+        The branches the caller sees (`tenant.branches.read`, branch scope),
+        one by one and in total: active and online branches, which are open
+        now (today's hours in each branch's time zone, dated exceptions
+        first) and how many members can work in each. `X-Branch` narrows it
+        to one branch. `totals.members` counts each member once.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantOverview"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/context:
     get:
       tags: [Tenant]
@@ -3650,6 +3678,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
       responses:
         "200":
           description: Resource meta
@@ -4628,6 +4657,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
       responses:
         "200":
           description: Resource meta
@@ -4649,6 +4679,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
       responses:
         "200":
           description: Facets
@@ -5464,6 +5495,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
       responses:
         "200":
           description: Specs
@@ -5543,6 +5575,18 @@ components:
         Organization of a `/v1/tenant/*` request: its slug (preferred, readable
         in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
       schema: { type: string, maxLength: 64, example: acme }
+    XBranch:
+      name: X-Branch
+      in: header
+      required: false
+      description: |
+        Branch picked in the panel header (branch uuid). Narrows branch-bound
+        lists, counts, facets, search and the overview to that branch; access
+        checks on single records still use the member's branch scope. Absent
+        = every branch the caller may access. A branch that is unknown or
+        outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+        forwards it on `/api/v1/tenant/*` only.
+      schema: { type: string, format: uuid }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -5674,8 +5718,9 @@ components:
     TenantForbidden:
       description: |
         `NO_TENANT_MEMBERSHIP` (unknown organization or not a member),
-        `ORGANIZATION_SUSPENDED`, `ORGANIZATION_ACCESS_EXPIRED`, or `FORBIDDEN`
-        (tenant permission missing in this organization)
+        `ORGANIZATION_SUSPENDED`, `ORGANIZATION_ACCESS_EXPIRED`,
+        `BRANCH_NOT_ALLOWED` (`X-Branch` names a branch outside the caller's
+        scope), or `FORBIDDEN` (tenant permission missing in this organization)
       content:
         application/json:
           schema:
@@ -7010,9 +7055,62 @@ components:
           type: array
           items: { $ref: "#/components/schemas/TenantPermission" }
 
+    TenantOverviewTotals:
+      type: object
+      required: [branches, active_branches, online_branches, open_now, members]
+      properties:
+        branches: { type: integer, format: int64 }
+        active_branches: { type: integer, format: int64 }
+        online_branches: { type: integer, format: int64, description: Active branches shown on the booking screens }
+        open_now: { type: integer, format: int64 }
+        members: { type: integer, format: int64, description: "Members who can work in any of the listed branches, each once" }
+
+    TenantOverviewDay:
+      type: object
+      required: [date, closed, open, close, exception, note]
+      properties:
+        date: { type: string, format: date, description: Current local date in the branch zone }
+        closed: { type: boolean, description: "Closed, or no opening hours set for the day" }
+        open: { type: string, example: "09:00" }
+        close: { type: string, example: "18:00", description: "At or before `open` = past midnight" }
+        exception: { type: boolean, description: The day comes from a dated exception }
+        note: { type: string }
+
+    TenantOverviewBranch:
+      type: object
+      required: [uuid, code, name, city, is_active, show_online, timezone, today, open_now, member_count]
+      properties:
+        uuid: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        city: { type: string }
+        is_active: { type: boolean }
+        show_online: { type: boolean }
+        timezone: { type: string, description: "Effective IANA zone (branch, else business)" }
+        today: { $ref: "#/components/schemas/TenantOverviewDay" }
+        open_now: { type: boolean }
+        member_count: { type: integer, format: int64 }
+
+    TenantOverview:
+      type: object
+      required: [totals, branches]
+      properties:
+        totals: { $ref: "#/components/schemas/TenantOverviewTotals" }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/TenantOverviewBranch" }
+
+    EnvelopeTenantOverview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantOverview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     OrganizationCompanySettings:
       type: object
-      required: [legal_name, tax_number, tax_office, address, phone, email]
+      required: [legal_name, tax_number, tax_office, address, phone, email, website]
       properties:
         legal_name: { type: string, maxLength: 255 }
         tax_number:
@@ -7023,48 +7121,75 @@ components:
         address: { type: string, maxLength: 1000 }
         phone: { type: string }
         email: { type: string }
+        website: { type: string, description: "http(s) address; empty = not set", maxLength: 255 }
 
     OrganizationReservationSettings:
       type: object
-      required: [approval_mode, staff_review_window_minutes, payment_hold_minutes, quote_validity_minutes]
+      description: Business-wide default booking rules; null = not configured.
+      required:
+        - approval_mode
+        - staff_review_window_minutes
+        - payment_hold_minutes
+        - min_lead_minutes
+        - max_advance_days
+        - cancel_cutoff_minutes
+        - change_cutoff_minutes
       properties:
         approval_mode:
           type: string
           enum: ["", auto, staff]
-          description: "`auto` confirms on payment, `staff` waits for an employee; empty = not configured"
+          description: "`auto` accepts immediately, `staff` waits for an employee within the review window; empty = not configured"
         staff_review_window_minutes: { type: [integer, "null"], minimum: 1, maximum: 10080 }
-        payment_hold_minutes: { type: [integer, "null"], minimum: 1, maximum: 10080 }
-        quote_validity_minutes: { type: [integer, "null"], minimum: 1, maximum: 43200 }
+        payment_hold_minutes:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 10080
+          description: How long a booking waiting for online payment holds its capacity
+        min_lead_minutes:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 43200
+          description: Earliest bookable start, in minutes from now
+        max_advance_days:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 730
+          description: Latest bookable day, in days from today
+        cancel_cutoff_minutes:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 43200
+          description: Customer cancellation allowed until this many minutes before the start; null = no limit
+        change_cutoff_minutes:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 43200
+          description: Customer change requests allowed until this many minutes before the start; null = no limit
 
     OrganizationPaymentSettings:
       type: object
-      required: [prepayment_rule, prepayment_value, full_payment_allowed]
+      description: At least one option is on. Online payment is the full amount.
+      required: [pay_at_venue, pay_online]
       properties:
-        prepayment_rule: { type: string, enum: [none, fixed, percent] }
-        prepayment_value:
-          type: string
-          description: Decimal amount (`fixed`) or percentage (`percent`); empty for `none`
-          example: "500.00"
-        full_payment_allowed: { type: boolean }
+        pay_at_venue: { type: boolean }
+        pay_online: { type: boolean }
 
     OrganizationPolicySettings:
       type: object
-      required: [cancellation, no_show, early_return, extension, late_return_grace_minutes, extra_hour_fee, fuel, mileage]
+      required: [cancellation, no_show, change]
       properties:
-        cancellation: { type: string }
-        no_show: { type: string }
-        early_return: { type: string }
-        extension: { type: string }
-        late_return_grace_minutes: { type: [integer, "null"], minimum: 0, maximum: 1440 }
-        extra_hour_fee: { type: string, description: "Decimal amount; empty = not charged", example: "150.00" }
-        fuel: { type: string }
-        mileage: { type: string }
+        cancellation: { type: string, maxLength: 5000 }
+        no_show: { type: string, maxLength: 5000 }
+        change: { type: string, maxLength: 5000 }
 
     OrganizationSalesChannel:
       type: object
       required: [code, is_active]
       properties:
-        code: { type: string, enum: [web, widget, api, branch, yolcu360, obilet] }
+        code:
+          type: string
+          enum: [web, widget, api]
+          description: "`web` = takwim.link page, `widget` = embedded booking, `api` = public booking API"
         is_active: { type: boolean }
 
     OrganizationInvoiceItemMapping:
@@ -7073,7 +7198,7 @@ components:
       properties:
         item_type:
           type: string
-          enum: [rental, extra_service, insurance, delivery, fuel, mileage, late_return, damage, deposit]
+          enum: [service, product, package]
         account_code: { type: string }
         vat_rate: { type: string, description: "Percentage; empty = use the default VAT rate" }
         description: { type: string }

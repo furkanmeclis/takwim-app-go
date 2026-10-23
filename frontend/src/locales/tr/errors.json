@@ -24,6 +24,7 @@
   "codes.PASSWORD_RESET_FAILED": "Şifre sıfırlanamadı.",
   "codes.NO_TENANT_MEMBERSHIP": "Bu işletmeye üyeliğiniz yok.",
   "codes.ORGANIZATION_REQUIRED": "Önce bir işletme seçin.",
+  "codes.BRANCH_NOT_ALLOWED": "Seçili şube artık kullanılamıyor; tüm şubeler gösteriliyor.",
   "codes.ORGANIZATION_SUSPENDED": "Bu işletme askıya alınmış.",
   "codes.ORGANIZATION_ACCESS_EXPIRED": "Bu işletmenin erişim süresi sona ermiş.",
   "codes.REALTIME_DISABLED": "Canlı bağlantı devre dışı.",

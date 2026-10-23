@@ -153,3 +153,88 @@ func TestRequireTenantPermission(t *testing.T) {
 		})
 	}
 }
+
+// branchResolver is a resolver with X-Branch lookup.
+type branchResolver struct {
+	resolverFunc
+	branches map[uuid.UUID]int64
+}
+
+func (b branchResolver) BranchIDByUUID(_ context.Context, _ int64, id uuid.UUID) (int64, error) {
+	if v, ok := b.branches[id]; ok {
+		return v, nil
+	}
+	return 0, orgctx.ErrBranchNotAllowed
+}
+
+func TestRequireOrganizationBranchHeader(t *testing.T) {
+	t.Parallel()
+	mine, other, foreign := uuid.New(), uuid.New(), uuid.New()
+	// The member works in branches 5 and 9 only; branch 11 exists but is
+	// outside its scope, foreign belongs to no branch of the organization.
+	scope := orgctx.Scope{ID: 7, Slug: "acme", Status: orgctx.StatusActive, BranchIDs: []int64{5, 9}}
+	resolver := branchResolver{
+		resolverFunc: func(context.Context, string, int64) (orgctx.Scope, error) { return scope, nil },
+		branches:     map[uuid.UUID]int64{mine: 9, other: 11},
+	}
+	cases := []struct {
+		name       string
+		header     string
+		wantStatus int
+		wantScope  []int64
+	}{
+		{name: "no header", header: "", wantStatus: http.StatusOK, wantScope: []int64{5, 9}},
+		{name: "own branch", header: mine.String(), wantStatus: http.StatusOK, wantScope: []int64{9}},
+		{name: "outside scope", header: other.String(), wantStatus: http.StatusForbidden},
+		{name: "unknown", header: foreign.String(), wantStatus: http.StatusForbidden},
+		{name: "not a uuid", header: "nope", wantStatus: http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var got orgctx.Scope
+			var ctxScope []int64
+			h := RequireOrganization(resolver)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got, _ = orgctx.From(r.Context())
+				ctxScope = orgctx.BranchScope(r.Context())
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequest(http.MethodGet, "/v1/tenant/branches", nil)
+			req.Header.Set(orgctx.HeaderName, "acme")
+			if tc.header != "" {
+				req.Header.Set(orgctx.BranchHeaderName, tc.header)
+			}
+			req = withPrincipal(req, authctx.Principal{UserInternal: 42})
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", rr.Code, tc.wantStatus, rr.Body.String())
+			}
+			if tc.wantStatus != http.StatusOK {
+				if code := errorCode(t, rr); code != response.CodeBranchNotAllowed {
+					t.Fatalf("code = %q", code)
+				}
+				return
+			}
+			if fmt.Sprint(ctxScope) != fmt.Sprint(tc.wantScope) {
+				t.Fatalf("BranchScope = %v, want %v", ctxScope, tc.wantScope)
+			}
+			// Access checks keep the member's full scope.
+			if fmt.Sprint(got.BranchIDs) != "[5 9]" {
+				t.Fatalf("scope.BranchIDs = %v", got.BranchIDs)
+			}
+		})
+	}
+
+	// A resolver without branch lookup ignores the header.
+	plain := resolverFunc(func(context.Context, string, int64) (orgctx.Scope, error) { return scope, nil })
+	h := RequireOrganization(plain)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	req := httptest.NewRequest(http.MethodGet, "/v1/tenant/branches", nil)
+	req.Header.Set(orgctx.HeaderName, "acme")
+	req.Header.Set(orgctx.BranchHeaderName, "nope")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, withPrincipal(req, authctx.Principal{UserInternal: 42}))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("plain resolver status = %d", rr.Code)
+	}
+}

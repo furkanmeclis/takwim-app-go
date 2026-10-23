@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { BranchOverview } from "@/features/tenant/components/branch-overview";
 import { SectorOverviewCard } from "@/features/sectors/components/sector-overview-card";
 import { SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -28,7 +29,10 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** Landing page of the organization shell: who you are in this organization. */
+/**
+ * Landing page of the organization shell: the central panel of the branches
+ * (in total and one by one), then the organization and your membership.
+ */
 export function TenantOverviewPage() {
   const { t, locale } = useLocale();
   const tenant = useTenant();
@@ -42,6 +46,8 @@ export function TenantOverviewPage() {
         description={t("tenant.overview.description")}
         icon={<Building2 className="size-6" />}
       />
+
+      <BranchOverview />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

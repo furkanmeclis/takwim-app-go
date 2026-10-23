@@ -114,18 +114,18 @@ func TestSettingsVersioning(t *testing.T) {
 	}
 
 	// Save 1: company only.
-	settings["company"] = map[string]any{"legal_name": "Acme Oto A.Ş.", "tax_number": "4540536920", "tax_office": "Kadıköy", "address": "", "phone": "", "email": "info@acme.test"}
+	settings["company"] = map[string]any{"legal_name": "Acme Kuaför Ltd. Şti.", "tax_number": "4540536920", "tax_office": "Kadıköy", "address": "", "phone": "", "email": "info@acme.test"}
 	code, v1, _ := call(owner, http.MethodPut, "/v1/tenant/settings", map[string]any{"settings": settings, "base_version": 0})
 	if code != http.StatusOK || v1["version"].(float64) != 1 || v1["ready_for_online_sales"] != false {
 		t.Fatalf("save 1 = %d %v", code, v1)
 	}
-	if missing := v1["missing"].([]any); len(missing) != 4 {
+	if missing := v1["missing"].([]any); len(missing) != 3 {
 		t.Fatalf("missing after save 1 = %v", missing)
 	}
 
 	// Save 2: reservation settings complete -> ready.
 	settings["reservation"] = map[string]any{
-		"approval_mode": "staff", "staff_review_window_minutes": 30, "payment_hold_minutes": 15, "quote_validity_minutes": 60,
+		"approval_mode": "staff", "staff_review_window_minutes": 30, "min_lead_minutes": 60, "max_advance_days": 30,
 	}
 	code, v2, _ := call(owner, http.MethodPut, "/v1/tenant/settings", map[string]any{"settings": settings, "base_version": 1})
 	if code != http.StatusOK || v2["version"].(float64) != 2 || v2["ready_for_online_sales"] != true {
@@ -153,7 +153,7 @@ func TestSettingsVersioning(t *testing.T) {
 	}
 
 	// Save 3 without base_version (last write wins).
-	settings["policies"] = map[string]any{"late_return_grace_minutes": 59, "extra_hour_fee": "150.00", "fuel": "Aynı seviyede iade"}
+	settings["policies"] = map[string]any{"cancellation": "Randevudan 2 saat öncesine kadar ücretsiz iptal", "no_show": "", "change": ""}
 	code, v3, _ := call(owner, http.MethodPut, "/v1/tenant/settings", map[string]any{"settings": settings})
 	if code != http.StatusOK || v3["version"].(float64) != 3 {
 		t.Fatalf("save 3 = %d %v", code, v3)

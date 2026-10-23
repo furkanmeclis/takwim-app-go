@@ -93,6 +93,16 @@ WHERE om.organization_id = sqlc.arg(organization_id)
   )
   AND (sqlc.narg(branch_scope)::text IS NULL OR om.branch_scope = sqlc.narg(branch_scope))
   AND (
+    sqlc.narg(branch_id)::bigint IS NULL
+    OR om.branch_scope = 'all'
+    OR EXISTS (
+        SELECT 1 FROM organization_member_branches omb
+        WHERE omb.organization_id = om.organization_id
+          AND omb.member_id = om.id
+          AND omb.branch_id = sqlc.narg(branch_id)
+    )
+  )
+  AND (
     sqlc.narg(role_ids)::bigint[] IS NULL
     OR EXISTS (
         SELECT 1 FROM organization_member_roles omr
@@ -127,6 +137,16 @@ WHERE om.organization_id = sqlc.arg(organization_id)
     OR u.surname ILIKE '%' || sqlc.narg(q) || '%'
   )
   AND (sqlc.narg(branch_scope)::text IS NULL OR om.branch_scope = sqlc.narg(branch_scope))
+  AND (
+    sqlc.narg(branch_id)::bigint IS NULL
+    OR om.branch_scope = 'all'
+    OR EXISTS (
+        SELECT 1 FROM organization_member_branches omb
+        WHERE omb.organization_id = om.organization_id
+          AND omb.member_id = om.id
+          AND omb.branch_id = sqlc.narg(branch_id)
+    )
+  )
   AND (
     sqlc.narg(role_ids)::bigint[] IS NULL
     OR EXISTS (

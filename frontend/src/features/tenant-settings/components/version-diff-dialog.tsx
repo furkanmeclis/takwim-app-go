@@ -38,9 +38,6 @@ const MAPPING_FIELD_KEYS: Record<string, string> = {
 const ENUM_VALUE_KEYS: Record<string, string> = {
   "reservation.approval_mode:auto": "tenant_settings.approval_modes.auto",
   "reservation.approval_mode:staff": "tenant_settings.approval_modes.staff",
-  "payment.prepayment_rule:none": "tenant_settings.prepayment_rules.none",
-  "payment.prepayment_rule:fixed": "tenant_settings.prepayment_rules.fixed",
-  "payment.prepayment_rule:percent": "tenant_settings.prepayment_rules.percent",
 };
 
 /**

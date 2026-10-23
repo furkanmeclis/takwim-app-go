@@ -2270,6 +2270,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Central panel of the organization
+         * @description The branches the caller sees (`tenant.branches.read`, branch scope),
+         *     one by one and in total: active and online branches, which are open
+         *     now (today's hours in each branch's time zone, dated exceptions
+         *     first) and how many members can work in each. `X-Branch` narrows it
+         *     to one branch. `totals.members` counts each member once.
+         */
+        get: operations["getTenantOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/context": {
         parameters: {
             query?: never;
@@ -2485,7 +2509,7 @@ export interface paths {
         };
         /**
          * Connectable providers
-         * @description `tenant.integrations.manage`. Providers with their credential fields and modes.
+         * @description `tenant.integrations.read`. Providers with their credential fields and modes.
          */
         get: operations["getTenantIntegrationsMeta"];
         put?: never;
@@ -2505,7 +2529,7 @@ export interface paths {
         };
         /**
          * List integration accounts
-         * @description `tenant.integrations.manage`. Credentials are never returned (masked hints only).
+         * @description `tenant.integrations.read`. Credentials are never returned (masked hints only).
          */
         get: operations["getTenantIntegrations"];
         put?: never;
@@ -2531,7 +2555,7 @@ export interface paths {
         };
         /**
          * Integration account
-         * @description `tenant.integrations.manage`.
+         * @description `tenant.integrations.read`.
          */
         get: operations["getTenantIntegration"];
         put?: never;
@@ -2615,7 +2639,7 @@ export interface paths {
         };
         /**
          * Integration jobs of an account
-         * @description `tenant.integrations.manage`. Outbound calls and inbound notifications (idempotency key, attempts,
+         * @description `tenant.integrations.read`. Outbound calls and inbound notifications (idempotency key, attempts,
          *     deliveries, status). Live list resource `tenant.integration_jobs`.
          */
         get: operations["getTenantIntegrationJobs"];
@@ -2636,7 +2660,7 @@ export interface paths {
         };
         /**
          * An integration job with its attempts
-         * @description `tenant.integrations.manage`. Every provider call (submit / check_status) with its outcome, a short
+         * @description `tenant.integrations.read`. Every provider call (submit / check_status) with its outcome, a short
          *     request / response summary (references only: no secrets, codes or full numbers), the error and
          *     timings.
          */
@@ -2684,7 +2708,7 @@ export interface paths {
         };
         /**
          * Integration jobs of the organization
-         * @description `tenant.integrations.manage`. Jobs of every account (and account-less jobs). The work list of jobs
+         * @description `tenant.integrations.read`. Jobs of every account (and account-less jobs). The work list of jobs
          *     that need a person is `?status=failed,needs_verification`.
          */
         get: operations["listTenantIntegrationJobs"];
@@ -4646,6 +4670,68 @@ export interface components {
         TenantPermissionList: {
             items: components["schemas"]["TenantPermission"][];
         };
+        TenantOverviewTotals: {
+            /** Format: int64 */
+            branches: number;
+            /** Format: int64 */
+            active_branches: number;
+            /**
+             * Format: int64
+             * @description Active branches shown on the booking screens
+             */
+            online_branches: number;
+            /** Format: int64 */
+            open_now: number;
+            /**
+             * Format: int64
+             * @description Members who can work in any of the listed branches, each once
+             */
+            members: number;
+        };
+        TenantOverviewDay: {
+            /**
+             * Format: date
+             * @description Current local date in the branch zone
+             */
+            date: string;
+            /** @description Closed, or no opening hours set for the day */
+            closed: boolean;
+            /** @example 09:00 */
+            open: string;
+            /**
+             * @description At or before `open` = past midnight
+             * @example 18:00
+             */
+            close: string;
+            /** @description The day comes from a dated exception */
+            exception: boolean;
+            note: string;
+        };
+        TenantOverviewBranch: {
+            /** Format: uuid */
+            uuid: string;
+            code: string;
+            name: string;
+            city: string;
+            is_active: boolean;
+            show_online: boolean;
+            /** @description Effective IANA zone (branch, else business) */
+            timezone: string;
+            today: components["schemas"]["TenantOverviewDay"];
+            open_now: boolean;
+            /** Format: int64 */
+            member_count: number;
+        };
+        TenantOverview: {
+            totals: components["schemas"]["TenantOverviewTotals"];
+            branches: components["schemas"]["TenantOverviewBranch"][];
+        };
+        EnvelopeTenantOverview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         OrganizationCompanySettings: {
             legal_name: string;
             /**
@@ -4657,49 +4743,49 @@ export interface components {
             address: string;
             phone: string;
             email: string;
+            /** @description http(s) address; empty = not set */
+            website: string;
         };
+        /** @description Business-wide default booking rules; null = not configured. */
         OrganizationReservationSettings: {
             /**
-             * @description `auto` confirms on payment, `staff` waits for an employee; empty = not configured
+             * @description `auto` accepts immediately, `staff` waits for an employee within the review window; empty = not configured
              * @enum {string}
              */
             approval_mode: "" | "auto" | "staff";
             staff_review_window_minutes: number | null;
+            /** @description How long a booking waiting for online payment holds its capacity */
             payment_hold_minutes: number | null;
-            quote_validity_minutes: number | null;
+            /** @description Earliest bookable start, in minutes from now */
+            min_lead_minutes: number | null;
+            /** @description Latest bookable day, in days from today */
+            max_advance_days: number | null;
+            /** @description Customer cancellation allowed until this many minutes before the start; null = no limit */
+            cancel_cutoff_minutes: number | null;
+            /** @description Customer change requests allowed until this many minutes before the start; null = no limit */
+            change_cutoff_minutes: number | null;
         };
+        /** @description At least one option is on. Online payment is the full amount. */
         OrganizationPaymentSettings: {
-            /** @enum {string} */
-            prepayment_rule: "none" | "fixed" | "percent";
-            /**
-             * @description Decimal amount (`fixed`) or percentage (`percent`); empty for `none`
-             * @example 500.00
-             */
-            prepayment_value: string;
-            full_payment_allowed: boolean;
+            pay_at_venue: boolean;
+            pay_online: boolean;
         };
         OrganizationPolicySettings: {
             cancellation: string;
             no_show: string;
-            early_return: string;
-            extension: string;
-            late_return_grace_minutes: number | null;
-            /**
-             * @description Decimal amount; empty = not charged
-             * @example 150.00
-             */
-            extra_hour_fee: string;
-            fuel: string;
-            mileage: string;
+            change: string;
         };
         OrganizationSalesChannel: {
-            /** @enum {string} */
-            code: "web" | "widget" | "api" | "branch" | "yolcu360" | "obilet";
+            /**
+             * @description `web` = takwim.link page, `widget` = embedded booking, `api` = public booking API
+             * @enum {string}
+             */
+            code: "web" | "widget" | "api";
             is_active: boolean;
         };
         OrganizationInvoiceItemMapping: {
             /** @enum {string} */
-            item_type: "rental" | "extra_service" | "insurance" | "delivery" | "fuel" | "mileage" | "late_return" | "damage" | "deposit";
+            item_type: "service" | "product" | "package";
             account_code: string;
             /** @description Percentage; empty = use the default VAT rate */
             vat_rate: string;
@@ -6189,8 +6275,9 @@ export interface components {
         };
         /**
          * @description `NO_TENANT_MEMBERSHIP` (unknown organization or not a member),
-         *     `ORGANIZATION_SUSPENDED`, `ORGANIZATION_ACCESS_EXPIRED`, or `FORBIDDEN`
-         *     (tenant permission missing in this organization)
+         *     `ORGANIZATION_SUSPENDED`, `ORGANIZATION_ACCESS_EXPIRED`,
+         *     `BRANCH_NOT_ALLOWED` (`X-Branch` names a branch outside the caller's
+         *     scope), or `FORBIDDEN` (tenant permission missing in this organization)
          */
         TenantForbidden: {
             headers: {
@@ -6214,6 +6301,15 @@ export interface components {
          *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
          */
         XOrganization: string;
+        /**
+         * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+         *     lists, counts, facets, search and the overview to that branch; access
+         *     checks on single records still use the member's branch scope. Absent
+         *     = every branch the caller may access. A branch that is unknown or
+         *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+         *     forwards it on `/api/v1/tenant/*` only.
+         */
+        XBranch: string;
         /**
          * @description Client-generated key (a UUID) for an unsafe request the client may
          *     retry. Scoped to the caller, `X-Organization`, method and path; kept
@@ -9778,6 +9874,45 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getTenantOverview: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantOverview"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     getTenantContext: {
         parameters: {
             query?: never;
@@ -9817,6 +9952,15 @@ export interface operations {
                  *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
                  */
                 "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
             };
             path?: never;
             cookie?: never;
@@ -11070,6 +11214,15 @@ export interface operations {
                  *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
                  */
                 "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
             };
             path?: never;
             cookie?: never;
@@ -11099,6 +11252,15 @@ export interface operations {
                  *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
                  */
                 "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
             };
             path?: never;
             cookie?: never;
@@ -12161,6 +12323,15 @@ export interface operations {
                  *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
                  */
                 "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
             };
             path?: never;
             cookie?: never;

@@ -59,12 +59,22 @@ WHERE om.organization_id = $1
   )
   AND ($3::text IS NULL OR om.branch_scope = $3)
   AND (
-    $4::bigint[] IS NULL
+    $4::bigint IS NULL
+    OR om.branch_scope = 'all'
+    OR EXISTS (
+        SELECT 1 FROM organization_member_branches omb
+        WHERE omb.organization_id = om.organization_id
+          AND omb.member_id = om.id
+          AND omb.branch_id = $4
+    )
+  )
+  AND (
+    $5::bigint[] IS NULL
     OR EXISTS (
         SELECT 1 FROM organization_member_roles omr
         WHERE omr.organization_id = om.organization_id
           AND omr.member_id = om.id
-          AND omr.role_id = ANY($4::bigint[])
+          AND omr.role_id = ANY($5::bigint[])
     )
   )
 `
@@ -73,6 +83,7 @@ type CountTenantMembersParams struct {
 	OrganizationID int64       `json:"organization_id"`
 	Q              pgtype.Text `json:"q"`
 	BranchScope    pgtype.Text `json:"branch_scope"`
+	BranchID       pgtype.Int8 `json:"branch_id"`
 	RoleIds        []int64     `json:"role_ids"`
 }
 
@@ -81,6 +92,7 @@ func (q *Queries) CountTenantMembers(ctx context.Context, arg CountTenantMembers
 		arg.OrganizationID,
 		arg.Q,
 		arg.BranchScope,
+		arg.BranchID,
 		arg.RoleIds,
 	)
 	var column_1 int64
@@ -527,33 +539,44 @@ WHERE om.organization_id = $1
   )
   AND ($3::text IS NULL OR om.branch_scope = $3)
   AND (
-    $4::bigint[] IS NULL
+    $4::bigint IS NULL
+    OR om.branch_scope = 'all'
+    OR EXISTS (
+        SELECT 1 FROM organization_member_branches omb
+        WHERE omb.organization_id = om.organization_id
+          AND omb.member_id = om.id
+          AND omb.branch_id = $4
+    )
+  )
+  AND (
+    $5::bigint[] IS NULL
     OR EXISTS (
         SELECT 1 FROM organization_member_roles omr
         WHERE omr.organization_id = om.organization_id
           AND omr.member_id = om.id
-          AND omr.role_id = ANY($4::bigint[])
+          AND omr.role_id = ANY($5::bigint[])
     )
   )
 ORDER BY
-  CASE WHEN $5::text = 'email' AND NOT $6::boolean THEN u.email END ASC,
-  CASE WHEN $5::text = 'email' AND $6::boolean THEN u.email END DESC,
-  CASE WHEN $5::text = 'name' AND NOT $6::boolean THEN u.name END ASC,
-  CASE WHEN $5::text = 'name' AND $6::boolean THEN u.name END DESC,
-  CASE WHEN $5::text = 'branch_scope' AND NOT $6::boolean THEN om.branch_scope END ASC,
-  CASE WHEN $5::text = 'branch_scope' AND $6::boolean THEN om.branch_scope END DESC,
-  CASE WHEN $5::text = 'last_login_at' AND NOT $6::boolean THEN u.last_login_at END ASC NULLS FIRST,
-  CASE WHEN $5::text = 'last_login_at' AND $6::boolean THEN u.last_login_at END DESC NULLS LAST,
-  CASE WHEN $5::text = 'created_at' AND NOT $6::boolean THEN om.created_at END ASC,
-  CASE WHEN $5::text = 'created_at' AND $6::boolean THEN om.created_at END DESC,
+  CASE WHEN $6::text = 'email' AND NOT $7::boolean THEN u.email END ASC,
+  CASE WHEN $6::text = 'email' AND $7::boolean THEN u.email END DESC,
+  CASE WHEN $6::text = 'name' AND NOT $7::boolean THEN u.name END ASC,
+  CASE WHEN $6::text = 'name' AND $7::boolean THEN u.name END DESC,
+  CASE WHEN $6::text = 'branch_scope' AND NOT $7::boolean THEN om.branch_scope END ASC,
+  CASE WHEN $6::text = 'branch_scope' AND $7::boolean THEN om.branch_scope END DESC,
+  CASE WHEN $6::text = 'last_login_at' AND NOT $7::boolean THEN u.last_login_at END ASC NULLS FIRST,
+  CASE WHEN $6::text = 'last_login_at' AND $7::boolean THEN u.last_login_at END DESC NULLS LAST,
+  CASE WHEN $6::text = 'created_at' AND NOT $7::boolean THEN om.created_at END ASC,
+  CASE WHEN $6::text = 'created_at' AND $7::boolean THEN om.created_at END DESC,
   om.id ASC
-LIMIT $8 OFFSET $7
+LIMIT $9 OFFSET $8
 `
 
 type ListTenantMembersParams struct {
 	OrganizationID int64       `json:"organization_id"`
 	Q              pgtype.Text `json:"q"`
 	BranchScope    pgtype.Text `json:"branch_scope"`
+	BranchID       pgtype.Int8 `json:"branch_id"`
 	RoleIds        []int64     `json:"role_ids"`
 	SortField      string      `json:"sort_field"`
 	SortDesc       bool        `json:"sort_desc"`
@@ -580,6 +603,7 @@ func (q *Queries) ListTenantMembers(ctx context.Context, arg ListTenantMembersPa
 		arg.OrganizationID,
 		arg.Q,
 		arg.BranchScope,
+		arg.BranchID,
 		arg.RoleIds,
 		arg.SortField,
 		arg.SortDesc,
