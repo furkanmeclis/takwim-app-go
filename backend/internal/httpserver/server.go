@@ -80,6 +80,7 @@ import (
 	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
 	reservationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations"
+	reservationsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/adapters"
 	reservationshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/handler"
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	resourcesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources"
@@ -237,6 +238,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		resourcesadapters.NewSearch(deps.Queries),
 		servicesadapters.NewSearch(deps.Queries),
 		customersadapters.NewSearch(deps.Queries),
+		reservationsadapters.NewSearch(deps.Queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, deps.Queue, log)
@@ -371,6 +373,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	capacityHolds := availabilityusecase.NewHolds(deps.DB, deps.Queries, orgsettingsSvc)
 	// Lapsed approval / payment holds cancel their requests (TEC-899).
 	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
+	reservationsSvc := reservationsusecase.New(capacityHolds, deps.Queries, orgsettingsSvc)
+	reservationsSvc.SetSearchIndexer(searchIndexer)
 	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
 	availabilitySvc.SetBusySource(capacityHolds.Busy())
 	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
@@ -440,6 +444,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
 		customersadapters.NewIO(customersSvc),
+		reservationsadapters.NewIO(reservationsSvc),
 		orgadapters.NewIO(orgSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
@@ -452,6 +457,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
 		customersadapters.NewBulk(customersSvc),
+		reservationsadapters.NewBulk(reservationsSvc),
 		orgadapters.NewBulk(orgSvc),
 	)
 	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, jobQueue, notifSvc, activityRec, cfg.Bulk, log)
@@ -535,9 +541,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}, tokens, loader, tenantResolver)
 	// Reservations (TEC-899 / TEC-900): the record on top of the capacity
 	// holds.
-	reservationsH := reservationshandler.New(reservationsusecase.New(capacityHolds, deps.Queries, orgsettingsSvc), activityRec)
+	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)
+	reservationsmodule.RegisterEngineRoutes(mux, reservationsmodule.EngineHandlers{
+		Export: exportH.TenantExport(reservationsmodule.Resource, reservationsmodule.ExportQueryKeys...),
+		Bulk:   bulkH.TenantExecute(reservationsmodule.Resource),
+	}, tokens, loader, tenantResolver)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),
 		deps.Storage,

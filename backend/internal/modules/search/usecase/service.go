@@ -106,11 +106,28 @@ func (s *Service) ListTenantSpecs(ctx context.Context) []searchengine.Spec {
 		if spec.Scope != searchengine.ScopeTenant {
 			continue
 		}
-		if spec.Permission == "" || scope.Has(spec.Permission) {
+		switch tenantReach(scope, spec) {
+		case orgctx.ReachAll:
 			out = append(out, spec)
+		case orgctx.ReachOwn:
+			// The client checks the slug it is given: an own-records member
+			// holds the own slug only.
+			own := spec
+			own.Permission = spec.OwnPermission
+			out = append(out, own)
 		}
 	}
 	return out
+}
+
+// tenantReach is how far the caller reaches into a tenant spec: every record
+// (its permission, or none needed), its own records (OwnPermission only) or
+// nothing.
+func tenantReach(scope orgctx.Scope, spec searchengine.Spec) orgctx.Reach {
+	if spec.Permission == "" {
+		return orgctx.ReachAll
+	}
+	return scope.Reach(spec.Permission, spec.OwnPermission)
 }
 
 // SearchTenant queries tenant specs, filtered to the current organization.
@@ -128,13 +145,28 @@ func (s *Service) SearchTenant(ctx context.Context, q, spec string, limit int) [
 	}
 	requested := strings.TrimSpace(spec)
 	branchIDs := orgctx.BranchScope(ctx)
+	scope, _ := orgctx.From(ctx)
+	var userID int64
+	if p, ok := authctx.PrincipalFrom(ctx); ok {
+		userID = p.UserInternal
+	}
 	specs := make([]string, 0)
 	filters := make([]string, 0)
-	for _, sp := range s.ListTenantSpecs(ctx) {
-		if requested != "" && sp.ID != requested {
+	for _, sp := range s.reg.Specs() {
+		if sp.Scope != searchengine.ScopeTenant || (requested != "" && sp.ID != requested) {
 			continue
 		}
-		filter, ok := searchengine.TenantFilter(sp, orgID, branchIDs)
+		var own int64
+		switch tenantReach(scope, sp) {
+		case orgctx.ReachNone:
+			continue
+		case orgctx.ReachOwn:
+			if userID <= 0 {
+				continue
+			}
+			own = userID
+		}
+		filter, ok := searchengine.TenantOwnFilter(sp, orgID, branchIDs, own)
 		if !ok {
 			continue
 		}

@@ -37,21 +37,59 @@ func Params(ctx context.Context) map[string]string {
 	return p
 }
 
-// BulkItemResult is the outcome of applying one bulk item.
+// BulkItemResult is the outcome of applying one bulk item. Skipped marks an
+// item that was left as it is on purpose (the action does not apply in its
+// current state); it is reported apart from failures. Label names the item
+// in the result report (for example a reservation number); only labelled
+// items are listed there.
 type BulkItemResult struct {
 	EntityUUID string
 	EntityType string
 	OK         bool
+	Skipped    bool
 	Error      string
+	Label      string
 	Op         string // update | delete
 	Previous   map[string]any
 }
 
-// BulkSummary aggregates job results.
+// MaxSummaryIssues caps the per-item lines of a summary.
+const MaxSummaryIssues = 200
+
+// BulkIssue is one skipped or failed item of a summary.
+type BulkIssue struct {
+	EntityUUID string `json:"entity_uuid"`
+	Label      string `json:"label,omitempty"`
+	Error      string `json:"error"`
+	Skipped    bool   `json:"skipped,omitempty"`
+}
+
+// BulkSummary aggregates job results. Issues lists the first
+// MaxSummaryIssues skipped / failed items that carry a Label.
 type BulkSummary struct {
-	Total     int `json:"total"`
-	Succeeded int `json:"succeeded"`
-	Failed    int `json:"failed"`
+	Total     int         `json:"total"`
+	Succeeded int         `json:"succeeded"`
+	Failed    int         `json:"failed"`
+	Skipped   int         `json:"skipped,omitempty"`
+	Issues    []BulkIssue `json:"issues,omitempty"`
+}
+
+// Add counts one item result into the summary.
+func (s *BulkSummary) Add(res BulkItemResult) {
+	switch {
+	case res.OK:
+		s.Succeeded++
+		return
+	case res.Skipped:
+		s.Skipped++
+	default:
+		s.Failed++
+	}
+	// Only items the adapter named (it found them in the caller's reach)
+	// are listed; an unknown uuid stays a bare count.
+	if len(s.Issues) < MaxSummaryIssues && res.EntityUUID != "" && res.Label != "" {
+		s.Issues = append(s.Issues, BulkIssue{EntityUUID: res.EntityUUID, Label: res.Label, Error: res.Error, Skipped: res.Skipped})
+	}
 }
 
 // BulkAdapter connects bulkengine to a list resource.

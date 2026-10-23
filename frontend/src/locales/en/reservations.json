@@ -182,5 +182,21 @@
   "calendar.off": "Leave / closed",
   "calendar.move_description": "The visit moves to the dropped time; if that time is not free, nothing changes.",
   "calendar.new_time": "New time",
-  "calendar.line": "Moved service"
+  "calendar.line": "Moved service",
+  "bulk_cancel.title": "Cancel {{count}} reservations",
+  "bulk_cancel.description": "The reason is written to each reservation's history. Anything that is not a request or an active booking is skipped.",
+  "bulk_cancel.continue": "Continue",
+  "bulk_report.description": "{{succeeded}} succeeded, {{skipped}} skipped, {{failed}} failed. The reservations left unchanged are listed below.",
+  "bulk_report.columns.number": "Reservation",
+  "bulk_report.columns.reason": "Reason",
+  "bulk_report.columns.result": "Result",
+  "bulk_report.skipped": "Skipped",
+  "bulk_report.failed": "Failed",
+  "bulk_report.reasons.invalid_transition": "Not allowed in its current state",
+  "bulk_report.reasons.stale": "Changed after the list was loaded",
+  "bulk_report.reasons.expired": "Its hold time ran out",
+  "bulk_report.reasons.not_found": "Not found",
+  "bulk_report.empty_title": "Nothing skipped",
+  "bulk_report.empty_description": "Every selected reservation was processed.",
+  "bulk_report.close": "Close"
 }

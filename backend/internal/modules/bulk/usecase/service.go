@@ -140,7 +140,7 @@ func (s *Service) Execute(ctx context.Context, actorID int64, in ExecuteInput) (
 			uid := actorID
 			s.activity.Record(ctx, &uid, "bulk.completed", in.Resource, nil, map[string]any{
 				"action": in.Action, "total": summary.Total,
-				"succeeded": summary.Succeeded, "failed": summary.Failed, "sync": true,
+				"succeeded": summary.Succeeded, "failed": summary.Failed, "skipped": summary.Skipped, "sync": true,
 			}, nil)
 		}
 		return ExecuteResult{Async: false, Summary: summary}, nil
@@ -250,7 +250,7 @@ func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {
 		uid := job.ActorID
 		s.activity.Record(ctx, &uid, "bulk.completed", job.Resource, &job.Uuid, map[string]any{
 			"action": job.Action, "total": summary.Total,
-			"succeeded": summary.Succeeded, "failed": summary.Failed,
+			"succeeded": summary.Succeeded, "failed": summary.Failed, "skipped": summary.Skipped,
 		}, nil)
 	}
 	s.publishBulk(ctx, job.Resource, affected)
@@ -356,14 +356,16 @@ func (s *Service) applyTargets(
 	for _, entityUUID := range targets {
 		res, err := adapter.ApplyItem(ctx, action, entityUUID)
 		if err != nil {
-			summary.Failed++
+			summary.Add(bulkengine.BulkItemResult{EntityUUID: entityUUID, Error: "error"})
 			continue
 		}
+		if res.EntityUUID == "" {
+			res.EntityUUID = entityUUID
+		}
+		summary.Add(res)
 		if !res.OK {
-			summary.Failed++
 			continue
 		}
-		summary.Succeeded++
 		if len(affected) <= maxEventUUIDs {
 			affected = append(affected, entityUUID)
 		}

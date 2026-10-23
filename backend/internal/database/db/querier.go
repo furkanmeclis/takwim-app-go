@@ -231,6 +231,7 @@ type Querier interface {
 	// branch offer (service_branches) › list price.
 	GetReservationLineService(ctx context.Context, arg GetReservationLineServiceParams) (GetReservationLineServiceRow, error)
 	GetReservationRecord(ctx context.Context, arg GetReservationRecordParams) (Reservation, error)
+	GetReservationSearchDocument(ctx context.Context, arg GetReservationSearchDocumentParams) (GetReservationSearchDocumentRow, error)
 	GetResource(ctx context.Context, arg GetResourceParams) (GetResourceRow, error)
 	// Import key: a resource of the branch with the same name.
 	GetResourceByBranchName(ctx context.Context, arg GetResourceByBranchNameParams) (GetResourceByBranchNameRow, error)
@@ -408,6 +409,11 @@ type Querier interface {
 	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
 	ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error)
 	ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error)
+	// Reservation engines (TEC-963): Cmd+K documents. Every query filters by
+	// organization_id; joins by alias.organization_id too.
+	// owner_user_ids: the member who booked it and the accounts of the staff
+	// members serving it (the own calendar reach of reservations).
+	ListReservationSearchDocuments(ctx context.Context, organizationID int64) ([]ListReservationSearchDocumentsRow, error)
 	ListReservationStaffFacets(ctx context.Context, arg ListReservationStaffFacetsParams) ([]ListReservationStaffFacetsRow, error)
 	ListReservationStaffIDs(ctx context.Context, arg ListReservationStaffIDsParams) ([]int64, error)
 	// The panel list (TEC-900). branch_ids = the caller's branch scope (NULL =

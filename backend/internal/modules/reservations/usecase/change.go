@@ -147,6 +147,7 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 	if err != nil {
 		return model.Reservation{}, err
 	}
+	s.index(ctx, orgID, id)
 	return s.get(ctx, orgID, id)
 }
 

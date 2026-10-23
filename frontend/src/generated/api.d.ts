@@ -4544,6 +4544,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export reservations
+         * @description Queues an export of the reservations the caller sees in the list
+         *     (`tenant.reservations.read` or `tenant.reservations.own`, plus
+         *     `tenant.reservations.export`): the branch scope and the own-records
+         *     reach apply as in `GET /v1/tenant/reservations`. `query` honours `q`,
+         *     `sort`, `branch`, `staff`, `status`, `approval_status`,
+         *     `payment_status`, `source`, `starts_from`, `starts_to` and
+         *     `customer_uuid`. Times are in the business timezone and states carry
+         *     their `tr` / `en` labels. Reservations are not imported. Poll
+         *     `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantReservationsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept, reject or cancel reservations in bulk
+         * @description Actions `accept` (`tenant.reservations.bulk.accept`), `reject`
+         *     (`tenant.reservations.bulk.reject`) and `cancel`
+         *     (`tenant.reservations.bulk.cancel`, the reason in
+         *     `target.params.reason`, at most 32 characters, default `cancelled`).
+         *     The caller also needs `tenant.reservations.write` or
+         *     `tenant.reservations.own`; targets outside the organization, the
+         *     branch scope or the own-records reach are not found. Each record goes
+         *     through its own transition: capacity is confirmed (accept) or
+         *     released (reject, cancel) with it. `target.params.versions`
+         *     (`uuid:version,…`) passes the versions the caller read; a record
+         *     changed since is skipped (`stale`), and a record the action does not
+         *     apply to is skipped (`invalid_transition`). The summary counts
+         *     skipped records apart and lists them in `issues`. Not reversible.
+         */
+        post: operations["postTenantReservationsBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -5034,7 +5094,10 @@ export interface paths {
         };
         /**
          * Search the organization's records (Cmd+K)
-         * @description Hits are filtered by `organization_id` in the index; Meilisearch is never exposed to the browser.
+         * @description Hits are filtered by `organization_id` in the index; Meilisearch is
+         *     never exposed to the browser. Branch-bound specs match the caller's
+         *     branch scope, and a member holding only the own slug of a spec
+         *     (`tenant.reservations.own`) matches only its own records.
          */
         get: operations["getTenantSearch"];
         put?: never;
@@ -8766,6 +8829,19 @@ export interface components {
             total?: number;
             succeeded?: number;
             failed?: number;
+            /** @description Items left as they were because the action does not apply to them (not counted in `failed`). */
+            skipped?: number;
+            /** @description The first 200 skipped or failed items the caller can see (named by `label`); unknown ids are only counted. */
+            issues?: components["schemas"]["BulkIssue"][];
+        };
+        BulkIssue: {
+            /** Format: uuid */
+            entity_uuid: string;
+            /** @description How the item is shown in the report (for example `#42`). */
+            label?: string;
+            /** @description Reason code, for example `invalid_transition`, `stale`, `not_found`. */
+            error: string;
+            skipped?: boolean;
         };
         BulkJob: {
             /** Format: uuid */
@@ -17168,6 +17244,99 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantReservationsExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantReservationsBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantResourcesMeta: {

@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import type {
   BulkActionDef,
   BulkResource,
+  BulkSummary,
   SelectionScope,
 } from "@/features/bulk-engine/types";
 import { buildBulkTarget } from "@/features/bulk-engine/hooks/use-bulk-selection";
@@ -28,6 +29,8 @@ type BulkActionMenuProps = {
   scope: SelectionScope;
   selectedCount: number;
   onComplete?: () => void;
+  /** Summary of a run that finished inline (skipped / failed items). */
+  onResult?: (action: BulkActionDef, summary: BulkSummary) => void;
   /**
    * Collects the params of a parameterised action (for example a dialog
    * asking the new status). Resolve `null` to cancel, `undefined` for an
@@ -44,6 +47,7 @@ export function BulkActionMenu({
   scope,
   selectedCount,
   onComplete,
+  onResult,
   resolveParams,
 }: BulkActionMenuProps) {
   const { t } = useLocale();
@@ -83,6 +87,7 @@ export function BulkActionMenu({
       action: action.id,
       target,
       onComplete,
+      onResult: onResult ? (summary) => onResult(action, summary) : undefined,
     });
   };
 

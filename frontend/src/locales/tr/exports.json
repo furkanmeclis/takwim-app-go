@@ -76,5 +76,6 @@
   "resources.tenant.staff": "Personel",
   "resources.tenant.resources": "Kaynaklar",
   "resources.tenant.services": "Hizmetler",
-  "resources.tenant.customers": "Müşteriler"
+  "resources.tenant.customers": "Müşteriler",
+  "resources.tenant.reservations": "Rezervasyonlar"
 }

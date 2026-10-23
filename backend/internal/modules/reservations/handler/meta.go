@@ -2,10 +2,38 @@ package handler
 
 import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourcemeta"
 )
 
-// Meta is the table contract of GET /v1/tenant/reservations.
+// BulkActions are the bulk transitions of the list (TEC-963). Cancel takes
+// params["reason"] (default "cancelled"); every action takes
+// params["versions"] ("uuid:version,…", the versions the caller read), and a
+// record changed since is skipped as stale. None can be rolled back.
+func BulkActions() []bulkengine.BulkActionDef {
+	return []bulkengine.BulkActionDef{
+		{
+			ID: "accept", LabelKey: "bulk.actions.reservations.accept",
+			Permission: rbac.PermTenantReservationsBulkAccept,
+			ConfirmKey: "bulk.confirm.reservations.accept",
+		},
+		{
+			ID: "reject", LabelKey: "bulk.actions.reservations.reject",
+			Permission: rbac.PermTenantReservationsBulkReject, Destructive: true,
+			ConfirmKey: "bulk.confirm.reservations.reject",
+		},
+		{
+			ID: "cancel", LabelKey: "bulk.actions.reservations.cancel",
+			Permission: rbac.PermTenantReservationsBulkCancel, Destructive: true,
+			ConfirmKey: "bulk.confirm.reservations.cancel",
+		},
+	}
+}
+
+// Meta is the table contract of GET /v1/tenant/reservations. Export and
+// bulk are mounted by RegisterEngineRoutes (no import: a booking always goes
+// through the capacity engine).
 func Meta() resourcemeta.ResourceMeta {
 	enum := func(key string) resourcemeta.Column {
 		return resourcemeta.Column{
@@ -23,6 +51,7 @@ func Meta() resourcemeta.ResourceMeta {
 		DefaultFields: []string{"number", "starts_at", "customer", "services", "staff", "branch", "status", "approval_status", "payment_status", "total_price"},
 		Capabilities: resourcemeta.Capabilities{
 			Create: true, Read: true, Update: true, Search: true, Filter: true, Sort: true,
+			Export: true, Bulk: true,
 		},
 		SearchableFields: []string{"number", "customer", "phone"},
 		SortableFields:   []string{"starts_at", "number", "customer", "status", "total_price", "created_at"},
@@ -47,6 +76,7 @@ func Meta() resourcemeta.ResourceMeta {
 			{Key: "payment_status", LabelKey: "reservations.columns.payment_status", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.payment_status"},
 			{Key: "source", LabelKey: "reservations.columns.source", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.source"},
 		},
-		Includes: []string{},
+		Includes:    []string{},
+		BulkActions: BulkActions(),
 	}
 }

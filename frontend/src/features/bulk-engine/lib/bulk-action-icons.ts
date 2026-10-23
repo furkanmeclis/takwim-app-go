@@ -1,6 +1,9 @@
 import {
   BadgeMinus,
   BadgePlus,
+  Ban,
+  CalendarCheck,
+  CalendarX,
   CircleCheck,
   CircleOff,
   Trash2,
@@ -50,6 +53,11 @@ const bulkActionIconCatalog: Record<
     add_tag: BadgePlus,
     remove_tag: BadgeMinus,
     delete: Trash2,
+  },
+  "tenant.reservations": {
+    accept: CalendarCheck,
+    reject: CalendarX,
+    cancel: Ban,
   },
 };
 

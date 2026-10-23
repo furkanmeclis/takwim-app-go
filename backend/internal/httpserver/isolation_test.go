@@ -562,6 +562,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/services", map[string]any{"name": "X2", "duration_minutes": 30, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/services/bulk", bulkIDs("service"), nil},
 		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
+		{"POST /v1/tenant/reservations/bulk", map[string]any{"action": "cancel", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["reservation"]}}}, nil},
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}},
 			"starts_at": "2030-01-07T10:00:00+03:00", "reason": "checkout"}, reject},
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{

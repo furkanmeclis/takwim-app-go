@@ -23,10 +23,22 @@ export type BulkTarget = {
   params?: Record<string, string>;
 };
 
+/** One skipped or failed item of a bulk run (the first 200 are listed). */
+export type BulkIssue = {
+  entity_uuid: string;
+  label?: string;
+  /** Reason code, e.g. `invalid_transition`, `stale`, `not_found`. */
+  error: string;
+  skipped?: boolean;
+};
+
 export type BulkSummary = {
   total: number;
   succeeded: number;
   failed: number;
+  /** Left as they were: the action does not apply (not in `failed`). */
+  skipped?: number;
+  issues?: BulkIssue[];
 };
 
 export type BulkJob = {
@@ -55,6 +67,7 @@ export type BulkResource =
   | "tenant.resources"
   | "tenant.services"
   | "tenant.customers"
+  | "tenant.reservations"
   | "platform.organizations";
 
 /**
@@ -70,6 +83,7 @@ export const BULK_PATHS: Record<BulkResource, string> = {
   "tenant.resources": "/v1/tenant/resources/bulk",
   "tenant.services": "/v1/tenant/services/bulk",
   "tenant.customers": "/v1/tenant/customers/bulk",
+  "tenant.reservations": "/v1/tenant/reservations/bulk",
 };
 
 export type SelectionScope =

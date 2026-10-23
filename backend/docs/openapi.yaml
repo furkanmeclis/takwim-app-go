@@ -7394,6 +7394,90 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /v1/tenant/reservations/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationsExport
+      summary: Export reservations
+      description: |
+        Queues an export of the reservations the caller sees in the list
+        (`tenant.reservations.read` or `tenant.reservations.own`, plus
+        `tenant.reservations.export`): the branch scope and the own-records
+        reach apply as in `GET /v1/tenant/reservations`. `query` honours `q`,
+        `sort`, `branch`, `staff`, `status`, `approval_status`,
+        `payment_status`, `source`, `starts_from`, `starts_to` and
+        `customer_uuid`. Times are in the business timezone and states carry
+        their `tr` / `en` labels. Reservations are not imported. Poll
+        `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/reservations/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationsBulk
+      summary: Accept, reject or cancel reservations in bulk
+      description: |
+        Actions `accept` (`tenant.reservations.bulk.accept`), `reject`
+        (`tenant.reservations.bulk.reject`) and `cancel`
+        (`tenant.reservations.bulk.cancel`, the reason in
+        `target.params.reason`, at most 32 characters, default `cancelled`).
+        The caller also needs `tenant.reservations.write` or
+        `tenant.reservations.own`; targets outside the organization, the
+        branch scope or the own-records reach are not found. Each record goes
+        through its own transition: capacity is confirmed (accept) or
+        released (reject, cancel) with it. `target.params.versions`
+        (`uuid:version,…`) passes the versions the caller read; a record
+        changed since is skipped (`stale`), and a record the action does not
+        apply to is skipped (`invalid_transition`). The summary counts
+        skipped records apart and lists them in `issues`. Not reversible.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -8171,7 +8255,11 @@ paths:
       tags: [Tenant, Search]
       operationId: getTenantSearch
       summary: Search the organization's records (Cmd+K)
-      description: Hits are filtered by `organization_id` in the index; Meilisearch is never exposed to the browser.
+      description: |
+        Hits are filtered by `organization_id` in the index; Meilisearch is
+        never exposed to the browser. Branch-bound specs match the caller's
+        branch scope, and a member holding only the own slug of a spec
+        (`tenant.reservations.own`) matches only its own records.
       security:
         - bearerAuth: []
       parameters:
@@ -13036,6 +13124,22 @@ components:
         total: { type: integer }
         succeeded: { type: integer }
         failed: { type: integer }
+        skipped:
+          type: integer
+          description: Items left as they were because the action does not apply to them (not counted in `failed`).
+        issues:
+          type: array
+          description: The first 200 skipped or failed items the caller can see (named by `label`); unknown ids are only counted.
+          items: { $ref: "#/components/schemas/BulkIssue" }
+
+    BulkIssue:
+      type: object
+      required: [entity_uuid, error]
+      properties:
+        entity_uuid: { type: string, format: uuid }
+        label: { type: string, description: "How the item is shown in the report (for example `#42`)." }
+        error: { type: string, description: "Reason code, for example `invalid_transition`, `stale`, `not_found`." }
+        skipped: { type: boolean }
 
     BulkJob:
       type: object

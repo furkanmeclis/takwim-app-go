@@ -25,5 +25,7 @@
   "prefix_services": "service",
   "specs_services": "Services",
   "prefix_customers": "customer",
-  "specs_customers": "Customers"
+  "specs_customers": "Customers",
+  "prefix_reservations": "reservation",
+  "specs_reservations": "Reservations"
 }

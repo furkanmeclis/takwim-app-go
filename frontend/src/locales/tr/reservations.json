@@ -182,5 +182,21 @@
   "calendar.off": "İzin / kapalı",
   "calendar.move_description": "Randevu bırakılan saate taşınır; yeni saat uygun değilse hiçbir şey değişmez.",
   "calendar.new_time": "Yeni saat",
-  "calendar.line": "Taşınan hizmet"
+  "calendar.line": "Taşınan hizmet",
+  "bulk_cancel.title": "{{count}} rezervasyonu iptal et",
+  "bulk_cancel.description": "Neden her rezervasyonun geçmişine yazılır. Talep ve aktif rezervasyonlar dışındakiler atlanır.",
+  "bulk_cancel.continue": "Devam",
+  "bulk_report.description": "{{succeeded}} başarılı, {{skipped}} atlandı, {{failed}} hatalı. Değişmeyen rezervasyonlar aşağıda.",
+  "bulk_report.columns.number": "Rezervasyon",
+  "bulk_report.columns.reason": "Neden",
+  "bulk_report.columns.result": "Sonuç",
+  "bulk_report.skipped": "Atlandı",
+  "bulk_report.failed": "Hata",
+  "bulk_report.reasons.invalid_transition": "Bu durumdaki rezervasyona uygulanamaz",
+  "bulk_report.reasons.stale": "Liste açıldıktan sonra değişti",
+  "bulk_report.reasons.expired": "Bekleme süresi doldu",
+  "bulk_report.reasons.not_found": "Bulunamadı",
+  "bulk_report.empty_title": "Atlanan kayıt yok",
+  "bulk_report.empty_description": "Seçilen tüm rezervasyonlar işlendi.",
+  "bulk_report.close": "Kapat"
 }

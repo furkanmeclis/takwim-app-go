@@ -76,5 +76,6 @@
   "resources.tenant.staff": "Staff",
   "resources.tenant.resources": "Resources",
   "resources.tenant.services": "Services",
-  "resources.tenant.customers": "Customers"
+  "resources.tenant.customers": "Customers",
+  "resources.tenant.reservations": "Reservations"
 }

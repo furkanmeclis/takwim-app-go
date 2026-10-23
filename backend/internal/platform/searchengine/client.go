@@ -77,6 +77,9 @@ func (c *Client) EnsureIndex(ctx context.Context, spec Spec) error {
 		if spec.BranchScoped {
 			filterable = append(filterable, "branch_ids")
 		}
+		if spec.OwnPermission != "" {
+			filterable = append(filterable, "owner_user_ids")
+		}
 	}
 	settings := &meilisearch.Settings{
 		SearchableAttributes: searchable,
