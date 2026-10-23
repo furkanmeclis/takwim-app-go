@@ -17,9 +17,9 @@
   "status.active": "Aktif",
   "status.suspended": "Askıda",
   "status.expired": "Süresi doldu",
-  "roles.owner": "Sahip",
+  "roles.owner": "İşletme sahibi",
   "roles.admin": "Yönetici",
-  "roles.member": "Üye",
+  "roles.member": "Çalışan",
   "overview.description": "İşletme genel bakışı",
   "overview.organization_title": "İşletme",
   "overview.membership_title": "Üyeliğiniz",
@@ -33,9 +33,6 @@
   "no_access.title": "Henüz erişiminiz yok",
   "no_access.body": "Hesabınız hazır ancak henüz hiçbir işletmenin üyesi değilsiniz. Bir işletme sahibi sizi davet ettiğinde burada görünecek.",
   "no_access.check_again": "Tekrar kontrol et",
-  "roles.merkez_yoneticisi": "Merkez Yöneticisi",
-  "roles.sube_yoneticisi": "Şube Yöneticisi",
-  "roles.rezervasyon_satis": "Rezervasyon / Satış",
-  "roles.muhasebe": "Muhasebe",
-  "roles.teslim_iade": "Teslim / İade"
+  "roles.sube_yoneticisi": "Şube yöneticisi",
+  "roles.resepsiyon": "Resepsiyon"
 }

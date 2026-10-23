@@ -193,7 +193,7 @@ func TestInvitationAndPlatformRoutePermissions(t *testing.T) {
 	code, _, ec = call(&member, http.MethodPost, "/v1/tenant/invitations", slug, body)
 	expect("member without members.write invite", http.StatusForbidden, code, ec)
 	code, _, ec = call(&member, http.MethodGet, "/v1/tenant/invitations", slug, nil)
-	expect("member lists invitations", http.StatusOK, code, ec)
+	expect("staff (member) lists invitations without members.read", http.StatusForbidden, code, ec)
 	code, data, ec = call(&owner, http.MethodPost, "/v1/tenant/invitations", slug, body)
 	expect("owner invite", http.StatusCreated, code, ec)
 	if data["status"] != "pending" || data["email"] != invitee.Email {
@@ -234,7 +234,7 @@ func TestInvitationAndPlatformRoutePermissions(t *testing.T) {
 		t.Fatalf("register on used invitation = %d %s", code, ec)
 	}
 	code, _, ec = call(&invitee, http.MethodGet, "/v1/tenant/members", slug, nil)
-	expect("new member reads members", http.StatusOK, code, ec)
+	expect("new staff member cannot read the member list", http.StatusForbidden, code, ec)
 
 	// Organization profile: settings.read to view, settings.write to change.
 	code, data, ec = call(&member, http.MethodGet, "/v1/tenant/organization", slug, nil)

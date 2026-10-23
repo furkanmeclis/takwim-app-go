@@ -51,7 +51,7 @@ func TestScopeJSONKeepsBranchScope(t *testing.T) {
 	for _, in := range []Scope{
 		{ID: 1, UUID: uuid.New(), Slug: "a"},
 		{ID: 1, UUID: uuid.New(), Slug: "a", BranchIDs: []int64{}},
-		{ID: 1, UUID: uuid.New(), Slug: "a", BranchIDs: []int64{5, 9}, MemberRoles: []string{"muhasebe", "teslim_iade"}},
+		{ID: 1, UUID: uuid.New(), Slug: "a", BranchIDs: []int64{5, 9}, MemberRoles: []string{"resepsiyon", "member"}},
 	} {
 		raw, err := json.Marshal(in)
 		if err != nil {

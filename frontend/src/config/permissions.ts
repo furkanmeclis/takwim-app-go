@@ -65,12 +65,23 @@ export const Permission = {
   TenantBranchesBulkActivate: "tenant.branches.bulk.activate",
   TenantBranchesBulkDeactivate: "tenant.branches.bulk.deactivate",
   TenantIntegrationsManage: "tenant.integrations.manage",
+  TenantIntegrationsRead: "tenant.integrations.read",
+  TenantReservationsRead: "tenant.reservations.read",
+  TenantReservationsWrite: "tenant.reservations.write",
+  TenantReservationsOwn: "tenant.reservations.own",
+  TenantSchedulesRead: "tenant.schedules.read",
+  TenantSchedulesWrite: "tenant.schedules.write",
+  TenantSchedulesOwn: "tenant.schedules.own",
+  TenantCustomersRead: "tenant.customers.read",
+  TenantCustomersWrite: "tenant.customers.write",
+  TenantFinanceRead: "tenant.finance.read",
+  TenantFinanceWrite: "tenant.finance.write",
+  TenantEarningsRead: "tenant.earnings.read",
+  TenantEarningsOwn: "tenant.earnings.own",
   TenantPriceOverride: "tenant.price.override",
   TenantDiscountApply: "tenant.discount.apply",
   TenantPaymentCollect: "tenant.payment.collect",
   TenantPaymentRefund: "tenant.payment.refund",
-  TenantDamageApprove: "tenant.damage.approve",
-  TenantSignatureWaive: "tenant.signature.waive",
   TenantDocumentDownload: "tenant.document.download",
   TenantReportExport: "tenant.report.export",
 } as const;
@@ -193,7 +204,31 @@ export const permissions = {
       bulkDeactivate: Permission.TenantBranchesBulkDeactivate,
     },
     integrations: {
+      read: Permission.TenantIntegrationsRead,
       manage: Permission.TenantIntegrationsManage,
+    },
+    /** ".own" = only the member's own records (requirements §4). */
+    reservations: {
+      read: Permission.TenantReservationsRead,
+      write: Permission.TenantReservationsWrite,
+      own: Permission.TenantReservationsOwn,
+    },
+    schedules: {
+      read: Permission.TenantSchedulesRead,
+      write: Permission.TenantSchedulesWrite,
+      own: Permission.TenantSchedulesOwn,
+    },
+    customers: {
+      read: Permission.TenantCustomersRead,
+      write: Permission.TenantCustomersWrite,
+    },
+    finance: {
+      read: Permission.TenantFinanceRead,
+      write: Permission.TenantFinanceWrite,
+    },
+    earnings: {
+      read: Permission.TenantEarningsRead,
+      own: Permission.TenantEarningsOwn,
     },
     price: {
       override: Permission.TenantPriceOverride,
@@ -204,12 +239,6 @@ export const permissions = {
     payment: {
       collect: Permission.TenantPaymentCollect,
       refund: Permission.TenantPaymentRefund,
-    },
-    damage: {
-      approve: Permission.TenantDamageApprove,
-    },
-    signature: {
-      waive: Permission.TenantSignatureWaive,
     },
     document: {
       download: Permission.TenantDocumentDownload,

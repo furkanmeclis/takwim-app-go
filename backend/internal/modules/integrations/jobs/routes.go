@@ -29,12 +29,13 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	}
 	authn := middleware.Authenticate(tokens, loader)
 	org := middleware.RequireOrganization(resolver)
+	read := middleware.RequireTenantPermission(rbac.PermTenantIntegrationsRead)
 	manage := middleware.RequireTenantPermission(rbac.PermTenantIntegrationsManage)
-	mux.Handle("GET /v1/tenant/integration-jobs/{uuid}", middleware.Chain(http.HandlerFunc(h.Get), authn, org, manage))
+	mux.Handle("GET /v1/tenant/integration-jobs/{uuid}", middleware.Chain(http.HandlerFunc(h.Get), authn, org, read))
 	mux.Handle("POST /v1/tenant/integration-jobs/{uuid}/retry", middleware.Chain(http.HandlerFunc(h.Retry), authn, org, manage))
 }
 
 // RegisterLiveResources declares the live job list channel.
 func RegisterLiveResources(reg *resourceevents.Registry) {
-	reg.Register(usecase.ResourceJobs, rbac.PermTenantIntegrationsManage)
+	reg.Register(usecase.ResourceJobs, rbac.PermTenantIntegrationsRead)
 }

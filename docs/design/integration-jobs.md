@@ -63,7 +63,7 @@ GET   /v1/tenant/integration-jobs/{uuid}          job + attempt log
 POST  /v1/tenant/integration-jobs/{uuid}/retry    §6
 ```
 
-All behind `RequireOrganization` + `tenant.integrations.manage` (owner, admin, merkez_yoneticisi). RT-A01 covers every route.
+All behind `RequireOrganization`; reads need `tenant.integrations.read` (owner, admin, sube_yoneticisi), retry needs `tenant.integrations.manage` (owner, admin). RT-A01 covers every route.
 
 ## 8. Open items
 

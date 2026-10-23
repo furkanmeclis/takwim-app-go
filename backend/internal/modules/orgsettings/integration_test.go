@@ -70,7 +70,7 @@ func TestSettingsVersioning(t *testing.T) {
 		_, _ = pool.Exec(bg, "DELETE FROM organizations WHERE id = $1", org.ID)
 		_, _ = pool.Exec(bg, "DELETE FROM users WHERE id = ANY($1)", []int64{owner.ID, clerk.ID})
 	})
-	if _, err := orgSvc.AddMember(ctx, org.UUID, clerk.Uuid, "teslim_iade"); err != nil {
+	if _, err := orgSvc.AddMember(ctx, org.UUID, clerk.Uuid, "resepsiyon"); err != nil {
 		t.Fatal(err)
 	}
 

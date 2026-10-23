@@ -13,6 +13,7 @@ import (
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/slug"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -80,8 +81,8 @@ var MemberSortColumns = map[string]string{
 
 // rolePrecedence picks the primary (display) role of a member.
 var rolePrecedence = []string{
-	orgctx.RoleOwner, orgctx.RoleAdmin, "merkez_yoneticisi", "sube_yoneticisi",
-	"muhasebe", "rezervasyon_satis", "teslim_iade", orgctx.RoleMember,
+	orgctx.RoleOwner, orgctx.RoleAdmin, rbac.TenantRoleSubeYoneticisi,
+	rbac.TenantRoleResepsiyon, orgctx.RoleMember,
 }
 
 func isOwnerScope(s orgctx.Scope) bool {

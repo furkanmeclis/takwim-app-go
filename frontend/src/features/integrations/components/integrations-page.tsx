@@ -258,7 +258,7 @@ export function IntegrationsPage() {
     <EntityPage
       title={t("integrations.title")}
       description={t("integrations.page_description")}
-      permission={manage}
+      permission={permissions.tenant.integrations.read}
       forbiddenFallback={
         <ErrorState
           title={t("common.error_forbidden")}
