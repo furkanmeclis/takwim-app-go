@@ -6787,6 +6787,135 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/availability/holds:
+    post:
+      tags: [Tenant]
+      operationId: postTenantAvailabilityHold
+      summary: Hold capacity for a visit
+      description: |
+        Holds the staff and resources of one visit at `starts_at` until the
+        hold time of `reason` passes (`tenant.reservations.write`, or
+        `tenant.reservations.own` on the caller's own calendar):
+        `checkout` (customer filling in the booking form, 10 minutes),
+        `approval` (the business's review window, default 60) or
+        `payment` (online payment hold time, default 15); `minutes`
+        (1–1440) overrides it. In one transaction under the organization's
+        lock: lapsed holds are expired, the slot engine re-plans the start
+        on fresh data and the allocations are written. Exclusion constraints
+        refuse any overlapping commitment of a person or resource (in every
+        branch), so of concurrent requests for the last free time exactly
+        one wins; the others get `409` detail `starts_at` / `taken` and
+        nothing is written. A lapsed hold stops counting at `expires_at`,
+        before the minute sweep marks it `expired`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantCapacityHoldCreateRequest"
+      responses:
+        "201":
+          description: Created hold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCapacityHold"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/availability/holds/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantAvailabilityHold
+      summary: A capacity hold or booking
+      description: |
+        `tenant.reservations.read` (every hold in the branch scope) or
+        `tenant.reservations.own` (holds the caller created). A lapsed,
+        not yet swept hold reads as `expired`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Hold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCapacityHold"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantAvailabilityHold
+      summary: Release a hold or booking
+      description: |
+        Frees the capacity exactly once (`409` detail `uuid` / `not_active`
+        afterwards, `expired` for a lapsed hold).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Released hold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCapacityHold"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/availability/holds/{uuid}/extend:
+    post:
+      tags: [Tenant]
+      operationId: postTenantAvailabilityHoldExtend
+      summary: Extend a hold
+      description: |
+        Sets `expires_at` to now + `minutes` (1–1440) for an active hold.
+        `409` detail `uuid` / `expired` when it already lapsed (its capacity
+        is free again), `not_hold` for a confirmed booking.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [minutes]
+              properties:
+                minutes: { type: integer, minimum: 1, maximum: 1440 }
+      responses:
+        "200":
+          description: Extended hold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCapacityHold"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -11977,6 +12106,72 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/TenantAvailability" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantCapacityHoldCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [branch_uuid, lines, starts_at, reason]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            additionalProperties: false
+            required: [service_uuid]
+            properties:
+              service_uuid: { type: string, format: uuid }
+              staff_uuid: { type: [string, "null"], format: uuid }
+        channel: { type: string, enum: [panel, online], default: panel }
+        starts_at: { type: string, format: date-time }
+        reason: { type: string, enum: [approval, payment, checkout] }
+        minutes: { type: integer, minimum: 1, maximum: 1440 }
+
+    TenantCapacityHold:
+      type: object
+      required: [uuid, kind, reason, status, channel, branch, starts_at, ends_at, expires_at, ref_type, ref_uuid, released_at, release_reason, allocations, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [hold, booking] }
+        reason: { type: [string, "null"], enum: [approval, payment, checkout, null] }
+        status: { type: string, enum: [active, released, expired] }
+        channel: { type: string, enum: [panel, online] }
+        branch: { $ref: "#/components/schemas/TenantAvailabilityRef" }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        ref_type: { type: [string, "null"] }
+        ref_uuid: { type: [string, "null"], format: uuid }
+        released_at: { type: [string, "null"], format: date-time }
+        release_reason: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        allocations:
+          type: array
+          items:
+            type: object
+            required: [line_index, starts_at, ends_at, staff, resource]
+            properties:
+              line_index: { type: integer }
+              starts_at: { type: string, format: date-time, description: Held time (buffers included). }
+              ends_at: { type: string, format: date-time }
+              staff:
+                oneOf:
+                  - $ref: "#/components/schemas/TenantAvailabilityRef"
+                  - type: "null"
+              resource:
+                oneOf:
+                  - $ref: "#/components/schemas/TenantAvailabilityResourceRef"
+                  - type: "null"
+
+    EnvelopeTenantCapacityHold:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantCapacityHold" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeTenantCustomer:

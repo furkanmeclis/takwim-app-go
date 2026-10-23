@@ -126,6 +126,9 @@ type Assignment struct {
 	Key   string
 	Start time.Time
 	End   time.Time
+	// Held is the time the staff member and resources are held (buffers
+	// included).
+	Held Interval
 	// StaffID is 0 when the line runs without a staff member.
 	StaffID     int64
 	ResourceIDs []int64
@@ -402,7 +405,7 @@ func (p *planner) assign(i int, t time.Time, open Interval, out []Assignment) bo
 		if !ok {
 			continue
 		}
-		out[i] = Assignment{Key: l.Key, Start: customer.Start, End: customer.End, StaffID: staffID, ResourceIDs: resources}
+		out[i] = Assignment{Key: l.Key, Start: customer.Start, End: customer.End, Held: held, StaffID: staffID, ResourceIDs: resources}
 		if p.assign(i+1, customer.End, open, out) {
 			return true
 		}

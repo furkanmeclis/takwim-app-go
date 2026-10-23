@@ -365,8 +365,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	orgsettingsmodule.RegisterRoutes(mux, orgsettingshandler.New(orgsettingsSvc, activityRec), tokens, loader, tenantResolver)
 	// Slot engine (TEC-897): the panel search; the public booking API uses
 	// the same service with the online channel.
-	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilityusecase.New(deps.Queries, orgsettingsSvc)),
-		tokens, loader, tenantResolver)
+	capacityHolds := availabilityusecase.NewHolds(deps.DB, deps.Queries, orgsettingsSvc)
+	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
+	availabilitySvc.SetBusySource(capacityHolds.Busy())
+	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
 	// Central panel (TEC-892): branches one by one and in total.
 	overviewmodule.RegisterRoutes(mux, overviewmodule.NewHandler(overviewmodule.New(branchSvc, deps.Queries)), tokens, loader, tenantResolver)
 

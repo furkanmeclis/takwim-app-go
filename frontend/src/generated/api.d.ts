@@ -4180,6 +4180,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/availability/holds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hold capacity for a visit
+         * @description Holds the staff and resources of one visit at `starts_at` until the
+         *     hold time of `reason` passes (`tenant.reservations.write`, or
+         *     `tenant.reservations.own` on the caller's own calendar):
+         *     `checkout` (customer filling in the booking form, 10 minutes),
+         *     `approval` (the business's review window, default 60) or
+         *     `payment` (online payment hold time, default 15); `minutes`
+         *     (1–1440) overrides it. In one transaction under the organization's
+         *     lock: lapsed holds are expired, the slot engine re-plans the start
+         *     on fresh data and the allocations are written. Exclusion constraints
+         *     refuse any overlapping commitment of a person or resource (in every
+         *     branch), so of concurrent requests for the last free time exactly
+         *     one wins; the others get `409` detail `starts_at` / `taken` and
+         *     nothing is written. A lapsed hold stops counting at `expires_at`,
+         *     before the minute sweep marks it `expired`.
+         */
+        post: operations["postTenantAvailabilityHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/availability/holds/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A capacity hold or booking
+         * @description `tenant.reservations.read` (every hold in the branch scope) or
+         *     `tenant.reservations.own` (holds the caller created). A lapsed,
+         *     not yet swept hold reads as `expired`.
+         */
+        get: operations["getTenantAvailabilityHold"];
+        put?: never;
+        post?: never;
+        /**
+         * Release a hold or booking
+         * @description Frees the capacity exactly once (`409` detail `uuid` / `not_active`
+         *     afterwards, `expired` for a lapsed hold).
+         */
+        delete: operations["deleteTenantAvailabilityHold"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/availability/holds/{uuid}/extend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend a hold
+         * @description Sets `expires_at` to now + `minutes` (1–1440) for an active hold.
+         *     `409` detail `uuid` / `expired` when it already lapsed (its capacity
+         *     is free again), `not_hold` for a confirmed booking.
+         */
+        post: operations["postTenantAvailabilityHoldExtend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -8019,6 +8101,71 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["TenantAvailability"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TenantCapacityHoldCreateRequest: {
+            /** Format: uuid */
+            branch_uuid: string;
+            lines: {
+                /** Format: uuid */
+                service_uuid: string;
+                /** Format: uuid */
+                staff_uuid?: string | null;
+            }[];
+            /**
+             * @default panel
+             * @enum {string}
+             */
+            channel: "panel" | "online";
+            /** Format: date-time */
+            starts_at: string;
+            /** @enum {string} */
+            reason: "approval" | "payment" | "checkout";
+            minutes?: number;
+        };
+        TenantCapacityHold: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "hold" | "booking";
+            /** @enum {string|null} */
+            reason: "approval" | "payment" | "checkout" | null;
+            /** @enum {string} */
+            status: "active" | "released" | "expired";
+            /** @enum {string} */
+            channel: "panel" | "online";
+            branch: components["schemas"]["TenantAvailabilityRef"];
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** Format: date-time */
+            expires_at: string | null;
+            ref_type: string | null;
+            /** Format: uuid */
+            ref_uuid: string | null;
+            /** Format: date-time */
+            released_at: string | null;
+            release_reason: string | null;
+            /** Format: date-time */
+            created_at: string;
+            allocations: {
+                line_index: number;
+                /**
+                 * Format: date-time
+                 * @description Held time (buffers included).
+                 */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+                staff: components["schemas"]["TenantAvailabilityRef"] | null;
+                resource: components["schemas"]["TenantAvailabilityResourceRef"] | null;
+            }[];
+        };
+        EnvelopeTenantCapacityHold: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantCapacityHold"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeTenantCustomer: {
@@ -15817,6 +15964,147 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantAvailabilityHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantCapacityHoldCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created hold */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCapacityHold"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantAvailabilityHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hold */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCapacityHold"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantAvailabilityHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Released hold */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCapacityHold"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantAvailabilityHoldExtend: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    minutes: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Extended hold */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCapacityHold"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getTenantResourcesMeta: {

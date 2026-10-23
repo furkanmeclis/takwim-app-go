@@ -162,11 +162,14 @@ func (s *Service) Check(ctx context.Context, orgID int64, in model.SearchInput, 
 	if !ok {
 		return model.Slot{}, false, nil
 	}
-	return p.slot(slot), true, nil
+	out := p.slot(slot)
+	out.BranchID = p.branchID
+	return out, true, nil
 }
 
 // prepared is an engine request with the lookups to render its answer.
 type prepared struct {
+	branchID  int64
 	req       engine.Request
 	result    model.Result
 	services  []uuid.UUID
@@ -180,6 +183,7 @@ func (p *prepared) slot(s engine.Slot) model.Slot {
 		line := model.SlotLine{
 			ServiceUUID: p.services[i], StartsAt: a.Start.UTC(), EndsAt: a.End.UTC(),
 			Resources: make([]model.ResourceRef, 0, len(a.ResourceIDs)),
+			StaffID:   a.StaffID, ResourceIDs: a.ResourceIDs, HeldFrom: a.Held.Start.UTC(), HeldUntil: a.Held.End.UTC(),
 		}
 		if a.StaffID != 0 {
 			ref := p.staff[a.StaffID]
@@ -371,7 +375,7 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		}
 	}
 
-	p := &prepared{staff: map[int64]model.Ref{}, resources: map[int64]model.ResourceRef{}}
+	p := &prepared{branchID: branch.ID, staff: map[int64]model.Ref{}, resources: map[int64]model.ResourceRef{}}
 	staffShifts := map[int64]engine.WeeklyShifts{}
 	kinds := map[string]bool{}
 	online := channel == model.ChannelOnline

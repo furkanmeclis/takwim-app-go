@@ -309,6 +309,13 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["customer"] = str(must(call(o, http.MethodPost, "/v1/tenant/customers", map[string]any{
 			"first_name": m, "last_name": "Müşteri", "phone": ids["customerPhone"], "notes": m, "tags": []string{m},
 		}), http.StatusCreated, "create customer"), "uuid")
+		must(call(o, http.MethodPut, "/v1/tenant/staff/"+ids["staff"]+"/branches/"+ids["branch"]+"/shifts", map[string]any{
+			"mon": []map[string]any{{"start": "09:00", "end": "18:00"}},
+		}), http.StatusOK, "staff shifts")
+		ids["hold"] = str(must(call(o, http.MethodPost, "/v1/tenant/availability/holds", map[string]any{
+			"branch_uuid": ids["branch"], "lines": []map[string]any{{"service_uuid": ids["service"]}},
+			"starts_at": "2030-01-07T09:00:00+03:00", "reason": "approval", "minutes": 1440,
+		}), http.StatusCreated, "create hold"), "uuid")
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -547,6 +554,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/services", map[string]any{"name": "X2", "duration_minutes": 30, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/services/bulk", bulkIDs("service"), nil},
 		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
+		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}},
+			"starts_at": "2030-01-07T10:00:00+03:00", "reason": "checkout"}, reject},
+		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{
+			{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}, "starts_at": "2030-01-07T10:00:00+03:00", "reason": "checkout"}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}}}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{
@@ -752,6 +763,8 @@ func paramKey(prev, name string) string {
 		return "serviceCategory"
 	case "customers/uuid":
 		return "customer"
+	case "holds/uuid":
+		return "hold"
 	}
 	return ""
 }

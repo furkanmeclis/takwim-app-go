@@ -26,6 +26,7 @@ type Querier interface {
 	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
+	ConfirmCapacityHold(ctx context.Context, arg ConfirmCapacityHoldParams) (CapacityHold, error)
 	ConfirmUserTOTP(ctx context.Context, arg ConfirmUserTOTPParams) (UserTotp, error)
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
 	CountActivityEvents(ctx context.Context, arg CountActivityEventsParams) (int64, error)
@@ -80,6 +81,8 @@ type Querier interface {
 	CreateBranch(ctx context.Context, arg CreateBranchParams) (Branch, error)
 	CreateBranchImage(ctx context.Context, arg CreateBranchImageParams) (BranchImage, error)
 	CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error)
+	CreateCapacityAllocation(ctx context.Context, arg CreateCapacityAllocationParams) error
+	CreateCapacityHold(ctx context.Context, arg CreateCapacityHoldParams) (CapacityHold, error)
 	// Tenant resource: customers (TEC-896). Every query on customers and
 	// customer_identity_links filters by organization_id. customer_identities is
 	// platform-level: only the link use case touches it, and no tenant response
@@ -120,6 +123,7 @@ type Querier interface {
 	DeleteAppLogsByUUIDs(ctx context.Context, uuids []uuid.UUID) (int64, error)
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
 	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
+	DeleteCapacityAllocations(ctx context.Context, arg DeleteCapacityAllocationsParams) error
 	DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCustomerIdentityLinkParams) (int64, error)
 	DeleteLogPurgeRule(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteMemberBranches(ctx context.Context, arg DeleteMemberBranchesParams) error
@@ -152,6 +156,8 @@ type Querier interface {
 	// First device registration opts the user into push (the OS permission
 	// prompt is the consent). An existing preference row is left untouched.
 	EnsureNotificationPreferencesPushDefault(ctx context.Context, userID int64) error
+	ExpireDueCapacityHolds(ctx context.Context, arg ExpireDueCapacityHoldsParams) ([]int64, error)
+	ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHoldParams) (CapacityHold, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
 	FinishIntegrationJob(ctx context.Context, arg FinishIntegrationJobParams) error
 	// The organization's active account of a kind (payments go to it).
@@ -172,6 +178,8 @@ type Querier interface {
 	GetBranchSearchDocument(ctx context.Context, arg GetBranchSearchDocumentParams) (GetBranchSearchDocumentRow, error)
 	GetBulkJobByID(ctx context.Context, id int64) (BulkJob, error)
 	GetBulkJobByUUID(ctx context.Context, argUuid uuid.UUID) (BulkJob, error)
+	GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams) (GetCapacityHoldRow, error)
+	GetCapacityHoldForUpdate(ctx context.Context, arg GetCapacityHoldForUpdateParams) (CapacityHold, error)
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
 	GetCurrentOrganizationSettings(ctx context.Context, organizationID int64) (GetCurrentOrganizationSettingsRow, error)
@@ -303,12 +311,21 @@ type Querier interface {
 	ListBranchesForExport(ctx context.Context, arg ListBranchesForExportParams) ([]Branch, error)
 	ListBulkChangesForJob(ctx context.Context, jobID int64) ([]BulkChange, error)
 	ListBulkJobsForActor(ctx context.Context, arg ListBulkJobsForActorParams) ([]BulkJob, error)
+	// Commitments of the given staff and resources overlapping [since, until):
+	// active holds that have not lapsed (a lapsed hold stops counting at its
+	// expiry, before the sweep) and confirmed bookings. exclude_hold_id
+	// leaves one commitment out (0 = none), for re-planning it.
+	ListBusyCapacityAllocations(ctx context.Context, arg ListBusyCapacityAllocationsParams) ([]ListBusyCapacityAllocationsRow, error)
+	ListCapacityHoldAllocations(ctx context.Context, arg ListCapacityHoldAllocationsParams) ([]ListCapacityHoldAllocationsRow, error)
+	ListCapacityHoldStaffIDs(ctx context.Context, arg ListCapacityHoldStaffIDsParams) ([]int64, error)
 	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)
 	ListCustomerSourceFacets(ctx context.Context, organizationID int64) ([]ListCustomerSourceFacetsRow, error)
 	ListCustomerTagFacets(ctx context.Context, organizationID int64) ([]ListCustomerTagFacetsRow, error)
 	ListCustomerUUIDs(ctx context.Context, arg ListCustomerUUIDsParams) ([]uuid.UUID, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
 	ListCustomersForExport(ctx context.Context, arg ListCustomersForExportParams) ([]ListCustomersForExportRow, error)
+	// Organizations with holds past their expiry (the minute sweep).
+	ListDueCapacityHoldOrganizations(ctx context.Context, now pgtype.Timestamptz) ([]int64, error)
 	ListDuePushTickets(ctx context.Context, arg ListDuePushTicketsParams) ([]ListDuePushTicketsRow, error)
 	// The sweep: runner jobs whose next call is due, across organizations
 	// (each row carries its organization_id; the runner re-scopes from it).
@@ -427,6 +444,11 @@ type Querier interface {
 	ListUsersForExport(ctx context.Context, arg ListUsersForExportParams) ([]User, error)
 	ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebauthnCredential, error)
 	ListWebAuthnCredentialsForUserIDs(ctx context.Context, userIds []int64) ([]WebauthnCredential, error)
+	// Capacity holds and allocations (TEC-898). Every query filters by
+	// organization_id; joins by alias.organization_id too.
+	// Serialises the writers of one organization inside a transaction (the
+	// exclusion constraints stay the correctness argument).
+	LockCapacity(ctx context.Context, organizationID int64) error
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
 	// Claims a job for one provider call (one worker at a time; an expired
@@ -462,6 +484,7 @@ type Querier interface {
 	MarkUserPasswordUnset(ctx context.Context, id int64) error
 	PingDB(ctx context.Context) (int32, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
+	ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHoldParams) (CapacityHold, error)
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
 	ReplaceUserRoles(ctx context.Context, userID int64) error

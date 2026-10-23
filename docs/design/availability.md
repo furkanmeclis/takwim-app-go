@@ -8,7 +8,7 @@ One engine answers "when can this be booked, and who / what serves it?" for the 
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Opening hours             | `branches.working_hours`, replaced on a date by `branches.holiday_exceptions` (closed or other hours). The branch time zone, else the business's.        |
 | Working time of a person  | `staff_branches.shifts` of the requested branch, minus breaks                                                                                            |
-| Busy time of a person     | `staff_time_off` (every branch) + commitments of every branch through `BusySource` (reservations and holds, TEC-898 / TEC-899)                           |
+| Busy time of a person     | `staff_time_off` (every branch) + commitments of every branch through `BusySource` (holds and bookings of [capacity-holds.md](./capacity-holds.md))      |
 | Who may perform a service | `service_staff` ∩ people working in the branch (active, live)                                                                                            |
 | Duration                  | personal `service_staff.duration_minutes` › branch `service_branches.duration_minutes` › `services.duration_minutes`                                     |
 | Buffers                   | `services.buffer_before_minutes` / `buffer_after_minutes`                                                                                                |
@@ -40,7 +40,7 @@ One engine answers "when can this be booked, and who / what serves it?" for the 
 
 ## Service API
 
-`usecase.Service.Search(org, input, caller)` and `Check(org, input, caller, start)`; `SetBusySource` plugs in reservations and holds. The public booking API (TEC-906) calls the same service with the online channel; the reservation record (TEC-899) calls `Check` inside its transaction after taking the capacity lock (TEC-898).
+`usecase.Service.Search(org, input, caller)` and `Check(org, input, caller, start)`; `SetBusySource` plugs in reservations and holds (`AllocationBusy`, see [capacity-holds.md](./capacity-holds.md)). The public booking API (TEC-906) calls the same service with the online channel; the reservation record (TEC-899) calls `Check` inside its transaction after taking the capacity lock (TEC-898).
 
 ## Tests
 
