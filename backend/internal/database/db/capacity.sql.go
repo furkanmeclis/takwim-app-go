@@ -302,19 +302,19 @@ func (q *Queries) GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams
 	return i, err
 }
 
-const getCapacityHoldForUpdate = `-- name: GetCapacityHoldForUpdate :one
+const getCapacityHoldByIDForUpdate = `-- name: GetCapacityHoldByIDForUpdate :one
 SELECT id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at FROM capacity_holds
-WHERE organization_id = $1 AND uuid = $2
+WHERE organization_id = $1 AND id = $2
 FOR UPDATE
 `
 
-type GetCapacityHoldForUpdateParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	Uuid           uuid.UUID `json:"uuid"`
+type GetCapacityHoldByIDForUpdateParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
 }
 
-func (q *Queries) GetCapacityHoldForUpdate(ctx context.Context, arg GetCapacityHoldForUpdateParams) (CapacityHold, error) {
-	row := q.db.QueryRow(ctx, getCapacityHoldForUpdate, arg.OrganizationID, arg.Uuid)
+func (q *Queries) GetCapacityHoldByIDForUpdate(ctx context.Context, arg GetCapacityHoldByIDForUpdateParams) (CapacityHold, error) {
+	row := q.db.QueryRow(ctx, getCapacityHoldByIDForUpdate, arg.OrganizationID, arg.ID)
 	var i CapacityHold
 	err := row.Scan(
 		&i.ID,
@@ -549,6 +549,50 @@ func (q *Queries) ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHo
 	row := q.db.QueryRow(ctx, releaseCapacityHold,
 		arg.Now,
 		arg.ReleaseReason,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	var i CapacityHold
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.BranchID,
+		&i.Kind,
+		&i.Reason,
+		&i.Status,
+		&i.Channel,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.ExpiresAt,
+		&i.RefType,
+		&i.RefUuid,
+		&i.CreatedBy,
+		&i.ReleasedAt,
+		&i.ReleaseReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const renewCapacityHold = `-- name: RenewCapacityHold :one
+UPDATE capacity_holds SET reason = $1, expires_at = $2
+WHERE organization_id = $3 AND id = $4 AND status = 'active' AND kind = 'hold'
+RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at
+`
+
+type RenewCapacityHoldParams struct {
+	Reason         pgtype.Text        `json:"reason"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+func (q *Queries) RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldParams) (CapacityHold, error) {
+	row := q.db.QueryRow(ctx, renewCapacityHold,
+		arg.Reason,
+		arg.ExpiresAt,
 		arg.OrganizationID,
 		arg.ID,
 	)

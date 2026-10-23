@@ -47,10 +47,15 @@ FROM capacity_holds h
 JOIN branches b ON b.organization_id = h.organization_id AND b.id = h.branch_id
 WHERE h.organization_id = sqlc.arg(organization_id) AND h.uuid = sqlc.arg(uuid);
 
--- name: GetCapacityHoldForUpdate :one
+-- name: GetCapacityHoldByIDForUpdate :one
 SELECT * FROM capacity_holds
-WHERE organization_id = sqlc.arg(organization_id) AND uuid = sqlc.arg(uuid)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
 FOR UPDATE;
+
+-- name: RenewCapacityHold :one
+UPDATE capacity_holds SET reason = sqlc.arg(reason), expires_at = sqlc.arg(expires_at)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND status = 'active' AND kind = 'hold'
+RETURNING *;
 
 -- name: ListCapacityHoldAllocations :many
 SELECT a.line_index, lower(a.period)::TIMESTAMPTZ AS starts_at, upper(a.period)::TIMESTAMPTZ AS ends_at,

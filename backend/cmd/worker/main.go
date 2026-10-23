@@ -31,6 +31,7 @@ import (
 	orgadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/adapters"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
 	resourcesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/repository"
 	resourcesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/usecase"
@@ -221,6 +222,10 @@ func main() {
 	integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: queueClient})
 	integrationKit.Runner.SetResourceEvents(resourceEvents)
 
+	// The minute sweep of capacity holds also cancels the requests whose
+	// approval or payment hold lapsed (TEC-899).
+	capacityHolds := availabilityusecase.NewHolds(pool, queries, nil)
+	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
 	worker := queue.NewWorker(cfg, log, notifSvc.Deliver).
 		WithExport(exportSvc.ProcessExport).
 		WithImport(importSvc.ProcessImport).
@@ -235,7 +240,7 @@ func main() {
 			}
 			return err
 		}, integrationKit.Runner.RunDue).
-		WithCapacityExpiry(availabilityusecase.NewHolds(pool, queries, nil).ExpireDue).
+		WithCapacityExpiry(capacityHolds.ExpireDue).
 		WithSearch(
 			searchIndexer.ProcessUpsert,
 			searchIndexer.ProcessDelete,

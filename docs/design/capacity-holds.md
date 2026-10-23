@@ -13,7 +13,7 @@ The slot engine ([availability.md](./availability.md)) says which starts are fre
 
 ## Why double booking is impossible
 
-1. **Exclusion constraints (database).** Two overlapping allocations of one person or resource cannot exist, whatever the application does. A concurrent writer that loses gets `23P01` (it waits for the winner's commit, then fails) and the API answers `409` `starts_at` / `taken` with nothing written.
+1. **Exclusion constraints (database).** Two overlapping allocations of one person or resource cannot exist, whatever the application does. A concurrent writer that loses gets `23P01` (it waits for the winner's commit, then fails), or a deadlock when two writers wait on each other's exclusion check (they compete for the same capacity, so the aborted one lost it); the API answers `409` `starts_at` / `taken` with nothing written.
 2. **Organization lock (application).** Writers of a business serialise on `pg_advisory_xact_lock`. Inside it they expire lapsed holds, re-plan the start with the slot engine on fresh data (busy time = allocations of active, unexpired commitments) and write. The lock spares losers the work and keeps answers clean; it is not the correctness argument: `TestA03LastSlotConcurrency` runs 6 and 12 parallel writers with the lock off and still gets exactly one winner.
 
 ## Holds
@@ -34,7 +34,11 @@ The slot engine ([availability.md](./availability.md)) says which starts are fre
 | Release   | frees a hold or booking exactly once (`ErrNotActive` afterwards)                                                                                  |
 | ExpireDue | the sweep, per business under its lock                                                                                                            |
 
-`AllocationBusy` is the slot engine's `BusySource` (`ExcludeHoldID` leaves one commitment out, for moving it). The reservation record (TEC-899) creates a hold or confirms one with `ref_type = reservation`.
+`AllocationBusy` is the slot engine's `BusySource` (`ExcludeHoldID` leaves one commitment out, for moving it).
+
+## Composing with records
+
+`Run(org, fn)` opens a capacity transaction: lock, expire lapsed holds (running the expiry hook), then `fn` in a savepoint, commit. When `fn` fails its writes are undone but the expiry still commits. Inside it `CreateIn`, `ConfirmIn`, `RenewIn` (new reason and expiry, e.g. an accepted request now waiting for payment) and `ReleaseIn` work on the transaction, so the reservation record ([reservations.md](./reservations.md)) and its capacity commit together. `SetExpiryHook` registers the reaction to lapsed holds (the reservation record cancels its requests); the API server and the worker both register it.
 
 ## API
 

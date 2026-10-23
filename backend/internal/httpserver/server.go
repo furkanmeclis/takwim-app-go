@@ -79,6 +79,7 @@ import (
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
+	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	resourcesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources"
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
 	resourceshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/handler"
@@ -366,6 +367,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Slot engine (TEC-897): the panel search; the public booking API uses
 	// the same service with the online channel.
 	capacityHolds := availabilityusecase.NewHolds(deps.DB, deps.Queries, orgsettingsSvc)
+	// Lapsed approval / payment holds cancel their requests (TEC-899).
+	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
 	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
 	availabilitySvc.SetBusySource(capacityHolds.Busy())
 	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
