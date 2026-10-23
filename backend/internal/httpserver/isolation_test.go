@@ -70,6 +70,7 @@ var isolationAllowlist = map[string]string{
 	"PATCH /v1/tenant/organization":          "profile of the caller's organization (name only); no foreign references",
 	"PUT /v1/tenant/organization/logo":       "logo of the caller's organization; the key is built from the scope (storage prefix check)",
 	"DELETE /v1/tenant/organization/logo":    "logo of the caller's organization; no ids",
+	"POST /v1/tenant/integrations":           "body has no foreign references (kind, provider code, display name, mode, the organization's own credentials)",
 }
 
 type isoOrg struct {
@@ -278,6 +279,20 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["bulkJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/bulk", map[string]any{
 			"action": "deactivate", "target": map[string]any{"scope": "ids", "ids": []string{ids["branch"], branch2}},
 		}), http.StatusAccepted, "bulk"), "uuid")
+		// Integration account (log provider, no network) and a failed job
+		// of it: the {uuid} of /v1/tenant/integration-jobs.
+		ids["integrationAccount"] = str(must(call(o, http.MethodPost, "/v1/tenant/integrations", map[string]any{
+			"kind": "sms", "provider": "log", "display_name": m + " sms", "credentials": map[string]any{"sender": "TAKWIM"},
+		}), http.StatusCreated, "connect integration"), "uuid")
+		var jobUUID uuid.UUID
+		if err := pool.QueryRow(ctx, `INSERT INTO integration_jobs (organization_id, integration_account_id, direction, provider,
+			kind, idempotency_key, status, attempts, last_error)
+			SELECT a.organization_id, a.id, 'outbound', 'log', 'sms.send', $2, 'failed', 1, $3
+			FROM integration_accounts a WHERE a.uuid = $1 RETURNING uuid`,
+			ids["integrationAccount"], "iso:"+m, m+" failed").Scan(&jobUUID); err != nil {
+			t.Fatal(err)
+		}
+		ids["integrationJob"] = jobUUID.String()
 	}
 	seed(orgA)
 	seed(orgB)
@@ -438,7 +453,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	// 3. GET routes without path parameters: no B identifier in A's answer
 	// (with and without filters naming B's records).
 	probes := map[string][]string{
-		"GET /v1/tenant/search": {"?q=" + orgB.marker},
+		"GET /v1/tenant/search":           {"?q=" + orgB.marker},
+		"GET /v1/tenant/integrations":     {"?q=" + orgB.marker},
+		"GET /v1/tenant/integration-jobs": {"?status=failed"},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -640,6 +657,10 @@ func paramKey(prev, name string) string {
 		return "bulkJob"
 	case "versions/version":
 		return "version"
+	case "integrations/uuid":
+		return "integrationAccount"
+	case "integration-jobs/uuid":
+		return "integrationJob"
 	}
 	return ""
 }

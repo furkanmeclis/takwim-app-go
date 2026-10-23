@@ -176,6 +176,73 @@ type ImportJob struct {
 	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
+type IntegrationAccount struct {
+	ID                    int64              `json:"id"`
+	Uuid                  uuid.UUID          `json:"uuid"`
+	OrganizationID        int64              `json:"organization_id"`
+	Kind                  string             `json:"kind"`
+	Provider              string             `json:"provider"`
+	DisplayName           string             `json:"display_name"`
+	Mode                  string             `json:"mode"`
+	Status                string             `json:"status"`
+	CredentialsCiphertext string             `json:"credentials_ciphertext"`
+	CredentialsHint       []byte             `json:"credentials_hint"`
+	Settings              []byte             `json:"settings"`
+	LastCheckedAt         pgtype.Timestamptz `json:"last_checked_at"`
+	LastCheckStatus       string             `json:"last_check_status"`
+	LastCheckError        string             `json:"last_check_error"`
+	CreatedBy             pgtype.Int8        `json:"created_by"`
+	UpdatedBy             pgtype.Int8        `json:"updated_by"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntegrationAttempt struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   pgtype.Int8        `json:"organization_id"`
+	IntegrationJobID int64              `json:"integration_job_id"`
+	AttemptNo        int32              `json:"attempt_no"`
+	Operation        string             `json:"operation"`
+	Trigger          string             `json:"trigger"`
+	Outcome          string             `json:"outcome"`
+	RequestSummary   []byte             `json:"request_summary"`
+	ResponseSummary  []byte             `json:"response_summary"`
+	Error            string             `json:"error"`
+	StartedAt        pgtype.Timestamptz `json:"started_at"`
+	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
+	DurationMs       int32              `json:"duration_ms"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type IntegrationJob struct {
+	ID                   int64              `json:"id"`
+	Uuid                 uuid.UUID          `json:"uuid"`
+	OrganizationID       pgtype.Int8        `json:"organization_id"`
+	IntegrationAccountID pgtype.Int8        `json:"integration_account_id"`
+	Direction            string             `json:"direction"`
+	Provider             string             `json:"provider"`
+	Kind                 string             `json:"kind"`
+	IdempotencyKey       string             `json:"idempotency_key"`
+	Status               string             `json:"status"`
+	Attempts             int32              `json:"attempts"`
+	MaxAttempts          int32              `json:"max_attempts"`
+	Deliveries           int32              `json:"deliveries"`
+	LastError            string             `json:"last_error"`
+	Payload              []byte             `json:"payload"`
+	Result               []byte             `json:"result"`
+	RefType              string             `json:"ref_type"`
+	RefUuid              pgtype.UUID        `json:"ref_uuid"`
+	Priority             string             `json:"priority"`
+	NextAttemptAt        pgtype.Timestamptz `json:"next_attempt_at"`
+	ProviderRef          string             `json:"provider_ref"`
+	SubmittedAt          pgtype.Timestamptz `json:"submitted_at"`
+	LockedUntil          pgtype.Timestamptz `json:"locked_until"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
 type LogPurgeRule struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`

@@ -9,3 +9,4 @@ organization_settings_versions
 organization_members
 organization_invitation_roles
 organization_invitation_branches
+integration_accounts

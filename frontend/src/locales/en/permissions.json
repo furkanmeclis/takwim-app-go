@@ -83,6 +83,7 @@
   "labels.tenant.branches.import": "Import branches",
   "labels.tenant.branches.bulk.activate": "Bulk activate branches",
   "labels.tenant.branches.bulk.deactivate": "Bulk deactivate branches",
+  "labels.tenant.integrations.manage": "Manage integrations",
   "labels.tenant.fleet.read": "View fleet (segments, groups, products)",
   "labels.tenant.fleet.write": "Manage fleet (segments, groups, products)",
   "labels.tenant.vehicles.read": "View vehicles",

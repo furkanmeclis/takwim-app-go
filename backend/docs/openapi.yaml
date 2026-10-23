@@ -3812,6 +3812,304 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/tenant/integrations/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantIntegrationsMeta
+      summary: Connectable providers
+      description: "`tenant.integrations.manage`. Providers with their credential fields and modes."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Providers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationsMeta" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/integrations:
+    get:
+      tags: [Tenant]
+      operationId: getTenantIntegrations
+      summary: List integration accounts
+      description: "`tenant.integrations.manage`. Credentials are never returned (masked hints only)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "`display_name` or `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - { name: status, in: query, schema: { type: string }, description: "active, disabled" }
+        - { name: kind, in: query, schema: { type: string }, description: "payment, sms, whatsapp, email" }
+        - { name: provider, in: query, schema: { type: string }, description: "Provider codes" }
+      responses:
+        "200":
+          description: Account page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationAccountPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantIntegration
+      summary: Connect a provider account
+      description: |
+        `tenant.integrations.manage`. Stores the organization's own credentials sealed with the field
+        cipher (purpose `integration.credentials`, bound to the organization and the account). One active
+        account per kind (`409`). Use `/test` to check the connection.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [provider, display_name, credentials]
+              properties:
+                kind: { type: string, enum: [payment, sms, whatsapp, email], description: "Defaults to the provider's kind." }
+                provider: { type: string, pattern: "^[a-z][a-z0-9_]*$", description: "Provider code of a registered adapter (`GET /v1/tenant/integrations/meta`); `log` = development provider (no network call)." }
+                display_name: { type: string, maxLength: 120 }
+                mode: { type: string, enum: [sandbox, live] }
+                credentials:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: "Fields of the provider (`GET /v1/tenant/integrations/meta`); log (development only): `sender`. Never returned: answers carry masked hints only."
+      responses:
+        "201": { $ref: "#/components/responses/IntegrationAccountOK" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/integrations/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantIntegration
+      summary: Integration account
+      description: "`tenant.integrations.manage`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200": { $ref: "#/components/responses/IntegrationAccountOK" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantIntegration
+      summary: Rename, switch mode, rotate credentials
+      description: "`tenant.integrations.manage`. Only the given credential keys are replaced; a rotation or mode change resets the last check."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                display_name: { type: [string, "null"], maxLength: 120 }
+                mode: { type: [string, "null"], enum: [sandbox, live, null] }
+                credentials:
+                  type: [object, "null"]
+                  additionalProperties: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/IntegrationAccountOK" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/integrations/{uuid}/test:
+    post:
+      tags: [Tenant]
+      operationId: postTenantIntegrationTest
+      summary: Test the connection
+      description: "`tenant.integrations.manage`. An authenticated provider call that moves no money; the result is stored on the account. A failure answers `422 INTEGRATION_CHECK_FAILED` with the account in `data`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200": { $ref: "#/components/responses/IntegrationAccountOK" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /v1/tenant/integrations/{uuid}/disable:
+    post:
+      tags: [Tenant]
+      operationId: postTenantIntegrationDisable
+      summary: Disable an account
+      description: "`tenant.integrations.manage`. Work of the kind needs an active account; jobs already created keep it."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200": { $ref: "#/components/responses/IntegrationAccountOK" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/integrations/{uuid}/enable:
+    post:
+      tags: [Tenant]
+      operationId: postTenantIntegrationEnable
+      summary: Enable an account
+      description: "`tenant.integrations.manage`. `409` when another account of the kind is active."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200": { $ref: "#/components/responses/IntegrationAccountOK" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/integrations/{uuid}/jobs:
+    get:
+      tags: [Tenant]
+      operationId: getTenantIntegrationJobs
+      summary: Integration jobs of an account
+      description: |
+        `tenant.integrations.manage`. Outbound calls and inbound notifications (idempotency key, attempts,
+        deliveries, status). Live list resource `tenant.integration_jobs`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: sort
+          in: query
+          description: "`created_at` or `updated_at`; prefix `-` for descending (default `-created_at`)."
+          schema: { type: string }
+        - { name: status, in: query, schema: { type: string }, description: "Comma-separated job statuses" }
+        - { name: kind, in: query, schema: { type: string }, description: "Comma-separated job kinds (sms.send, payment.webhook …)" }
+      responses:
+        "200":
+          description: Job page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationJobPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/integration-jobs/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantIntegrationJob
+      summary: An integration job with its attempts
+      description: |
+        `tenant.integrations.manage`. Every provider call (submit / check_status) with its outcome, a short
+        request / response summary (references only: no secrets, codes or full numbers), the error and
+        timings.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationJobDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/integration-jobs/{uuid}/retry:
+    post:
+      tags: [Tenant]
+      operationId: postTenantIntegrationJobRetry
+      summary: Retry a job ("Yeniden dene")
+      description: |
+        `tenant.integrations.manage`. Asks the provider for the job's status first (CheckStatus); the work
+        is submitted again only when the provider confirms it was not done (`action: resubmitted`). Done
+        → `already_done`, still in progress → `in_progress`. When the status cannot be confirmed (unknown
+        or unsupported) nothing is sent and the answer is `409 INTEGRATION_JOB_UNVERIFIED` with the job in
+        `data`. Succeeded jobs, inbound notifications and payment refunds answer
+        `409 INTEGRATION_JOB_NOT_RETRYABLE`; a job held by a worker `409 INTEGRATION_JOB_BUSY`. No tenant
+        step-up policy exists yet (docs/design/integration-jobs.md).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Retried
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationJobRetry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/integration-jobs:
+    get:
+      tags: [Tenant]
+      operationId: listTenantIntegrationJobs
+      summary: Integration jobs of the organization
+      description: |
+        `tenant.integrations.manage`. Jobs of every account (and account-less jobs). The work list of jobs
+        that need a person is `?status=failed,needs_verification`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: sort
+          in: query
+          description: "`created_at` or `updated_at`; prefix `-` for descending (default `-created_at`)."
+          schema: { type: string }
+        - { name: status, in: query, schema: { type: string }, description: "Comma-separated job statuses" }
+        - { name: kind, in: query, schema: { type: string }, description: "Comma-separated job kinds" }
+      responses:
+        "200":
+          description: Job page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationJobPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/organization:
     get:
       tags: [Tenant]
@@ -5080,6 +5378,18 @@ components:
       schema: { type: string }
 
   responses:
+    IntegrationAccountOK:
+      description: Integration account
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EnvelopeIntegrationAccount"
+    UnprocessableEntity:
+      description: The request is well-formed but cannot be applied (e.g. the provider rejected the connection test)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     BadRequest:
       description: Validation or malformed request
       content:
@@ -5863,6 +6173,219 @@ components:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/ImportJob" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    IntegrationField:
+      type: object
+      required: [key, label_key, secret, required]
+      properties:
+        key: { type: string }
+        label_key: { type: string }
+        secret: { type: boolean }
+        required: { type: boolean }
+
+    IntegrationProvider:
+      type: object
+      required: [kind, provider, fields, modes]
+      properties:
+        kind: { type: string, enum: [payment, sms, whatsapp, email] }
+        provider: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationField" }
+        modes:
+          type: array
+          items: { type: string, enum: [sandbox, live] }
+
+    EnvelopeIntegrationsMeta:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [providers]
+          properties:
+            providers:
+              type: array
+              items: { $ref: "#/components/schemas/IntegrationProvider" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    IntegrationAccount:
+      type: object
+      description: "Never carries secrets: `credentials_hint` holds masked values."
+      required: [uuid, kind, provider, display_name, mode, status, credentials_hint, last_checked_at, last_check_status, last_check_error, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [payment, sms, whatsapp, email] }
+        provider: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
+        display_name: { type: string }
+        mode: { type: string, enum: [sandbox, live] }
+        status: { type: string, enum: [active, disabled] }
+        credentials_hint:
+          type: object
+          additionalProperties: { type: string }
+        last_checked_at: { type: [string, "null"], format: date-time }
+        last_check_status: { type: string, enum: ["", ok, failed] }
+        last_check_error: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationField" }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/IntegrationActor"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    EnvelopeIntegrationAccount:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/IntegrationAccount" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeIntegrationAccountPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/IntegrationAccount" }
+            total: { type: integer, format: int64 }
+            limit: { type: integer }
+            offset: { type: integer }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    IntegrationJobStatus:
+      type: string
+      description: |
+        `pending` = pending_submit, `submitted` = accepted by the provider (final state from CheckStatus),
+        `needs_verification` = outcome unknown (only CheckStatus moves it on), `processing` = held by a
+        worker (payments), `ignored` = a notification that needs no action. Held (the runner never calls the
+        provider): `blocked` = required data is missing, `waiting_dependency` = no working adapter. Staff
+        resolutions (final): `reported_manually`, `reconciled`.
+      enum: [pending, processing, submitted, succeeded, failed, ignored, needs_verification, blocked, waiting_dependency, reported_manually, reconciled]
+
+    IntegrationJob:
+      type: object
+      required: [uuid, direction, provider, kind, status, priority, attempts, max_attempts, deliveries, last_error, ref_type, ref_uuid, next_attempt_at, submitted_at, completed_at, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        direction: { type: string, enum: [inbound, outbound] }
+        provider: { type: string }
+        kind: { type: string }
+        status: { $ref: "#/components/schemas/IntegrationJobStatus" }
+        priority: { type: string, enum: [critical, normal] }
+        attempts: { type: integer }
+        max_attempts: { type: integer }
+        deliveries: { type: integer }
+        last_error: { type: string }
+        ref_type: { type: string }
+        ref_uuid: { type: [string, "null"], format: uuid }
+        next_attempt_at: { type: [string, "null"], format: date-time }
+        submitted_at: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    IntegrationAttempt:
+      type: object
+      required: [uuid, attempt_no, operation, trigger, outcome, request_summary, response_summary, error, started_at, finished_at, duration_ms]
+      properties:
+        uuid: { type: string, format: uuid }
+        attempt_no: { type: integer }
+        operation: { type: string, enum: [submit, check_status] }
+        trigger: { type: string, enum: [worker, sweep, retry, inline] }
+        outcome: { type: string, enum: [succeeded, accepted, pending, failed, not_found, uncertain, unsupported] }
+        request_summary: { type: object, additionalProperties: true }
+        response_summary: { type: object, additionalProperties: true }
+        error: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        duration_ms: { type: integer }
+
+    IntegrationJobDetail:
+      type: object
+      required: [uuid, account_uuid, direction, provider, kind, status, priority, attempts, max_attempts, deliveries, last_error, provider_ref, payload, result, ref_type, ref_uuid, next_attempt_at, submitted_at, completed_at, created_at, updated_at, retryable, attempt_log]
+      properties:
+        uuid: { type: string, format: uuid }
+        account_uuid: { type: [string, "null"], format: uuid }
+        direction: { type: string, enum: [inbound, outbound] }
+        provider: { type: string }
+        kind: { type: string }
+        status: { $ref: "#/components/schemas/IntegrationJobStatus" }
+        priority: { type: string, enum: [critical, normal] }
+        attempts: { type: integer }
+        max_attempts: { type: integer }
+        deliveries: { type: integer }
+        last_error: { type: string }
+        provider_ref: { type: string }
+        payload: { type: object, additionalProperties: true, description: "References and non-secret facts only." }
+        result: { type: object, additionalProperties: true }
+        ref_type: { type: string }
+        ref_uuid: { type: [string, "null"], format: uuid }
+        next_attempt_at: { type: [string, "null"], format: date-time }
+        submitted_at: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        retryable: { type: boolean, description: "A staff retry applies (outbound, not a payment refund, not succeeded)." }
+        attempt_log:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationAttempt" }
+
+    EnvelopeIntegrationJobDetail:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/IntegrationJobDetail" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeIntegrationJobRetry:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [action, job]
+          properties:
+            action: { type: string, enum: [already_done, in_progress, resubmitted] }
+            job: { $ref: "#/components/schemas/IntegrationJobDetail" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeIntegrationJobPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/IntegrationJob" }
+            total: { type: integer, format: int64 }
+            limit: { type: integer }
+            offset: { type: integer }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    IntegrationActor:
+      type: object
+      required: [uuid, name, surname, email]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
 
     TenantOrganization:
       type: object

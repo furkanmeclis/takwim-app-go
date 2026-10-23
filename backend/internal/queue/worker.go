@@ -67,7 +67,11 @@ func NewWorker(cfg config.Config, log *slog.Logger, deliver DeliverNotificationF
 			QueueBulk:          2,
 			QueueSearch:        2,
 			QueueMaintenance:   1,
+			// Integration jobs (TEC-880): OTP / transactional messages first.
+			QueueIntegrations:         2,
+			QueueIntegrationsCritical: 6,
 		},
+		RetryDelayFunc: retryDelay,
 		ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
 			log.Error("queue_task_failed", "type", task.Type(), "error", err)
 			reportTaskFailure(ctx, task, err)

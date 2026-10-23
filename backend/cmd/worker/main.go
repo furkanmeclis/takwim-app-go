@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -17,6 +18,8 @@ import (
 	bulkusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/usecase"
 	exportusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/usecase"
 	importusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/usecase"
+	integrationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations"
+	integrationjobsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/jobs/usecase"
 	logsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/logs/usecase"
 	notifmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/providers"
@@ -29,6 +32,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
 	bulkadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine/adapters"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/crypto"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/events"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	ioadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine/adapters"
@@ -173,12 +177,35 @@ func main() {
 	importSvc.SetResourceEvents(resourceEvents)
 	bulkSvc.SetResourceEvents(resourceEvents)
 
+	// Integration jobs (TEC-880): queue steps and the minute sweep of due
+	// steps (lost tasks, delivery reports, backoff retries).
+	fieldCipher, err := crypto.NewFieldCipher(cfg.Encryption.Key)
+	if err != nil {
+		log.Error("field_cipher_failed", "error", err)
+		exit(1)
+	}
+	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log)
+	if err != nil {
+		log.Error("integrations_failed", "error", err)
+		exit(1)
+	}
+	integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: queueClient})
+	integrationKit.Runner.SetResourceEvents(resourceEvents)
+
 	worker := queue.NewWorker(cfg, log, notifSvc.Deliver).
 		WithExport(exportSvc.ProcessExport).
 		WithImport(importSvc.ProcessImport).
 		WithBulk(bulkSvc.ProcessBulk).
 		WithLogPurge(logsSvc.ApplyDueRules).
 		WithMobilePush(notifSvc.SendMobilePush, notifSvc.ProcessPushReceipts).
+		WithIntegrations(func(ctx context.Context, orgID, jobID int64) error {
+			_, err := integrationKit.Runner.Process(ctx, orgID, jobID, integrationjobsusecase.TriggerWorker)
+			if errors.Is(err, integrationjobsusecase.ErrNotFound) || errors.Is(err, integrationjobsusecase.ErrBusy) {
+				// Deleted with its organization / another step holds it.
+				return nil
+			}
+			return err
+		}, integrationKit.Runner.RunDue).
 		WithSearch(
 			searchIndexer.ProcessUpsert,
 			searchIndexer.ProcessDelete,
@@ -196,6 +223,10 @@ func main() {
 	}
 	if err := queue.RegisterPushReceiptsSchedule(scheduler); err != nil {
 		log.Error("push_receipts_scheduler_failed", "error", err)
+		exit(1)
+	}
+	if err := queue.RegisterIntegrationSweepSchedule(scheduler); err != nil {
+		log.Error("integration_sweep_scheduler_failed", "error", err)
 		exit(1)
 	}
 	go func() {
