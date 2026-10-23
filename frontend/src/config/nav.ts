@@ -1,5 +1,6 @@
 import {
   Armchair,
+  ConciergeBell,
   Gauge,
   History,
   PlugZap,
@@ -303,6 +304,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: Armchair,
             permission: permissions.tenant.resources.read,
             module: "resources",
+          },
+          {
+            id: "services",
+            titleKey: "layout.nav_services",
+            href: routes.tenant.services.root(slug),
+            icon: ConciergeBell,
+            permission: permissions.tenant.services.read,
+            module: "services",
           },
         ],
       },

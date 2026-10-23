@@ -5797,6 +5797,597 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/public/media/services/{orgUuid}/images/{imageUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getPublicServiceImage
+      summary: Service cover image
+      description: No authentication; booking pages and the mobile app show service covers. Clients use the `image_url` the API returns. Immutable (cached for a year).
+      security: []
+      parameters:
+        - name: orgUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: imageUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/service-categories:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceCategories
+      summary: List service categories
+      description: Every category of the organization with its service count, in `sort_order` (`tenant.services.read`, `services` module). Not paged.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeServiceCategoryList"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantServiceCategory
+      summary: Create a service category
+      description: "`tenant.services.write`. Names are unique in the organization, case-insensitive (`409`)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceCategoryCreateRequest"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeServiceCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/service-categories/{uuid}:
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantServiceCategory
+      summary: Update a service category
+      description: "`tenant.services.write`. Omitted fields are unchanged."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceCategoryPatchRequest"
+      responses:
+        "200":
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeServiceCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantServiceCategory
+      summary: Delete a service category (soft)
+      description: "`tenant.services.write`. Its services become uncategorized."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/services/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServicesMeta
+      summary: Service list metadata
+      description: Table contract of `GET /v1/tenant/services` (`tenant.services.read`, `services` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/services/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServicesFacets
+      summary: Service faceted filter options
+      description: Categories (`none` = uncategorized), branches inside the caller's scope and payment modes, with counts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServiceFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/services:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServices
+      summary: List services of the organization
+      description: |
+        The service catalog of the `X-Organization` organization
+        (`tenant.services.read`). The catalog is business level: every reader
+        sees every service; `offers` are the branches offering it. `q`
+        searches name, description and the category name.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `duration`, `price`, `sort_order`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default: category, `sort_order`, name."
+          schema: { type: string, example: name }
+        - name: category
+          in: query
+          description: "Category uuids and/or `none` (uncategorized); comma-separate or repeat"
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids: services offered there; comma-separate or repeat"
+          schema: { type: string }
+        - name: payment_mode
+          in: query
+          description: "`on_site`, `online`, `both`; comma-separate or repeat"
+          schema: { type: string }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: show_online
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Service page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServicePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantService
+      summary: Create a service
+      description: |
+        `tenant.services.write`. Names are unique in the organization,
+        case-insensitive (`409`). `branch_uuids` adds offers at the catalog
+        price; each branch must be inside the caller's scope
+        (`branch_uuids.N` `not_found`). `staff_mode` defaults by sector
+        (`none` for restaurants, otherwise `required`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantServiceCreateRequest"
+      responses:
+        "201":
+          description: Created service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/services/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantServicesExport
+      summary: Export services
+      description: |
+        Queues an export of the service catalog (`tenant.services.export`).
+        `query` honours `q`, `category`, `branch`, `payment_mode`,
+        `is_active` and `show_online`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/services/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantServicesImport
+      summary: Upload a service import file
+      description: |
+        Creates an import job (`tenant.services.import`). A row whose `name`
+        matches a service (case-insensitive) updates it, any other row
+        creates one. `category` names the category (created when missing);
+        `branch_codes` adds offers to new services. Continue with
+        `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/services/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServicesImportSample
+      summary: Download a service import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/services/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantServicesBulk
+      summary: Run a bulk action on services
+      description: |
+        Actions `activate` (`tenant.services.bulk.activate`) and `deactivate`
+        (`tenant.services.bulk.deactivate`), both reversible. Targets are
+        resolved inside the organization only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/services/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantService
+      summary: Get a service
+      description: With `staff` (who may perform it). `offers[].editable` is false for branches outside the caller's scope. A uuid of another organization answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantService
+      summary: Update a service
+      description: |
+        `tenant.services.write`. Omitted fields are unchanged;
+        `category_uuid: null` uncategorizes. Offers change through
+        `PUT /offers` (`branch_uuids` is refused here).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantServicePatchRequest"
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantService
+      summary: Delete a service (soft)
+      description: "`tenant.services.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/services/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceActivity
+      summary: Activity of a service
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/services/{uuid}/offers:
+    put:
+      tags: [Tenant]
+      operationId: putTenantServiceOffers
+      summary: Set the branch offers of a service
+      description: |
+        `tenant.services.offer`. The list replaces the offers of the branches
+        inside the caller's scope; offers in other branches stay as they are.
+        A branch outside the scope is `offers.N.branch_uuid` `not_found`.
+        `price` / `duration_minutes` null use the catalog values.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantServiceOffersRequest"
+      responses:
+        "200":
+          description: Service with its offers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/services/{uuid}/staff:
+    put:
+      tags: [Tenant]
+      operationId: putTenantServiceStaff
+      summary: Set the staff who may perform a service
+      description: "`tenant.services.write`. Replaces the list; `price` / `duration_minutes` are optional personal overrides."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantServiceStaffRequest"
+      responses:
+        "200":
+          description: Service with its staff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/services/{uuid}/image:
+    put:
+      tags: [Tenant]
+      operationId: putTenantServiceImage
+      summary: Upload the cover image of a service
+      description: "`tenant.services.write`. JPEG, PNG or WebP up to 5 MiB (sniffed); replaces the previous cover."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Service with its new `image_url`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantServiceImage
+      summary: Remove the cover image of a service
+      description: "`tenant.services.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Service without a cover
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantService"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -8671,6 +9262,282 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/TenantResourceClosurePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    MoneyAmount:
+      type: string
+      description: Decimal amount with two places, in the organization's currency.
+      pattern: "^[0-9]+\\.[0-9]{2}$"
+      example: "450.00"
+
+    MoneyInput:
+      description: Non-negative amount with at most two decimals, as a string or a number.
+      oneOf:
+        - type: string
+          pattern: "^[0-9]+(\\.[0-9]{1,2})?$"
+        - type: number
+          minimum: 0
+      example: "450.00"
+
+    ServiceCategory:
+      type: object
+      required: [uuid, name, description, sort_order, services_count, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        sort_order: { type: integer }
+        services_count: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ServiceCategoryCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+
+    ServiceCategoryPatchRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+
+    ServiceCategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceCategory" }
+
+    TenantServiceOffer:
+      type: object
+      description: |
+        A branch offering the service. `price` / `duration_minutes` are the
+        branch overrides (null = catalog value); `effective_*` are what the
+        branch charges and books.
+      required: [branch_uuid, branch_name, branch_code, price, duration_minutes, effective_price, effective_duration_minutes, is_active, editable]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        branch_name: { type: string }
+        branch_code: { type: string }
+        price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        duration_minutes: { type: [integer, "null"] }
+        effective_price: { $ref: "#/components/schemas/MoneyAmount" }
+        effective_duration_minutes: { type: integer }
+        is_active: { type: boolean }
+        editable: { type: boolean, description: "False for branches outside the caller's scope" }
+
+    TenantServiceStaff:
+      type: object
+      required: [staff_uuid, name, title, color, is_active, price, duration_minutes]
+      properties:
+        staff_uuid: { type: string, format: uuid }
+        name: { type: string }
+        title: { type: string }
+        color: { type: string }
+        is_active: { type: boolean }
+        price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        duration_minutes: { type: [integer, "null"] }
+
+    TenantServiceCategoryRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    TenantService:
+      type: object
+      description: |
+        A service of the business catalog (TEC-894). `buffer_*` minutes are
+        held around a booking; `resource_kinds` are the kinds a booking needs
+        (one of each). `image_url` is the API-owned public cover URL.
+      required: [uuid, category, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, currency, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_url, offers, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/TenantServiceCategoryRef"
+            - type: "null"
+        name: { type: string }
+        description: { type: string }
+        duration_minutes: { type: integer, minimum: 5, maximum: 1440 }
+        buffer_before_minutes: { type: integer, minimum: 0, maximum: 480 }
+        buffer_after_minutes: { type: integer, minimum: 0, maximum: 480 }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string, example: TRY }
+        payment_mode: { type: string, enum: [on_site, online, both] }
+        staff_mode: { type: string, enum: [required, optional, none] }
+        resource_kinds:
+          type: array
+          items: { type: string, enum: [chair, table, area, room, device, bay] }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        image_url: { type: [string, "null"] }
+        offers:
+          type: array
+          items: { $ref: "#/components/schemas/TenantServiceOffer" }
+        staff:
+          description: Detail only.
+          type: array
+          items: { $ref: "#/components/schemas/TenantServiceStaff" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantServiceCreateRequest:
+      type: object
+      required: [name, duration_minutes, price]
+      properties:
+        category_uuid: { type: [string, "null"], format: uuid }
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        duration_minutes: { type: integer, minimum: 5, maximum: 1440 }
+        buffer_before_minutes: { type: integer, minimum: 0, maximum: 480, default: 0 }
+        buffer_after_minutes: { type: integer, minimum: 0, maximum: 480, default: 0 }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+        payment_mode: { type: string, enum: [on_site, online, both], default: on_site }
+        staff_mode: { type: string, enum: [required, optional, none] }
+        resource_kinds:
+          type: array
+          items: { type: string, enum: [chair, table, area, room, device, bay] }
+        show_online: { type: boolean, default: true }
+        is_active: { type: boolean, default: true }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    TenantServicePatchRequest:
+      type: object
+      properties:
+        category_uuid: { type: [string, "null"], format: uuid }
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        duration_minutes: { type: integer, minimum: 5, maximum: 1440 }
+        buffer_before_minutes: { type: integer, minimum: 0, maximum: 480 }
+        buffer_after_minutes: { type: integer, minimum: 0, maximum: 480 }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+        payment_mode: { type: string, enum: [on_site, online, both] }
+        staff_mode: { type: string, enum: [required, optional, none] }
+        resource_kinds:
+          type: array
+          items: { type: string, enum: [chair, table, area, room, device, bay] }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+
+    TenantServiceOffersRequest:
+      type: object
+      required: [offers]
+      properties:
+        offers:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [branch_uuid]
+            properties:
+              branch_uuid: { type: string, format: uuid }
+              price:
+                oneOf:
+                  - $ref: "#/components/schemas/MoneyInput"
+                  - type: "null"
+              duration_minutes: { type: [integer, "null"], minimum: 5, maximum: 1440 }
+              is_active: { type: boolean, default: true }
+
+    TenantServiceStaffRequest:
+      type: object
+      required: [staff]
+      properties:
+        staff:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [staff_uuid]
+            properties:
+              staff_uuid: { type: string, format: uuid }
+              price:
+                oneOf:
+                  - $ref: "#/components/schemas/MoneyInput"
+                  - type: "null"
+              duration_minutes: { type: [integer, "null"], minimum: 5, maximum: 1440 }
+
+    TenantServicePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantService" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantServiceFacets:
+      type: object
+      required: [category, branch, payment_mode]
+      properties:
+        category:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+        payment_mode:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+
+    EnvelopeServiceCategory:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ServiceCategory" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeServiceCategoryList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ServiceCategoryList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantService:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantService" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantServicePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantServicePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantServiceFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantServiceFacets" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     OrganizationCompanySettings:

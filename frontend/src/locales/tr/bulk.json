@@ -45,5 +45,8 @@
   "confirm.staff.deactivate": "Seçili {{count}} personel pasifleştirilsin mi? Yeni randevularda seçilemezler.",
   "actions.resources.activate": "Kaynakları aktifleştir",
   "actions.resources.deactivate": "Kaynakları pasifleştir",
-  "confirm.resources.deactivate": "Seçili {{count}} kaynak pasifleştirilsin mi? Yeni rezervasyonlarda seçilemezler."
+  "confirm.resources.deactivate": "Seçili {{count}} kaynak pasifleştirilsin mi? Yeni rezervasyonlarda seçilemezler.",
+  "actions.services.activate": "Hizmetleri aktifleştir",
+  "actions.services.deactivate": "Hizmetleri pasifleştir",
+  "confirm.services.deactivate": "Seçili {{count}} hizmet pasifleştirilsin mi? Yeni randevularda seçilemezler."
 }

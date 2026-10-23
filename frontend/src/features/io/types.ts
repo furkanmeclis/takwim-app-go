@@ -106,6 +106,7 @@ export type IoResource =
   | "tenant.branches"
   | "tenant.staff"
   | "tenant.resources"
+  | "tenant.services"
   | "platform.organizations";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
@@ -117,6 +118,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.branches": "/v1/tenant/branches/export",
   "tenant.staff": "/v1/tenant/staff/export",
   "tenant.resources": "/v1/tenant/resources/export",
+  "tenant.services": "/v1/tenant/services/export",
 };
 
 export const IMPORT_PATHS: Partial<
@@ -141,6 +143,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.resources": {
     upload: "/v1/tenant/resources/import",
     sample: "/v1/tenant/resources/import/sample",
+  },
+  "tenant.services": {
+    upload: "/v1/tenant/services/import",
+    sample: "/v1/tenant/services/import/sample",
   },
 };
 
@@ -201,5 +207,25 @@ export const IMPORT_SCHEMA: Partial<
     { key: "is_active", labelKey: "resources.fields.is_active" },
     { key: "sort_order", labelKey: "resources.fields.sort_order" },
     { key: "description", labelKey: "resources.fields.description" },
+  ],
+  "tenant.services": [
+    { key: "category", labelKey: "services.fields.category" },
+    { key: "name", labelKey: "services.fields.name", required: true },
+    {
+      key: "duration_minutes",
+      labelKey: "services.fields.duration",
+      required: true,
+    },
+    { key: "buffer_before_minutes", labelKey: "services.fields.buffer_before" },
+    { key: "buffer_after_minutes", labelKey: "services.fields.buffer_after" },
+    { key: "price", labelKey: "services.fields.price_short", required: true },
+    { key: "payment_mode", labelKey: "services.fields.payment_mode" },
+    { key: "staff_mode", labelKey: "services.fields.staff_mode" },
+    { key: "resource_kinds", labelKey: "services.fields.resource_kinds" },
+    { key: "branch_codes", labelKey: "services.fields.branch_codes" },
+    { key: "show_online", labelKey: "services.fields.show_online" },
+    { key: "is_active", labelKey: "services.fields.is_active" },
+    { key: "sort_order", labelKey: "services.fields.sort_order" },
+    { key: "description", labelKey: "services.fields.description" },
   ],
 };

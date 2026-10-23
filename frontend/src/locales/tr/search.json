@@ -21,5 +21,7 @@
   "specs_staff": "Personel",
   "prefix_staff": "personel",
   "prefix_resources": "kaynak",
-  "specs_resources": "Kaynaklar"
+  "specs_resources": "Kaynaklar",
+  "prefix_services": "hizmet",
+  "specs_services": "Hizmetler"
 }

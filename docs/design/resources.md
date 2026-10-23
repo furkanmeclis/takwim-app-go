@@ -31,4 +31,4 @@ Both carry `organization_id` with composite foreign keys (`branches`, `resources
 
 ## Later
 
-Availability (which resource is free for a party size at a time) comes with reservations; service requirements ("this treatment needs the laser device") come with the services catalog (TEC-894). There is no plan limit on resources.
+Availability (which resource is free for a party size at a time) comes with reservations; a service names the resource kinds it needs (`resource_kinds`, see [services.md](./services.md)). There is no plan limit on resources.

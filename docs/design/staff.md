@@ -30,4 +30,4 @@ All three carry `organization_id` with composite foreign keys, so a row can neve
 
 ## Later
 
-Service competence and per-person price / duration overrides come with the services catalog (TEC-894). Profile photos are not stored yet.
+Service competence and per-person price / duration overrides live on the service (`PUT /v1/tenant/services/{uuid}/staff`, see [services.md](./services.md)). Profile photos are not stored yet.

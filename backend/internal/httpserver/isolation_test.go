@@ -69,6 +69,8 @@ var isolationAllowlist = map[string]string{
 	"POST /v1/tenant/branches/import":        "imports match natural keys inside the organization (adapter tests); the job is the {uuid} cases",
 	"POST /v1/tenant/staff/import":           "imports match uuids and branch codes inside the organization (staff DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/resources/import":       "imports match branch codes and names inside the organization (resources DB tests); the job is the {uuid} cases",
+	"POST /v1/tenant/services/import":        "imports match names, category names and branch codes inside the organization (services DB tests); the job is the {uuid} cases",
+	"POST /v1/tenant/service-categories":     "body has no foreign references (name, description, sort order)",
 	"PATCH /v1/tenant/organization":          "profile of the caller's organization (name only); no foreign references",
 	"PUT /v1/tenant/organization/logo":       "logo of the caller's organization; the key is built from the scope (storage prefix check)",
 	"DELETE /v1/tenant/organization/logo":    "logo of the caller's organization; no ids",
@@ -288,6 +290,19 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["closure"] = str(must(call(o, http.MethodPost, "/v1/tenant/resources/"+ids["resource"]+"/closures", map[string]any{
 			"starts_at": "2030-01-01T09:00:00Z", "ends_at": "2030-01-02T09:00:00Z", "reason": m,
 		}), http.StatusCreated, "create closure"), "uuid")
+		ids["serviceCategory"] = str(must(call(o, http.MethodPost, "/v1/tenant/service-categories", map[string]any{
+			"name": m + " Kategori",
+		}), http.StatusCreated, "create service category"), "uuid")
+		ids["service"] = str(must(call(o, http.MethodPost, "/v1/tenant/services", map[string]any{
+			"name": m + " Hizmet", "category_uuid": ids["serviceCategory"], "duration_minutes": 30, "price": "450.00",
+			"branch_uuids": []string{ids["branch"]},
+		}), http.StatusCreated, "create service"), "uuid")
+		must(call(o, http.MethodPut, "/v1/tenant/services/"+ids["service"]+"/staff", map[string]any{
+			"staff": []map[string]any{{"staff_uuid": ids["staff"]}},
+		}), http.StatusOK, "service staff")
+		cover := must(upload(o, http.MethodPut, "/v1/tenant/services/"+ids["service"]+"/image", "file", "cover.png",
+			png, nil), http.StatusOK, "upload service image")
+		ids["serviceImageURL"] = str(cover, "image_url")
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -377,7 +392,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	}
 	bodyFor := func(pattern string) (string, io.Reader) {
 		method, path, _ := strings.Cut(pattern, " ")
-		if strings.HasSuffix(path, "/file") && method == http.MethodPut || strings.HasSuffix(path, "/images") && method == http.MethodPost {
+		if strings.HasSuffix(path, "/file") && method == http.MethodPut || strings.HasSuffix(path, "/images") && method == http.MethodPost ||
+			strings.HasSuffix(path, "/image") && method == http.MethodPut {
 			var form bytes.Buffer
 			mw := multipart.NewWriter(&form)
 			fw, _ := mw.CreateFormFile("file", "x.png")
@@ -476,6 +492,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/search":           {"?q=" + orgB.marker},
 		"GET /v1/tenant/integrations":     {"?q=" + orgB.marker},
 		"GET /v1/tenant/integration-jobs": {"?status=failed"},
+		"GET /v1/tenant/services":         {"?category=" + orgB.ids["serviceCategory"], "?branch=" + orgB.ids["branch"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -519,6 +536,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/staff/bulk", bulkIDs("staff"), nil},
 		{"POST /v1/tenant/resources", map[string]any{"branch_uuid": orgB.ids["branch"], "kind": "chair", "name": "X"}, reject},
 		{"POST /v1/tenant/resources/bulk", bulkIDs("resource"), nil},
+		{"POST /v1/tenant/services", map[string]any{"name": "X1", "duration_minutes": 30, "price": "1", "category_uuid": orgB.ids["serviceCategory"]}, reject},
+		{"POST /v1/tenant/services", map[string]any{"name": "X2", "duration_minutes": 30, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
+		{"POST /v1/tenant/services/bulk", bulkIDs("service"), nil},
 	}
 	for _, c := range cases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -543,6 +563,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"branch_uuids": []string{orgB.ids["home"]}}, reject},
 		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"account_uuid": orgB.ids["member"]}, reject},
 		{"PATCH /v1/tenant/resources/" + orgA.ids["resource"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
+		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
+		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
+		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/staff", map[string]any{"staff": []map[string]any{{"staff_uuid": orgB.ids["staff"]}}}, reject},
 	}
 	for _, c := range ownCases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -583,6 +606,16 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	// A's own export download stays A's (B cannot read it either).
 	if r := do(bob, orgB.org.Slug, http.MethodGet, "/v1/tenant/exports/"+orgA.ids["exportJob"]+"/download", "", nil); r.code != http.StatusNotFound {
 		t.Errorf("B downloads A's export = %d, want 404", r.code)
+	}
+
+	// Public service covers are bound to their organization: B's image
+	// under A's organization uuid is not served.
+	bImage := orgB.ids["serviceImageURL"][strings.LastIndex(orgB.ids["serviceImageURL"], "/")+1:]
+	if r := do(alice, "", http.MethodGet, "/v1/public/media/services/"+orgA.org.UUID.String()+"/images/"+bImage, "", nil); r.code != http.StatusNotFound {
+		t.Errorf("B's service cover under A's organization = %d, want 404", r.code)
+	}
+	if r := do(bob, "", http.MethodGet, orgB.ids["serviceImageURL"], "", nil); r.code != http.StatusOK {
+		t.Errorf("B's own service cover = %d, want 200: %s", r.code, r.raw)
 	}
 
 	// B is unchanged by everything A did.
@@ -701,6 +734,10 @@ func paramKey(prev, name string) string {
 		return "resource"
 	case "closures/closureUuid":
 		return "closure"
+	case "services/uuid":
+		return "service"
+	case "service-categories/uuid":
+		return "serviceCategory"
 	}
 	return ""
 }
