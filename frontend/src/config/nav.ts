@@ -30,6 +30,7 @@ import {
   Upload,
   UserRound,
   Users,
+  Wallet,
 } from "lucide-react";
 
 import { permissions } from "@/config/permissions";
@@ -375,6 +376,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: UserRound,
             permission: permissions.tenant.customers.read,
             module: "customers",
+          },
+          {
+            id: "cash",
+            titleKey: "layout.nav_cash",
+            href: routes.tenant.cash.root(slug),
+            icon: Wallet,
+            permission: permissions.tenant.cash.read,
+            module: "cash",
           },
         ],
       },

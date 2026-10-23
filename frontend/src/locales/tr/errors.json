@@ -52,5 +52,18 @@
   "codes.INVITATION_EMAIL_MISMATCH": "Bu davet başka bir e-posta adresine gönderildi.",
   "codes.ACCOUNT_EXISTS": "Bu e-posta ile bir hesap zaten var.",
   "codes.PLAN_LIMIT_REACHED": "Paketinizin kotası doldu. Daha fazlası için paketinizi yükseltin.",
-  "codes.MODULE_NOT_ENABLED": "Bu modül paketinizde yok."
+  "codes.MODULE_NOT_ENABLED": "Bu modül paketinizde yok.",
+  "details.name.taken": "Bu şubede aynı adla bir hesap zaten var.",
+  "details.amount.insufficient_funds": "Kasada yeterli bakiye yok; kasa eksiye düşemez.",
+  "details.account.archived": "Arşivlenmiş hesaba hareket girilemez.",
+  "details.movement_date.day_closed": "Bu gün kapatılmış; kapanıştan önceki tarihlere hareket girilemez.",
+  "details.business_date.already_closed": "Bu gün zaten kapatılmış.",
+  "details.movement.already_reversed": "Bu hareket zaten ters kayıtla düzeltilmiş.",
+  "details.movement.not_reversible": "Bu hareket buradan düzeltilemez; kaynağı olan kayıttan düzeltin.",
+  "details.closing.not_latest": "Yalnızca en son kapanış yeniden açılabilir.",
+  "details.closing.reopened": "Bu kapanış zaten yeniden açılmış.",
+  "details.account.not_closable": "Yalnızca kasa hesapları için gün kapanışı yapılır.",
+  "details.status.balance_not_zero": "Bakiyesi sıfır olmayan hesap arşivlenemez.",
+  "details.to_account_uuid.currency_mismatch": "Farklı para birimindeki hesaplar arasında transfer yapılamaz.",
+  "details.idempotency_key.reused": "Bu işlem anahtarı farklı bir kayıt için kullanılmış."
 }

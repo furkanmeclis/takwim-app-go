@@ -77,7 +77,13 @@ export class ApiError extends Error {
 export function parseApiError(status: number, data: unknown): ApiError {
   const body = data as Partial<ApiErrorBody> | null;
   const code = body?.error?.code ?? `HTTP_${status}`;
-  const message = localizedMessage(code, status, body?.error?.message);
+  const detail = body?.error?.details?.find((d) => d.code);
+  const message = localizedMessage(
+    code,
+    status,
+    body?.error?.message,
+    detail ? `errors.details.${detail.field ?? "_"}.${detail.code}` : undefined,
+  );
   return new ApiError({
     status,
     code,
@@ -108,11 +114,16 @@ function localizedMessage(
   code: string,
   status: number,
   serverMessage?: string,
+  detailKey?: string,
 ) {
   const locale = activeLocale();
   const server = serverMessage?.trim();
   const serverIsTurkish = server ? TURKISH_CHARS.test(server) : false;
   if (server && (locale === "tr") === serverIsTurkish) return server;
+  if (detailKey) {
+    const byDetail = translate(locale, detailKey);
+    if (byDetail !== detailKey) return byDetail;
+  }
   const key = `errors.codes.${code}`;
   const byCode = translate(locale, key);
   if (byCode !== key) return byCode;

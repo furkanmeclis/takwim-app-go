@@ -38,6 +38,11 @@ import (
 	bulkmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk"
 	bulkhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/handler"
 	bulkusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/usecase"
+	cashmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash"
+	cashadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/adapters"
+	cashhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/handler"
+	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
+	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
 	customersmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers"
 	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
 	customershandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/handler"
@@ -248,6 +253,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		productsadapters.NewSearch(deps.Queries),
 		customersadapters.NewSearch(deps.Queries),
 		reservationsadapters.NewSearch(deps.Queries),
+		cashadapters.NewSearch(deps.Queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, deps.Queue, log)
@@ -342,6 +348,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	productsSvc := productsusecase.New(productsrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	productsSvc.SetStorage(deps.Storage)
 	customersSvc := customersusecase.New(customersrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
+	cashSvc := cashusecase.New(cashrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	orgSvc := orgusecase.New(
 		orgrepository.NewPostgres(deps.DB, deps.Queries),
 		branchusecase.NewOrganizationHooks(searchIndexer),
@@ -420,6 +427,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	servicesmodule.RegisterLiveResources(tenantLive)
 	productsmodule.RegisterLiveResources(tenantLive)
 	customersmodule.RegisterLiveResources(tenantLive)
+	cashmodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
@@ -458,6 +466,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		productsadapters.NewIO(productsSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
+		cashadapters.NewAccountsIO(cashSvc),
+		cashadapters.NewMovementsIO(cashSvc),
 		orgadapters.NewIO(orgSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
@@ -472,6 +482,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		productsadapters.NewBulk(productsSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
+		cashadapters.NewBulk(cashSvc),
 		orgadapters.NewBulk(orgSvc),
 	)
 	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, jobQueue, notifSvc, activityRec, cfg.Bulk, log)
@@ -560,6 +571,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Import: importH.TenantUpload(customersmodule.Resource),
 		Sample: importH.TenantSample(customersmodule.Resource),
 		Bulk:   bulkH.TenantExecute(customersmodule.Resource),
+	}, tokens, loader, tenantResolver)
+	// Cash and bank accounts (TEC-914).
+	cashH := cashhandler.New(cashSvc, activityRec)
+	cashH.SetResourceEvents(resourceEvents)
+	cashmodule.RegisterRoutes(mux, cashH, cashmodule.EngineHandlers{
+		ExportAccounts:  exportH.TenantExport(cashmodule.AccountsResource, cashmodule.ExportAccountQueryKeys...),
+		ExportMovements: exportH.TenantExport(cashmodule.MovementsResource, cashmodule.ExportMovementQueryKeys...),
+		BulkAccounts:    bulkH.TenantExecute(cashmodule.AccountsResource),
 	}, tokens, loader, tenantResolver)
 	// Reservations (TEC-899 / TEC-900): the record on top of the capacity
 	// holds.

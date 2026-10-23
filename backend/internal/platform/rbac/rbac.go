@@ -134,6 +134,16 @@ const (
 	PermTenantFinanceWrite        = "tenant.finance.write"
 	PermTenantEarningsRead        = "tenant.earnings.read"
 	PermTenantEarningsOwn         = "tenant.earnings.own"
+	// Cash and bank accounts (TEC-914): read, post movements / transfers,
+	// manage accounts, close a till's day, reopen a closed day.
+	PermTenantCashRead         = "tenant.cash.read"
+	PermTenantCashWrite        = "tenant.cash.write"
+	PermTenantCashManage       = "tenant.cash.manage"
+	PermTenantCashClose        = "tenant.cash.close"
+	PermTenantCashReopen       = "tenant.cash.reopen"
+	PermTenantCashExport       = "tenant.cash.export"
+	PermTenantCashBulkArchive  = "tenant.cash.bulk.archive"
+	PermTenantCashBulkActivate = "tenant.cash.bulk.activate"
 	// Sensitive actions of later tenant modules (TEC-689), separate from the
 	// resource read/write slugs so roles can grant them one by one.
 	PermTenantPriceOverride    = "tenant.price.override"

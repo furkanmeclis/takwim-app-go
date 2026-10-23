@@ -8248,6 +8248,733 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
 
+  /v1/tenant/cash/accounts/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountsMeta
+      summary: Cash account list metadata
+      description: Table contract of `GET /v1/tenant/cash/accounts` (`tenant.cash.read`, `cash` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/accounts/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountsFacets
+      summary: Cash account faceted filter options
+      description: Branches (with counts) for the branch filter, inside the caller's branch scope. Business-wide accounts have the value `head_office`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAccountFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/cash/accounts/options:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountOptions
+      summary: Every account of the caller's scope (pickers)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Account options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAccountOptions"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/cash/accounts:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccounts
+      summary: List cash, bank and online accounts
+      description: |
+        Accounts of the `X-Organization` organization with their balance
+        (opening balance + money in - money out, `tenant.cash.read`). A
+        member limited to some branches sees the accounts of those branches
+        only; business-wide accounts need every branch.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `kind`, `balance`, `status`, `sort_order`, `created_at`; prefix `-` for descending. Default: status, branch, `sort_order`, name."
+          schema: { type: string, example: name }
+        - name: branch
+          in: query
+          description: "Branch uuids and / or `head_office`; comma-separate or repeat"
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "`cash`, `bank`, `online`; comma-separate or repeat"
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "`active`, `archived`; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Account page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAccountPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashAccount
+      summary: Open a cash, bank or online account
+      description: |
+        `tenant.cash.manage`. Without `branch_uuid` the account is
+        business-wide (only for members with every branch). A till cannot
+        open with a negative balance. Names are unique per branch (`409`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashAccountCreateRequest"
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAccount"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/cash/accounts/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashAccountsExport
+      summary: Export cash accounts
+      description: |
+        Queues an export of the accounts with their balances
+        (`tenant.cash.export`). `query` honours `q`, `branch`, `kind` and
+        `status`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/accounts/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashAccountsBulk
+      summary: Run a bulk action on cash accounts
+      description: |
+        Actions `archive` (`tenant.cash.bulk.archive`, zero balance only)
+        and `activate` (`tenant.cash.bulk.activate`), both reversible.
+        Targets are resolved inside the organization and the caller's
+        branch scope only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/accounts/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccount
+      summary: Get a cash account
+      description: With `has_activity`. A uuid of another organization or outside the caller's branch scope answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAccount"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantCashAccount
+      summary: Update a cash account
+      description: |
+        `tenant.cash.manage`. Branch and kind are fixed; the opening balance
+        and date only change while the account has no movement and no
+        closing (`locked`). `status: archived` needs a zero balance (`409`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashAccountPatchRequest"
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAccount"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/accounts/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountActivity
+      summary: Activity of a cash account
+      description: Account changes, movements, transfers, reversals, closings and reopenings.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/cash/accounts/{uuid}/movements:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountMovements
+      summary: Movements of an account with the running balance
+      description: Newest first; `balance_after` is the account balance after each movement (book order by date, then entry).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: kind
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Movement page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMovementPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashAccountMovement
+      summary: Record a manual money in / out
+      description: |
+        `tenant.cash.write`. `in` is a deposit, `out` a withdrawal. The date
+        defaults to today (business time zone), is not before the opening
+        date, not in the future and not on a closed day (`409 day_closed`).
+        A till never goes below zero (`409 insufficient_funds`); bank and
+        online accounts may.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashMovementCreateRequest"
+      responses:
+        "201":
+          description: Created movement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMovement"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/accounts/{uuid}/closings:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountClosings
+      summary: Daily closings of a till
+      description: Newest day first, reopened closings included.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Closing page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashClosingPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashAccountClosing
+      summary: Close a day of a till
+      description: |
+        `tenant.cash.close`. Only tills (`kind` = `cash`) are closed daily.
+        The expected balance (opening + money in - money out of the day) is
+        compared with `counted_amount`; the difference is posted as a
+        `closing_difference` movement so the book follows the count. The
+        day and every earlier day are then locked for movements. The day
+        must be after the latest closed day (`409 already_closed`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashClosingCreateRequest"
+      responses:
+        "201":
+          description: Closing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashClosing"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/accounts/{uuid}/closings/preview:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashAccountClosingPreview
+      summary: Expected state of a day before closing it
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+        - name: date
+          in: query
+          description: Business day (default today)
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashClosingPreview"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/accounts/{uuid}/closings/{closingUuid}/reopen:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashAccountClosingReopen
+      summary: Reopen the latest closed day
+      description: |
+        `tenant.cash.reopen` and a reason. Only the latest closed day of the
+        till reopens (`409 not_latest`); its difference movement is reversed
+        on the same day.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashAccountUUID"
+        - name: closingUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashReasonRequest"
+      responses:
+        "200":
+          description: Reopened closing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashClosing"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/movements/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashMovementsMeta
+      summary: Cash movement list metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/movements/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashMovementsFacets
+      summary: Cash movement faceted filter options
+      description: Kinds in use (with counts) and the accounts of the caller's scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMovementFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/cash/movements:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashMovements
+      summary: The cash book across accounts
+      description: |
+        Movements of the accounts in the caller's scope (`tenant.cash.read`).
+        `q` searches the description and the account name.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `movement_date`, `amount`, `kind`, `created_at`; prefix `-` for descending. Default: newest first."
+          schema: { type: string }
+        - name: account
+          in: query
+          description: "Account uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "Movement kinds; comma-separate or repeat"
+          schema: { type: string }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [in, out] }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Movement page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMovementPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/cash/movements/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashMovementsExport
+      summary: Export cash movements
+      description: |
+        Queues an export of the cash book (`tenant.cash.export`). `query`
+        honours `q`, `account`, `kind`, `direction`, `date_from` and
+        `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/movements/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashMovement
+      summary: Get a cash movement
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashMovementUUID"
+      responses:
+        "200":
+          description: Movement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMovement"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/cash/movements/{uuid}/reverse:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashMovementReverse
+      summary: Reverse a manual movement
+      description: |
+        `tenant.cash.write` and a reason. Posts the exact opposite movement
+        dated today (both legs of a transfer). Movements are never edited
+        or deleted. A movement is reversed once (`409 already_reversed`);
+        reversals, closing differences and movements of other modules
+        (payments, sales …) are not reversed here (`409 not_reversible`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashMovementUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashReasonRequest"
+      responses:
+        "201":
+          description: The reversal movements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMovementList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/transfers:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashTransfer
+      summary: Transfer money between two accounts
+      description: |
+        `tenant.cash.write`. Writes `transfer_out` on the source and
+        `transfer_in` on the target in one transaction with a shared
+        `transfer_group`; a transfer is not revenue. Both accounts must be
+        active, in the caller's scope (`not_found` otherwise) and in the
+        same currency; the source till cannot go below zero. A provider
+        payout (online account to bank) is a transfer too.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashTransferRequest"
+      responses:
+        "201":
+          description: Both legs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashTransfer"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/daily-summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashDailySummary
+      summary: Daily cash summary (günlük kapanış özeti)
+      description: |
+        Every account of the caller's scope on one day: opening balance,
+        money in / out, transfers in / out (listed apart, not revenue),
+        closing difference, closing balance and whether the day is closed;
+        plus totals per currency.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: date
+          in: query
+          description: Business day (default today)
+          schema: { type: string, format: date }
+        - name: branch
+          in: query
+          description: "Branch uuids and / or `head_office`; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Daily summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashDailySummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -9458,6 +10185,22 @@ components:
       in: path
       required: true
       description: Resource UUID
+      schema:
+        type: string
+        format: uuid
+    CashAccountUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Cash account UUID.
+      schema:
+        type: string
+        format: uuid
+    CashMovementUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Cash movement UUID.
       schema:
         type: string
         format: uuid
@@ -11280,6 +12023,449 @@ components:
         name: { type: string }
         code: { type: string }
 
+    CashAccountKind:
+      type: string
+      description: "`cash` = till, `bank` = bank account, `online` = online payment provider receivable"
+      enum: [cash, bank, online]
+
+    CashMovementKind:
+      type: string
+      description: |
+        `deposit` / `withdrawal`: manual money in / out. `transfer_in` /
+        `transfer_out`: the legs of a transfer. `closing_difference`: over /
+        short of a daily closing. `reversal`: the opposite of one movement.
+        `collection`, `refund`, `income`, `expense`, `staff_payment`: posted
+        by the payment, sales, income / expense and staff payout modules.
+      enum: [deposit, withdrawal, transfer_in, transfer_out, closing_difference, reversal, collection, refund, income, expense, staff_payment]
+
+    CashBranchRef:
+      type: object
+      required: [uuid, name, code]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+
+    CashAccountRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/CashAccountKind" }
+
+    CashUserRef:
+      type: object
+      required: [uuid, name, surname]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+
+    CashAccount:
+      type: object
+      description: |
+        A till, bank or online account (TEC-914). `branch` null = the whole
+        business. `balance` = `opening_balance` + money in - money out.
+        Amounts are decimal strings with two fraction digits.
+      required: [uuid, branch, kind, name, currency, opening_balance, opening_date, balance, bank_name, iban, provider, note, status, sort_order, last_closed_date, has_activity, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/CashBranchRef"
+            - type: "null"
+        kind: { $ref: "#/components/schemas/CashAccountKind" }
+        name: { type: string }
+        currency: { type: string, example: TRY }
+        opening_balance: { type: string, example: "100.00" }
+        opening_date: { type: string, format: date }
+        balance: { type: string, example: "1250.00" }
+        bank_name: { type: string }
+        iban: { type: string }
+        provider: { type: string }
+        note: { type: string }
+        status: { type: string, enum: [active, archived] }
+        sort_order: { type: integer }
+        last_closed_date:
+          description: Latest closed day (tills); movements on or before it are refused.
+          oneOf:
+            - { type: string, format: date }
+            - type: "null"
+        has_activity: { type: boolean, description: "Detail only: the account has a movement or a closing" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CashAccountCreateRequest:
+      type: object
+      required: [kind, name]
+      properties: &CashAccountFields
+        branch_uuid: { type: string, format: uuid, description: "Omit for a business-wide account" }
+        kind: { $ref: "#/components/schemas/CashAccountKind" }
+        name: { type: string, maxLength: 120 }
+        opening_balance: { type: string, example: "0.00" }
+        opening_date: { type: string, format: date, description: "Default today; not in the future" }
+        bank_name: { type: string, maxLength: 120 }
+        iban: { type: string, description: "Bank accounts only" }
+        provider: { type: string, maxLength: 32, description: "Online accounts: the provider code" }
+        note: { type: string, maxLength: 2000 }
+        status: { type: string, enum: [active, archived] }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+
+    CashAccountPatchRequest:
+      type: object
+      properties: *CashAccountFields
+
+    CashAccountPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashAccount" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CashFacet:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        label: { type: string }
+        count: { type: integer, format: int64 }
+
+    CashAccountFacets:
+      type: object
+      required: [branch]
+      properties:
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/CashFacet" }
+
+    CashAccountOption:
+      type: object
+      required: [uuid, name, kind, status, currency, branch_name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/CashAccountKind" }
+        status: { type: string, enum: [active, archived] }
+        currency: { type: string }
+        branch_name: { type: string, description: "Empty for business-wide accounts" }
+
+    CashAccountOptionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashAccountOption" }
+
+    CashMovement:
+      type: object
+      description: One append-only row of the cash book.
+      required: [uuid, account, kind, direction, amount, currency, movement_date, description, counter_account, transfer_group, reverses_uuid, reversed_by_uuid, closing_uuid, source_type, source_uuid, created_by, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        account: { $ref: "#/components/schemas/CashAccountRef" }
+        kind: { $ref: "#/components/schemas/CashMovementKind" }
+        direction: { type: string, enum: [in, out] }
+        amount: { type: string, example: "250.00" }
+        currency: { type: string }
+        movement_date: { type: string, format: date }
+        description: { type: string }
+        counter_account:
+          oneOf:
+            - $ref: "#/components/schemas/CashAccountRef"
+            - type: "null"
+        transfer_group: { type: [string, "null"], format: uuid }
+        reverses_uuid: { type: [string, "null"], format: uuid }
+        reversed_by_uuid: { type: [string, "null"], format: uuid }
+        closing_uuid: { type: [string, "null"], format: uuid }
+        source_type: { type: string, description: "Module that posted it (`payment` …); empty for panel movements" }
+        source_uuid: { type: [string, "null"], format: uuid }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        balance_after: { type: string, description: "Account movement list only: the balance after this movement" }
+        created_at: { type: string, format: date-time }
+
+    CashMovementCreateRequest:
+      type: object
+      required: [direction, amount, description]
+      properties:
+        direction: { type: string, enum: [in, out] }
+        amount: { type: string, example: "150.00" }
+        movement_date: { type: string, format: date }
+        description: { type: string, maxLength: 500 }
+
+    CashTransferRequest:
+      type: object
+      required: [from_account_uuid, to_account_uuid, amount]
+      properties:
+        from_account_uuid: { type: string, format: uuid }
+        to_account_uuid: { type: string, format: uuid }
+        amount: { type: string, example: "500.00" }
+        movement_date: { type: string, format: date }
+        description: { type: string, maxLength: 500 }
+
+    CashTransfer:
+      type: object
+      required: [transfer_group, out, in]
+      properties:
+        transfer_group: { type: string, format: uuid }
+        out: { $ref: "#/components/schemas/CashMovement" }
+        in: { $ref: "#/components/schemas/CashMovement" }
+
+    CashReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    CashMovementPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashMovement" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CashMovementList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashMovement" }
+
+    CashMovementFacets:
+      type: object
+      required: [kind, account]
+      properties:
+        kind:
+          type: array
+          items: { $ref: "#/components/schemas/CashFacet" }
+        account:
+          type: array
+          items: { $ref: "#/components/schemas/CashFacet" }
+
+    CashClosing:
+      type: object
+      description: The daily closing of a till.
+      required: [uuid, business_date, currency, opening_amount, total_in, total_out, expected_amount, counted_amount, difference, note, status, closed_by, closed_at, reopened_by, reopened_at, reopen_reason]
+      properties:
+        uuid: { type: string, format: uuid }
+        business_date: { type: string, format: date }
+        currency: { type: string }
+        opening_amount: { type: string }
+        total_in: { type: string }
+        total_out: { type: string }
+        expected_amount: { type: string }
+        counted_amount: { type: string }
+        difference: { type: string, description: "counted - expected; negative = short" }
+        note: { type: string }
+        status: { type: string, enum: [closed, reopened] }
+        closed_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        closed_at: { type: string, format: date-time }
+        reopened_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        reopened_at: { type: [string, "null"], format: date-time }
+        reopen_reason: { type: string }
+
+    CashClosingCreateRequest:
+      type: object
+      required: [counted_amount]
+      properties:
+        business_date: { type: string, format: date, description: "Default today" }
+        counted_amount: { type: string, example: "1250.00" }
+        note: { type: string, maxLength: 2000 }
+
+    CashClosingPreview:
+      type: object
+      required: [business_date, currency, opening_amount, total_in, total_out, expected_amount, movement_count, closed, last_closed_date]
+      properties:
+        business_date: { type: string, format: date }
+        currency: { type: string }
+        opening_amount: { type: string }
+        total_in: { type: string }
+        total_out: { type: string }
+        expected_amount: { type: string }
+        movement_count: { type: integer, format: int64 }
+        closed: { type: boolean, description: "The day is on or before the latest closed day" }
+        last_closed_date: { type: [string, "null"], format: date }
+
+    CashClosingPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashClosing" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CashDailyAccount:
+      type: object
+      required: [account, branch, currency, status, opening_amount, money_in, money_out, transfer_in, transfer_out, difference, closing_amount, closed, closing_uuid, closed_at]
+      properties:
+        account: { $ref: "#/components/schemas/CashAccountRef" }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/CashBranchRef"
+            - type: "null"
+        currency: { type: string }
+        status: { type: string, enum: [active, archived] }
+        opening_amount: { type: string }
+        money_in: { type: string }
+        money_out: { type: string }
+        transfer_in: { type: string }
+        transfer_out: { type: string }
+        difference: { type: string }
+        closing_amount: { type: string }
+        closed: { type: boolean }
+        closing_uuid: { type: [string, "null"], format: uuid }
+        closed_at: { type: [string, "null"], format: date-time }
+
+    CashDailyTotals:
+      type: object
+      required: [currency, opening_amount, money_in, money_out, transfer_in, transfer_out, difference, closing_amount]
+      properties:
+        currency: { type: string }
+        opening_amount: { type: string }
+        money_in: { type: string }
+        money_out: { type: string }
+        transfer_in: { type: string }
+        transfer_out: { type: string }
+        difference: { type: string }
+        closing_amount: { type: string }
+
+    CashDailySummary:
+      type: object
+      required: [date, accounts, totals]
+      properties:
+        date: { type: string, format: date }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CashDailyAccount" }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/CashDailyTotals" }
+
+    EnvelopeCashAccount:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashAccount" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashAccountPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashAccountPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashAccountFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashAccountFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashAccountOptions:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashAccountOptionList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashMovement:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashMovement" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashMovementPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashMovementPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashMovementList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashMovementList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashMovementFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashMovementFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashTransfer:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashTransfer" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashClosing:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashClosing" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashClosingPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashClosingPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashClosingPreview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashClosingPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashDailySummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashDailySummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     TenantResource:
       type: object
       description: |

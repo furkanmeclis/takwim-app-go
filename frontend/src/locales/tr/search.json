@@ -29,5 +29,7 @@
   "prefix_customers": "müşteri",
   "specs_customers": "Müşteriler",
   "prefix_reservations": "rezervasyon",
-  "specs_reservations": "Rezervasyonlar"
+  "specs_reservations": "Rezervasyonlar",
+  "prefix_cash_accounts": "kasa",
+  "specs_cash_accounts": "Kasa ve banka hesapları"
 }

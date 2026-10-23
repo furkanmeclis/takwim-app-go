@@ -163,6 +163,75 @@ type CapacityHold struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CashAccount struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       pgtype.Int8        `json:"branch_id"`
+	Kind           string             `json:"kind"`
+	Name           string             `json:"name"`
+	Currency       string             `json:"currency"`
+	OpeningBalance pgtype.Numeric     `json:"opening_balance"`
+	OpeningDate    pgtype.Date        `json:"opening_date"`
+	BankName       string             `json:"bank_name"`
+	Iban           string             `json:"iban"`
+	Provider       string             `json:"provider"`
+	Note           string             `json:"note"`
+	Status         string             `json:"status"`
+	SortOrder      int32              `json:"sort_order"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CashClosing struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	CashAccountID  int64              `json:"cash_account_id"`
+	BranchID       pgtype.Int8        `json:"branch_id"`
+	BusinessDate   pgtype.Date        `json:"business_date"`
+	Currency       string             `json:"currency"`
+	OpeningAmount  pgtype.Numeric     `json:"opening_amount"`
+	TotalIn        pgtype.Numeric     `json:"total_in"`
+	TotalOut       pgtype.Numeric     `json:"total_out"`
+	ExpectedAmount pgtype.Numeric     `json:"expected_amount"`
+	CountedAmount  pgtype.Numeric     `json:"counted_amount"`
+	Difference     pgtype.Numeric     `json:"difference"`
+	Note           string             `json:"note"`
+	Status         string             `json:"status"`
+	ClosedBy       pgtype.Int8        `json:"closed_by"`
+	ClosedAt       pgtype.Timestamptz `json:"closed_at"`
+	ReopenedBy     pgtype.Int8        `json:"reopened_by"`
+	ReopenedAt     pgtype.Timestamptz `json:"reopened_at"`
+	ReopenReason   string             `json:"reopen_reason"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CashMovement struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	CashAccountID      int64              `json:"cash_account_id"`
+	Kind               string             `json:"kind"`
+	Direction          string             `json:"direction"`
+	Amount             pgtype.Numeric     `json:"amount"`
+	Currency           string             `json:"currency"`
+	MovementDate       pgtype.Date        `json:"movement_date"`
+	Description        string             `json:"description"`
+	BranchID           pgtype.Int8        `json:"branch_id"`
+	TransferGroup      pgtype.UUID        `json:"transfer_group"`
+	CounterAccountID   pgtype.Int8        `json:"counter_account_id"`
+	ReversesMovementID pgtype.Int8        `json:"reverses_movement_id"`
+	ClosingID          pgtype.Int8        `json:"closing_id"`
+	SourceType         string             `json:"source_type"`
+	SourceUuid         pgtype.UUID        `json:"source_uuid"`
+	IdempotencyKey     pgtype.Text        `json:"idempotency_key"`
+	CreatedBy          pgtype.Int8        `json:"created_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
 type Customer struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`

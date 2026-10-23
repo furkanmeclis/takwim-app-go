@@ -96,6 +96,17 @@ export const routes = {
     },
     calendar: (slug: string) => `/t/${encodeURIComponent(slug)}/calendar`,
     myAgenda: (slug: string) => `/t/${encodeURIComponent(slug)}/my-agenda`,
+    cash: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/cash`,
+      create: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/create`,
+      detail: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/cash/${uuid}`,
+      edit: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/cash/${uuid}/edit`,
+      movements: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/cash/movements`,
+      daily: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/daily`,
+    },
     reservations: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/reservations`,
       create: (slug: string) =>

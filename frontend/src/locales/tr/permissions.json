@@ -160,5 +160,14 @@
   "labels.tenant.customers.export": "Müşterileri dışa aktar",
   "labels.tenant.customers.import": "Müşterileri içe aktar",
   "labels.tenant.customers.bulk.tag": "Müşterileri toplu etiketle",
-  "labels.tenant.customers.bulk.delete": "Müşterileri toplu sil"
+  "labels.tenant.customers.bulk.delete": "Müşterileri toplu sil",
+  "groups.tenant_cash": "Kasa ve banka",
+  "labels.tenant.cash.read": "Kasa ve banka hesaplarını görüntüle",
+  "labels.tenant.cash.write": "Kasa hareketi ve transfer gir",
+  "labels.tenant.cash.manage": "Kasa ve banka hesaplarını yönet",
+  "labels.tenant.cash.close": "Gün sonu kasa kapanışı yap",
+  "labels.tenant.cash.reopen": "Kapanmış günü yeniden aç",
+  "labels.tenant.cash.export": "Kasa kayıtlarını dışa aktar",
+  "labels.tenant.cash.bulk.archive": "Hesapları toplu arşivle",
+  "labels.tenant.cash.bulk.activate": "Hesapları toplu aktifleştir"
 }

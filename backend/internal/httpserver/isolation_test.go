@@ -338,6 +338,15 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"branch_uuid": ids["branch"], "customer_uuid": ids["customer"], "lines": []map[string]any{{"service_uuid": ids["service"]}},
 			"starts_at": "2030-01-07T10:00:00+03:00", "internal_note": m,
 		}), http.StatusCreated, "create reservation"), "uuid")
+		ids["cashAccount"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts", map[string]any{
+			"branch_uuid": ids["branch"], "kind": "cash", "name": m + " Kasa", "opening_balance": "100",
+		}), http.StatusCreated, "create cash account"), "uuid")
+		ids["cashMovement"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts/"+ids["cashAccount"]+"/movements", map[string]any{
+			"direction": "in", "amount": "50", "description": m + " giriş",
+		}), http.StatusCreated, "create cash movement"), "uuid")
+		ids["cashClosing"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts/"+ids["cashAccount"]+"/closings", map[string]any{
+			"counted_amount": "150", "note": m,
+		}), http.StatusCreated, "close cash day"), "uuid")
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -532,7 +541,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/products/lookup":  {"?code=" + orgB.ids["productSKU"]},
 		"GET /v1/tenant/stock-movements": {"?branch=" + orgB.ids["branch"], "?product=" + orgB.ids["product"],
 			"?staff=" + orgB.ids["staff"]},
-		"GET /v1/tenant/customers": {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
+		"GET /v1/tenant/customers":          {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
+		"GET /v1/tenant/cash/accounts":      {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker},
+		"GET /v1/tenant/cash/movements":     {"?account=" + orgB.ids["cashAccount"], "?q=" + orgB.marker},
+		"GET /v1/tenant/cash/daily-summary": {"?branch=" + orgB.ids["branch"]},
 		"GET /v1/tenant/reservations": {"?q=" + orgB.ids["customerPhone"][3:], "?branch=" + orgB.ids["branch"],
 			"?staff=" + orgB.ids["staff"], "?customer_uuid=" + orgB.ids["customer"]},
 		"GET /v1/tenant/reservations/calendar": {"?from=2030-01-07&by=branch", "?from=2030-01-07&branch=" + orgB.ids["branch"],
@@ -596,6 +608,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1}, reject},
 		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "sale", "branch_uuid": orgA.ids["branch"], "staff_uuid": orgB.ids["staff"],
 			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/cash/accounts", map[string]any{"branch_uuid": orgB.ids["branch"], "kind": "cash", "name": "X"}, reject},
+		{"POST /v1/tenant/cash/accounts/bulk", map[string]any{"action": "archive", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["cashAccount"]}}}, nil},
+		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgA.ids["cashAccount"], "to_account_uuid": orgB.ids["cashAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgB.ids["cashAccount"], "to_account_uuid": orgA.ids["cashAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
 		{"POST /v1/tenant/reservations/bulk", map[string]any{"action": "cancel", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["reservation"]}}}, nil},
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}},
@@ -638,6 +654,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"branch_uuids": []string{orgB.ids["home"]}}, reject},
 		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"account_uuid": orgB.ids["member"]}, reject},
 		{"PATCH /v1/tenant/resources/" + orgA.ids["resource"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
+		{"PATCH /v1/tenant/cash/accounts/" + orgA.ids["cashAccount"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
 		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/staff", map[string]any{"staff": []map[string]any{{"staff_uuid": orgB.ids["staff"]}}}, reject},
@@ -828,6 +845,12 @@ func paramKey(prev, name string) string {
 		return "hold"
 	case "reservations/uuid":
 		return "reservation"
+	case "accounts/uuid":
+		return "cashAccount"
+	case "closings/closingUuid":
+		return "cashClosing"
+	case "movements/uuid":
+		return "cashMovement"
 	}
 	return ""
 }

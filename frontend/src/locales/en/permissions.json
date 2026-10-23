@@ -160,5 +160,14 @@
   "labels.tenant.customers.export": "Export customers",
   "labels.tenant.customers.import": "Import customers",
   "labels.tenant.customers.bulk.tag": "Bulk tag customers",
-  "labels.tenant.customers.bulk.delete": "Bulk delete customers"
+  "labels.tenant.customers.bulk.delete": "Bulk delete customers",
+  "groups.tenant_cash": "Cash and bank",
+  "labels.tenant.cash.read": "View cash and bank accounts",
+  "labels.tenant.cash.write": "Post cash movements and transfers",
+  "labels.tenant.cash.manage": "Manage cash and bank accounts",
+  "labels.tenant.cash.close": "Close a till's day",
+  "labels.tenant.cash.reopen": "Reopen a closed day",
+  "labels.tenant.cash.export": "Export cash records",
+  "labels.tenant.cash.bulk.archive": "Bulk archive accounts",
+  "labels.tenant.cash.bulk.activate": "Bulk activate accounts"
 }

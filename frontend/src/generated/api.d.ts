@@ -5057,6 +5057,448 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/cash/accounts/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cash account list metadata
+         * @description Table contract of `GET /v1/tenant/cash/accounts` (`tenant.cash.read`, `cash` module).
+         */
+        get: operations["getTenantCashAccountsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cash account faceted filter options
+         * @description Branches (with counts) for the branch filter, inside the caller's branch scope. Business-wide accounts have the value `head_office`.
+         */
+        get: operations["getTenantCashAccountsFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every account of the caller's scope (pickers) */
+        get: operations["getTenantCashAccountOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List cash, bank and online accounts
+         * @description Accounts of the `X-Organization` organization with their balance
+         *     (opening balance + money in - money out, `tenant.cash.read`). A
+         *     member limited to some branches sees the accounts of those branches
+         *     only; business-wide accounts need every branch.
+         */
+        get: operations["getTenantCashAccounts"];
+        put?: never;
+        /**
+         * Open a cash, bank or online account
+         * @description `tenant.cash.manage`. Without `branch_uuid` the account is
+         *     business-wide (only for members with every branch). A till cannot
+         *     open with a negative balance. Names are unique per branch (`409`).
+         */
+        post: operations["postTenantCashAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export cash accounts
+         * @description Queues an export of the accounts with their balances
+         *     (`tenant.cash.export`). `query` honours `q`, `branch`, `kind` and
+         *     `status`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantCashAccountsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on cash accounts
+         * @description Actions `archive` (`tenant.cash.bulk.archive`, zero balance only)
+         *     and `activate` (`tenant.cash.bulk.activate`), both reversible.
+         *     Targets are resolved inside the organization and the caller's
+         *     branch scope only.
+         */
+        post: operations["postTenantCashAccountsBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a cash account
+         * @description With `has_activity`. A uuid of another organization or outside the caller's branch scope answers `404`.
+         */
+        get: operations["getTenantCashAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a cash account
+         * @description `tenant.cash.manage`. Branch and kind are fixed; the opening balance
+         *     and date only change while the account has no movement and no
+         *     closing (`locked`). `status: archived` needs a zero balance (`409`).
+         */
+        patch: operations["patchTenantCashAccount"];
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity of a cash account
+         * @description Account changes, movements, transfers, reversals, closings and reopenings.
+         */
+        get: operations["getTenantCashAccountActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/{uuid}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Movements of an account with the running balance
+         * @description Newest first; `balance_after` is the account balance after each movement (book order by date, then entry).
+         */
+        get: operations["getTenantCashAccountMovements"];
+        put?: never;
+        /**
+         * Record a manual money in / out
+         * @description `tenant.cash.write`. `in` is a deposit, `out` a withdrawal. The date
+         *     defaults to today (business time zone), is not before the opening
+         *     date, not in the future and not on a closed day (`409 day_closed`).
+         *     A till never goes below zero (`409 insufficient_funds`); bank and
+         *     online accounts may.
+         */
+        post: operations["postTenantCashAccountMovement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/{uuid}/closings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily closings of a till
+         * @description Newest day first, reopened closings included.
+         */
+        get: operations["getTenantCashAccountClosings"];
+        put?: never;
+        /**
+         * Close a day of a till
+         * @description `tenant.cash.close`. Only tills (`kind` = `cash`) are closed daily.
+         *     The expected balance (opening + money in - money out of the day) is
+         *     compared with `counted_amount`; the difference is posted as a
+         *     `closing_difference` movement so the book follows the count. The
+         *     day and every earlier day are then locked for movements. The day
+         *     must be after the latest closed day (`409 already_closed`).
+         */
+        post: operations["postTenantCashAccountClosing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/{uuid}/closings/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expected state of a day before closing it */
+        get: operations["getTenantCashAccountClosingPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/accounts/{uuid}/closings/{closingUuid}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen the latest closed day
+         * @description `tenant.cash.reopen` and a reason. Only the latest closed day of the
+         *     till reopens (`409 not_latest`); its difference movement is reversed
+         *     on the same day.
+         */
+        post: operations["postTenantCashAccountClosingReopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/movements/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cash movement list metadata */
+        get: operations["getTenantCashMovementsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/movements/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cash movement faceted filter options
+         * @description Kinds in use (with counts) and the accounts of the caller's scope.
+         */
+        get: operations["getTenantCashMovementsFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The cash book across accounts
+         * @description Movements of the accounts in the caller's scope (`tenant.cash.read`).
+         *     `q` searches the description and the account name.
+         */
+        get: operations["getTenantCashMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/movements/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export cash movements
+         * @description Queues an export of the cash book (`tenant.cash.export`). `query`
+         *     honours `q`, `account`, `kind`, `direction`, `date_from` and
+         *     `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantCashMovementsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/movements/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a cash movement */
+        get: operations["getTenantCashMovement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/movements/{uuid}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a manual movement
+         * @description `tenant.cash.write` and a reason. Posts the exact opposite movement
+         *     dated today (both legs of a transfer). Movements are never edited
+         *     or deleted. A movement is reversed once (`409 already_reversed`);
+         *     reversals, closing differences and movements of other modules
+         *     (payments, sales …) are not reversed here (`409 not_reversible`).
+         */
+        post: operations["postTenantCashMovementReverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer money between two accounts
+         * @description `tenant.cash.write`. Writes `transfer_out` on the source and
+         *     `transfer_in` on the target in one transaction with a shared
+         *     `transfer_group`; a transfer is not revenue. Both accounts must be
+         *     active, in the caller's scope (`not_found` otherwise) and in the
+         *     same currency; the source till cannot go below zero. A provider
+         *     payout (online account to bank) is a transfer too.
+         */
+        post: operations["postTenantCashTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/daily-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily cash summary (günlük kapanış özeti)
+         * @description Every account of the caller's scope on one day: opening balance,
+         *     money in / out, transfers in / out (listed apart, not revenue),
+         *     closing difference, closing balance and whether the day is closed;
+         *     plus totals per currency.
+         */
+        get: operations["getTenantCashDailySummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -7280,6 +7722,399 @@ export interface components {
             uuid: string;
             name: string;
             code: string;
+        };
+        /**
+         * @description `cash` = till, `bank` = bank account, `online` = online payment provider receivable
+         * @enum {string}
+         */
+        CashAccountKind: "cash" | "bank" | "online";
+        /**
+         * @description `deposit` / `withdrawal`: manual money in / out. `transfer_in` /
+         *     `transfer_out`: the legs of a transfer. `closing_difference`: over /
+         *     short of a daily closing. `reversal`: the opposite of one movement.
+         *     `collection`, `refund`, `income`, `expense`, `staff_payment`: posted
+         *     by the payment, sales, income / expense and staff payout modules.
+         * @enum {string}
+         */
+        CashMovementKind: "deposit" | "withdrawal" | "transfer_in" | "transfer_out" | "closing_difference" | "reversal" | "collection" | "refund" | "income" | "expense" | "staff_payment";
+        CashBranchRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            code: string;
+        };
+        CashAccountRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            kind?: components["schemas"]["CashAccountKind"];
+        };
+        CashUserRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            surname: string;
+        };
+        /**
+         * @description A till, bank or online account (TEC-914). `branch` null = the whole
+         *     business. `balance` = `opening_balance` + money in - money out.
+         *     Amounts are decimal strings with two fraction digits.
+         */
+        CashAccount: {
+            /** Format: uuid */
+            uuid: string;
+            branch: components["schemas"]["CashBranchRef"] | null;
+            kind: components["schemas"]["CashAccountKind"];
+            name: string;
+            /** @example TRY */
+            currency: string;
+            /** @example 100.00 */
+            opening_balance: string;
+            /** Format: date */
+            opening_date: string;
+            /** @example 1250.00 */
+            balance: string;
+            bank_name: string;
+            iban: string;
+            provider: string;
+            note: string;
+            /** @enum {string} */
+            status: "active" | "archived";
+            sort_order: number;
+            /** @description Latest closed day (tills); movements on or before it are refused. */
+            last_closed_date: string | null;
+            /** @description Detail only: the account has a movement or a closing */
+            has_activity: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CashAccountCreateRequest: {
+            /**
+             * Format: uuid
+             * @description Omit for a business-wide account
+             */
+            branch_uuid?: string;
+            kind: components["schemas"]["CashAccountKind"];
+            name: string;
+            /** @example 0.00 */
+            opening_balance?: string;
+            /**
+             * Format: date
+             * @description Default today; not in the future
+             */
+            opening_date?: string;
+            bank_name?: string;
+            /** @description Bank accounts only */
+            iban?: string;
+            /** @description Online accounts: the provider code */
+            provider?: string;
+            note?: string;
+            /** @enum {string} */
+            status?: "active" | "archived";
+            sort_order?: number;
+        };
+        CashAccountPatchRequest: {
+            /**
+             * Format: uuid
+             * @description Omit for a business-wide account
+             */
+            branch_uuid?: string;
+            kind?: components["schemas"]["CashAccountKind"];
+            name?: string;
+            /** @example 0.00 */
+            opening_balance?: string;
+            /**
+             * Format: date
+             * @description Default today; not in the future
+             */
+            opening_date?: string;
+            bank_name?: string;
+            /** @description Bank accounts only */
+            iban?: string;
+            /** @description Online accounts: the provider code */
+            provider?: string;
+            note?: string;
+            /** @enum {string} */
+            status?: "active" | "archived";
+            sort_order?: number;
+        };
+        CashAccountPage: {
+            items: components["schemas"]["CashAccount"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CashFacet: {
+            value: string;
+            label?: string;
+            /** Format: int64 */
+            count: number;
+        };
+        CashAccountFacets: {
+            branch: components["schemas"]["CashFacet"][];
+        };
+        CashAccountOption: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            kind: components["schemas"]["CashAccountKind"];
+            /** @enum {string} */
+            status: "active" | "archived";
+            currency: string;
+            /** @description Empty for business-wide accounts */
+            branch_name: string;
+        };
+        CashAccountOptionList: {
+            items: components["schemas"]["CashAccountOption"][];
+        };
+        /** @description One append-only row of the cash book. */
+        CashMovement: {
+            /** Format: uuid */
+            uuid: string;
+            account: components["schemas"]["CashAccountRef"];
+            kind: components["schemas"]["CashMovementKind"];
+            /** @enum {string} */
+            direction: "in" | "out";
+            /** @example 250.00 */
+            amount: string;
+            currency: string;
+            /** Format: date */
+            movement_date: string;
+            description: string;
+            counter_account: components["schemas"]["CashAccountRef"] | null;
+            /** Format: uuid */
+            transfer_group: string | null;
+            /** Format: uuid */
+            reverses_uuid: string | null;
+            /** Format: uuid */
+            reversed_by_uuid: string | null;
+            /** Format: uuid */
+            closing_uuid: string | null;
+            /** @description Module that posted it (`payment` …); empty for panel movements */
+            source_type: string;
+            /** Format: uuid */
+            source_uuid: string | null;
+            created_by: components["schemas"]["CashUserRef"] | null;
+            /** @description Account movement list only: the balance after this movement */
+            balance_after?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CashMovementCreateRequest: {
+            /** @enum {string} */
+            direction: "in" | "out";
+            /** @example 150.00 */
+            amount: string;
+            /** Format: date */
+            movement_date?: string;
+            description: string;
+        };
+        CashTransferRequest: {
+            /** Format: uuid */
+            from_account_uuid: string;
+            /** Format: uuid */
+            to_account_uuid: string;
+            /** @example 500.00 */
+            amount: string;
+            /** Format: date */
+            movement_date?: string;
+            description?: string;
+        };
+        CashTransfer: {
+            /** Format: uuid */
+            transfer_group: string;
+            out: components["schemas"]["CashMovement"];
+            in: components["schemas"]["CashMovement"];
+        };
+        CashReasonRequest: {
+            reason: string;
+        };
+        CashMovementPage: {
+            items: components["schemas"]["CashMovement"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CashMovementList: {
+            items: components["schemas"]["CashMovement"][];
+        };
+        CashMovementFacets: {
+            kind: components["schemas"]["CashFacet"][];
+            account: components["schemas"]["CashFacet"][];
+        };
+        /** @description The daily closing of a till. */
+        CashClosing: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: date */
+            business_date: string;
+            currency: string;
+            opening_amount: string;
+            total_in: string;
+            total_out: string;
+            expected_amount: string;
+            counted_amount: string;
+            /** @description counted - expected; negative = short */
+            difference: string;
+            note: string;
+            /** @enum {string} */
+            status: "closed" | "reopened";
+            closed_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            closed_at: string;
+            reopened_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            reopened_at: string | null;
+            reopen_reason: string;
+        };
+        CashClosingCreateRequest: {
+            /**
+             * Format: date
+             * @description Default today
+             */
+            business_date?: string;
+            /** @example 1250.00 */
+            counted_amount: string;
+            note?: string;
+        };
+        CashClosingPreview: {
+            /** Format: date */
+            business_date: string;
+            currency: string;
+            opening_amount: string;
+            total_in: string;
+            total_out: string;
+            expected_amount: string;
+            /** Format: int64 */
+            movement_count: number;
+            /** @description The day is on or before the latest closed day */
+            closed: boolean;
+            /** Format: date */
+            last_closed_date: string | null;
+        };
+        CashClosingPage: {
+            items: components["schemas"]["CashClosing"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CashDailyAccount: {
+            account: components["schemas"]["CashAccountRef"];
+            branch: components["schemas"]["CashBranchRef"] | null;
+            currency: string;
+            /** @enum {string} */
+            status: "active" | "archived";
+            opening_amount: string;
+            money_in: string;
+            money_out: string;
+            transfer_in: string;
+            transfer_out: string;
+            difference: string;
+            closing_amount: string;
+            closed: boolean;
+            /** Format: uuid */
+            closing_uuid: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        CashDailyTotals: {
+            currency: string;
+            opening_amount: string;
+            money_in: string;
+            money_out: string;
+            transfer_in: string;
+            transfer_out: string;
+            difference: string;
+            closing_amount: string;
+        };
+        CashDailySummary: {
+            /** Format: date */
+            date: string;
+            accounts: components["schemas"]["CashDailyAccount"][];
+            totals: components["schemas"]["CashDailyTotals"][];
+        };
+        EnvelopeCashAccount: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashAccount"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashAccountPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashAccountPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashAccountFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashAccountFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashAccountOptions: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashAccountOptionList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashMovement: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashMovement"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashMovementPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashMovementPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashMovementList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashMovementList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashMovementFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashMovementFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashTransfer: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashTransfer"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashClosing: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashClosing"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashClosingPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashClosingPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashClosingPreview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashClosingPreview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashDailySummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashDailySummary"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         /**
          * @description Bookable capacity of a branch besides staff time (TEC-891). Capacity is
@@ -10463,6 +11298,10 @@ export interface components {
         QRSessionID: string;
         /** @description Resource UUID */
         ResourceUUID: string;
+        /** @description Cash account UUID. */
+        CashAccountUUID: string;
+        /** @description Cash movement UUID. */
+        CashMovementUUID: string;
         /** @description User UUID */
         UserUUID: string;
         /** @description Service point UUID */
@@ -19617,6 +20456,928 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashAccountsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashAccountsFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAccountFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCashAccountOptions: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAccountOptions"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCashAccounts: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `kind`, `balance`, `status`, `sort_order`, `created_at`; prefix `-` for descending. Default: status, branch, `sort_order`, name. */
+                sort?: string;
+                /** @description Branch uuids and / or `head_office`; comma-separate or repeat */
+                branch?: string;
+                /** @description `cash`, `bank`, `online`; comma-separate or repeat */
+                kind?: string;
+                /** @description `active`, `archived`; comma-separate or repeat */
+                status?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAccountPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCashAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashAccountCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created account */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCashAccountsExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCashAccountsBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantCashAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashAccountPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashAccountActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantCashAccountMovements: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                kind?: string;
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Movement page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMovementPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCashAccountMovement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashMovementCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created movement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMovement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashAccountClosings: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closing page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashClosingPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCashAccountClosing: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashClosingCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Closing */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashClosing"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashAccountClosingPreview: {
+        parameters: {
+            query?: {
+                /** @description Business day (default today) */
+                date?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashClosingPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantCashAccountClosingReopen: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash account UUID. */
+                uuid: components["parameters"]["CashAccountUUID"];
+                closingUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Reopened closing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashClosing"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashMovementsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashMovementsFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMovementFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCashMovements: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `movement_date`, `amount`, `kind`, `created_at`; prefix `-` for descending. Default: newest first. */
+                sort?: string;
+                /** @description Account uuids; comma-separate or repeat */
+                account?: string;
+                /** @description Movement kinds; comma-separate or repeat */
+                kind?: string;
+                direction?: "in" | "out";
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Movement page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMovementPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCashMovementsExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashMovement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash movement UUID. */
+                uuid: components["parameters"]["CashMovementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Movement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMovement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCashMovementReverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Cash movement UUID. */
+                uuid: components["parameters"]["CashMovementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal movements */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMovementList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantCashTransfer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashTransferRequest"];
+            };
+        };
+        responses: {
+            /** @description Both legs */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashTransfer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashDailySummary: {
+        parameters: {
+            query?: {
+                /** @description Business day (default today) */
+                date?: string;
+                /** @description Branch uuids and / or `head_office`; comma-separate or repeat */
+                branch?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Daily summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashDailySummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
         };
     };
     getTenantResourcesMeta: {
