@@ -12,12 +12,26 @@ import (
 
 var ErrInvalidToken = errors.New("invalid token")
 
+// Token kinds (the "knd" claim). Staff tokens (web panel, staff mobile app)
+// are the only kind the /v1 Bearer middleware accepts. Customer panel and
+// single-appointment links get their own kinds and their own middleware
+// (TEC-909 / TEC-910), so a customer token can never reach a staff route.
+const (
+	KindStaff = "staff"
+)
+
+// ErrWrongKind is returned when a token of another kind is presented.
+var ErrWrongKind = errors.New("token kind not accepted")
+
 // Claims are verified identity data carried by an access token.
 type Claims struct {
 	Roles          []string `json:"roles"`
 	IsSuperAdmin   bool     `json:"is_super_admin"`
 	ImpersonatorID *string  `json:"imp,omitempty"`
 	SessionID      string   `json:"sid,omitempty"`
+	// Kind is the token kind; empty reads as KindStaff (tokens issued
+	// before the claim existed).
+	Kind string `json:"knd,omitempty"`
 	jwtlib.RegisteredClaims
 }
 
@@ -85,6 +99,7 @@ func (m *Manager) IssueAccess(in AccessInput) (string, time.Time, error) {
 		IsSuperAdmin:   in.IsSuperAdmin,
 		ImpersonatorID: imp,
 		SessionID:      sid,
+		Kind:           KindStaff,
 		RegisteredClaims: jwtlib.RegisteredClaims{
 			Subject:   in.UserID.String(),
 			ExpiresAt: jwtlib.NewNumericDate(expiresAt),
@@ -113,6 +128,12 @@ func (m *Manager) ParseAccess(token string) (Claims, error) {
 	}
 	if _, err := uuid.Parse(claims.Subject); err != nil {
 		return Claims{}, ErrInvalidToken
+	}
+	if claims.Kind == "" {
+		claims.Kind = KindStaff
+	}
+	if claims.Kind != KindStaff {
+		return Claims{}, ErrWrongKind
 	}
 	if claims.Roles == nil {
 		claims.Roles = []string{}

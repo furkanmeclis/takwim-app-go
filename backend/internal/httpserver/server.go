@@ -80,6 +80,7 @@ import (
 	bulkadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/crypto"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/events"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/idempotency"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	ioadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/jwt"
@@ -428,13 +429,19 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		loader,
 	)
 
+	// Idempotency-Key replay for retried unsafe requests (mobile clients).
+	var idemStore idempotency.Store
+	if rs := idempotency.NewRedisStore(deps.Redis, cfg.App.Env); rs != nil {
+		idemStore = rs
+	}
+
 	outboxStore := outbox.NewStore(deps.DB, deps.Queries)
 	outboxPub := outbox.NewPublisher(outboxStore, eventBus, log)
 	s.outboxPub = outboxPub
 
 	s.http = &http.Server{
 		Addr:         cfg.HTTP.Addr,
-		Handler:      middleware.RequestID(middleware.ServerErrors(log)(mux)),
+		Handler:      middleware.RequestID(middleware.Idempotency(idemStore, tokens, log)(middleware.ServerErrors(log)(mux))),
 		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
 		IdleTimeout:  cfg.HTTP.IdleTimeout,

@@ -97,6 +97,19 @@ Cross-module signals use the platform event bus (`internal/platform/events`). Us
 - **Ranges** are half-open `[start, end)`: back-to-back appointments touch but do not overlap. Dates are `"2006-01-02"` (`localtime.Date`); `Date.Bounds(zone)` gives the instant range of a local day (23 or 25 hours on DST days).
 - Frontend: `amount`, `toMinor` / `fromMinor` / `allocateMinor`, `datetimeInZone` and `dateKeyInZone` in `frontend/src/lib/utils/format.ts`; defaults in `frontend/src/config/regional.ts`.
 
+## Mobile client rules
+
+The web panel and the future staff / customer mobile apps share one API. Keep it that way:
+
+- **One contract.** `/v1` is versioned; breaking changes go to a new version, additive changes (new optional fields, new endpoints) do not. `docs/openapi.yaml` is the single source; the web types (`pnpm api:generate`) and any mobile client are generated from it. Clients ignore unknown fields.
+- **Rules live in the API.** The Next.js BFF only holds the session (httpOnly cookies) and proxies `/api/v1/*`; it never validates, computes prices or availability, or decides permissions. Anything the web can do, a mobile app can do with the same calls.
+- **Auth.** Mobile apps send `Authorization: Bearer <access>` and rotate with `POST /v1/auth/refresh` (opaque refresh token, one row per device, listed under `/v1/auth/sessions`). Native Apple / Google sign-in: `POST /v1/auth/oauth/{provider}/native`. Access tokens carry a kind (`knd`): only `staff` is accepted on these routes; the customer panel gets its own kind and middleware.
+- **Business scope.** Tenant calls send `X-Organization: <slug|uuid>`; the list comes from `GET /v1/auth/me` organizations.
+- **Retries.** Every unsafe request a client may retry (creating a reservation, taking a payment, cancelling) sends `Idempotency-Key: <uuid>` — a new key per user action, the same key for its retries. Same key + body → the first response is replayed (`Idempotent-Replayed: true`); `409 IDEMPOTENCY_IN_PROGRESS` → retry later; `422 IDEMPOTENCY_KEY_REUSED` → client bug. Kept 24 h; 5xx outcomes are not kept.
+- **Lists, errors, formats.** Same envelope, `limit`/`offset` lists, error codes (`docs/api/errors.md`) and money / time formats as above. Never parse `message`; branch on `error.code`.
+- **Push.** Devices register with `POST /v1/push-devices` (Expo token, platform, locale, app version) and unregister with `DELETE /v1/push-devices/{token}` on sign-out. Payload `data.url` is the deep link.
+- **Media** URLs come from the API (signed or streamed); clients never build storage keys.
+
 ## OpenAPI
 
 Contract: `docs/openapi.yaml` (OpenAPI 3.1) + Scalar at `/docs/`. Run `make openapi-lint` after path/schema changes.

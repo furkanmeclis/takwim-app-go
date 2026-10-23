@@ -221,6 +221,7 @@ function passthroughHeaders(
     "cache-control",
     "location",
     "x-request-id",
+    "idempotent-replayed",
     "x-content-type-options",
     "content-security-policy",
   ] as const;
@@ -483,6 +484,11 @@ export async function proxyToUpstream(
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }
+  }
+  // Retried writes keep their outcome (API replays the first response).
+  const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+  if (idempotencyKey && request.method !== "GET" && request.method !== "HEAD") {
+    headers.set("Idempotency-Key", idempotencyKey);
   }
   // Only tenant routes read the organization header; it is never forwarded
   // elsewhere.

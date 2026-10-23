@@ -4,29 +4,25 @@ info:
   version: 0.1.0
   summary: Takwim HTTP API — auth, RBAC, users, roles, notifications, realtime
   description: |
-    Takwim HTTP API (built on the Next.js + Go boilerplate).
+    Takwim HTTP API (built on the Next.js + Go boilerplate). One contract for
+    the web panel (through its same-origin BFF) and the future staff and
+    customer mobile apps: business rules live here, never in a client.
 
-    **In scope:** authentication, global RBAC, platform users/roles, notifications,
-    Web Push (VAPID), passkeys, and Centrifugo realtime tokens.
+    **Shells:** platform (`/v1/platform/*`, `/v1/organizations/*`) and the
+    business shell (`/v1/tenant/*`, `X-Organization` header).
 
-    **Out of scope:** tenants, workspaces, CRM, inbox, commerce, AI, tickets, reports.
-    Those product modules were stripped. Live Go routes (`internal/modules/**/routes.go`)
-    are the source of truth if a path below is missing from the router.
-
-    **Roles:**
-    - `super_admin` — system role; assigned via `make create-super-admin`
-    - `cms_user` — seed role for CMS access
-    - Custom roles via `/v1/platform/roles`
-
-    **Auth:** Bearer JWT access tokens + opaque refresh tokens.
-    See `docs/auth.md` for the permission matrix and token claims.
+    **Auth:** Bearer JWT access tokens (kind `staff`) + opaque refresh tokens
+    (`/v1/auth/refresh`). Customer panel tokens are a separate kind and are
+    never accepted on these routes. See `docs/auth.md`.
     Error catalog: `docs/api/errors.md`.
 
     **Conventions:**
     - Success/error envelope: `{success,data|error,meta.request_id}` on all `/v1/*`.
     - Lists: `{items,total,limit,offset}` under `data` (`limit`/`offset`/`q`/`sort`; never `page`/`search`).
+    - Amounts are decimal strings (`"1300.00"`) with an ISO 4217 currency; instants are RFC 3339 UTC; dates are `YYYY-MM-DD`; calendar decisions use the business / branch time zone.
+    - Unsafe requests (`POST`/`PUT`/`PATCH`/`DELETE`) may carry an `Idempotency-Key`; a retry with the same key and body replays the first response (`Idempotent-Replayed: true`).
     - Probes `/healthz` and `/readyz` are **not** enveloped.
-    - See `API_CONVENTIONS.md` and `docs/api/errors.md`.
+    - See `API_CONVENTIONS.md` (including the mobile client rules) and `docs/api/errors.md`.
   contact:
     name: App
   license:
@@ -3845,6 +3841,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -5022,6 +5019,18 @@ components:
         Organization of a `/v1/tenant/*` request: its slug (preferred, readable
         in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
       schema: { type: string, maxLength: 64, example: acme }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Client-generated key (a UUID) for an unsafe request the client may
+        retry. Scoped to the caller, `X-Organization`, method and path; kept
+        24 hours. Same key + same body replays the first response with
+        `Idempotent-Replayed: true`; same key + another body is `422
+        IDEMPOTENCY_KEY_REUSED`; while the first request runs a retry gets
+        `409 IDEMPOTENCY_IN_PROGRESS`. 5xx outcomes are not kept.
+      schema: { type: string, minLength: 1, maxLength: 255, pattern: "^[!-~]+$" }
     QRSessionID:
       name: id
       in: path

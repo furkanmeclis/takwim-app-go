@@ -28,6 +28,9 @@ Branch on `error.code`, not on message text. `details` is optional (field-level 
 | `FORBIDDEN` | 403 | Missing permission or disabled user |
 | `NOT_FOUND` | 404 | Resource does not exist or is not visible |
 | `CONFLICT` | 409 | Unique constraint / duplicate (e.g. email already registered) |
+| `INVALID_IDEMPOTENCY_KEY` | 400 | `Idempotency-Key` is empty, longer than 255 or not printable ASCII |
+| `IDEMPOTENCY_IN_PROGRESS` | 409 | A request with the same `Idempotency-Key` is still running; retry later |
+| `IDEMPOTENCY_KEY_REUSED` | 422 | The `Idempotency-Key` was already used with a different request body |
 | `RATE_LIMITED` | 429 | Auth endpoints: login, register, forgot-password, reset-password |
 | `PASSWORD_RESET_FAILED` | 500 | Forgot/reset persist or enqueue failure |
 | `INTERNAL_ERROR` | 500 | Unexpected server failure |
