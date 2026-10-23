@@ -599,6 +599,20 @@ func TestOrganizationSector(t *testing.T) {
 	}
 }
 
+func TestReservedSlugs(t *testing.T) {
+	t.Parallel()
+	for _, v := range []string{"admin", "api", "t", "panel", "b", "embed", "share", "invite", "health"} {
+		if !reservedSlug(v) {
+			t.Errorf("%q must be reserved", v)
+		}
+	}
+	for _, v := range []string{"kuafor-ayse", "panelim", "berber"} {
+		if reservedSlug(v) {
+			t.Errorf("%q must not be reserved", v)
+		}
+	}
+}
+
 func TestSetEntitlements(t *testing.T) {
 	t.Parallel()
 	f := newFakeRepo(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC))

@@ -32,6 +32,7 @@
   "codes.MFA_REQUIRED": "Two-factor verification is required.",
   "codes.MFA_NOT_ENROLLED": "Two-factor verification is not set up.",
   "codes.RATE_LIMITED": "Too many attempts. Please wait a moment.",
+  "codes.BOOKING_UNAVAILABLE": "The business does not take online bookings right now.",
   "codes.INVALID_MFA_CODE": "The verification code is incorrect.",
   "codes.NOT_CONFIGURED": "This feature isn't configured yet.",
   "http.401": "Sign-in required",

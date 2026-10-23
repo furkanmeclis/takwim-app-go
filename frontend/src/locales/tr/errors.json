@@ -32,6 +32,7 @@
   "codes.MFA_REQUIRED": "İki adımlı doğrulama gerekiyor.",
   "codes.MFA_NOT_ENROLLED": "İki adımlı doğrulama kurulu değil.",
   "codes.RATE_LIMITED": "Çok fazla deneme yapıldı. Lütfen biraz bekleyin.",
+  "codes.BOOKING_UNAVAILABLE": "İşletme şu anda online rezervasyon almıyor.",
   "codes.INVALID_MFA_CODE": "Doğrulama kodu hatalı.",
   "codes.NOT_CONFIGURED": "Bu özellik henüz yapılandırılmamış.",
   "http.401": "Oturum gerekli",
