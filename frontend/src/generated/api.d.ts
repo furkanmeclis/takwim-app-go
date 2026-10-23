@@ -4141,6 +4141,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/availability/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bookable start times
+         * @description The slot engine (`reservations` module; `tenant.reservations.read`,
+         *     or `tenant.reservations.own` for the caller's own calendar: every
+         *     line that takes a staff member is planned with the caller's staff
+         *     record, another `staff_uuid` is `403`). Answers each local date of
+         *     the branch from `from` to `to` (default today + 6 days, at most 31)
+         *     with a status (`available`, `closed`, `too_far`, `too_soon`,
+         *     `no_staff`, `full`) and the starts every `step_minutes` (default 15)
+         *     counted from the opening. Lines run back to back; each slot names
+         *     the staff member and resources of every line. `staff_uuid` null is
+         *     "anyone free" (the least booked person that day first).
+         *
+         *     A person has one calendar across branches: time off and bookings in
+         *     any branch are busy time. `channel` `online` previews what the
+         *     booking page offers: services, staff and resources shown online,
+         *     the minimum notice and maximum advance of the business settings
+         *     (`409` detail `channel` / `online_not_ready` until both are set).
+         *     The panel channel offers every start from now on. A branch outside
+         *     the caller's scope or of another business is `404`; services and
+         *     staff are checked per line (`lines.N.service_uuid` `not_found`,
+         *     `inactive`, `not_offered`; `lines.N.staff_uuid` `not_found`).
+         */
+        post: operations["postTenantAvailabilitySearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -7882,6 +7921,105 @@ export interface components {
         TenantCustomerFacets: {
             tag: components["schemas"]["TenantResourceFacet"][];
             source: components["schemas"]["TenantResourceFacet"][];
+        };
+        TenantAvailabilitySearchRequest: {
+            /** Format: uuid */
+            branch_uuid: string;
+            lines: {
+                /** Format: uuid */
+                service_uuid: string;
+                /**
+                 * Format: uuid
+                 * @description A person who may perform the service in the branch; null = anyone free.
+                 */
+                staff_uuid?: string | null;
+            }[];
+            /**
+             * Format: date
+             * @description Local date of the branch; default today.
+             */
+            from?: string;
+            /**
+             * Format: date
+             * @description Inclusive; default from + 6 days, at most 31 days.
+             */
+            to?: string;
+            /** @default 15 */
+            step_minutes: number;
+            /**
+             * @default panel
+             * @enum {string}
+             */
+            channel: "panel" | "online";
+        };
+        TenantAvailabilityRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        TenantAvailabilityResourceRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            /** @enum {string} */
+            kind: "chair" | "table" | "area" | "room" | "device" | "bay";
+        };
+        TenantAvailabilitySlot: {
+            /** Format: date-time */
+            starts_at: string;
+            /**
+             * Format: date-time
+             * @description End of the customer's time (buffers excluded).
+             */
+            ends_at: string;
+            lines: {
+                /** Format: uuid */
+                service_uuid: string;
+                /** Format: date-time */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+                staff: components["schemas"]["TenantAvailabilityRef"] | null;
+                resources: components["schemas"]["TenantAvailabilityResourceRef"][];
+            }[];
+        };
+        TenantAvailability: {
+            branch: components["schemas"]["TenantAvailabilityRef"];
+            /** @example Europe/Istanbul */
+            timezone: string;
+            /** @enum {string} */
+            channel: "panel" | "online";
+            /** Format: date-time */
+            earliest_start: string;
+            /** Format: date */
+            latest_date: string | null;
+            step_minutes: number;
+            lines: {
+                /** Format: uuid */
+                service_uuid: string;
+                service_name: string;
+                /** @description Branch duration (personal durations may differ per slot). */
+                duration_minutes: number;
+                buffer_before_minutes: number;
+                buffer_after_minutes: number;
+                /** @enum {string} */
+                staff_mode: "required" | "optional" | "none";
+                resource_kinds: string[];
+                staff: components["schemas"]["TenantAvailabilityRef"][];
+            }[];
+            days: {
+                /** Format: date */
+                date: string;
+                /** @enum {string} */
+                status: "available" | "closed" | "too_far" | "too_soon" | "no_staff" | "full";
+                slots: components["schemas"]["TenantAvailabilitySlot"][];
+            }[];
+        };
+        EnvelopeTenantAvailability: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantAvailability"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeTenantCustomer: {
             /** @enum {boolean} */
@@ -15643,6 +15781,42 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantAvailabilitySearch: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantAvailabilitySearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Days and slots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantAvailability"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
         };
     };
     getTenantResourcesMeta: {

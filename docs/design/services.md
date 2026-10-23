@@ -38,4 +38,4 @@ Every table carries `organization_id` with composite foreign keys, so a row neve
 
 ## Later
 
-Availability (which staff and resource are free for a service at a time) comes with reservations. Packages, extras and online payment collection come with their own issues.
+Availability (which staff and resource are free for a service at a time) is the slot engine, see [availability.md](./availability.md). Packages, extras and online payment collection come with their own issues.
