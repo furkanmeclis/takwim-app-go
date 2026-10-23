@@ -90,6 +90,7 @@ jobs:
       BRANCH: ${{ github.ref_name }}
       BASE: main
     steps:
+      - uses: actions/checkout@v7
       - name: Open or reuse pull request
         id: pr
         run: |
@@ -126,3 +127,27 @@ jobs:
             exit 1
           fi
           echo "$out"
+      - name: Release tag
+        if: steps.pr.outputs.number != ''
+        run: |
+          # Merges made with GITHUB_TOKEN do not start a CI run on main, so the
+          # release for the merge commit is cut here. The release job below
+          # covers pushes and PAT merges; the script skips tagged commits.
+          sha="$(gh pr view "${{ steps.pr.outputs.number }}" --json mergeCommit --jq '.mergeCommit.oid')"
+          scripts/release-tag.sh "$sha"
+
+  # Every commit that lands on main gets the next patch version tag and a
+  # GitHub release (scripts/release-tag.sh).
+  release:
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.AUTO_PR_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Release tag
+        run: scripts/release-tag.sh "$GITHUB_SHA"

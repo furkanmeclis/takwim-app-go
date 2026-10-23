@@ -18,6 +18,8 @@
   "view_empty": "There are no permissions to display.",
   "labels.platform.users.read": "Read platform users",
   "labels.platform.users.write": "Write platform users",
+  "labels.platform.organizations.read": "Read businesses",
+  "labels.platform.organizations.write": "Manage businesses",
   "labels.platform.roles.read": "Read platform roles",
   "labels.platform.roles.write": "Write platform roles",
   "labels.platform.notifications.read": "Read platform notifications",

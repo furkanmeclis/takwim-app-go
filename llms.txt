@@ -1,4 +1,4 @@
-# Next.js + Go Boilerplate
+# Takwim (Next.js + Go)
 
 Starter monorepo: Go HTTP API (`backend/`) + Next.js BFF (`frontend/`). No tenants or workspaces. Kept modules: auth, global RBAC, platform users/roles, notifications, realtime, queue, MinIO.
 

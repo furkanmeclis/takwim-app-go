@@ -1,6 +1,8 @@
-# Next.js + Go Boilerplate
+# Takwim
 
-Starter monorepo for an authenticated admin + CMS product: Go HTTP API, Next.js BFF frontend, and Docker infra. Domain product modules (tenants, workspaces, CRM, inbox, commerce, AI, tickets) are stripped. What remains is the platform you build on.
+Multi-branch booking platform for hair salons, restaurants, gyms, car washes, clinics and beauty salons: bookings and availability, a shared customer panel, confirmation, cash desk, staff earnings, stock and service packages. Planning lives in the Linear project **Takwim**; brand kit in [docs/brand.md](./docs/brand.md).
+
+Built on [nextjs-go-boilerplate](https://github.com/furkanmeclis/nextjs-go-boilerplate): Go HTTP API, Next.js BFF frontend, and Docker infra. The API is the single source of truth so a mobile app can use it later.
 
 | Path | Role |
 |------|------|

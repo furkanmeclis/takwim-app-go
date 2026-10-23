@@ -1,0 +1,8 @@
+{
+  "uuid": "UUID",
+  "name": "Ad",
+  "slug": "Kısa ad",
+  "status": "Durum",
+  "access_ends_at": "Erişim bitişi",
+  "created_at": "Oluşturulma"
+}
