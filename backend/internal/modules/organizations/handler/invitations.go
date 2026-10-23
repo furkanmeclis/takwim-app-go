@@ -448,6 +448,7 @@ type TenantOrganization struct {
 	Status         string    `json:"status"`
 	Timezone       string    `json:"timezone"`
 	Currency       string    `json:"currency"`
+	Sector         string    `json:"sector"`
 	AccessStartsAt string    `json:"access_starts_at"`
 	AccessEndsAt   *string   `json:"access_ends_at"`
 	UpdatedAt      string    `json:"updated_at"`
@@ -456,7 +457,7 @@ type TenantOrganization struct {
 func tenantOrganization(org orgmodel.Organization) TenantOrganization {
 	out := TenantOrganization{
 		UUID: org.UUID, Slug: org.Slug, Name: org.Name, LogoURL: org.LogoURL, Status: org.Status,
-		Timezone: org.Timezone, Currency: org.Currency,
+		Timezone: org.Timezone, Currency: org.Currency, Sector: org.Sector,
 		AccessStartsAt: org.AccessStartsAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:      org.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}

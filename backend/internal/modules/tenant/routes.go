@@ -24,6 +24,9 @@ func RegisterRoutes(
 	authn := middleware.Authenticate(tokens, loader)
 	org := middleware.RequireOrganization(resolver)
 
+	mux.Handle("GET /v1/sectors", middleware.Chain(
+		http.HandlerFunc(listSectors), authn,
+	))
 	mux.Handle("GET /v1/tenant/context", middleware.Chain(
 		http.HandlerFunc(getContext), authn, org,
 	))

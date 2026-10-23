@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { SECTOR_CODES } from "@/features/sectors/constants";
+
 type Translate = (key: string) => string;
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -20,6 +22,7 @@ export function createOrganizationSchema(t: Translate) {
           (value) => value === "" || SLUG_RE.test(value),
           t("organizations.validation.slug_invalid"),
         ),
+      sector: z.enum(SECTOR_CODES),
       owner_mode: z.enum(["existing", "invite"]),
       owner_user_uuid: z.string(),
       owner_email: z.string().trim(),
@@ -62,6 +65,7 @@ export function createOrganizationEditSchema(t: Translate) {
       .min(1, t("organizations.validation.slug_invalid"))
       .max(64, t("organizations.validation.slug_invalid"))
       .regex(SLUG_RE, t("organizations.validation.slug_invalid")),
+    sector: z.enum(SECTOR_CODES),
   });
 }
 

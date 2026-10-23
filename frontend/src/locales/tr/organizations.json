@@ -23,6 +23,7 @@
   "owner_invited": "Sahip davet edildi",
   "columns.name": "İşletme",
   "columns.slug": "Kısa ad",
+  "columns.sector": "Sektör",
   "columns.owner": "Sahip",
   "columns.member_count": "Üye",
   "columns.branch_count": "Şube",

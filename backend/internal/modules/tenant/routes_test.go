@@ -42,7 +42,7 @@ func TestContextRoute(t *testing.T) {
 	ends := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	scope := orgctx.Scope{
 		ID: 3, UUID: uuid.New(), Slug: "acme", Name: "Acme", Status: orgctx.StatusActive,
-		AccessEndsAt: &ends, MemberRole: orgctx.RoleOwner, Permissions: []string{"tenant.settings.read"},
+		AccessEndsAt: &ends, Sector: "restaurant", Timezone: "Europe/Istanbul", Currency: "TRY", MemberRole: orgctx.RoleOwner, Permissions: []string{"tenant.settings.read"},
 	}
 
 	mux := http.NewServeMux()
@@ -69,7 +69,19 @@ func TestContextRoute(t *testing.T) {
 				UUID         string     `json:"uuid"`
 				Slug         string     `json:"slug"`
 				AccessEndsAt *time.Time `json:"access_ends_at"`
+				Sector       string     `json:"sector"`
+				Timezone     string     `json:"timezone"`
 			} `json:"organization"`
+			Sector struct {
+				Code     string   `json:"code"`
+				Modules  []string `json:"modules"`
+				Capacity struct {
+					PartySize bool `json:"party_size"`
+				} `json:"capacity"`
+				Terms struct {
+					Resource string `json:"resource"`
+				} `json:"terms"`
+			} `json:"sector"`
 			Role        string   `json:"role"`
 			Permissions []string `json:"permissions"`
 		} `json:"data"`
@@ -81,6 +93,30 @@ func TestContextRoute(t *testing.T) {
 	if d.Organization.UUID != scope.UUID.String() || d.Organization.Slug != "acme" || d.Role != orgctx.RoleOwner ||
 		len(d.Permissions) != 1 || d.Organization.AccessEndsAt == nil || !d.Organization.AccessEndsAt.Equal(ends) {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+	if d.Organization.Sector != "restaurant" || d.Organization.Timezone != "Europe/Istanbul" ||
+		d.Sector.Code != "restaurant" || !d.Sector.Capacity.PartySize || d.Sector.Terms.Resource != "table" || len(d.Sector.Modules) == 0 {
+		t.Fatalf("unexpected sector: %s", rr.Body.String())
+	}
+
+	sectors := httptest.NewRequest(http.MethodGet, "/v1/sectors", nil)
+	sectors.Header.Set("Authorization", "Bearer "+access)
+	src := httptest.NewRecorder()
+	mux.ServeHTTP(src, sectors)
+	var catalog struct {
+		Data struct {
+			Items []struct {
+				Code string `json:"code"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if src.Code != http.StatusOK || json.Unmarshal(src.Body.Bytes(), &catalog) != nil || len(catalog.Data.Items) != 6 {
+		t.Fatalf("sectors: %d %s", src.Code, src.Body.String())
+	}
+	anon := httptest.NewRecorder()
+	mux.ServeHTTP(anon, httptest.NewRequest(http.MethodGet, "/v1/sectors", nil))
+	if anon.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous sectors status = %d", anon.Code)
 	}
 
 	if rr := do(""); rr.Code != http.StatusBadRequest {

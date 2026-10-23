@@ -6,6 +6,10 @@ export {
   EMPTY_NAV_ADORNMENT,
 } from "@/features/nav-engine/define";
 export { NavEngine } from "@/features/nav-engine/components/nav-engine";
+export {
+  NavModulesProvider,
+  useNavModules,
+} from "@/features/nav-engine/lib/modules";
 export type {
   NavAdornment,
   NavAdornmentComponent,

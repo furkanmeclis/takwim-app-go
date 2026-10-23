@@ -33,6 +33,11 @@ import {
 import { useNavGroupOpen } from "@/features/nav-engine/hooks/use-nav-group-open";
 import { visibleNavItems } from "@/features/nav-engine/lib/access";
 import {
+  orderByHighlights,
+  useNavHighlights,
+  useNavModules,
+} from "@/features/nav-engine/lib/modules";
+import {
   formatNavCount,
   isNavHrefActive,
 } from "@/features/nav-engine/lib/active";
@@ -55,7 +60,12 @@ export function NavGroup({
   homeHref: string;
 }) {
   const { can, canAny } = usePermission();
-  const items = visibleNavItems(group, { can, canAny });
+  const hasModule = useNavModules();
+  const highlights = useNavHighlights();
+  const items = orderByHighlights(
+    visibleNavItems(group, { can, canAny, hasModule }),
+    highlights,
+  );
   if (!items.length) return null;
 
   return (

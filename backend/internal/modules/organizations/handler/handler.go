@@ -107,12 +107,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Slug          string    `json:"slug"`
 		OwnerUserUUID uuid.UUID `json:"owner_user_uuid"`
 		OwnerEmail    string    `json:"owner_email"`
+		Sector        string    `json:"sector"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
-	input := orgmodel.CreateOrganizationInput{Name: in.Name, Slug: in.Slug, OwnerUserUUID: in.OwnerUserUUID, OwnerUserID: p.UserInternal}
+	input := orgmodel.CreateOrganizationInput{Name: in.Name, Slug: in.Slug, Sector: in.Sector, OwnerUserUUID: in.OwnerUserUUID, OwnerUserID: p.UserInternal}
 	var (
 		org        orgmodel.Organization
 		invitation *orgmodel.Invitation
@@ -173,6 +174,7 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 		Settings *json.RawMessage `json:"settings"`
 		Timezone *string          `json:"timezone"`
 		Currency *string          `json:"currency"`
+		Sector   *string          `json:"sector"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
@@ -182,7 +184,7 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 		settings = []byte(*in.Settings)
 	}
 	org, err := h.svc.PatchOrganization(r.Context(), id, orgmodel.PatchOrganizationInput{
-		Name: in.Name, Slug: in.Slug, Settings: settings, Timezone: in.Timezone, Currency: in.Currency,
+		Name: in.Name, Slug: in.Slug, Settings: settings, Timezone: in.Timezone, Currency: in.Currency, Sector: in.Sector,
 	})
 	if err != nil {
 		writeError(w, r, err)

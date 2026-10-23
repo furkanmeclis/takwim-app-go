@@ -52,6 +52,11 @@ type Scope struct {
 	Status         string
 	AccessStartsAt time.Time
 	AccessEndsAt   *time.Time
+	// Sector is the business sector code (internal/platform/sector).
+	Sector string
+	// Timezone is the business IANA zone; Currency its ISO 4217 code.
+	Timezone string
+	Currency string
 	// MemberRole is the primary tenant role key of the caller in this
 	// organization (owner, admin, member, a Rentopia template or a custom
 	// role key). Kept for display; permissions come from MemberRoles.

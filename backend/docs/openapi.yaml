@@ -3494,6 +3494,30 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/sectors:
+    get:
+      tags: [Tenant]
+      operationId: listSectors
+      summary: Sector catalog
+      description: |
+        The six business sectors with their default booking flow, the
+        capacity a reservation holds, the panel's terms and the visible /
+        highlighted modules (TEC-882). The catalog lives in code; a
+        business stores only its sector code. Any signed-in user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sectors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSectorList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /v1/tenant/context:
     get:
       tags: [Tenant]
@@ -5477,6 +5501,9 @@ components:
           type: [string, "null"]
           description: "API-owned logo stream (`/v1/organizations/{uuid}/logo?v=...`)"
         status: { type: string, enum: [active, suspended] }
+        timezone: { type: string, example: Europe/Istanbul }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: TRY }
+        sector: { $ref: "#/components/schemas/SectorCode" }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
         settings:
@@ -5780,7 +5807,7 @@ components:
 
     OrganizationProfile:
       type: object
-      required: [uuid, slug, name, logo_url, status, timezone, currency, access_starts_at, access_ends_at, updated_at]
+      required: [uuid, slug, name, logo_url, status, timezone, currency, sector, access_starts_at, access_ends_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -5789,6 +5816,7 @@ components:
         status: { type: string, enum: [active, suspended] }
         timezone: { type: string, description: "IANA zone for calendar decisions; instants stay UTC", example: Europe/Istanbul }
         currency: { type: string, pattern: "^[A-Z]{3}$", description: ISO 4217 code of every amount of the organization, example: TRY }
+        sector: { $ref: "#/components/schemas/SectorCode" }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
         updated_at: { type: string, format: date-time }
@@ -6389,7 +6417,7 @@ components:
 
     TenantOrganization:
       type: object
-      required: [uuid, slug, name, status, access_ends_at]
+      required: [uuid, slug, name, status, access_ends_at, sector, timezone, currency]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string, example: acme }
@@ -6399,6 +6427,72 @@ components:
           type: [string, "null"]
           format: date-time
           description: End of the access window; `null` = no end
+        sector: { $ref: "#/components/schemas/SectorCode" }
+        timezone: { type: string, example: Europe/Istanbul }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: TRY }
+
+    SectorCode:
+      type: string
+      enum: [hairdresser, restaurant, gym, car_wash, clinic, beauty_salon]
+      description: Business sector (TEC-882); the catalog is `GET /v1/sectors`
+
+    SectorModule:
+      type: string
+      enum: [reservations, calendar, customers, services, packages, products, staff, staff_shares, resources, classes, vehicles, cash, finance, reports, confirmation, booking_page]
+
+    Sector:
+      type: object
+      description: "What a sector changes: default booking flow, capacity a reservation holds, the panel's words and visible modules"
+      required: [code, flow, capacity, terms, modules, highlights]
+      properties:
+        code: { $ref: "#/components/schemas/SectorCode" }
+        flow:
+          type: array
+          description: Default customer booking flow
+          items:
+            type: string
+            enum: [branch, service, staff, party_size, session_type, class, vehicle, appointment_type, datetime, area, products, contact, summary, payment]
+        capacity:
+          type: object
+          required: [staff, resources, resource_required, group_sessions, party_size]
+          properties:
+            staff: { type: string, enum: [required, optional, none] }
+            resources:
+              type: array
+              items: { type: string, enum: [chair, table, area, room, device, bay] }
+            resource_required: { type: boolean }
+            group_sessions: { type: boolean }
+            party_size: { type: boolean }
+        terms:
+          type: object
+          description: Term codes the clients translate (`sectors.terms.<code>`)
+          required: [staff, resource, booking]
+          properties:
+            staff: { type: string, example: specialist }
+            resource: { type: string, example: room_device }
+            booking: { type: string, example: appointment }
+        modules:
+          type: array
+          description: Visible panel modules in display order
+          items: { $ref: "#/components/schemas/SectorModule" }
+        highlights:
+          type: array
+          description: Modules the panel puts first (subset of `modules`)
+          items: { $ref: "#/components/schemas/SectorModule" }
+
+    EnvelopeSectorList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/Sector" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     TenantRoleRef:
       type: object
@@ -6739,9 +6833,10 @@ components:
 
     TenantContext:
       type: object
-      required: [organization, role, roles, permissions, branch_scope]
+      required: [organization, role, roles, permissions, branch_scope, sector]
       properties:
         organization: { $ref: "#/components/schemas/TenantOrganization" }
+        sector: { $ref: "#/components/schemas/Sector" }
         role:
           type: string
           description: Caller's primary tenant role key in this organization (`owner`, `admin`, `member`, a Rentopia template or a custom key)
@@ -7244,7 +7339,7 @@ components:
 
     Organization:
       type: object
-      required: [uuid, slug, name, status, timezone, currency, access_starts_at, created_at, updated_at]
+      required: [uuid, slug, name, status, timezone, currency, sector, access_starts_at, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -7255,6 +7350,7 @@ components:
         status: { type: string, enum: [active, suspended] }
         timezone: { type: string, description: "IANA zone for calendar decisions; instants stay UTC", example: Europe/Istanbul }
         currency: { type: string, pattern: "^[A-Z]{3}$", description: ISO 4217 code of every amount of the organization, example: TRY }
+        sector: { $ref: "#/components/schemas/SectorCode" }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
         settings:
@@ -7278,6 +7374,9 @@ components:
           type: string
           format: email
           description: Invite this e-mail as owner instead (the organization starts without members).
+        sector:
+          allOf: [{ $ref: "#/components/schemas/SectorCode" }]
+          description: Defaults to `hairdresser`
 
     PatchOrganizationRequest:
       type: object
@@ -7287,6 +7386,7 @@ components:
         slug: { type: string }
         timezone: { type: string, description: IANA zone name, example: Europe/Istanbul }
         currency: { type: string, pattern: "^[A-Z]{3}$", example: TRY }
+        sector: { $ref: "#/components/schemas/SectorCode" }
         settings:
           type: object
           additionalProperties: true

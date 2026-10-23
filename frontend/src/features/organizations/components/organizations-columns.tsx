@@ -6,6 +6,7 @@ import { useMemo } from "react";
 
 import { EntityRowActions, type EntityRowAction } from "@/components/entity";
 import { createColumn } from "@/components/tables";
+import { SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
 import { Badge } from "@/components/ui/badge";
 import { permissions } from "@/config/permissions";
 import {
@@ -74,6 +75,15 @@ export function useOrganizationsColumns(
               {row.original.slug}
             </code>
           ),
+        }),
+        createColumn<OrganizationSummary>({
+          accessorKey: "sector",
+          labelKey: "organizations.columns.sector",
+          enableSorting: false,
+          cell: ({ row }) =>
+            row.original.sector
+              ? t(SECTOR_LABEL_KEYS[row.original.sector])
+              : "—",
         }),
         createColumn<OrganizationSummary>({
           id: "owner",

@@ -21,6 +21,7 @@ import type { PaletteItem } from "@/features/search-engine/types";
 import { useApiScope } from "@/features/tenant/hooks/use-api-scope";
 import { scopeKey } from "@/lib/api/scoped-request";
 import { useLocale } from "@/providers/locale-provider";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
 import { usePermission } from "@/providers/permission-provider";
 
 export function useCommandPaletteData(variant: AppLayoutVariant) {
@@ -36,7 +37,11 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
     queryFn: () => Promise.resolve(readRecentItems()),
     staleTime: Infinity,
   });
-  const access = useMemo(() => ({ can, canAny }), [can, canAny]);
+  const hasModule = useNavModules();
+  const access = useMemo(
+    () => ({ can, canAny, hasModule }),
+    [can, canAny, hasModule],
+  );
 
   const specsQuery = useQuery({
     queryKey: ["search", scopeKey(scope), "specs"],

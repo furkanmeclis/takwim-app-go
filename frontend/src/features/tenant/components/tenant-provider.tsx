@@ -14,6 +14,8 @@ import {
   tenantService,
 } from "@/features/tenant/services/tenant.service";
 import { useAuth } from "@/providers/auth-provider";
+import { NavModulesProvider } from "@/features/nav-engine/lib/modules";
+import type { Sector, SectorCode } from "@/features/sectors/types";
 import { PermissionProvider } from "@/providers/permission-provider";
 
 export type TenantOrganization = {
@@ -24,6 +26,10 @@ export type TenantOrganization = {
   logoUrl: string | null;
   status: "active" | "suspended";
   accessEndsAt: string | null;
+  /** Sector code; null until the API answers (the `/me` cache has none). */
+  sector: SectorCode | null;
+  timezone: string | null;
+  currency: string | null;
 };
 
 export type TenantScope = {
@@ -38,6 +44,11 @@ export type TenantScope = {
   branchScope: "all" | "selected";
   /** `tenant.*` permissions in this organization only. */
   permissions: string[];
+  /**
+   * Sector definition (flow, capacity, terms, visible modules); null until
+   * the API confirms the scope.
+   */
+  sector: Sector | null;
   /** The API confirmed the membership for this slug. */
   verified: boolean;
   /**
@@ -65,6 +76,9 @@ function fromMembership(org: AuthOrganization): TenantOrganization {
     logoUrl: org.logoUrl ?? null,
     status: org.status,
     accessEndsAt: org.accessEndsAt,
+    sector: null,
+    timezone: null,
+    currency: null,
   };
 }
 
@@ -130,11 +144,15 @@ export function TenantProvider({
           logoUrl: membership?.logoUrl ?? null,
           status: data.organization.status,
           accessEndsAt: data.organization.access_ends_at ?? null,
+          sector: data.organization.sector,
+          timezone: data.organization.timezone,
+          currency: data.organization.currency,
         },
         role: { key: data.role, name: roleName },
         roles: data.roles?.length ? data.roles : [data.role],
         branchScope: data.branch_scope ?? "all",
         permissions: data.permissions ?? EMPTY,
+        sector: data.sector,
         verified: true,
         optimistic,
         isLoading: false,
@@ -151,6 +169,7 @@ export function TenantProvider({
       roles: membership ? [membership.role.key] : EMPTY,
       branchScope: "all",
       permissions: membership?.permissions ?? EMPTY,
+      sector: null,
       verified: false,
       optimistic,
       isLoading,
@@ -173,7 +192,12 @@ export function TenantProvider({
   return (
     <TenantContext.Provider value={value}>
       <PermissionProvider permissions={scopedPermissions} roles={roles}>
-        {children}
+        <NavModulesProvider
+          modules={value.sector?.modules ?? null}
+          highlights={value.sector?.highlights}
+        >
+          {children}
+        </NavModulesProvider>
       </PermissionProvider>
     </TenantContext.Provider>
   );

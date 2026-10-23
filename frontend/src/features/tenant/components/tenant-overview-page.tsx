@@ -12,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SectorOverviewCard } from "@/features/sectors/components/sector-overview-card";
+import { SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantRoleLabel } from "@/features/tenant/lib/role-label";
 import { date } from "@/lib/utils/format";
@@ -55,6 +57,10 @@ export function TenantOverviewPage() {
               value={org?.name ?? tenant.slug}
             />
             <Row label={t("organizations.slug")} value={tenant.slug} />
+            <Row
+              label={t("sectors.label")}
+              value={org?.sector ? t(SECTOR_LABEL_KEYS[org.sector]) : "—"}
+            />
             <Row
               label={t("organizations.status")}
               value={
@@ -107,6 +113,8 @@ export function TenantOverviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      <SectorOverviewCard />
     </div>
   );
 }

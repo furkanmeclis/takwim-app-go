@@ -2193,6 +2193,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sector catalog
+         * @description The six business sectors with their default booking flow, the
+         *     capacity a reservation holds, the panel's terms and the visible /
+         *     highlighted modules (TEC-882). The catalog lives in code; a
+         *     business stores only its sector code. Any signed-in user.
+         */
+        get: operations["listSectors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/context": {
         parameters: {
             query?: never;
@@ -3366,6 +3389,11 @@ export interface components {
             logo_url?: string | null;
             /** @enum {string} */
             status: "active" | "suspended";
+            /** @example Europe/Istanbul */
+            timezone?: string;
+            /** @example TRY */
+            currency?: string;
+            sector?: components["schemas"]["SectorCode"];
             /** Format: date-time */
             access_starts_at: string;
             /** Format: date-time */
@@ -3627,6 +3655,7 @@ export interface components {
              * @example TRY
              */
             currency: string;
+            sector: components["schemas"]["SectorCode"];
             /** Format: date-time */
             access_starts_at: string;
             /** Format: date-time */
@@ -4197,6 +4226,53 @@ export interface components {
              * @description End of the access window; `null` = no end
              */
             access_ends_at: string | null;
+            sector: components["schemas"]["SectorCode"];
+            /** @example Europe/Istanbul */
+            timezone: string;
+            /** @example TRY */
+            currency: string;
+        };
+        /**
+         * @description Business sector (TEC-882); the catalog is `GET /v1/sectors`
+         * @enum {string}
+         */
+        SectorCode: "hairdresser" | "restaurant" | "gym" | "car_wash" | "clinic" | "beauty_salon";
+        /** @enum {string} */
+        SectorModule: "reservations" | "calendar" | "customers" | "services" | "packages" | "products" | "staff" | "staff_shares" | "resources" | "classes" | "vehicles" | "cash" | "finance" | "reports" | "confirmation" | "booking_page";
+        /** @description What a sector changes: default booking flow, capacity a reservation holds, the panel's words and visible modules */
+        Sector: {
+            code: components["schemas"]["SectorCode"];
+            /** @description Default customer booking flow */
+            flow: ("branch" | "service" | "staff" | "party_size" | "session_type" | "class" | "vehicle" | "appointment_type" | "datetime" | "area" | "products" | "contact" | "summary" | "payment")[];
+            capacity: {
+                /** @enum {string} */
+                staff: "required" | "optional" | "none";
+                resources: ("chair" | "table" | "area" | "room" | "device" | "bay")[];
+                resource_required: boolean;
+                group_sessions: boolean;
+                party_size: boolean;
+            };
+            /** @description Term codes the clients translate (`sectors.terms.<code>`) */
+            terms: {
+                /** @example specialist */
+                staff: string;
+                /** @example room_device */
+                resource: string;
+                /** @example appointment */
+                booking: string;
+            };
+            /** @description Visible panel modules in display order */
+            modules: components["schemas"]["SectorModule"][];
+            /** @description Modules the panel puts first (subset of `modules`) */
+            highlights: components["schemas"]["SectorModule"][];
+        };
+        EnvelopeSectorList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["Sector"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
         };
         TenantRoleRef: {
             /** Format: uuid */
@@ -4449,6 +4525,7 @@ export interface components {
         };
         TenantContext: {
             organization: components["schemas"]["TenantOrganization"];
+            sector: components["schemas"]["Sector"];
             /**
              * @description Caller's primary tenant role key in this organization (`owner`, `admin`, `member`, a Rentopia template or a custom key)
              * @example owner
@@ -4818,6 +4895,7 @@ export interface components {
              * @example TRY
              */
             currency: string;
+            sector: components["schemas"]["SectorCode"];
             /** Format: date-time */
             access_starts_at: string;
             /** Format: date-time */
@@ -4844,6 +4922,8 @@ export interface components {
              * @description Invite this e-mail as owner instead (the organization starts without members).
              */
             owner_email?: string;
+            /** @description Defaults to `hairdresser` */
+            sector?: components["schemas"]["SectorCode"];
         };
         PatchOrganizationRequest: {
             name?: string;
@@ -4855,6 +4935,7 @@ export interface components {
             timezone?: string;
             /** @example TRY */
             currency?: string;
+            sector?: components["schemas"]["SectorCode"];
             settings?: {
                 [key: string]: unknown;
             };
@@ -9304,6 +9385,28 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listSectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sectors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSectorList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
             500: components["responses"]["InternalError"];
         };
     };

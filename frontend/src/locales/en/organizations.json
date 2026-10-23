@@ -23,6 +23,7 @@
   "owner_invited": "Owner invited",
   "columns.name": "Business",
   "columns.slug": "Slug",
+  "columns.sector": "Sector",
   "columns.owner": "Owner",
   "columns.member_count": "Members",
   "columns.branch_count": "Branches",
