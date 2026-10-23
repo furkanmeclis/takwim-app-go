@@ -138,7 +138,7 @@ Registered in `internal/httpserver/server.go`; the core ships with none.
 - `tenantNav(slug)` catalog in `config/nav.ts`; `Tenant*` permission keys; `routes.tenant.*` builders; `/login?next=/t/{slug}` only.
 - Org switcher in the header lists `me.organizations`; `/onboarding/organization` for signed-in users without one (when self-serve is on).
 - Platform UI: organizations list/detail (status, access window, members, invitations, activity).
-- Shell choice after login: `next` wins; otherwise platform users → `/platform`, users with one org → `/t/{slug}`, several → org picker, none → onboarding or CMS (single-scope apps).
+- Shell choice after login: `next` wins; otherwise platform users → `/platform`, users with one org → `/t/{slug}`, several → org picker (`/organizations`), none → `/no-access` (onboarding later). The CMS shell was removed (TEC-668).
 
 ## 10. Configuration
 
@@ -163,5 +163,5 @@ Each phase is one PR (auto-merge after CI) behind `TENANCY_ENABLED`, so `main` s
 ## 12. Open questions
 
 1. Org-specific custom roles in v1, or only the three templates? (Proposal: templates only; the schema already allows custom roles.)
-2. Should the CMS shell stay as the "no organization" home, or be dropped when tenancy is on? (Proposal: keep; apps choose.)
+2. ~~Should the CMS shell stay as the "no organization" home?~~ Decided: dropped; users without an organization see `/no-access`.
 3. Domain-based tenants (`acme.example.com`) — not in v1; `X-Organization` can be derived from the host later without API changes.

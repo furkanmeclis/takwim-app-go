@@ -6,7 +6,6 @@ import enAuth from "@/locales/en/auth.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
 import enChart from "@/locales/en/chart.json";
-import enCms from "@/locales/en/cms.json";
 import enCommon from "@/locales/en/common.json";
 import enDashboard from "@/locales/en/dashboard.json";
 import enEditor from "@/locales/en/editor.json";
@@ -36,7 +35,6 @@ import trAuth from "@/locales/tr/auth.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
 import trChart from "@/locales/tr/chart.json";
-import trCms from "@/locales/tr/cms.json";
 import trCommon from "@/locales/tr/common.json";
 import trDashboard from "@/locales/tr/dashboard.json";
 import trEditor from "@/locales/tr/editor.json";
@@ -78,7 +76,6 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     organizations: trOrganizations,
     permissions: trPermissions,
     realtime: trRealtime,
-    cms: trCms,
     roles: trRoles,
     search: trSearch,
     errors: trErrors,
@@ -110,7 +107,6 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     organizations: enOrganizations,
     permissions: enPermissions,
     realtime: enRealtime,
-    cms: enCms,
     roles: enRoles,
     search: enSearch,
     errors: enErrors,

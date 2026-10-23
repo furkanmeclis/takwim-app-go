@@ -34,7 +34,7 @@ Single-scope role model for this boilerplate: users are global; permissions come
 | `platform.integrations.google.read` / `.write` | Google OAuth settings (also requires super admin) |
 | `platform.integrations.facebook.read` / `.write` | Facebook OAuth settings (also requires super admin) |
 | `platform.integrations.apple.read` / `.write` | Apple OAuth settings (also requires super admin) |
-| `auth.session` | Sign-in / CMS access |
+| `auth.session` | Sign-in / account pages |
 | `notifications.read` / `notifications.manage` | User notifications |
 
 Super admin bypasses permission checks in `HasPermission`. Most platform HTTP routes use `RequirePermission` only. Auth settings and OAuth integration routes also use `RequireSuperAdmin`.

@@ -26,5 +26,11 @@
   "overview.membership_description": "Your role and permissions in this business.",
   "overview.role": "Role",
   "overview.permissions": "Permissions",
-  "overview.no_end": "No end date"
+  "overview.no_end": "No end date",
+  "picker.title": "Choose a business",
+  "picker.description": "You are a member of several businesses. Pick the one to open.",
+  "picker.no_access_link": "What can I do?",
+  "no_access.title": "No access yet",
+  "no_access.body": "Your account is ready, but you are not a member of any business yet. Once a business owner invites you, it will show up here.",
+  "no_access.check_again": "Check again"
 }

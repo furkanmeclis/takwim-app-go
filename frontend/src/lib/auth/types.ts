@@ -1,3 +1,4 @@
+import { routes } from "@/config/routes";
 import type { components } from "@/generated/api";
 
 export type PublicUser = components["schemas"]["PublicUser"];
@@ -112,14 +113,19 @@ export function isPlatformUser(user: AuthUser | null | undefined): boolean {
   return hasPlatformPermission(user);
 }
 
-export function isCmsUser(user: AuthUser | null | undefined): boolean {
-  if (!user) return false;
-  return !isPlatformUser(user);
-}
-
+/**
+ * Where a signed-in user lands when no `next` is given: platform users go to
+ * `/platform`; otherwise one organization → its shell, several → the
+ * organization picker, none → the "no access yet" page.
+ */
 export function defaultHomeForUser(user: AuthUser): string {
-  if (isPlatformUser(user)) return "/platform";
-  return "/";
+  if (isPlatformUser(user)) return routes.platform.home;
+  const organizations = userOrganizations(user);
+  if (organizations.length === 1) {
+    return routes.tenant.home(organizations[0]!.slug);
+  }
+  if (organizations.length > 1) return routes.account.organizations;
+  return routes.account.noAccess;
 }
 
 /** Memberships of a (possibly older, cached) user object. */

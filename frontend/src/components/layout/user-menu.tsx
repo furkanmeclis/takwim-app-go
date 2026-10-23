@@ -34,7 +34,7 @@ export function UserMenu() {
 
   const profileHref = isPlatformUser(user)
     ? routes.platform.profile.root
-    : routes.cms.profile.root;
+    : routes.account.profile.root;
 
   const onLogout = async () => {
     try {

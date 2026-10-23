@@ -256,23 +256,3 @@ export function tenantNav(slug: string): NavCatalog {
     ],
   });
 }
-
-export const cmsNav = defineNav({
-  id: "cms",
-  groups: [
-    {
-      id: "cms",
-      labelKey: "layout.section_cms",
-      icon: LayoutDashboard,
-      defaultOpen: true,
-      items: [
-        {
-          id: "home",
-          titleKey: "layout.home",
-          href: routes.cms.home,
-          icon: LayoutDashboard,
-        },
-      ],
-    },
-  ],
-});

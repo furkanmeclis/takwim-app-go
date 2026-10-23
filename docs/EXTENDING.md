@@ -19,7 +19,7 @@ For a full agent checklist, use `.agents/skills/add-platform-resource`. Narrativ
 ## Frontend feature
 
 1. Add `frontend/src/features/<name>/` (`components`, `hooks`, `services`, `schemas`).
-2. Add App Router pages under `(platform)` and/or `(cms)`.
+2. Add App Router pages under `(platform)` and/or `(tenant)/t/[slug]` (organization pages call `tenantRequest()`).
 3. Register routes in `frontend/src/config/routes.ts`, sidebar items in `frontend/src/config/nav.ts`, and gate with permissions from `frontend/src/config/permissions.ts`.
 4. Call the BFF (`/api/v1/...`), not the Go host, from the browser.
 5. Dates: shared `DatePicker` / `AppDatePicker` — see `.agents/skills/admin-date-picker`.

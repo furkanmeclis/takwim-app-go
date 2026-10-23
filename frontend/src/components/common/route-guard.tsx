@@ -13,18 +13,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { routes } from "@/config/routes";
-import {
-  defaultHomeForUser,
-  isCmsUser,
-  isPlatformUser,
-} from "@/lib/auth/types";
+import { defaultHomeForUser, isPlatformUser } from "@/lib/auth/types";
 import { useAuthStore } from "@/lib/auth/session-store";
 import { useAuth } from "@/providers/auth-provider";
 import { useLocale } from "@/providers/locale-provider";
 
 type RouteGuardProps = {
   children: ReactNode;
-  mode: "guest" | "platform" | "cms";
+  /**
+   * `guest`: signed-out pages; `platform`: platform shell (needs a platform
+   * permission); `account`: any signed-in user (profile, organization
+   * picker, …).
+   */
+  mode: "guest" | "platform" | "account";
 };
 
 function PageLoader({ label }: { label: string }) {
@@ -71,7 +72,7 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
       return;
     }
 
-    if ((mode === "platform" || mode === "cms") && !isAuthenticated) {
+    if ((mode === "platform" || mode === "account") && !isAuthenticated) {
       router.replace(routes.guest.login);
     }
   }, [bootstrapped, mode, isAuthenticated, user, router]);
@@ -83,7 +84,7 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
     return <PageLoader label={t("common.loading")} />;
   }
 
-  if ((mode === "platform" || mode === "cms") && !isAuthenticated) {
+  if ((mode === "platform" || mode === "account") && !isAuthenticated) {
     return null;
   }
 
@@ -91,18 +92,7 @@ export function RouteGuard({ children, mode }: RouteGuardProps) {
     return (
       <RoleMismatch
         expected={t("layout.nav_platform")}
-        home={isCmsUser(user) ? routes.cms.home : routes.errors.forbidden}
-      />
-    );
-  }
-
-  if (mode === "cms" && user && !isCmsUser(user)) {
-    return (
-      <RoleMismatch
-        expected="CMS"
-        home={
-          isPlatformUser(user) ? routes.platform.home : routes.errors.forbidden
-        }
+        home={defaultHomeForUser(user)}
       />
     );
   }

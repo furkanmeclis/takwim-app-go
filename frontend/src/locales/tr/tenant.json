@@ -26,5 +26,11 @@
   "overview.membership_description": "Bu işletmedeki rolünüz ve yetkileriniz.",
   "overview.role": "Rol",
   "overview.permissions": "Yetkiler",
-  "overview.no_end": "Bitiş tarihi yok"
+  "overview.no_end": "Bitiş tarihi yok",
+  "picker.title": "İşletme seçin",
+  "picker.description": "Birden fazla işletmenin üyesisiniz. Açmak istediğiniz işletmeyi seçin.",
+  "picker.no_access_link": "Ne yapabilirim?",
+  "no_access.title": "Henüz erişiminiz yok",
+  "no_access.body": "Hesabınız hazır ancak henüz hiçbir işletmenin üyesi değilsiniz. Bir işletme sahibi sizi davet ettiğinde burada görünecek.",
+  "no_access.check_again": "Tekrar kontrol et"
 }

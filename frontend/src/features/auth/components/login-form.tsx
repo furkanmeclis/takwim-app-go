@@ -145,10 +145,6 @@ export function LoginForm() {
       return false;
     }
     const home = defaultHomeForUser(user);
-    if (home === routes.errors.forbidden) {
-      setFormError(t("errors.role_mismatch"));
-      return false;
-    }
     const next = resolveNext(searchParams.get("next"), home);
     router.replace(next);
     return true;
@@ -345,10 +341,8 @@ export function LoginForm() {
       }
       await signIn(provider, {
         redirect: true,
-        callbackUrl: resolveNext(
-          searchParams.get("next"),
-          routes.platform.home,
-        ),
+        // `/` sends the user to their home once the session exists.
+        callbackUrl: resolveNext(searchParams.get("next"), routes.account.home),
       });
     } catch {
       setFormError(t("auth.oauth.sign_in_error"));

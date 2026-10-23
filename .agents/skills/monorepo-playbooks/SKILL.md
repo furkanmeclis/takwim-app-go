@@ -12,7 +12,7 @@ description: >-
 
 | Path | Role |
 |------|------|
-| `frontend/` | Next.js BFF — `/platform` + CMS `/` |
+| `frontend/` | Next.js BFF — `/platform` + organizations `/t/{slug}` |
 | `backend/` | Go HTTP API + Asynq worker |
 | `compose.local.yml` / `compose.prod.yml` | Docker |
 | `docs/` | Architecture, development, extending |

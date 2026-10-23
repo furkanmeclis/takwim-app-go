@@ -132,7 +132,7 @@ export function RegisterForm() {
       }
       await signIn(provider, {
         redirect: true,
-        callbackUrl: routes.platform.home,
+        callbackUrl: routes.account.home,
       });
     } catch {
       setFormError(t("auth.oauth.sign_in_error"));
