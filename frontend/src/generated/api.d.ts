@@ -3599,6 +3599,248 @@ export interface paths {
         patch: operations["patchTenantStaffTimeOff"];
         trace?: never;
     };
+    "/v1/tenant/resources/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resource list metadata
+         * @description Table contract of `GET /v1/tenant/resources` (`tenant.resources.read`, `resources` module).
+         */
+        get: operations["getTenantResourcesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resource faceted filter options
+         * @description Branches, kinds and zones (with counts) for the faceted filters, inside the caller's branch scope.
+         */
+        get: operations["getTenantResourcesFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List resources of the organization
+         * @description Bookable resources (chair, table, area, room, device, bay) of the
+         *     `X-Organization` organization (`tenant.resources.read`). `q` searches
+         *     name, zone, description and the branch name. A member with
+         *     `branch_scope` = `selected` only sees resources of its branches.
+         */
+        get: operations["getTenantResources"];
+        put?: never;
+        /**
+         * Create a resource
+         * @description `tenant.resources.write`. The branch must be inside the caller's
+         *     branch scope (`branch_uuid` `not_found` otherwise). Names are unique
+         *     per branch, case-insensitive (`409`).
+         */
+        post: operations["postTenantResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export resources
+         * @description Queues an export of the organization's resources
+         *     (`tenant.resources.export`). `query` honours `q`, `branch`, `kind`,
+         *     `zone`, `is_active` and `show_online`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantResourcesExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a resource import file
+         * @description Creates an import job (`tenant.resources.import`). A row whose
+         *     `branch_code` + `name` matches a resource updates it, any other row
+         *     creates one. Continue with `/v1/tenant/imports/{uuid}/mapping`,
+         *     `/preview` and `/confirm`.
+         */
+        post: operations["postTenantResourcesImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a resource import sample */
+        get: operations["getTenantResourcesImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on resources
+         * @description Actions `activate` (`tenant.resources.bulk.activate`) and `deactivate`
+         *     (`tenant.resources.bulk.deactivate`), both reversible. Targets are
+         *     resolved inside the organization and the caller's branch scope only.
+         */
+        post: operations["postTenantResourcesBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a resource
+         * @description With `branch_hours` (the branch's weekly hours, used while `working_hours` is null). A uuid of another organization or outside the caller's branch scope answers `404`.
+         */
+        get: operations["getTenantResource"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a resource (soft)
+         * @description `tenant.resources.write`.
+         */
+        delete: operations["deleteTenantResource"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a resource
+         * @description `tenant.resources.write`. Omitted fields are unchanged;
+         *     `working_hours: null` falls back to the branch's hours. Moving to
+         *     another branch needs that branch in the caller's scope.
+         */
+        patch: operations["patchTenantResource"];
+        trace?: never;
+    };
+    "/v1/tenant/resources/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity of a resource */
+        get: operations["getTenantResourceActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/{uuid}/closures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Closed periods of a resource
+         * @description Newest first. `from` / `to` keep the periods overlapping that range.
+         */
+        get: operations["getTenantResourceClosures"];
+        put?: never;
+        /**
+         * Close a resource for a period
+         * @description `tenant.resources.write`. The resource cannot be booked during the period (at most 366 days).
+         */
+        post: operations["postTenantResourceClosure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/resources/{uuid}/closures/{closureUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a closed period */
+        delete: operations["deleteTenantResourceClosure"];
+        options?: never;
+        head?: never;
+        /** Update a closed period */
+        patch: operations["patchTenantResourceClosure"];
+        trace?: never;
+    };
     "/v1/tenant/notifications": {
         parameters: {
             query?: never;
@@ -5317,6 +5559,160 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["StaffTimeOffPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TenantResourceBranchRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            code: string;
+        };
+        /**
+         * @description Bookable capacity of a branch besides staff time (TEC-891). Capacity is
+         *     a people range (a table seats `min_capacity`–`capacity`); `combinable`
+         *     lets tables be joined. `working_hours` null means the branch's hours.
+         */
+        TenantResource: {
+            /** Format: uuid */
+            uuid: string;
+            branch: components["schemas"]["TenantResourceBranchRef"];
+            /** @enum {string} */
+            kind: "chair" | "table" | "area" | "room" | "device" | "bay";
+            name: string;
+            /** @description Free-text section (iç salon, teras …); empty when none */
+            zone: string;
+            description: string;
+            min_capacity: number;
+            capacity: number;
+            combinable: boolean;
+            show_online: boolean;
+            is_active: boolean;
+            sort_order: number;
+            working_hours: components["schemas"]["WeeklyHours"] | null;
+            /** @description Detail only. The branch's weekly hours. */
+            branch_hours?: components["schemas"]["WeeklyHours"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TenantResourceCreateRequest: {
+            /** Format: uuid */
+            branch_uuid: string;
+            /** @enum {string} */
+            kind: "chair" | "table" | "area" | "room" | "device" | "bay";
+            name: string;
+            zone?: string;
+            description?: string;
+            /** @default 1 */
+            min_capacity: number;
+            /** @default 1 */
+            capacity: number;
+            /** @default false */
+            combinable: boolean;
+            /** @default true */
+            show_online: boolean;
+            /** @default true */
+            is_active: boolean;
+            sort_order?: number;
+            working_hours?: components["schemas"]["WeeklyHours"] | null;
+        };
+        TenantResourcePatchRequest: {
+            /** Format: uuid */
+            branch_uuid?: string;
+            /** @enum {string} */
+            kind?: "chair" | "table" | "area" | "room" | "device" | "bay";
+            name?: string;
+            zone?: string;
+            description?: string;
+            min_capacity?: number;
+            capacity?: number;
+            combinable?: boolean;
+            show_online?: boolean;
+            is_active?: boolean;
+            sort_order?: number;
+            /** @description `null` falls back to the branch's hours */
+            working_hours?: components["schemas"]["WeeklyHours"] | null;
+        };
+        TenantResourcePage: {
+            items: components["schemas"]["TenantResource"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        TenantResourceFacet: {
+            value: string;
+            /** @description Branch facets only: the branch name */
+            label?: string;
+            /** Format: int64 */
+            count: number;
+        };
+        TenantResourceFacets: {
+            branch: components["schemas"]["TenantResourceFacet"][];
+            kind: components["schemas"]["TenantResourceFacet"][];
+            zone: components["schemas"]["TenantResourceFacet"][];
+        };
+        TenantResourceClosure: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            reason: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TenantResourceClosureCreateRequest: {
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            reason?: string;
+        };
+        TenantResourceClosurePatchRequest: {
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+            reason?: string;
+        };
+        TenantResourceClosurePage: {
+            items: components["schemas"]["TenantResourceClosure"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeTenantResource: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantResource"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantResourcePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantResourcePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantResourceFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantResourceFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantResourceClosure: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantResourceClosure"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantResourceClosurePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantResourceClosurePage"];
             meta: components["schemas"]["ResponseMeta"];
         };
         OrganizationCompanySettings: {
@@ -13248,6 +13644,598 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeStaffTimeOff"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantResourcesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantResourcesFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResourceFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantResources: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `kind`, `zone`, `capacity`, `sort_order`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default: branch, `sort_order`, name. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat (see `/v1/tenant/resources/facets`) */
+                branch?: string;
+                /** @description Kinds; comma-separate or repeat */
+                kind?: string;
+                /** @description Zones; comma-separate or repeat */
+                zone?: string;
+                is_active?: boolean;
+                show_online?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResourcePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantResourceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created resource */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantResourcesExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantResourcesImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantResourcesImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantResourcesBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantResource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantResourcePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated resource */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantResourceActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantResourceClosures: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                from?: string;
+                to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closure page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResourceClosurePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantResourceClosure: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantResourceClosureCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created closure */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResourceClosure"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantResourceClosure: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                closureUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantResourceClosure: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                closureUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantResourceClosurePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated closure */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantResourceClosure"];
                 };
             };
             400: components["responses"]["BadRequest"];

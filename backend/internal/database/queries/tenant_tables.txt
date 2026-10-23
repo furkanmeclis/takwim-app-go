@@ -15,3 +15,5 @@ organization_usage
 staff
 staff_branches
 staff_time_off
+resources
+resource_closures

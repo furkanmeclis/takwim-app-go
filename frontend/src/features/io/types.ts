@@ -105,6 +105,7 @@ export type IoResource =
   | "platform.activity"
   | "tenant.branches"
   | "tenant.staff"
+  | "tenant.resources"
   | "platform.organizations";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
@@ -115,6 +116,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "platform.organizations": "/v1/platform/organizations/export",
   "tenant.branches": "/v1/tenant/branches/export",
   "tenant.staff": "/v1/tenant/staff/export",
+  "tenant.resources": "/v1/tenant/resources/export",
 };
 
 export const IMPORT_PATHS: Partial<
@@ -135,6 +137,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.staff": {
     upload: "/v1/tenant/staff/import",
     sample: "/v1/tenant/staff/import/sample",
+  },
+  "tenant.resources": {
+    upload: "/v1/tenant/resources/import",
+    sample: "/v1/tenant/resources/import/sample",
   },
 };
 
@@ -178,5 +184,22 @@ export const IMPORT_SCHEMA: Partial<
     { key: "show_online", labelKey: "staff.fields.show_online" },
     { key: "is_active", labelKey: "staff.fields.is_active" },
     { key: "uuid", labelKey: "staff.columns.uuid" },
+  ],
+  "tenant.resources": [
+    {
+      key: "branch_code",
+      labelKey: "resources.fields.branch_code",
+      required: true,
+    },
+    { key: "kind", labelKey: "resources.fields.kind", required: true },
+    { key: "name", labelKey: "resources.fields.name", required: true },
+    { key: "zone", labelKey: "resources.fields.zone" },
+    { key: "min_capacity", labelKey: "resources.fields.min_capacity" },
+    { key: "capacity", labelKey: "resources.fields.capacity" },
+    { key: "combinable", labelKey: "resources.fields.combinable" },
+    { key: "show_online", labelKey: "resources.fields.show_online" },
+    { key: "is_active", labelKey: "resources.fields.is_active" },
+    { key: "sort_order", labelKey: "resources.fields.sort_order" },
+    { key: "description", labelKey: "resources.fields.description" },
   ],
 };

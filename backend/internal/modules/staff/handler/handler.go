@@ -484,4 +484,3 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.InternalErr(w, r, err, "Unexpected server error")
 	}
 }
-

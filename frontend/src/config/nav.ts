@@ -1,4 +1,5 @@
 import {
+  Armchair,
   Gauge,
   History,
   PlugZap,
@@ -294,6 +295,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: Contact,
             permission: permissions.tenant.staff.read,
             module: "staff",
+          },
+          {
+            id: "resources",
+            titleKey: "layout.nav_resources",
+            href: routes.tenant.resources.root(slug),
+            icon: Armchair,
+            permission: permissions.tenant.resources.read,
+            module: "resources",
           },
         ],
       },

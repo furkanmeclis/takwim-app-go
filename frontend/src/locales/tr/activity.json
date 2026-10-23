@@ -159,5 +159,15 @@
   "fields.tenant.staff.thu": "Perşembe",
   "fields.tenant.staff.fri": "Cuma",
   "fields.tenant.staff.sat": "Cumartesi",
-  "fields.tenant.staff.sun": "Pazar"
+  "fields.tenant.staff.sun": "Pazar",
+  "resources.tenant.resources": "Kaynaklar",
+  "actions.resources.created": "Kaynak eklendi",
+  "actions.resources.updated": "Kaynak güncellendi",
+  "actions.resources.deleted": "Kaynak silindi",
+  "actions.resources.closure_created": "Kapalı dönem eklendi",
+  "actions.resources.closure_updated": "Kapalı dönem güncellendi",
+  "actions.resources.closure_deleted": "Kapalı dönem silindi",
+  "fields.tenant.resources.starts_at": "Başlangıç",
+  "fields.tenant.resources.ends_at": "Bitiş",
+  "fields.tenant.resources.reason": "Neden"
 }

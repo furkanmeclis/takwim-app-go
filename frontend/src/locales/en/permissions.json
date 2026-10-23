@@ -127,5 +127,12 @@
   "labels.tenant.staff.import": "Import staff",
   "labels.tenant.staff.bulk.activate": "Bulk activate staff",
   "labels.tenant.staff.bulk.deactivate": "Bulk deactivate staff",
-  "groups.tenant_staff": "Staff"
+  "groups.tenant_staff": "Staff",
+  "labels.tenant.resources.read": "View resources",
+  "labels.tenant.resources.write": "Manage resources",
+  "labels.tenant.resources.export": "Export resources",
+  "labels.tenant.resources.import": "Import resources",
+  "labels.tenant.resources.bulk.activate": "Bulk activate resources",
+  "labels.tenant.resources.bulk.deactivate": "Bulk deactivate resources",
+  "groups.tenant_resources": "Resources"
 }

@@ -557,6 +557,40 @@ type RefreshToken struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type Resource struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	Kind           string             `json:"kind"`
+	Name           string             `json:"name"`
+	Zone           string             `json:"zone"`
+	Description    string             `json:"description"`
+	MinCapacity    int32              `json:"min_capacity"`
+	Capacity       int32              `json:"capacity"`
+	Combinable     bool               `json:"combinable"`
+	ShowOnline     bool               `json:"show_online"`
+	IsActive       bool               `json:"is_active"`
+	SortOrder      int32              `json:"sort_order"`
+	WorkingHours   []byte             `json:"working_hours"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ResourceClosure struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ResourceID     int64              `json:"resource_id"`
+	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+	Reason         string             `json:"reason"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Role struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

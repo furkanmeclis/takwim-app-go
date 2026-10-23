@@ -1,5 +1,6 @@
 import {
   Activity,
+  Armchair,
   Bell,
   Contact,
   Download,
@@ -33,6 +34,7 @@ const ICONS: Record<string, LucideIcon> = {
   github: githubNavIcon,
   branches: Store,
   staff: Contact,
+  resources: Armchair,
 };
 
 export function resolveSearchIcon(name?: string): LucideIcon {

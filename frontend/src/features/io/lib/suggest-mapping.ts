@@ -130,7 +130,11 @@ export function applyAutoDefaults(
     if (!mapping.permission_slugs && !next.permission_slugs)
       next.permission_slugs = "";
   }
-  if (resource === "tenant.branches" || resource === "tenant.staff") {
+  if (
+    resource === "tenant.branches" ||
+    resource === "tenant.staff" ||
+    resource === "tenant.resources"
+  ) {
     if (!mapping.is_active && !next.is_active) next.is_active = "true";
   }
   return next;
