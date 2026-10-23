@@ -29,6 +29,7 @@ import enSettings from "@/locales/en/settings.json";
 import enStepup from "@/locales/en/stepup.json";
 import enStorage from "@/locales/en/storage.json";
 import enTable from "@/locales/en/table.json";
+import enEntitlements from "@/locales/en/entitlements.json";
 import enSectors from "@/locales/en/sectors.json";
 import enTenant from "@/locales/en/tenant.json";
 import enTenantMembers from "@/locales/en/tenant_members.json";
@@ -64,6 +65,7 @@ import trSettings from "@/locales/tr/settings.json";
 import trStepup from "@/locales/tr/stepup.json";
 import trStorage from "@/locales/tr/storage.json";
 import trTable from "@/locales/tr/table.json";
+import trEntitlements from "@/locales/tr/entitlements.json";
 import trSectors from "@/locales/tr/sectors.json";
 import trTenant from "@/locales/tr/tenant.json";
 import trTenantMembers from "@/locales/tr/tenant_members.json";
@@ -105,6 +107,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     stepup: trStepup,
     invitations: trInvitations,
     sectors: trSectors,
+    entitlements: trEntitlements,
     tenant: trTenant,
     branches: trBranches,
     tenant_members: trTenantMembers,
@@ -142,6 +145,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     stepup: enStepup,
     invitations: enInvitations,
     sectors: enSectors,
+    entitlements: enEntitlements,
     tenant: enTenant,
     branches: enBranches,
     tenant_members: enTenantMembers,

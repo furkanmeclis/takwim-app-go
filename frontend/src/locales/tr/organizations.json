@@ -103,7 +103,6 @@
   "status_tab.access_unlimited": "Erişimin bitiş tarihi yok.",
   "status_tab.access_ends_hint": "Boş bırakılırsa süresiz.",
   "status_tab.clear_end": "Bitişi kaldır",
-  "placeholders.plan": "Paketler ve özellik yetkileri TEC-674 ile gelecek.",
   "placeholders.domains": "Özel alan adları M5 kapsamında eklenecek.",
   "placeholders.integrations": "Dış sistem bağlantıları M0 / M5 kapsamında eklenecek.",
   "members.add": "Üye ekle",

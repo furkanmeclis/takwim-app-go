@@ -49,5 +49,7 @@
   "codes.INVITATION_USED": "Bu davet zaten kullanıldı.",
   "codes.INVITATION_REVOKED": "Bu davet iptal edildi.",
   "codes.INVITATION_EMAIL_MISMATCH": "Bu davet başka bir e-posta adresine gönderildi.",
-  "codes.ACCOUNT_EXISTS": "Bu e-posta ile bir hesap zaten var."
+  "codes.ACCOUNT_EXISTS": "Bu e-posta ile bir hesap zaten var.",
+  "codes.PLAN_LIMIT_REACHED": "Paketinizin kotası doldu. Daha fazlası için paketinizi yükseltin.",
+  "codes.MODULE_NOT_ENABLED": "Bu modül paketinizde yok."
 }

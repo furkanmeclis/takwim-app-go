@@ -34,6 +34,8 @@ Branch on `error.code`, not on message text. `details` is optional (field-level 
 | `INTEGRATION_JOB_NOT_RETRYABLE` | 409 | Integration job is done, inbound, or a refund (no staff retry) |
 | `INTEGRATION_JOB_UNVERIFIED` | 409 | Retry could not confirm the job's state with the provider; nothing was sent (`data` = job) |
 | `INTEGRATION_JOB_BUSY` | 409 | A worker holds the integration job right now |
+| `PLAN_LIMIT_REACHED` | 409 | Adding a branch or a staff seat (member / invitation) exceeds the plan limit; `data` = `{kind, limit, used}` |
+| `MODULE_NOT_ENABLED` | 403 | The organization may not use the module (sector does not show it, or the add-on is not granted) |
 | `INTEGRATION_CHECK_FAILED` | 422 | Provider rejected the connection test of an integration account |
 | `RATE_LIMITED` | 429 | Auth endpoints: login, register, forgot-password, reset-password |
 | `PASSWORD_RESET_FAILED` | 500 | Forgot/reset persist or enqueue failure |

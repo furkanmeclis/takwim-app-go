@@ -25,6 +25,7 @@ func OperatorScope(org orgmodel.Organization) orgctx.Scope {
 	return orgctx.Scope{
 		ID: org.ID, UUID: org.UUID, Slug: org.Slug, Name: org.Name, Status: org.Status,
 		Sector: org.Sector, Timezone: org.Timezone, Currency: org.Currency,
+		Plan: org.Plan, Addons: org.Addons, BranchLimit: org.BranchLimit, StaffLimit: org.StaffLimit,
 		MemberRole: orgctx.RoleOwner, MemberRoles: []string{orgctx.RoleOwner},
 	}
 }
@@ -96,6 +97,9 @@ func (s *Service) PlatformAddMember(ctx context.Context, orgUUID uuid.UUID, in o
 		if _, err := s.repo.GetOrganizationMember(ctx, q, scope.ID, user.ID); err == nil {
 			return fmt.Errorf("%w: user is already a member", ErrConflict)
 		} else if !errors.Is(err, repository.ErrNotFound) {
+			return err
+		}
+		if err := s.checkStaffAdd(ctx, q, scope); err != nil {
 			return err
 		}
 		return s.insertMember(ctx, q, scope.ID, user.ID, roles, branchScope, branchIDs)
@@ -315,6 +319,7 @@ func mapOrganizationSummary(row db.ListOrganizationsWithStatsRow, now time.Time)
 		Status: row.Status, AccessStartsAt: row.AccessStartsAt, AccessEndsAt: row.AccessEndsAt,
 		Settings: row.Settings, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		Timezone: row.Timezone, Currency: row.Currency, Sector: row.Sector,
+		Plan: row.Plan, Addons: row.Addons, BranchLimit: row.BranchLimit, StaffLimit: row.StaffLimit,
 	})
 	out := orgmodel.OrganizationSummary{
 		Organization: org, MemberCount: row.MemberCount, BranchCount: row.BranchCount,

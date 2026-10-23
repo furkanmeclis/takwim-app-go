@@ -96,6 +96,11 @@ func (r *Postgres) UpdateOrganization(ctx context.Context, params db.UpdateOrgan
 	return row, mapErr(err)
 }
 
+func (r *Postgres) UpdateOrganizationEntitlements(ctx context.Context, params db.UpdateOrganizationEntitlementsParams) (db.Organization, error) {
+	row, err := r.q.UpdateOrganizationEntitlements(ctx, params)
+	return row, mapErr(err)
+}
+
 func (r *Postgres) SetOrganizationStatus(ctx context.Context, params db.SetOrganizationStatusParams) (db.Organization, error) {
 	row, err := r.q.SetOrganizationStatus(ctx, params)
 	return row, mapErr(err)

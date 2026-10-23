@@ -99,6 +99,17 @@ type SearchIndexer interface {
 type Service struct {
 	repo    Repository
 	indexer SearchIndexer
+	limits  BranchLimiter
+}
+
+// BranchLimiter enforces the branch limit of the plan (TEC-883).
+type BranchLimiter interface {
+	CheckBranchAdd(ctx context.Context, scope orgctx.Scope) error
+}
+
+// SetLimiter attaches the plan limit check of new branches.
+func (s *Service) SetLimiter(l BranchLimiter) {
+	s.limits = l
 }
 
 // New builds the service. indexer may be nil.
@@ -162,6 +173,13 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.BranchInput)
 	// access to every branch create branches.
 	if err := orgctx.RequireAllBranches(ctx); err != nil {
 		return model.Branch{}, ErrAllBranchesRequired
+	}
+	if s.limits != nil {
+		if scope, ok := orgctx.From(ctx); ok {
+			if err := s.limits.CheckBranchAdd(ctx, scope); err != nil {
+				return model.Branch{}, err
+			}
+		}
 	}
 	fields := repository.BranchFields{
 		PrepMinutes: 60, IsActive: true,

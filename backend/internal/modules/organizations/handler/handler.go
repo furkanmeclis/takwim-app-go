@@ -12,6 +12,7 @@ import (
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
@@ -589,6 +590,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	response.RecordFailure(w, err)
+	if entitlement.WriteLimitError(w, r, err) {
+		return
+	}
 	var ve *apiquery.ValidationError
 	if errors.As(err, &ve) {
 		details := make([]response.Detail, 0, len(ve.Details))

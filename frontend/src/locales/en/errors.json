@@ -49,5 +49,7 @@
   "codes.INVITATION_USED": "This invitation was already used.",
   "codes.INVITATION_REVOKED": "This invitation was revoked.",
   "codes.INVITATION_EMAIL_MISMATCH": "This invitation was sent to another e-mail address.",
-  "codes.ACCOUNT_EXISTS": "An account with this e-mail already exists."
+  "codes.ACCOUNT_EXISTS": "An account with this e-mail already exists.",
+  "codes.PLAN_LIMIT_REACHED": "Your plan's limit is reached. Upgrade the plan to add more.",
+  "codes.MODULE_NOT_ENABLED": "This module is not part of your plan."
 }

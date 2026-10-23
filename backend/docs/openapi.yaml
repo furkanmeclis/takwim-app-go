@@ -1563,6 +1563,61 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/platform/organizations/{uuid}/entitlements:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationEntitlements
+      summary: Organization plan, add-ons, limits and usage
+      description: |
+        Effective entitlements (TEC-883) with the stored limit overrides, the
+        current use (branches, staff seats = members + open invitations),
+        this month's communication usage and the plan / add-on catalog.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Entitlements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlatformEntitlements"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Platform]
+      operationId: putPlatformOrganizationEntitlements
+      summary: Assign plan, add-ons and limit overrides
+      description: |
+        Replaces the plan, the granted add-ons and the limit overrides
+        (`null` = plan default). Takes effect at once (scope cache
+        invalidated). Limits are checked when something is added: lowering a
+        limit below the current use blocks new branches / seats, it removes
+        nothing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetEntitlementsRequest"
+      responses:
+        "200":
+          description: Entitlements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlatformEntitlements"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/platform/organizations/{uuid}/access:
     post:
       tags: [Platform]
@@ -3515,6 +3570,37 @@ paths:
                 $ref: "#/components/schemas/EnvelopeSectorList"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/tenant/entitlements:
+    get:
+      tags: [Tenant]
+      operationId: getTenantEntitlements
+      summary: Plan, add-ons, limits and usage of the organization
+      description: |
+        Read-only for the organization (`tenant.settings.read`); Takwim
+        assigns plans and add-ons. Adding a branch or a staff seat over the
+        limit answers `409 PLAN_LIMIT_REACHED` with `{kind, limit, used}`; a
+        module route of a module the organization may not use answers
+        `403 MODULE_NOT_ENABLED`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Entitlements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeEntitlementSummary"
+        "400":
+          $ref: "#/components/responses/OrganizationRequired"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/TenantForbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -6480,6 +6566,112 @@ components:
           description: Modules the panel puts first (subset of `modules`)
           items: { $ref: "#/components/schemas/SectorModule" }
 
+    PlanCode:
+      type: string
+      enum: [starter, growth, enterprise]
+      description: Plan (TEC-883); a set of default limits, no price
+
+    Addon:
+      type: string
+      enum: [confirmation]
+      description: Module sold on top of the plan (Konfirmasyon)
+
+    Plan:
+      type: object
+      required: [code, branch_limit, staff_limit]
+      properties:
+        code: { $ref: "#/components/schemas/PlanCode" }
+        branch_limit: { type: [integer, "null"], description: "`null` = unlimited" }
+        staff_limit: { type: [integer, "null"], description: "`null` = unlimited" }
+
+    Entitlements:
+      type: object
+      required: [plan, addons, branch_limit, staff_limit, modules]
+      properties:
+        plan: { $ref: "#/components/schemas/PlanCode" }
+        addons:
+          type: array
+          items: { $ref: "#/components/schemas/Addon" }
+        branch_limit: { type: [integer, "null"], description: "Effective limit (override, else plan); `null` = unlimited" }
+        staff_limit: { type: [integer, "null"], description: "Staff seats: members plus open invitations; `null` = unlimited" }
+        modules:
+          type: array
+          description: Modules the organization may use (the sector's modules minus add-ons not granted)
+          items: { $ref: "#/components/schemas/SectorModule" }
+
+    EntitlementSummary:
+      allOf:
+        - $ref: "#/components/schemas/Entitlements"
+        - type: object
+          required: [used, period, usage]
+          properties:
+            used:
+              type: object
+              required: [branches, staff]
+              properties:
+                branches: { type: integer }
+                staff: { type: integer }
+            period: { type: string, example: "2026-10", description: Current month in the organization time zone }
+            usage:
+              type: array
+              items:
+                type: object
+                required: [metric, quantity]
+                properties:
+                  metric: { type: string, enum: [sms, whatsapp, email, voice_call] }
+                  quantity: { type: integer }
+
+    PlatformEntitlements:
+      allOf:
+        - $ref: "#/components/schemas/EntitlementSummary"
+        - type: object
+          required: [overrides, catalog]
+          properties:
+            overrides:
+              type: object
+              required: [branch_limit, staff_limit]
+              properties:
+                branch_limit: { type: [integer, "null"] }
+                staff_limit: { type: [integer, "null"] }
+            catalog:
+              type: object
+              required: [plans, addons]
+              properties:
+                plans:
+                  type: array
+                  items: { $ref: "#/components/schemas/Plan" }
+                addons:
+                  type: array
+                  items: { $ref: "#/components/schemas/Addon" }
+
+    SetEntitlementsRequest:
+      type: object
+      required: [plan, addons, branch_limit, staff_limit]
+      additionalProperties: false
+      properties:
+        plan: { $ref: "#/components/schemas/PlanCode" }
+        addons:
+          type: array
+          items: { $ref: "#/components/schemas/Addon" }
+        branch_limit: { type: [integer, "null"], minimum: 1, description: "Override; `null` = plan default" }
+        staff_limit: { type: [integer, "null"], minimum: 1, description: "Override; `null` = plan default" }
+
+    EnvelopeEntitlementSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/EntitlementSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePlatformEntitlements:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PlatformEntitlements" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     EnvelopeSectorList:
       type: object
       required: [success, data, meta]
@@ -6833,10 +7025,11 @@ components:
 
     TenantContext:
       type: object
-      required: [organization, role, roles, permissions, branch_scope, sector]
+      required: [organization, role, roles, permissions, branch_scope, sector, entitlements]
       properties:
         organization: { $ref: "#/components/schemas/TenantOrganization" }
         sector: { $ref: "#/components/schemas/Sector" }
+        entitlements: { $ref: "#/components/schemas/Entitlements" }
         role:
           type: string
           description: Caller's primary tenant role key in this organization (`owner`, `admin`, `member`, a Rentopia template or a custom key)
@@ -7339,7 +7532,7 @@ components:
 
     Organization:
       type: object
-      required: [uuid, slug, name, status, timezone, currency, sector, access_starts_at, created_at, updated_at]
+      required: [uuid, slug, name, status, timezone, currency, sector, plan, addons, branch_limit, staff_limit, access_starts_at, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -7351,6 +7544,12 @@ components:
         timezone: { type: string, description: "IANA zone for calendar decisions; instants stay UTC", example: Europe/Istanbul }
         currency: { type: string, pattern: "^[A-Z]{3}$", description: ISO 4217 code of every amount of the organization, example: TRY }
         sector: { $ref: "#/components/schemas/SectorCode" }
+        plan: { $ref: "#/components/schemas/PlanCode" }
+        addons:
+          type: array
+          items: { $ref: "#/components/schemas/Addon" }
+        branch_limit: { type: [integer, "null"], description: "Stored override; `null` = plan default" }
+        staff_limit: { type: [integer, "null"], description: "Stored override; `null` = plan default" }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
         settings:

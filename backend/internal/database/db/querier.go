@@ -17,6 +17,7 @@ type Querier interface {
 	AddMemberBranch(ctx context.Context, arg AddMemberBranchParams) error
 	AddMemberRole(ctx context.Context, arg AddMemberRoleParams) error
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) (OrganizationMember, error)
+	AddOrganizationUsage(ctx context.Context, arg AddOrganizationUsageParams) (OrganizationUsage, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams) (bool, error)
 	// Moves a pending / failed job to processing (one worker at a time).
@@ -33,6 +34,9 @@ type Querier interface {
 	CountAppLogsByLevel(ctx context.Context) ([]CountAppLogsByLevelRow, error)
 	CountBranches(ctx context.Context, arg CountBranchesParams) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
+	// Live branches and staff seats (members plus open invitations) of a
+	// business.
+	CountEntitlementUsage(ctx context.Context, organizationID int64) (CountEntitlementUsageRow, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountInvitations(ctx context.Context, arg CountInvitationsParams) (int64, error)
@@ -248,6 +252,7 @@ type Querier interface {
 	ListOrganizationMembershipsByUser(ctx context.Context, userID int64) ([]ListOrganizationMembershipsByUserRow, error)
 	ListOrganizationResourceActivity(ctx context.Context, arg ListOrganizationResourceActivityParams) ([]ListOrganizationResourceActivityRow, error)
 	ListOrganizationSettingsVersions(ctx context.Context, arg ListOrganizationSettingsVersionsParams) ([]ListOrganizationSettingsVersionsRow, error)
+	ListOrganizationUsage(ctx context.Context, arg ListOrganizationUsageParams) ([]OrganizationUsage, error)
 	// Platform organization management (TEC-670): list with owner and counts,
 	// export / bulk uuids, profile logo, activity.
 	// Access state: 'upcoming' before access_starts_at, 'expired' after
@@ -369,6 +374,9 @@ type Querier interface {
 	UpdateOAuthAccountRefreshToken(ctx context.Context, arg UpdateOAuthAccountRefreshTokenParams) error
 	UpdateOAuthProviderSettings(ctx context.Context, arg UpdateOAuthProviderSettingsParams) (OauthProviderSetting, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
+	// Entitlements and usage (TEC-883).
+	// PUT semantics: every value is replaced; NULL limits mean the plan default.
+	UpdateOrganizationEntitlements(ctx context.Context, arg UpdateOrganizationEntitlementsParams) (Organization, error)
 	UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)

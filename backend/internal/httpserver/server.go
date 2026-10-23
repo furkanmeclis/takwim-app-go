@@ -35,6 +35,7 @@ import (
 	bulkmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk"
 	bulkhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/handler"
 	bulkusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/usecase"
+	entitlementsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/entitlements"
 	exportmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports"
 	exporthandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/handler"
 	exportusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/usecase"
@@ -316,6 +317,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		tenantResolver = orgCache
 	}
 	tenantmodule.RegisterRoutes(mux, tokens, loader, tenantResolver)
+
+	// Plan and add-on entitlements (TEC-883): limits on branches and staff
+	// seats, Konfirmasyon add-on, monthly communication usage.
+	entitlementSvc := entitlementsmodule.New(deps.Queries)
+	branchSvc.SetLimiter(entitlementSvc)
+	orgSvc.SetStaffLimiter(entitlementSvc)
+	entitlementsmodule.RegisterRoutes(mux, entitlementsmodule.NewHandler(entitlementSvc, orgSvc, activityRec), tokens, loader, tenantResolver)
 	organizationsmodule.RegisterTenantRoutes(mux, orgH, tokens, loader, tenantResolver)
 	orgsettingsmodule.RegisterRoutes(mux, orgsettingshandler.New(
 		orgsettingsusecase.New(orgsettingsrepository.NewPostgres(deps.DB, deps.Queries)), activityRec,

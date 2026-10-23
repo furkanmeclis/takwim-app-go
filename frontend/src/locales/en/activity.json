@@ -97,5 +97,6 @@
   "actions.invitations.accepted": "Invitation accepted",
   "actions.organization.updated": "Business name updated",
   "actions.organization.logo_updated": "Business logo updated",
-  "actions.organization.logo_removed": "Business logo removed"
+  "actions.organization.logo_removed": "Business logo removed",
+  "actions.organizations.entitlements_updated": "Organization plan updated"
 }

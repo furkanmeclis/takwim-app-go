@@ -145,6 +145,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The seed opens a second branch: above the starter plan (TEC-883).
+		if org, err = orgSvc.SetEntitlements(ctx, org.UUID, orgmodel.SetEntitlementsInput{Plan: "growth"}); err != nil {
+			t.Fatal(err)
+		}
 		return &isoOrg{org: org, owner: owner, marker: marker, ids: map[string]string{}}
 	}
 	orgA := newOrg("Iso A", alice, "AMARK"+suffix)

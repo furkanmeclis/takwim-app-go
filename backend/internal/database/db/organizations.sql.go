@@ -91,7 +91,7 @@ INSERT INTO organizations (
     COALESCE($5, NOW()), $6,
     COALESCE($7, '{}'::jsonb), COALESCE($8::varchar, 'hairdresser')
 )
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
 `
 
 type CreateOrganizationParams struct {
@@ -133,6 +133,10 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
@@ -156,7 +160,7 @@ func (q *Queries) DeleteOrganizationMember(ctx context.Context, arg DeleteOrgani
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -179,12 +183,16 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organizati
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
 WHERE slug = $1 AND deleted_at IS NULL
 `
 
@@ -207,12 +215,16 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
 
 const getOrganizationByUUID = `-- name: GetOrganizationByUUID :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
 WHERE uuid = $1 AND deleted_at IS NULL
 `
 
@@ -235,6 +247,10 @@ func (q *Queries) GetOrganizationByUUID(ctx context.Context, argUuid uuid.UUID) 
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
@@ -580,7 +596,7 @@ func (q *Queries) ListTenantRolePermissionSlugsByRoleID(ctx context.Context, rol
 }
 
 const lockOrganizationRow = `-- name: LockOrganizationRow :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
 WHERE id = $1 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -604,13 +620,17 @@ func (q *Queries) LockOrganizationRow(ctx context.Context, id int64) (Organizati
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
 
 const resolveOrganizationScopeBySlug = `-- name: ResolveOrganizationScopeBySlug :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       o.sector, o.timezone, o.currency,
+       o.sector, o.timezone, o.currency, o.plan, o.addons, o.branch_limit, o.staff_limit,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $1
@@ -634,6 +654,10 @@ type ResolveOrganizationScopeBySlugRow struct {
 	Sector         string             `json:"sector"`
 	Timezone       string             `json:"timezone"`
 	Currency       string             `json:"currency"`
+	Plan           string             `json:"plan"`
+	Addons         []string           `json:"addons"`
+	BranchLimit    pgtype.Int4        `json:"branch_limit"`
+	StaffLimit     pgtype.Int4        `json:"staff_limit"`
 	RoleID         int64              `json:"role_id"`
 	RoleKey        string             `json:"role_key"`
 	MemberID       int64              `json:"member_id"`
@@ -654,6 +678,10 @@ func (q *Queries) ResolveOrganizationScopeBySlug(ctx context.Context, arg Resolv
 		&i.Sector,
 		&i.Timezone,
 		&i.Currency,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 		&i.RoleID,
 		&i.RoleKey,
 		&i.MemberID,
@@ -664,7 +692,7 @@ func (q *Queries) ResolveOrganizationScopeBySlug(ctx context.Context, arg Resolv
 
 const resolveOrganizationScopeByUUID = `-- name: ResolveOrganizationScopeByUUID :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       o.sector, o.timezone, o.currency,
+       o.sector, o.timezone, o.currency, o.plan, o.addons, o.branch_limit, o.staff_limit,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $1
@@ -688,6 +716,10 @@ type ResolveOrganizationScopeByUUIDRow struct {
 	Sector         string             `json:"sector"`
 	Timezone       string             `json:"timezone"`
 	Currency       string             `json:"currency"`
+	Plan           string             `json:"plan"`
+	Addons         []string           `json:"addons"`
+	BranchLimit    pgtype.Int4        `json:"branch_limit"`
+	StaffLimit     pgtype.Int4        `json:"staff_limit"`
 	RoleID         int64              `json:"role_id"`
 	RoleKey        string             `json:"role_key"`
 	MemberID       int64              `json:"member_id"`
@@ -708,6 +740,10 @@ func (q *Queries) ResolveOrganizationScopeByUUID(ctx context.Context, arg Resolv
 		&i.Sector,
 		&i.Timezone,
 		&i.Currency,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 		&i.RoleID,
 		&i.RoleKey,
 		&i.MemberID,
@@ -721,7 +757,7 @@ UPDATE organizations
 SET access_starts_at = COALESCE($1, access_starts_at),
     access_ends_at = $2
 WHERE uuid = $3 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
 `
 
 type SetOrganizationAccessWindowParams struct {
@@ -749,6 +785,10 @@ func (q *Queries) SetOrganizationAccessWindow(ctx context.Context, arg SetOrgani
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
@@ -757,7 +797,7 @@ const setOrganizationStatus = `-- name: SetOrganizationStatus :one
 UPDATE organizations
 SET status = $1
 WHERE uuid = $2 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
 `
 
 type SetOrganizationStatusParams struct {
@@ -784,6 +824,10 @@ func (q *Queries) SetOrganizationStatus(ctx context.Context, arg SetOrganization
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
@@ -805,7 +849,7 @@ const softDeleteOrganization = `-- name: SoftDeleteOrganization :one
 UPDATE organizations
 SET deleted_at = NOW()
 WHERE uuid = $1 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
 `
 
 func (q *Queries) SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error) {
@@ -827,6 +871,10 @@ func (q *Queries) SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID)
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }
@@ -841,7 +889,7 @@ SET name = COALESCE($1, name),
     currency = COALESCE($6, currency),
     sector = COALESCE($7, sector)
 WHERE uuid = $8 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
 `
 
 type UpdateOrganizationParams struct {
@@ -883,6 +931,10 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }

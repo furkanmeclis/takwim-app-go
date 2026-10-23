@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
@@ -31,6 +32,10 @@ type contextDTO struct {
 	// Sector is the definition of the organization's sector: booking flow,
 	// capacity, terms and visible modules (TEC-882).
 	Sector sector.Definition `json:"sector"`
+	// Entitlements: plan, add-ons, effective limits and the modules the
+	// organization may use (the sector's modules minus add-ons not
+	// granted; TEC-883). The panel shows exactly these modules.
+	Entitlements entitlement.Effective `json:"entitlements"`
 }
 
 // listSectors serves GET /v1/sectors: the sector catalog (any signed-in
@@ -65,10 +70,11 @@ func getContext(w http.ResponseWriter, r *http.Request) {
 			Timezone:     s.Timezone,
 			Currency:     s.Currency,
 		},
-		Role:        s.MemberRole,
-		Roles:       roles,
-		Permissions: perms,
-		BranchScope: branchScope,
-		Sector:      sector.Of(s.Sector),
+		Role:         s.MemberRole,
+		Roles:        roles,
+		Permissions:  perms,
+		BranchScope:  branchScope,
+		Sector:       sector.Of(s.Sector),
+		Entitlements: entitlement.ForScope(s),
 	})
 }

@@ -17,15 +17,21 @@ const (
 )
 
 type Organization struct {
-	ID             int64           `json:"-"`
-	UUID           uuid.UUID       `json:"uuid"`
-	Slug           string          `json:"slug"`
-	Name           string          `json:"name"`
-	LogoURL        *string         `json:"logo_url,omitempty"`
-	Status         string          `json:"status"`
-	Timezone       string          `json:"timezone"`
-	Currency       string          `json:"currency"`
-	Sector         string          `json:"sector"`
+	ID       int64     `json:"-"`
+	UUID     uuid.UUID `json:"uuid"`
+	Slug     string    `json:"slug"`
+	Name     string    `json:"name"`
+	LogoURL  *string   `json:"logo_url,omitempty"`
+	Status   string    `json:"status"`
+	Timezone string    `json:"timezone"`
+	Currency string    `json:"currency"`
+	Sector   string    `json:"sector"`
+	// Plan, Addons and the limit overrides (nil = plan default) are the
+	// stored entitlements (TEC-883).
+	Plan           string          `json:"plan"`
+	Addons         []string        `json:"addons"`
+	BranchLimit    *int32          `json:"branch_limit"`
+	StaffLimit     *int32          `json:"staff_limit"`
 	AccessStartsAt time.Time       `json:"access_starts_at"`
 	AccessEndsAt   *time.Time      `json:"access_ends_at,omitempty"`
 	Settings       json.RawMessage `json:"settings,omitempty"`
@@ -105,4 +111,13 @@ type MemberListFilter struct {
 	Q         string
 	SortField string
 	SortDesc  bool
+}
+
+// SetEntitlementsInput replaces the entitlements of an organization (PUT):
+// a nil limit clears the override (plan default).
+type SetEntitlementsInput struct {
+	Plan        string
+	Addons      []string
+	BranchLimit *int32
+	StaffLimit  *int32
 }

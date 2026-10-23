@@ -43,5 +43,6 @@
   "nav_tenant_settings_integrations": "Integrations",
   "nav_fleet_transfers": "Transfers",
   "nav_fleet_one_way_rules": "One-way rules",
-  "nav_organizations": "Businesses"
+  "nav_organizations": "Businesses",
+  "nav_tenant_settings_plan": "Plan and usage"
 }

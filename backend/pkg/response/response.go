@@ -28,6 +28,8 @@ const (
 	CodeOrganizationSuspended     = "ORGANIZATION_SUSPENDED"
 	CodeOrganizationAccessExpired = "ORGANIZATION_ACCESS_EXPIRED"
 	CodeLastOrganizationOwner     = "LAST_ORGANIZATION_OWNER"
+	CodePlanLimitReached          = "PLAN_LIMIT_REACHED"
+	CodeModuleNotEnabled          = "MODULE_NOT_ENABLED"
 	CodeRealtimeDisabled          = "REALTIME_DISABLED"
 	CodeStepUpRequired            = "STEP_UP_REQUIRED"
 	CodeMFARequired               = "MFA_REQUIRED"
