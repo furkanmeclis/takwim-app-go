@@ -31,10 +31,10 @@ import { authService } from "@/services/auth.service";
 import { fetchAppPublicConfig } from "@/services/app-config.service";
 import { cn } from "@/lib/utils";
 
-type AccountShell = "platform" | "cms";
+type AccountShell = "platform" | "account";
 
 function homeHref(shell: AccountShell) {
-  return shell === "platform" ? routes.platform.home : routes.cms.home;
+  return shell === "platform" ? routes.platform.home : routes.account.home;
 }
 
 export function AccountProfilePage({ shell }: { shell: AccountShell }) {

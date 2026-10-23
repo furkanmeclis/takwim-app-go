@@ -1,7 +1,7 @@
 ---
 name: nav-engine
 description: >-
-  Add or change platform/CMS sidebar items via the nav-engine catalog:
+  Add or change platform/organization sidebar items via the nav-engine catalog:
   accordion groups, count/label/dot/custom badges, and info popovers.
   Use when editing the sidebar, AppSidebar, config/nav.ts, nav items,
   nav groups, badges, or sidebar info.
@@ -16,7 +16,7 @@ That file only mounts `NavEngine`.
 
 | Piece | Path |
 |-------|------|
-| Catalog | `frontend/src/config/nav.ts` (`platformNav`, `settingsNav`, `tenantNav(slug)`, `cmsNav`) |
+| Catalog | `frontend/src/config/nav.ts` (`platformNav`, `settingsNav`, `tenantNav(slug)`) |
 | Engine | `frontend/src/features/nav-engine` |
 | Canonical example | `frontend/src/features/users/nav/` |
 

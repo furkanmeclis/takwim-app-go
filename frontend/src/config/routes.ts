@@ -14,14 +14,19 @@ export const routes = {
     resetPassword: "/platform/reset-password",
     verifyEmail: "/platform/verify-email",
   },
-  cms: {
-    root: "/",
+  /**
+   * Shell-independent pages for every signed-in user. `/` only routes the
+   * user to their home (see `defaultHomeForUser`).
+   */
+  account: {
     home: "/",
     profile: {
       root: "/profile",
       password: "/profile/password",
       preferences: "/profile/preferences",
     },
+    organizations: "/organizations",
+    noAccess: "/no-access",
   },
   /**
    * Organization (tenant) shell `/t/{slug}`. The slug in the URL picks the

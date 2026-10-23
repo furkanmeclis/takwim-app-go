@@ -14,7 +14,7 @@ Human docs: `docs/DEVELOPMENT.md`. Canonical env is the **repo-root** `.env`.
 ## Layout
 
 - `backend/` — Go API + worker (`:8080`, `/v1/...`)
-- `frontend/` — Next.js BFF (`/platform` + CMS `/`)
+- `frontend/` — Next.js BFF (`/platform` + organizations `/t/{slug}`)
 - `compose.local.yml` — infra only (Postgres, Redis, MinIO, MailHog, Adminer, Centrifugo, Meilisearch)
 - `compose.prod.yml` — full stack on its own app network; frontend + centrifugo also join `dokploy-network`
 
@@ -74,12 +74,13 @@ make create-super-admin
 | MailHog | http://127.0.0.1:8025 |
 | Meilisearch | http://127.0.0.1:7700 |
 
-Sign-in role: `super_admin` → `/platform`. Roleless / `cms_user` → `/` (CMS).
+Sign-in: `super_admin` / any `platform.*` permission → `/platform`; one organization → `/t/{slug}`; several → `/organizations`; none → `/no-access`.
 
 ## 4. Shells & RBAC
 
 - Platform (`/platform`): `super_admin` or any `platform.*` permission
-- CMS (`/`): other authenticated users
+- Organization (`/t/{slug}`): members of that organization
+- Account pages (`/profile`, `/organizations`, `/no-access`): any signed-in user
 - Public register creates a user with **no** roles
 - Assign roles from platform admin
 - No tenants / workspaces / `/business`

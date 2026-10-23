@@ -18,7 +18,8 @@ This repo is a two-app monorepo plus Compose files. Dependencies point inward: H
 │   └── docs/openapi.yaml         OpenAPI 3.1 (Scalar at /docs/)
 ├── frontend/                     Next.js BFF
 │   ├── src/app/(platform)        /platform admin
-│   ├── src/app/(cms)             / CMS shell
+│   ├── src/app/(tenant)          /t/{slug} organization shell
+│   ├── src/app/(account)         / (home router), profile, organization picker
 │   ├── src/app/(guest)           login, reset, verify
 │   ├── src/app/api/v1            BFF proxy → Go
 │   └── src/features/             users, roles, notifications, io, bulk-engine,
@@ -33,10 +34,11 @@ This repo is a two-app monorepo plus Compose files. Dependencies point inward: H
 | Surface | Path | Who |
 |---------|------|-----|
 | Platform | `/platform` | `super_admin` or any `platform.*` permission |
-| CMS | `/` | other authenticated users (`cms_user` seed, or any role without platform perms) |
+| Organization | `/t/{slug}` | members of that organization (`tenant.*` permissions from the membership role) |
+| Account | `/profile`, `/organizations`, `/no-access` | any signed-in user |
 | Guest | `/platform/login` (aliases also exist at `/login`) | signed-out users |
 
-There is **no** tenant, workspace, or `/business` shell. JWT claims are `sub`, `roles`, `is_super_admin`, `exp`, optional `imp` (impersonator) — no `tid` / `wid`.
+After sign-in `next` wins; otherwise platform users land on `/platform`, users with one organization on `/t/{slug}`, users with several on `/organizations`, and everyone else on `/no-access` (`defaultHomeForUser`). There is no workspace or `/business` shell. JWT claims are `sub`, `roles`, `is_super_admin`, `exp`, optional `imp` (impersonator) — no `tid` / `wid`.
 
 ## Request flow
 

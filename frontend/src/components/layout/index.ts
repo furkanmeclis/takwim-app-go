@@ -8,3 +8,4 @@ export { Footer } from "./footer";
 export { ThemeSwitch } from "./theme-switch";
 export { LocaleSwitch } from "./locale-switch";
 export { UserMenu } from "./user-menu";
+export { AccountLayout } from "./account-layout";

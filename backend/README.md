@@ -48,7 +48,7 @@ curl -sS -X POST http://127.0.0.1:8080/v1/auth/register \
   }'
 ```
 
-Creates a user only (`201 { user }`, no tokens). Roleless users can sign in and land on the CMS shell. Assign roles from platform admin (`POST/PATCH /v1/platform/users` with `role_uuids[]`).
+Creates a user only (`201 { user }`, no tokens). Roleless users can sign in; without an organization membership they land on the "no access yet" page. Assign roles from platform admin (`POST/PATCH /v1/platform/users` with `role_uuids[]`).
 
 Also enqueues welcome + email verification via the notification center (MailHog locally).
 

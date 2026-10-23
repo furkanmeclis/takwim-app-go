@@ -16,7 +16,7 @@ import { NotificationLiveBridge } from "@/features/notifications/components/noti
 import { OrganizationSwitcher } from "@/features/tenant/components/organization-switcher";
 import { useWebPushSync } from "@/hooks/use-web-push-sync";
 
-export type AppLayoutVariant = "platform" | "cms" | "tenant";
+export type AppLayoutVariant = "platform" | "tenant";
 
 export function AppLayout({
   children,
