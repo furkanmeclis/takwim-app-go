@@ -34,6 +34,14 @@ Canonical env is the **repo-root** `.env`. Compose files are `compose.local.yml`
 | [backend/DATABASE_RULES.md](./backend/DATABASE_RULES.md) | Migrations + sqlc |
 | [backend/docs/auth.md](./backend/docs/auth.md) | JWT, roles, permissions |
 
+## UI rules (frontend)
+
+- **shadcn only.** Build every control from `frontend/src/components/ui/*` (shadcn). No native `<select>`, `<table>`, `<input>`, `<input type="date">`, `<textarea>` or hand-rolled widgets in features; if a primitive is missing, add it with the shadcn MCP/CLI (`components.json`) into `components/ui/` first. ESLint enforces this under `src/features` and `src/app` (a hidden `type="file"` input behind a drop zone is the one exception).
+- **DataTable wherever a list exists.** Any collection (main lists, detail sub-lists, diffs, pickers with many rows) uses the DataTable stack in `components/tables/*` + `components/entity/*` (`EntityTable`, `useServerListState`, `createColumn`, `useUrlListDefaults`), not ad-hoc markup. Follow the `add-tenant-resource` checklist for list pages.
+- **One design language.** Reuse the entity page/detail/section-card/drawer/dialog patterns, the same spacing, typography, empty/loading/error states, toasts (`sonner` through `appToast`), confirmation dialogs and `AppDatePicker`. A new screen should look and behave like the existing ones; prefer extending a shared component over a one-off.
+- **Mobile first panel.** Every screen works at phone width: the sidebar collapses to a sheet, tables switch to the grid view (`gridPrimary` / `gridSecondary` columns), dialogs and drawers fit the viewport. The API is shared with the future mobile app, so screens never depend on browser-only behaviour for business rules.
+- **Turkish first.** Every string through i18n (`tr` primary, `en` complete; `node scripts/check-i18n.mjs`).
+
 ## Hard rules
 
 - Browser talks to same-origin `/api/v1/*`, never the Go host.

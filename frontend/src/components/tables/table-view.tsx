@@ -24,7 +24,10 @@ import {
   type Table,
 } from "@tanstack/react-table";
 
-import { ColumnFilter } from "@/components/tables/column-filter";
+import {
+  ColumnFilter,
+  hasInlineColumnFilter,
+} from "@/components/tables/column-filter";
 import { ColumnHeader } from "@/components/tables/column-header";
 import {
   EditableCell,
@@ -206,7 +209,9 @@ export function TableView<TData>({
             })}
           </TableRow>
 
-          {showColumnFilters && !reorderMode ? (
+          {showColumnFilters &&
+          !reorderMode &&
+          leafHeaders.some((header) => hasInlineColumnFilter(header.column)) ? (
             <TableRow className="border-border border-b transition-none hover:bg-transparent">
               {leafHeaders.map((header) => {
                 const pinned = header.column.getIsPinned();

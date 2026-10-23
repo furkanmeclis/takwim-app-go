@@ -24,14 +24,20 @@ type ColumnFilterProps<TData> = {
   column: Column<TData, unknown>;
 };
 
+/** Whether {@link ColumnFilter} renders a control for this column. */
+export function hasInlineColumnFilter<TData>(column: Column<TData, unknown>) {
+  if (!column.getCanFilter()) return false;
+  const meta = column.columnDef.meta as DataTableColumnMeta | undefined;
+  return (meta?.filterVariant ?? "text") !== "faceted";
+}
+
 export function ColumnFilter<TData>({ column }: ColumnFilterProps<TData>) {
   const { t } = useLocale();
-  if (!column.getCanFilter()) return null;
+  // Faceted filters live in the toolbar (quick filters)
+  if (!hasInlineColumnFilter(column)) return null;
 
   const meta = column.columnDef.meta as DataTableColumnMeta | undefined;
   const variant = meta?.filterVariant ?? "text";
-  // Faceted filters live in the toolbar (quick filters)
-  if (variant === "faceted") return null;
 
   const value = column.getFilterValue();
 

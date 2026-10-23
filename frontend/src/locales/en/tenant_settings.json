@@ -117,6 +117,8 @@
   "diff.title": "Version {{older}} → {{newer}}",
   "diff.description": "Changed fields; stored versions never change.",
   "diff.field": "Field",
+  "diff.before": "Before",
+  "diff.after": "After",
   "diff.no_changes": "These two versions are identical.",
   "diff.load_failed": "Versions could not be loaded.",
   "diff.yes": "Yes",

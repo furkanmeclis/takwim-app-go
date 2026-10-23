@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo } from "react";
 
 import { Loading } from "@/components/common/loading";
-import { Badge } from "@/components/ui/badge";
+import { EntityTable } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import {
   Dialog,
   DialogContent,
@@ -12,14 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   FIELD_LABEL_KEYS,
   INVOICE_ITEM_LABEL_KEYS,
   SALES_CHANNEL_LABEL_KEYS,
 } from "@/features/tenant-settings/constants";
 import { useSettingsVersionPair } from "@/features/tenant-settings/hooks/use-tenant-settings";
-import { diffSettings } from "@/features/tenant-settings/lib/settings-diff";
+import {
+  diffSettings,
+  type SettingsDiffRow,
+} from "@/features/tenant-settings/lib/settings-diff";
 import type {
   InvoiceItemType,
   SalesChannelCode,
@@ -89,6 +92,38 @@ export function VersionDiffDialog({
     return enumKey ? t(enumKey) : value;
   };
 
+  const columns = [
+    createColumn<SettingsDiffRow>({
+      accessorKey: "path",
+      labelKey: "tenant_settings.diff.field",
+      enableSorting: false,
+      gridPrimary: true,
+      cell: ({ row }) => (
+        <span className="font-medium">{pathLabel(row.original.path)}</span>
+      ),
+    }),
+    createColumn<SettingsDiffRow>({
+      accessorKey: "before",
+      labelKey: "tenant_settings.diff.before",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground break-words whitespace-pre-wrap line-through decoration-1">
+          {display(row.original.path, row.original.before)}
+        </span>
+      ),
+    }),
+    createColumn<SettingsDiffRow>({
+      accessorKey: "after",
+      labelKey: "tenant_settings.diff.after",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="break-words whitespace-pre-wrap">
+          {display(row.original.path, row.original.after)}
+        </span>
+      ),
+    }),
+  ] as ColumnDef<SettingsDiffRow, unknown>[];
+
   return (
     <Dialog open={Boolean(versions)} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
@@ -116,42 +151,21 @@ export function VersionDiffDialog({
             {t("tenant_settings.diff.no_changes")}
           </p>
         ) : (
-          <ScrollArea className="max-h-[60vh] pr-3">
-            <table className="w-full text-sm">
-              <thead className="text-muted-foreground text-left text-xs">
-                <tr>
-                  <th className="py-2 pr-3 font-medium">
-                    {t("tenant_settings.diff.field")}
-                  </th>
-                  <th className="py-2 pr-3 font-medium">
-                    <Badge variant="outline">v{versions?.[0]}</Badge>
-                  </th>
-                  <th className="w-4" />
-                  <th className="py-2 font-medium">
-                    <Badge variant="secondary">v{versions?.[1]}</Badge>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-border divide-y">
-                {rows.map((row) => (
-                  <tr key={row.path} className="align-top">
-                    <td className="py-2 pr-3 font-medium">
-                      {pathLabel(row.path)}
-                    </td>
-                    <td className="text-muted-foreground py-2 pr-3 break-words whitespace-pre-wrap line-through decoration-1">
-                      {display(row.path, row.before)}
-                    </td>
-                    <td className="text-muted-foreground py-2">
-                      <ArrowRight className="size-3.5" />
-                    </td>
-                    <td className="py-2 break-words whitespace-pre-wrap">
-                      {display(row.path, row.after)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollArea>
+          <EntityTable
+            columns={columns}
+            data={rows}
+            getRowId={(row) => row.path}
+            emptyTitle={t("tenant_settings.diff.no_changes")}
+            manual={{ filtering: false, sorting: false, pagination: false }}
+            features={{
+              persistKey: "tenant-settings-version-diff-v1",
+              rowSelection: false,
+              columnFilters: false,
+              facetedFilters: false,
+              sorting: false,
+              pagination: false,
+            }}
+          />
         )}
       </DialogContent>
     </Dialog>
