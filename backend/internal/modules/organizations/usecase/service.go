@@ -747,9 +747,14 @@ func normalizeRequestedSlug(v string) string {
 	return trimSlug(slug.FromName(strings.TrimSpace(v)), 64)
 }
 
+// reservedSlug reports slugs a business cannot take. Besides the panel's
+// own paths, the business page host (takwim.link/{slug}) serves the
+// customer panel at /panel and the app's public paths there
+// (docs/design/business-page.md).
 func reservedSlug(v string) bool {
 	switch v {
-	case "admin", "api", "platform", "login", "t", "www":
+	case "admin", "api", "platform", "login", "t", "www",
+		"panel", "b", "embed", "share", "invite", "health":
 		return true
 	default:
 		return false

@@ -12,6 +12,7 @@ import enCustomers from "@/locales/en/customers.json";
 import enReservations from "@/locales/en/reservations.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
+import enBusinessPage from "@/locales/en/business_page.json";
 import enChart from "@/locales/en/chart.json";
 import enCommon from "@/locales/en/common.json";
 import enDashboard from "@/locales/en/dashboard.json";
@@ -54,6 +55,7 @@ import trCustomers from "@/locales/tr/customers.json";
 import trReservations from "@/locales/tr/reservations.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
+import trBusinessPage from "@/locales/tr/business_page.json";
 import trChart from "@/locales/tr/chart.json";
 import trCommon from "@/locales/tr/common.json";
 import trDashboard from "@/locales/tr/dashboard.json";
@@ -98,6 +100,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     auth: trAuth,
     branding: trBranding,
     bulk: trBulk,
+    business_page: trBusinessPage,
     entity: trEntity,
     organizations: trOrganizations,
     permissions: trPermissions,
@@ -142,6 +145,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     auth: enAuth,
     branding: enBranding,
     bulk: enBulk,
+    business_page: enBusinessPage,
     entity: enEntity,
     organizations: enOrganizations,
     permissions: enPermissions,

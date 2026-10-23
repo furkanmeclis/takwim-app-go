@@ -106,7 +106,7 @@ It has composite foreign keys to branches, capacity holds and reservations, and 
 
 ## Not in this issue
 
-- **Pages.** The business page and the widget (TEC-907 / TEC-908).
+- **Pages.** The business page ([business-page.md](./business-page.md), TEC-907) and the widget (TEC-908).
 - **Phone verification and the customer panel** (TEC-909 / TEC-910): see above.
 - **Packages and products in the public catalog.** They come with their catalog modules (bundles TEC-895, products TEC-918 / TEC-919).
 - **Payment.** An online payment link for `online_pending` bookings comes with the payment layer (TEC-912). Until then the booking answers `requested` / `online_pending` with `expires_at`.
