@@ -12,6 +12,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # No AI attribution in commit messages (AGENTS.md hard rule). auto-pr waits
+  # on this job, so a branch carrying such a message is never merged.
+  commit-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject AI attribution in pushed commit messages
+        env:
+          MESSAGES: ${{ toJSON(github.event.commits.*.message) }}
+        run: |
+          if grep -Eiq 'co-authored-by:[^"]*(claude|anthropic)|noreply@anthropic\.com|claude-session|claude\.ai/code|generated with \[?claude' <<<"$MESSAGES"; then
+            echo "::error title=Commit policy::A pushed commit message contains AI attribution. Remove it (git commit --amend / rebase on your own branch)."
+            exit 1
+          fi
+
   backend:
     runs-on: ubuntu-latest
     defaults:
@@ -74,7 +88,7 @@ jobs:
   # main. Otherwise GITHUB_TOKEN, which needs Settings → Actions → General →
   # "Allow GitHub Actions to create and approve pull requests".
   auto-pr:
-    needs: [backend, frontend]
+    needs: [commit-policy, backend, frontend]
     if: >-
       github.event_name == 'push' &&
       github.ref_name != 'main' &&
