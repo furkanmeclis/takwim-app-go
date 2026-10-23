@@ -1,5 +1,6 @@
 import {
   Armchair,
+  ArrowLeftRight,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
@@ -17,6 +18,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogIn,
+  Package,
   Palette,
   ScrollText,
   Settings2,
@@ -349,6 +351,22 @@ export function tenantNav(slug: string): NavCatalog {
             icon: ConciergeBell,
             permission: permissions.tenant.services.read,
             module: "services",
+          },
+          {
+            id: "products",
+            titleKey: "layout.nav_products",
+            href: routes.tenant.products.root(slug),
+            icon: Package,
+            permission: permissions.tenant.products.read,
+            module: "products",
+          },
+          {
+            id: "stock-movements",
+            titleKey: "layout.nav_stock_movements",
+            href: routes.tenant.stockMovements.root(slug),
+            icon: ArrowLeftRight,
+            permission: permissions.tenant.products.read,
+            module: "products",
           },
           {
             id: "customers",

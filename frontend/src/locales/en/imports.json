@@ -110,5 +110,6 @@
   "resources.tenant.staff": "Staff",
   "resources.tenant.resources": "Resources",
   "resources.tenant.services": "Services",
+  "resources.tenant.products": "Products",
   "resources.tenant.customers": "Customers"
 }

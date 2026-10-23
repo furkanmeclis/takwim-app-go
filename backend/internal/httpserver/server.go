@@ -78,6 +78,11 @@ import (
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
+	productsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products"
+	productsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/adapters"
+	productshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/handler"
+	productsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/repository"
+	productsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/usecase"
 	publicbookingmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking"
 	publicbookinghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/handler"
 	publicbookingusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/usecase"
@@ -240,6 +245,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewSearch(deps.Queries),
 		resourcesadapters.NewSearch(deps.Queries),
 		servicesadapters.NewSearch(deps.Queries),
+		productsadapters.NewSearch(deps.Queries),
 		customersadapters.NewSearch(deps.Queries),
 		reservationsadapters.NewSearch(deps.Queries),
 	)
@@ -333,6 +339,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	resourcesSvc := resourcesusecase.New(resourcesrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	servicesSvc := servicesusecase.New(servicesrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	servicesSvc.SetStorage(deps.Storage)
+	productsSvc := productsusecase.New(productsrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
+	productsSvc.SetStorage(deps.Storage)
 	customersSvc := customersusecase.New(customersrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	orgSvc := orgusecase.New(
 		orgrepository.NewPostgres(deps.DB, deps.Queries),
@@ -410,6 +418,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffmodule.RegisterLiveResources(tenantLive)
 	resourcesmodule.RegisterLiveResources(tenantLive)
 	servicesmodule.RegisterLiveResources(tenantLive)
+	productsmodule.RegisterLiveResources(tenantLive)
 	customersmodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
@@ -446,6 +455,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewIO(staffSvc),
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
+		productsadapters.NewIO(productsSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
 		orgadapters.NewIO(orgSvc),
@@ -459,6 +469,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewBulk(staffSvc),
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
+		productsadapters.NewBulk(productsSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
 		orgadapters.NewBulk(orgSvc),
@@ -533,6 +544,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Import: importH.TenantUpload(servicesmodule.Resource),
 		Sample: importH.TenantSample(servicesmodule.Resource),
 		Bulk:   bulkH.TenantExecute(servicesmodule.Resource),
+	}, tokens, loader, tenantResolver)
+	productsH := productshandler.New(productsSvc, activityRec)
+	productsH.SetResourceEvents(resourceEvents)
+	productsmodule.RegisterRoutes(mux, productsH, productsmodule.EngineHandlers{
+		Export: exportH.TenantExport(productsmodule.Resource, productsmodule.ExportQueryKeys...),
+		Import: importH.TenantUpload(productsmodule.Resource),
+		Sample: importH.TenantSample(productsmodule.Resource),
+		Bulk:   bulkH.TenantExecute(productsmodule.Resource),
 	}, tokens, loader, tenantResolver)
 	customersH := customershandler.New(customersSvc, activityRec)
 	customersH.SetResourceEvents(resourceEvents)

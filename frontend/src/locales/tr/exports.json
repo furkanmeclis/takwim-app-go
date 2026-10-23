@@ -77,5 +77,6 @@
   "resources.tenant.resources": "Kaynaklar",
   "resources.tenant.services": "Hizmetler",
   "resources.tenant.customers": "Müşteriler",
-  "resources.tenant.reservations": "Rezervasyonlar"
+  "resources.tenant.reservations": "Rezervasyonlar",
+  "resources.tenant.products": "Ürünler"
 }

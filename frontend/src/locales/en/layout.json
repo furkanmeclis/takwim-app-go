@@ -49,6 +49,8 @@
   "nav_staff": "Staff",
   "nav_resources": "Resources",
   "nav_services": "Services",
+  "nav_products": "Products",
+  "nav_stock_movements": "Stock movements",
   "nav_customers": "Customers",
   "nav_reservations": "Reservations",
   "nav_calendar": "Calendar",

@@ -3937,6 +3937,423 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/media/products/{orgUuid}/images/{imageUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Product cover image
+         * @description No authentication; booking pages and the mobile app show product covers. Clients use the `image_url` the API returns. Immutable (cached for a year).
+         */
+        get: operations["getPublicProductImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Product list metadata
+         * @description Table contract of `GET /v1/tenant/products` (`tenant.products.read`, `products` module).
+         */
+        get: operations["getTenantProductsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Product faceted filter options
+         * @description Branches inside the caller's scope that sell products, with counts.
+         */
+        get: operations["getTenantProductsFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find products by barcode or stock code
+         * @description Barcode scanner / SKU entry (`tenant.products.read`). Matches the
+         *     exact barcode or the stock code (case-insensitive) of products and
+         *     variants. A variant match names the variant.
+         */
+        get: operations["getTenantProductsLookup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List products of the organization
+         * @description The product catalog of the `X-Organization` organization
+         *     (`tenant.products.read`). The catalog is business level; `stock`
+         *     sums the branches of the caller's scope (`X-Branch` narrows it).
+         *     `q` searches name, stock code, barcode and the variants.
+         */
+        get: operations["getTenantProducts"];
+        put?: never;
+        /**
+         * Create a product
+         * @description `tenant.products.write`. Stock codes are unique across the products
+         *     and variants of the organization, case-insensitive (`409`).
+         *     `branch_uuids` adds offers at the catalog price; each branch must be
+         *     inside the caller's scope (`branch_uuids.N` `not_found`). Stock
+         *     starts at zero and changes only through stock movements.
+         */
+        post: operations["postTenantProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export products
+         * @description Queues an export of the product catalog with the stock of the
+         *     caller's branches (`tenant.products.export`). `query` honours `q`,
+         *     `branch`, `stock_status`, `is_active` and `show_online`. Poll
+         *     `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantProductsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a product import file
+         * @description Creates an import job (`tenant.products.import`). A row whose `sku`
+         *     matches a product (case-insensitive) updates it, any other row
+         *     creates one; `branch_codes` adds offers to new products. Stock is not
+         *     imported (it moves through the ledger). Continue with
+         *     `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+         */
+        post: operations["postTenantProductsImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a product import sample */
+        get: operations["getTenantProductsImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on products
+         * @description Actions `activate` (`tenant.products.bulk.activate`) and `deactivate`
+         *     (`tenant.products.bulk.deactivate`), both reversible. Targets are
+         *     resolved inside the organization only.
+         */
+        post: operations["postTenantProductsBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a product
+         * @description With `variants` and `levels` (stock per branch of the caller's scope and stock item). A uuid of another organization answers `404`.
+         */
+        get: operations["getTenantProduct"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a product (soft)
+         * @description `tenant.products.write`. Only without stock in any branch (`409` `has_stock`); the ledger stays.
+         */
+        delete: operations["deleteTenantProduct"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a product
+         * @description `tenant.products.write`. Omitted fields are unchanged. Offers change
+         *     through `PUT /offers` (`branch_uuids` is refused here).
+         */
+        patch: operations["patchTenantProduct"];
+        trace?: never;
+    };
+    "/v1/tenant/products/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity of a product
+         * @description Catalog changes and stock movements of the product.
+         */
+        get: operations["getTenantProductActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/{uuid}/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the branch offers of a product
+         * @description `tenant.products.offer`. The list replaces the offers of the branches
+         *     inside the caller's scope; offers in other branches stay as they are.
+         *     A branch outside the scope is `offers.N.branch_uuid` `not_found`.
+         *     `price` null uses the catalog price.
+         */
+        put: operations["putTenantProductOffers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/{uuid}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload the cover image of a product
+         * @description `tenant.products.write`. JPEG, PNG or WebP up to 5 MiB (sniffed); replaces the previous cover.
+         */
+        put: operations["putTenantProductImage"];
+        post?: never;
+        /**
+         * Remove the cover image of a product
+         * @description `tenant.products.write`.
+         */
+        delete: operations["deleteTenantProductImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/{uuid}/variants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a variant to a product
+         * @description `tenant.products.write`. A variant has its own stock code (unique
+         *     with the product codes, `409`). The first variant needs the product's
+         *     own stock at zero (`409` `has_stock`): from then on stock is kept per
+         *     variant.
+         */
+        post: operations["postTenantProductVariant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/products/{uuid}/variants/{variantUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a variant (soft)
+         * @description `tenant.products.write`. Only without stock in any branch (`409` `has_stock`).
+         */
+        delete: operations["deleteTenantProductVariant"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a variant
+         * @description `tenant.products.write`. `price` / `cost` null use the product values.
+         */
+        patch: operations["patchTenantProductVariant"];
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stock movement list metadata
+         * @description Table contract of `GET /v1/tenant/stock-movements` (`tenant.products.read`, `products` module).
+         */
+        get: operations["getTenantStockMovementsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stock movement faceted filter options
+         * @description Kinds, branches and staff in the ledger of the caller's branches, with counts.
+         */
+        get: operations["getTenantStockMovementsFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List stock movements
+         * @description The append-only stock ledger of the caller's branches
+         *     (`tenant.products.read`), newest first. `q` searches the product
+         *     name, stock codes, reason and note.
+         */
+        get: operations["getTenantStockMovements"];
+        put?: never;
+        /**
+         * Record a stock movement
+         * @description `sale` needs `tenant.products.sell`; `receipt`, `return`,
+         *     `adjustment` (count) and `transfer` need `tenant.products.stock`.
+         *     Branches must be inside the caller's scope. Stock never goes below
+         *     zero: a sale or transfer takes at most the available units (on hand
+         *     minus reserved; `quantity` `insufficient_stock`). An adjustment
+         *     records `counted_quantity`; the ledger stores the difference. A
+         *     transfer writes `transfer_out` and `transfer_in` rows with the same
+         *     `transfer_uuid`. A product with variants needs `variant_uuid`. A sale
+         *     needs an active product sold in the branch (`not_offered`); its unit
+         *     price defaults to the branch price.
+         */
+        post: operations["postTenantStockMovement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/customers/meta": {
         parameters: {
             query?: never;
@@ -7217,6 +7634,322 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["TenantServiceFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /**
+         * @description Stock summed over the branches of the caller's scope. `available` =
+         *     `on_hand` − `reserved` (units held for appointments). `status` is
+         *     `out` (nothing available), `low` (at or under the low stock level) or
+         *     `in`.
+         */
+        TenantProductStock: {
+            /** Format: int64 */
+            on_hand: number;
+            /** Format: int64 */
+            reserved: number;
+            /** Format: int64 */
+            available: number;
+            /** @enum {string} */
+            status: "in" | "low" | "out";
+        };
+        /** @description A branch selling the product. `price` is the branch override (null = catalog price). */
+        TenantProductOffer: {
+            /** Format: uuid */
+            branch_uuid: string;
+            branch_name: string;
+            branch_code: string;
+            price: components["schemas"]["MoneyAmount"] | null;
+            effective_price: components["schemas"]["MoneyAmount"];
+            is_active: boolean;
+            /** @description False for branches outside the caller's scope */
+            editable: boolean;
+        };
+        TenantProductVariant: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            sku: string;
+            barcode: string;
+            price: components["schemas"]["MoneyAmount"] | null;
+            cost: components["schemas"]["MoneyAmount"] | null;
+            effective_price: components["schemas"]["MoneyAmount"];
+            effective_cost: components["schemas"]["MoneyAmount"];
+            is_active: boolean;
+            sort_order: number;
+            stock: components["schemas"]["TenantProductStock"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Stock of one stock item (the product, or a variant) in one branch. */
+        TenantProductStockLevel: {
+            /** Format: uuid */
+            branch_uuid: string;
+            branch_name: string;
+            branch_code: string;
+            /** Format: uuid */
+            variant_uuid: string | null;
+            variant_name: string;
+            variant_sku: string;
+            /** Format: int64 */
+            on_hand: number;
+            /** Format: int64 */
+            reserved: number;
+            /** Format: int64 */
+            available: number;
+            /** @enum {string} */
+            status: "in" | "low" | "out";
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @description A product of the business catalog (TEC-918). `image_url` is the
+         *     API-owned public cover URL. A product with variants keeps its stock
+         *     on the variants.
+         */
+        TenantProduct: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            sku: string;
+            barcode: string;
+            /** @enum {string} */
+            unit: "piece" | "bottle" | "box" | "pack" | "tube" | "set";
+            price: components["schemas"]["MoneyAmount"];
+            cost: components["schemas"]["MoneyAmount"];
+            /** @example TRY */
+            currency: string;
+            low_stock_threshold: number;
+            show_online: boolean;
+            is_active: boolean;
+            image_url: string | null;
+            /** Format: int64 */
+            variants_count: number;
+            stock: components["schemas"]["TenantProductStock"];
+            offers: components["schemas"]["TenantProductOffer"][];
+            /** @description Detail only. */
+            variants?: components["schemas"]["TenantProductVariant"][];
+            /** @description Detail only. Branches of the caller's scope with a stock row. */
+            levels?: components["schemas"]["TenantProductStockLevel"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TenantProductCreateRequest: {
+            name: string;
+            description?: string;
+            sku: string;
+            barcode?: string;
+            /**
+             * @default piece
+             * @enum {string}
+             */
+            unit: "piece" | "bottle" | "box" | "pack" | "tube" | "set";
+            price: components["schemas"]["MoneyInput"];
+            cost?: components["schemas"]["MoneyInput"];
+            /** @default 0 */
+            low_stock_threshold: number;
+            /** @default true */
+            show_online: boolean;
+            /** @default true */
+            is_active: boolean;
+            branch_uuids?: string[];
+        };
+        TenantProductPatchRequest: {
+            name?: string;
+            description?: string;
+            sku?: string;
+            barcode?: string;
+            /** @enum {string} */
+            unit?: "piece" | "bottle" | "box" | "pack" | "tube" | "set";
+            price?: components["schemas"]["MoneyInput"];
+            cost?: components["schemas"]["MoneyInput"];
+            low_stock_threshold?: number;
+            show_online?: boolean;
+            is_active?: boolean;
+        };
+        TenantProductVariantCreateRequest: {
+            name: string;
+            sku: string;
+            barcode?: string;
+            price?: components["schemas"]["MoneyInput"] | null;
+            cost?: components["schemas"]["MoneyInput"] | null;
+            /** @default true */
+            is_active: boolean;
+            sort_order?: number;
+        };
+        TenantProductVariantPatchRequest: {
+            name?: string;
+            sku?: string;
+            barcode?: string;
+            price?: components["schemas"]["MoneyInput"] | null;
+            cost?: components["schemas"]["MoneyInput"] | null;
+            is_active?: boolean;
+            sort_order?: number;
+        };
+        TenantProductOffersRequest: {
+            offers: {
+                /** Format: uuid */
+                branch_uuid: string;
+                price?: components["schemas"]["MoneyInput"] | null;
+                /** @default true */
+                is_active: boolean;
+            }[];
+        };
+        TenantProductPage: {
+            items: components["schemas"]["TenantProduct"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        TenantProductFacets: {
+            branch: components["schemas"]["TenantResourceFacet"][];
+        };
+        TenantProductLookupMatch: {
+            product: components["schemas"]["TenantProduct"];
+            variant: components["schemas"]["TenantProductVariant"] | null;
+        };
+        TenantStockRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            sku?: string;
+        };
+        /**
+         * @description One row of the append-only stock ledger. `quantity` is the signed
+         *     change of the branch stock, `balance_after` the stock right after
+         *     it. `unit_price` is kept on sales and returns, `unit_cost` on
+         *     receipts and sales.
+         */
+        TenantStockMovement: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "receipt" | "sale" | "return" | "adjustment" | "transfer_out" | "transfer_in";
+            quantity: number;
+            balance_after: number;
+            product: components["schemas"]["TenantStockRef"];
+            variant: components["schemas"]["TenantStockRef"] | null;
+            branch: components["schemas"]["TenantStockRef"];
+            counterpart_branch: components["schemas"]["TenantStockRef"] | null;
+            /** Format: uuid */
+            transfer_uuid: string | null;
+            unit_price: components["schemas"]["MoneyAmount"] | null;
+            unit_cost: components["schemas"]["MoneyAmount"] | null;
+            /** @example TRY */
+            currency: string;
+            staff: components["schemas"]["TenantStockRef"] | null;
+            reason: string;
+            note: string;
+            /** @example manual */
+            source: string;
+            /** Format: date-time */
+            occurred_at: string;
+            created_by: components["schemas"]["TenantStockRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TenantStockMovementRequest: {
+            /** @enum {string} */
+            kind: "receipt" | "sale" | "return" | "adjustment" | "transfer";
+            /**
+             * Format: uuid
+             * @description The branch (source of a transfer)
+             */
+            branch_uuid: string;
+            /**
+             * Format: uuid
+             * @description Target branch of a transfer
+             */
+            to_branch_uuid?: string;
+            /** Format: uuid */
+            product_uuid: string;
+            /**
+             * Format: uuid
+             * @description Required for products with variants
+             */
+            variant_uuid?: string;
+            /** @description Units (every kind except adjustment) */
+            quantity?: number;
+            /** @description Counted stock (adjustment) */
+            counted_quantity?: number;
+            unit_price?: components["schemas"]["MoneyInput"];
+            unit_cost?: components["schemas"]["MoneyInput"];
+            /**
+             * Format: uuid
+             * @description Staff credited with a sale or return
+             */
+            staff_uuid?: string;
+            reason?: string;
+            note?: string;
+            /**
+             * Format: date-time
+             * @description Defaults to now; never in the future
+             */
+            occurred_at?: string;
+        };
+        TenantStockMovementPage: {
+            items: components["schemas"]["TenantStockMovement"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        TenantStockMovementFacets: {
+            kind: components["schemas"]["TenantResourceFacet"][];
+            branch: components["schemas"]["TenantResourceFacet"][];
+            staff: components["schemas"]["TenantResourceFacet"][];
+        };
+        TenantStockMovementResult: {
+            items: components["schemas"]["TenantStockMovement"][];
+            product: components["schemas"]["TenantProduct"];
+        };
+        EnvelopeTenantProduct: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantProduct"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantProductPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantProductPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantProductFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantProductFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantProductLookup: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["TenantProductLookupMatch"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantStockMovementPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantStockMovementPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantStockMovementFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantStockMovementFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantStockMovementResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantStockMovementResult"];
             meta: components["schemas"]["ResponseMeta"];
         };
         OrganizationCompanySettings: {
@@ -16801,6 +17534,844 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicProductImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgUuid: string;
+                imageUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantProductsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantProductsFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProductFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantProductsLookup: {
+        parameters: {
+            query: {
+                code: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProductLookup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantProducts: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `sku`, `price`, `cost`, `stock`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default: name. */
+                sort?: string;
+                /** @description Branch uuids: products sold there; comma-separate or repeat */
+                branch?: string;
+                /** @description `in`, `low` (available at or under the low stock level), `out`; comma-separate or repeat */
+                stock_status?: string;
+                is_active?: boolean;
+                show_online?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProductPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantProductCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created product */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantProductsExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantProductsImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantProductsImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantProductsBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    patchTenantProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantProductPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantProductActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTenantProductOffers: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantProductOffersRequest"];
+            };
+        };
+        responses: {
+            /** @description Product with its offers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTenantProductImage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Product with its new `image_url` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantProductImage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product without a cover */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantProductVariant: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantProductVariantCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Product with the new variant */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteTenantProductVariant: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                variantUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product without the variant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    patchTenantProductVariant: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                variantUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantProductVariantPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Product with the updated variant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantProduct"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantStockMovementsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStockMovementsFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockMovementFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantStockMovements: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `occurred_at`, `quantity`, `kind`; prefix `-` for descending. Default: `-occurred_at`. */
+                sort?: string;
+                /** @description `receipt`, `sale`, `return`, `adjustment`, `transfer_out`, `transfer_in`; comma-separate or repeat */
+                kind?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description Product uuids; comma-separate or repeat */
+                product?: string;
+                /** @description Staff uuids (sales credited to them); comma-separate or repeat */
+                staff?: string;
+                /** @description Movements at or after this time (RFC 3339) */
+                from?: string;
+                /** @description Movements before this time (RFC 3339) */
+                to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Movement page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockMovementPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantStockMovement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantStockMovementRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded movements and the product with its new stock */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockMovementResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
         };
     };
     getTenantCustomersMeta: {

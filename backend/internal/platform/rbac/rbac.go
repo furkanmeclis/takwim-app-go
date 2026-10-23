@@ -97,6 +97,18 @@ const (
 	PermTenantServicesImport         = "tenant.services.import"
 	PermTenantServicesBulkActivate   = "tenant.services.bulk.activate"
 	PermTenantServicesBulkDeactivate = "tenant.services.bulk.deactivate"
+	// Products and stock (TEC-918): business-level catalog, branch offers,
+	// stock movements ("stock": receipt, return, count, transfer; "sell":
+	// sale) inside the member's branch scope.
+	PermTenantProductsRead           = "tenant.products.read"
+	PermTenantProductsWrite          = "tenant.products.write"
+	PermTenantProductsOffer          = "tenant.products.offer"
+	PermTenantProductsStock          = "tenant.products.stock"
+	PermTenantProductsSell           = "tenant.products.sell"
+	PermTenantProductsExport         = "tenant.products.export"
+	PermTenantProductsImport         = "tenant.products.import"
+	PermTenantProductsBulkActivate   = "tenant.products.bulk.activate"
+	PermTenantProductsBulkDeactivate = "tenant.products.bulk.deactivate"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

@@ -4,6 +4,7 @@ import { branchesSearchSpec } from "@/features/branches/search";
 import { customersSearchSpec } from "@/features/customers/search";
 import { reservationsSearchSpec } from "@/features/reservations/search";
 import { resourcesSearchSpec } from "@/features/resources/search";
+import { productsSearchSpec } from "@/features/products/search";
 import { servicesSearchSpec } from "@/features/services/search";
 import { staffSearchSpec } from "@/features/staff/search";
 import {
@@ -28,6 +29,7 @@ export const searchCatalog = defineSearchCatalog({
     staffSearchSpec,
     resourcesSearchSpec,
     servicesSearchSpec,
+    productsSearchSpec,
     customersSearchSpec,
     reservationsSearchSpec,
   ],

@@ -110,5 +110,6 @@
   "resources.tenant.staff": "Personel",
   "resources.tenant.resources": "Kaynaklar",
   "resources.tenant.services": "Hizmetler",
+  "resources.tenant.products": "Ürünler",
   "resources.tenant.customers": "Müşteriler"
 }

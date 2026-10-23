@@ -64,6 +64,12 @@ func ServiceImageObjectKey(orgUUID, serviceUUID, imageUUID, ext string) string {
 	return fmt.Sprintf("%sservices/%s/image/%s.%s", OrganizationPrefix(orgUUID), serviceUUID, imageUUID, trimExt(ext))
 }
 
+// ProductImageObjectKey builds
+// organizations/{orgUUID}/products/{productUUID}/image/{imageUUID}.{ext}.
+func ProductImageObjectKey(orgUUID, productUUID, imageUUID, ext string) string {
+	return fmt.Sprintf("%sproducts/%s/image/%s.%s", OrganizationPrefix(orgUUID), productUUID, imageUUID, trimExt(ext))
+}
+
 // ImportSourceObjectKey builds imports/{jobUUID}/source.{ext}.
 func ImportSourceObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("imports/%s/source.%s", jobUUID, trimExt(ext))

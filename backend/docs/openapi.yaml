@@ -6390,6 +6390,724 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/public/media/products/{orgUuid}/images/{imageUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getPublicProductImage
+      summary: Product cover image
+      description: No authentication; booking pages and the mobile app show product covers. Clients use the `image_url` the API returns. Immutable (cached for a year).
+      security: []
+      parameters:
+        - name: orgUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: imageUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/products/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProductsMeta
+      summary: Product list metadata
+      description: Table contract of `GET /v1/tenant/products` (`tenant.products.read`, `products` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/products/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProductsFacets
+      summary: Product faceted filter options
+      description: Branches inside the caller's scope that sell products, with counts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProductFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/products/lookup:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProductsLookup
+      summary: Find products by barcode or stock code
+      description: |
+        Barcode scanner / SKU entry (`tenant.products.read`). Matches the
+        exact barcode or the stock code (case-insensitive) of products and
+        variants. A variant match names the variant.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: code
+          in: query
+          required: true
+          schema: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: Matches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProductLookup"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/products:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProducts
+      summary: List products of the organization
+      description: |
+        The product catalog of the `X-Organization` organization
+        (`tenant.products.read`). The catalog is business level; `stock`
+        sums the branches of the caller's scope (`X-Branch` narrows it).
+        `q` searches name, stock code, barcode and the variants.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `sku`, `price`, `cost`, `stock`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default: name."
+          schema: { type: string, example: name }
+        - name: branch
+          in: query
+          description: "Branch uuids: products sold there; comma-separate or repeat"
+          schema: { type: string }
+        - name: stock_status
+          in: query
+          description: "`in`, `low` (available at or under the low stock level), `out`; comma-separate or repeat"
+          schema: { type: string }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: show_online
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Product page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProductPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantProduct
+      summary: Create a product
+      description: |
+        `tenant.products.write`. Stock codes are unique across the products
+        and variants of the organization, case-insensitive (`409`).
+        `branch_uuids` adds offers at the catalog price; each branch must be
+        inside the caller's scope (`branch_uuids.N` `not_found`). Stock
+        starts at zero and changes only through stock movements.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantProductCreateRequest"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/products/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantProductsExport
+      summary: Export products
+      description: |
+        Queues an export of the product catalog with the stock of the
+        caller's branches (`tenant.products.export`). `query` honours `q`,
+        `branch`, `stock_status`, `is_active` and `show_online`. Poll
+        `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/products/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantProductsImport
+      summary: Upload a product import file
+      description: |
+        Creates an import job (`tenant.products.import`). A row whose `sku`
+        matches a product (case-insensitive) updates it, any other row
+        creates one; `branch_codes` adds offers to new products. Stock is not
+        imported (it moves through the ledger). Continue with
+        `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/products/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProductsImportSample
+      summary: Download a product import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/products/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantProductsBulk
+      summary: Run a bulk action on products
+      description: |
+        Actions `activate` (`tenant.products.bulk.activate`) and `deactivate`
+        (`tenant.products.bulk.deactivate`), both reversible. Targets are
+        resolved inside the organization only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/products/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProduct
+      summary: Get a product
+      description: With `variants` and `levels` (stock per branch of the caller's scope and stock item). A uuid of another organization answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantProduct
+      summary: Update a product
+      description: |
+        `tenant.products.write`. Omitted fields are unchanged. Offers change
+        through `PUT /offers` (`branch_uuids` is refused here).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantProductPatchRequest"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantProduct
+      summary: Delete a product (soft)
+      description: "`tenant.products.write`. Only without stock in any branch (`409` `has_stock`); the ledger stays."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/products/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantProductActivity
+      summary: Activity of a product
+      description: Catalog changes and stock movements of the product.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/products/{uuid}/offers:
+    put:
+      tags: [Tenant]
+      operationId: putTenantProductOffers
+      summary: Set the branch offers of a product
+      description: |
+        `tenant.products.offer`. The list replaces the offers of the branches
+        inside the caller's scope; offers in other branches stay as they are.
+        A branch outside the scope is `offers.N.branch_uuid` `not_found`.
+        `price` null uses the catalog price.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantProductOffersRequest"
+      responses:
+        "200":
+          description: Product with its offers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/products/{uuid}/image:
+    put:
+      tags: [Tenant]
+      operationId: putTenantProductImage
+      summary: Upload the cover image of a product
+      description: "`tenant.products.write`. JPEG, PNG or WebP up to 5 MiB (sniffed); replaces the previous cover."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Product with its new `image_url`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantProductImage
+      summary: Remove the cover image of a product
+      description: "`tenant.products.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Product without a cover
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/products/{uuid}/variants:
+    post:
+      tags: [Tenant]
+      operationId: postTenantProductVariant
+      summary: Add a variant to a product
+      description: |
+        `tenant.products.write`. A variant has its own stock code (unique
+        with the product codes, `409`). The first variant needs the product's
+        own stock at zero (`409` `has_stock`): from then on stock is kept per
+        variant.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantProductVariantCreateRequest"
+      responses:
+        "201":
+          description: Product with the new variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/products/{uuid}/variants/{variantUuid}:
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantProductVariant
+      summary: Update a variant
+      description: "`tenant.products.write`. `price` / `cost` null use the product values."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: variantUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantProductVariantPatchRequest"
+      responses:
+        "200":
+          description: Product with the updated variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantProductVariant
+      summary: Delete a variant (soft)
+      description: "`tenant.products.write`. Only without stock in any branch (`409` `has_stock`)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: variantUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Product without the variant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantProduct"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/stock-movements/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStockMovementsMeta
+      summary: Stock movement list metadata
+      description: Table contract of `GET /v1/tenant/stock-movements` (`tenant.products.read`, `products` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/stock-movements/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStockMovementsFacets
+      summary: Stock movement faceted filter options
+      description: Kinds, branches and staff in the ledger of the caller's branches, with counts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockMovementFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/stock-movements:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStockMovements
+      summary: List stock movements
+      description: |
+        The append-only stock ledger of the caller's branches
+        (`tenant.products.read`), newest first. `q` searches the product
+        name, stock codes, reason and note.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `occurred_at`, `quantity`, `kind`; prefix `-` for descending. Default: `-occurred_at`."
+          schema: { type: string, example: -occurred_at }
+        - name: kind
+          in: query
+          description: "`receipt`, `sale`, `return`, `adjustment`, `transfer_out`, `transfer_in`; comma-separate or repeat"
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: product
+          in: query
+          description: "Product uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: staff
+          in: query
+          description: "Staff uuids (sales credited to them); comma-separate or repeat"
+          schema: { type: string }
+        - name: from
+          in: query
+          description: "Movements at or after this time (RFC 3339)"
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: "Movements before this time (RFC 3339)"
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Movement page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockMovementPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantStockMovement
+      summary: Record a stock movement
+      description: |
+        `sale` needs `tenant.products.sell`; `receipt`, `return`,
+        `adjustment` (count) and `transfer` need `tenant.products.stock`.
+        Branches must be inside the caller's scope. Stock never goes below
+        zero: a sale or transfer takes at most the available units (on hand
+        minus reserved; `quantity` `insufficient_stock`). An adjustment
+        records `counted_quantity`; the ledger stores the difference. A
+        transfer writes `transfer_out` and `transfer_in` rows with the same
+        `transfer_uuid`. A product with variants needs `variant_uuid`. A sale
+        needs an active product sold in the branch (`not_offered`); its unit
+        price defaults to the branch price.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantStockMovementRequest"
+      responses:
+        "201":
+          description: Recorded movements and the product with its new stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockMovementResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/customers/meta:
     get:
       tags: [Tenant]
@@ -11015,6 +11733,397 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/TenantServiceFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantProductStock:
+      type: object
+      description: |
+        Stock summed over the branches of the caller's scope. `available` =
+        `on_hand` − `reserved` (units held for appointments). `status` is
+        `out` (nothing available), `low` (at or under the low stock level) or
+        `in`.
+      required: [on_hand, reserved, available, status]
+      properties:
+        on_hand: { type: integer, format: int64 }
+        reserved: { type: integer, format: int64 }
+        available: { type: integer, format: int64 }
+        status: { type: string, enum: [in, low, out] }
+
+    TenantProductOffer:
+      type: object
+      description: A branch selling the product. `price` is the branch override (null = catalog price).
+      required: [branch_uuid, branch_name, branch_code, price, effective_price, is_active, editable]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        branch_name: { type: string }
+        branch_code: { type: string }
+        price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        effective_price: { $ref: "#/components/schemas/MoneyAmount" }
+        is_active: { type: boolean }
+        editable: { type: boolean, description: "False for branches outside the caller's scope" }
+
+    TenantProductVariant:
+      type: object
+      required: [uuid, name, sku, barcode, price, cost, effective_price, effective_cost, is_active, sort_order, stock, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        sku: { type: string }
+        barcode: { type: string }
+        price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        cost:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        effective_price: { $ref: "#/components/schemas/MoneyAmount" }
+        effective_cost: { $ref: "#/components/schemas/MoneyAmount" }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        stock: { $ref: "#/components/schemas/TenantProductStock" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantProductStockLevel:
+      type: object
+      description: Stock of one stock item (the product, or a variant) in one branch.
+      required: [branch_uuid, branch_name, branch_code, variant_uuid, variant_name, variant_sku, on_hand, reserved, available, status, updated_at]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        branch_name: { type: string }
+        branch_code: { type: string }
+        variant_uuid: { type: [string, "null"], format: uuid }
+        variant_name: { type: string }
+        variant_sku: { type: string }
+        on_hand: { type: integer, format: int64 }
+        reserved: { type: integer, format: int64 }
+        available: { type: integer, format: int64 }
+        status: { type: string, enum: [in, low, out] }
+        updated_at: { type: string, format: date-time }
+
+    TenantProduct:
+      type: object
+      description: |
+        A product of the business catalog (TEC-918). `image_url` is the
+        API-owned public cover URL. A product with variants keeps its stock
+        on the variants.
+      required: [uuid, name, description, sku, barcode, unit, price, cost, currency, low_stock_threshold, show_online, is_active, image_url, variants_count, stock, offers, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        sku: { type: string }
+        barcode: { type: string }
+        unit: { type: string, enum: [piece, bottle, box, pack, tube, set] }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        cost: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string, example: TRY }
+        low_stock_threshold: { type: integer, minimum: 0 }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+        image_url: { type: [string, "null"] }
+        variants_count: { type: integer, format: int64 }
+        stock: { $ref: "#/components/schemas/TenantProductStock" }
+        offers:
+          type: array
+          items: { $ref: "#/components/schemas/TenantProductOffer" }
+        variants:
+          description: Detail only.
+          type: array
+          items: { $ref: "#/components/schemas/TenantProductVariant" }
+        levels:
+          description: Detail only. Branches of the caller's scope with a stock row.
+          type: array
+          items: { $ref: "#/components/schemas/TenantProductStockLevel" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantProductCreateRequest:
+      type: object
+      required: [name, sku, price]
+      properties:
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        sku: { type: string, maxLength: 64 }
+        barcode: { type: string, maxLength: 64 }
+        unit: { type: string, enum: [piece, bottle, box, pack, tube, set], default: piece }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+        cost: { $ref: "#/components/schemas/MoneyInput" }
+        low_stock_threshold: { type: integer, minimum: 0, maximum: 1000000, default: 0 }
+        show_online: { type: boolean, default: true }
+        is_active: { type: boolean, default: true }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    TenantProductPatchRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        sku: { type: string, maxLength: 64 }
+        barcode: { type: string, maxLength: 64 }
+        unit: { type: string, enum: [piece, bottle, box, pack, tube, set] }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+        cost: { $ref: "#/components/schemas/MoneyInput" }
+        low_stock_threshold: { type: integer, minimum: 0, maximum: 1000000 }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+
+    TenantProductVariantCreateRequest:
+      type: object
+      required: [name, sku]
+      properties:
+        name: { type: string, maxLength: 120 }
+        sku: { type: string, maxLength: 64 }
+        barcode: { type: string, maxLength: 64 }
+        price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+        cost:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+        is_active: { type: boolean, default: true }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+
+    TenantProductVariantPatchRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        sku: { type: string, maxLength: 64 }
+        barcode: { type: string, maxLength: 64 }
+        price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+        cost:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+        is_active: { type: boolean }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+
+    TenantProductOffersRequest:
+      type: object
+      required: [offers]
+      properties:
+        offers:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [branch_uuid]
+            properties:
+              branch_uuid: { type: string, format: uuid }
+              price:
+                oneOf:
+                  - $ref: "#/components/schemas/MoneyInput"
+                  - type: "null"
+              is_active: { type: boolean, default: true }
+
+    TenantProductPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantProduct" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantProductFacets:
+      type: object
+      required: [branch]
+      properties:
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+
+    TenantProductLookupMatch:
+      type: object
+      required: [product, variant]
+      properties:
+        product: { $ref: "#/components/schemas/TenantProduct" }
+        variant:
+          oneOf:
+            - $ref: "#/components/schemas/TenantProductVariant"
+            - type: "null"
+
+    TenantStockRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        sku: { type: string }
+
+    TenantStockMovement:
+      type: object
+      description: |
+        One row of the append-only stock ledger. `quantity` is the signed
+        change of the branch stock, `balance_after` the stock right after
+        it. `unit_price` is kept on sales and returns, `unit_cost` on
+        receipts and sales.
+      required: [uuid, kind, quantity, balance_after, product, variant, branch, counterpart_branch, transfer_uuid, unit_price, unit_cost, currency, staff, reason, note, source, occurred_at, created_by, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [receipt, sale, return, adjustment, transfer_out, transfer_in] }
+        quantity: { type: integer }
+        balance_after: { type: integer, minimum: 0 }
+        product: { $ref: "#/components/schemas/TenantStockRef" }
+        variant:
+          oneOf:
+            - $ref: "#/components/schemas/TenantStockRef"
+            - type: "null"
+        branch: { $ref: "#/components/schemas/TenantStockRef" }
+        counterpart_branch:
+          oneOf:
+            - $ref: "#/components/schemas/TenantStockRef"
+            - type: "null"
+        transfer_uuid: { type: [string, "null"], format: uuid }
+        unit_price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        unit_cost:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        currency: { type: string, example: TRY }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/TenantStockRef"
+            - type: "null"
+        reason: { type: string }
+        note: { type: string }
+        source: { type: string, example: manual }
+        occurred_at: { type: string, format: date-time }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/TenantStockRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    TenantStockMovementRequest:
+      type: object
+      required: [kind, branch_uuid, product_uuid]
+      properties:
+        kind: { type: string, enum: [receipt, sale, return, adjustment, transfer] }
+        branch_uuid: { type: string, format: uuid, description: "The branch (source of a transfer)" }
+        to_branch_uuid: { type: string, format: uuid, description: "Target branch of a transfer" }
+        product_uuid: { type: string, format: uuid }
+        variant_uuid: { type: string, format: uuid, description: "Required for products with variants" }
+        quantity: { type: integer, minimum: 1, maximum: 100000, description: "Units (every kind except adjustment)" }
+        counted_quantity: { type: integer, minimum: 0, maximum: 100000, description: "Counted stock (adjustment)" }
+        unit_price: { $ref: "#/components/schemas/MoneyInput" }
+        unit_cost: { $ref: "#/components/schemas/MoneyInput" }
+        staff_uuid: { type: string, format: uuid, description: "Staff credited with a sale or return" }
+        reason: { type: string, maxLength: 200 }
+        note: { type: string, maxLength: 2000 }
+        occurred_at: { type: string, format: date-time, description: "Defaults to now; never in the future" }
+
+    TenantStockMovementPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantStockMovement" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantStockMovementFacets:
+      type: object
+      required: [kind, branch, staff]
+      properties:
+        kind:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+        staff:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+
+    TenantStockMovementResult:
+      type: object
+      required: [items, product]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantStockMovement" }
+        product: { $ref: "#/components/schemas/TenantProduct" }
+
+    EnvelopeTenantProduct:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantProduct" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantProductPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantProductPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantProductFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantProductFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantProductLookup:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/TenantProductLookupMatch" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantStockMovementPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantStockMovementPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantStockMovementFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantStockMovementFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantStockMovementResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantStockMovementResult" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     OrganizationCompanySettings:

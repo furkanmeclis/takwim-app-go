@@ -24,6 +24,8 @@
   "specs_resources": "Kaynaklar",
   "prefix_services": "hizmet",
   "specs_services": "Hizmetler",
+  "prefix_products": "ürün",
+  "specs_products": "Ürünler",
   "prefix_customers": "müşteri",
   "specs_customers": "Müşteriler",
   "prefix_reservations": "rezervasyon",
