@@ -30,6 +30,9 @@ import (
 	resourcesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/adapters"
 	resourcesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/repository"
 	resourcesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/usecase"
+	servicesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/adapters"
+	servicesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
+	servicesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/usecase"
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
@@ -131,6 +134,7 @@ func main() {
 	branchSvc := branchusecase.New(branchrepository.NewPostgres(queries), nil)
 	staffSvc := staffusecase.New(staffrepository.NewPostgres(pool, queries), nil)
 	resourcesSvc := resourcesusecase.New(resourcesrepository.NewPostgres(pool, queries), nil)
+	servicesSvc := servicesusecase.New(servicesrepository.NewPostgres(pool, queries), nil)
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
@@ -148,6 +152,7 @@ func main() {
 		branchadapters.NewIO(branchSvc),
 		staffadapters.NewIO(staffSvc),
 		resourcesadapters.NewIO(resourcesSvc),
+		servicesadapters.NewIO(servicesSvc),
 		orgadapters.NewIO(jobScopes),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
@@ -158,6 +163,7 @@ func main() {
 		branchadapters.NewBulk(branchSvc),
 		staffadapters.NewBulk(staffSvc),
 		resourcesadapters.NewBulk(resourcesSvc),
+		servicesadapters.NewBulk(servicesSvc),
 		orgadapters.NewBulk(jobScopes),
 	)
 	bulkSvc := bulkusecase.New(queries, bulkReg, nil, notifSvc, activityRec, cfg.Bulk, log)
@@ -173,6 +179,7 @@ func main() {
 		branchadapters.NewSearch(queries),
 		staffadapters.NewSearch(queries),
 		resourcesadapters.NewSearch(queries),
+		servicesadapters.NewSearch(queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, nil, log)

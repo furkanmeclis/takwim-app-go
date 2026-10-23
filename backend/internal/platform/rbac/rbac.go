@@ -88,6 +88,15 @@ const (
 	PermTenantResourcesImport         = "tenant.resources.import"
 	PermTenantResourcesBulkActivate   = "tenant.resources.bulk.activate"
 	PermTenantResourcesBulkDeactivate = "tenant.resources.bulk.deactivate"
+	// Services (TEC-894): the business-level catalog. "offer" lets a member
+	// set price, duration and availability in the branches of their scope.
+	PermTenantServicesRead           = "tenant.services.read"
+	PermTenantServicesWrite          = "tenant.services.write"
+	PermTenantServicesOffer          = "tenant.services.offer"
+	PermTenantServicesExport         = "tenant.services.export"
+	PermTenantServicesImport         = "tenant.services.import"
+	PermTenantServicesBulkActivate   = "tenant.services.bulk.activate"
+	PermTenantServicesBulkDeactivate = "tenant.services.bulk.deactivate"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

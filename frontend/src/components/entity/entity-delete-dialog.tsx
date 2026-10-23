@@ -7,6 +7,8 @@ type EntityDeleteDialogProps = {
   open: boolean;
   entityLabel: string;
   softDelete?: boolean;
+  /** Replaces the default text when deleting has a side effect to explain. */
+  description?: string;
   isPending?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -19,6 +21,7 @@ export function EntityDeleteDialog({
   open,
   entityLabel,
   softDelete = true,
+  description,
   isPending,
   onConfirm,
   onCancel,
@@ -30,9 +33,10 @@ export function EntityDeleteDialog({
       open={open}
       title={t("entity.delete_title", { name: entityLabel })}
       description={
-        softDelete
+        description ??
+        (softDelete
           ? t("entity.delete_soft_description", { name: entityLabel })
-          : t("entity.delete_description", { name: entityLabel })
+          : t("entity.delete_description", { name: entityLabel }))
       }
       isPending={isPending}
       onConfirm={onConfirm}

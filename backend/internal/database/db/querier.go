@@ -62,6 +62,7 @@ type Querier interface {
 	CountResourceClosures(ctx context.Context, arg CountResourceClosuresParams) (int64, error)
 	CountResources(ctx context.Context, arg CountResourcesParams) (int64, error)
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
+	CountServices(ctx context.Context, arg CountServicesParams) (int64, error)
 	// The linked account counts only while the user is a member.
 	CountStaff(ctx context.Context, arg CountStaffParams) (int64, error)
 	CountStaffTimeOff(ctx context.Context, arg CountStaffTimeOffParams) (int64, error)
@@ -69,6 +70,7 @@ type Querier interface {
 	CountStorageTrash(ctx context.Context) (int64, error)
 	CountTenantActivity(ctx context.Context, arg CountTenantActivityParams) (int64, error)
 	CountTenantMembers(ctx context.Context, arg CountTenantMembersParams) (int64, error)
+	CountUncategorizedServices(ctx context.Context, organizationID int64) (int64, error)
 	CountUnreadInappForUser(ctx context.Context, arg CountUnreadInappForUserParams) (int64, error)
 	CountUsers(ctx context.Context, arg CountUsersParams) (int64, error)
 	CountUsersWithRole(ctx context.Context, roleSlug string) (int64, error)
@@ -92,6 +94,11 @@ type Querier interface {
 	CreateResource(ctx context.Context, arg CreateResourceParams) (Resource, error)
 	CreateResourceClosure(ctx context.Context, arg CreateResourceClosureParams) (ResourceClosure, error)
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
+	CreateService(ctx context.Context, arg CreateServiceParams) (Service, error)
+	// Tenant resource: services (TEC-894). Every query filters by organization_id.
+	// The catalog is business-level; service_branches holds the branch offers
+	// and service_staff the staff who may perform a service.
+	CreateServiceCategory(ctx context.Context, arg CreateServiceCategoryParams) (ServiceCategory, error)
 	CreateServicePoint(ctx context.Context, arg CreateServicePointParams) (ServicePoint, error)
 	// Tenant resource: staff (TEC-890). Every query filters by organization_id.
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
@@ -116,7 +123,9 @@ type Querier interface {
 	DeletePushTickets(ctx context.Context, ids []int64) error
 	DeleteResourceClosure(ctx context.Context, arg DeleteResourceClosureParams) (int64, error)
 	DeleteRole(ctx context.Context, argUuid uuid.UUID) error
+	DeleteServiceBranch(ctx context.Context, arg DeleteServiceBranchParams) error
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
+	DeleteServiceStaffExcept(ctx context.Context, arg DeleteServiceStaffExceptParams) error
 	DeleteStaffTimeOff(ctx context.Context, arg DeleteStaffTimeOffParams) (int64, error)
 	DeleteStorageShare(ctx context.Context, argUuid uuid.UUID) error
 	DeleteStorageStar(ctx context.Context, arg DeleteStorageStarParams) error
@@ -188,9 +197,16 @@ type Querier interface {
 	GetRoleByUUID(ctx context.Context, argUuid uuid.UUID) (Role, error)
 	GetRunnerJob(ctx context.Context, arg GetRunnerJobParams) (GetRunnerJobRow, error)
 	GetRunnerJobByUUID(ctx context.Context, arg GetRunnerJobByUUIDParams) (GetRunnerJobByUUIDRow, error)
+	GetService(ctx context.Context, arg GetServiceParams) (GetServiceRow, error)
+	GetServiceByName(ctx context.Context, arg GetServiceByNameParams) (Service, error)
+	GetServiceCategory(ctx context.Context, arg GetServiceCategoryParams) (ServiceCategory, error)
+	GetServiceCategoryByName(ctx context.Context, arg GetServiceCategoryByNameParams) (ServiceCategory, error)
 	GetServicePoint(ctx context.Context, arg GetServicePointParams) (ServicePoint, error)
+	GetServicePublicImage(ctx context.Context, arg GetServicePublicImageParams) (GetServicePublicImageRow, error)
+	GetServiceSearchDocument(ctx context.Context, arg GetServiceSearchDocumentParams) (GetServiceSearchDocumentRow, error)
 	// The linked account counts only while the user is a member.
 	GetStaff(ctx context.Context, arg GetStaffParams) (GetStaffRow, error)
+	GetStaffIDsByUUIDs(ctx context.Context, arg GetStaffIDsByUUIDsParams) ([]GetStaffIDsByUUIDsRow, error)
 	GetStaffSearchDocument(ctx context.Context, arg GetStaffSearchDocumentParams) (GetStaffSearchDocumentRow, error)
 	GetStaffTimeOff(ctx context.Context, arg GetStaffTimeOffParams) (StaffTimeOff, error)
 	GetStepupSettings(ctx context.Context) (StepupSetting, error)
@@ -326,7 +342,18 @@ type Querier interface {
 	ListRolesFiltered(ctx context.Context, arg ListRolesFilteredParams) ([]Role, error)
 	ListRolesForExport(ctx context.Context, q_ pgtype.Text) ([]Role, error)
 	ListRolesForUserIDs(ctx context.Context, userIds []int64) ([]ListRolesForUserIDsRow, error)
+	ListServiceBranchFacets(ctx context.Context, arg ListServiceBranchFacetsParams) ([]ListServiceBranchFacetsRow, error)
+	// Offers of the given services (list rows and the detail).
+	ListServiceBranches(ctx context.Context, arg ListServiceBranchesParams) ([]ListServiceBranchesRow, error)
+	ListServiceCategories(ctx context.Context, organizationID int64) ([]ListServiceCategoriesRow, error)
+	ListServiceCategoryFacets(ctx context.Context, organizationID int64) ([]ListServiceCategoryFacetsRow, error)
+	ListServicePaymentModeFacets(ctx context.Context, organizationID int64) ([]ListServicePaymentModeFacetsRow, error)
 	ListServicePointsByBranch(ctx context.Context, arg ListServicePointsByBranchParams) ([]ServicePoint, error)
+	ListServiceSearchDocuments(ctx context.Context, organizationID int64) ([]ListServiceSearchDocumentsRow, error)
+	ListServiceStaff(ctx context.Context, arg ListServiceStaffParams) ([]ListServiceStaffRow, error)
+	ListServiceUUIDs(ctx context.Context, arg ListServiceUUIDsParams) ([]uuid.UUID, error)
+	ListServices(ctx context.Context, arg ListServicesParams) ([]ListServicesRow, error)
+	ListServicesForExport(ctx context.Context, arg ListServicesForExportParams) ([]ListServicesForExportRow, error)
 	ListSharedKeys(ctx context.Context, keys []string) ([]string, error)
 	// The linked account counts only while the user is a member.
 	ListStaff(ctx context.Context, arg ListStaffParams) ([]ListStaffRow, error)
@@ -418,6 +445,7 @@ type Querier interface {
 	RotateInvitationToken(ctx context.Context, arg RotateInvitationTokenParams) (OrganizationInvitation, error)
 	// Stores the outcome of a provider call and releases the claim.
 	SaveRunnerJob(ctx context.Context, arg SaveRunnerJobParams) error
+	ServiceNameTaken(ctx context.Context, arg ServiceNameTakenParams) (bool, error)
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)
 	SetBranchImageSort(ctx context.Context, arg SetBranchImageSortParams) (int64, error)
@@ -430,12 +458,17 @@ type Querier interface {
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
 	SetRolePermissions(ctx context.Context, roleID int64) error
+	SetServiceActive(ctx context.Context, arg SetServiceActiveParams) error
+	// Returns the previous key so the caller can remove the old object.
+	SetServiceImage(ctx context.Context, arg SetServiceImageParams) (pgtype.Text, error)
 	SetStaffActive(ctx context.Context, arg SetStaffActiveParams) error
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
 	SoftDeleteResource(ctx context.Context, arg SoftDeleteResourceParams) (int64, error)
+	SoftDeleteService(ctx context.Context, arg SoftDeleteServiceParams) (int64, error)
+	SoftDeleteServiceCategory(ctx context.Context, arg SoftDeleteServiceCategoryParams) (int64, error)
 	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
 	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
 	// Distinct resources and actions (with counts) in the caller's scope, for
@@ -443,6 +476,7 @@ type Querier interface {
 	TenantActivityFacets(ctx context.Context, arg TenantActivityFacetsParams) ([]TenantActivityFacetsRow, error)
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
 	TouchBranch(ctx context.Context, arg TouchBranchParams) error
+	UncategorizeServices(ctx context.Context, arg UncategorizeServicesParams) error
 	UnlockRunnerJob(ctx context.Context, arg UnlockRunnerJobParams) error
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
@@ -463,6 +497,8 @@ type Querier interface {
 	UpdateResource(ctx context.Context, arg UpdateResourceParams) (Resource, error)
 	UpdateResourceClosure(ctx context.Context, arg UpdateResourceClosureParams) (ResourceClosure, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, error)
+	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
+	UpdateServiceCategory(ctx context.Context, arg UpdateServiceCategoryParams) (ServiceCategory, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) (Staff, error)
 	UpdateStaffShifts(ctx context.Context, arg UpdateStaffShiftsParams) (int64, error)
@@ -489,6 +525,8 @@ type Querier interface {
 	// re-enabled on every registration.
 	UpsertPushDevice(ctx context.Context, arg UpsertPushDeviceParams) (PushDevice, error)
 	UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) (PushSubscription, error)
+	UpsertServiceBranch(ctx context.Context, arg UpsertServiceBranchParams) error
+	UpsertServiceStaff(ctx context.Context, arg UpsertServiceStaffParams) error
 	UpsertUserTOTPSetup(ctx context.Context, arg UpsertUserTOTPSetupParams) (UserTotp, error)
 	UserHasRoleSlug(ctx context.Context, arg UserHasRoleSlugParams) (bool, error)
 }

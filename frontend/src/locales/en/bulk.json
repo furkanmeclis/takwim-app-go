@@ -45,5 +45,8 @@
   "confirm.staff.deactivate": "Deactivate {{count}} selected staff members? They can no longer be picked for new bookings.",
   "actions.resources.activate": "Activate resources",
   "actions.resources.deactivate": "Deactivate resources",
-  "confirm.resources.deactivate": "Deactivate {{count}} selected resources? They can no longer be picked for new bookings."
+  "confirm.resources.deactivate": "Deactivate {{count}} selected resources? They can no longer be picked for new bookings.",
+  "actions.services.activate": "Activate services",
+  "actions.services.deactivate": "Deactivate services",
+  "confirm.services.deactivate": "Deactivate {{count}} selected services? They cannot be picked for new bookings."
 }

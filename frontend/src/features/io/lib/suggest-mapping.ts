@@ -133,7 +133,8 @@ export function applyAutoDefaults(
   if (
     resource === "tenant.branches" ||
     resource === "tenant.staff" ||
-    resource === "tenant.resources"
+    resource === "tenant.resources" ||
+    resource === "tenant.services"
   ) {
     if (!mapping.is_active && !next.is_active) next.is_active = "true";
   }

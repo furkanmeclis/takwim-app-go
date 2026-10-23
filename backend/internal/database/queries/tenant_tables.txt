@@ -17,3 +17,7 @@ staff_branches
 staff_time_off
 resources
 resource_closures
+service_categories
+services
+service_branches
+service_staff

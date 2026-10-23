@@ -134,5 +134,13 @@
   "labels.tenant.resources.import": "Import resources",
   "labels.tenant.resources.bulk.activate": "Bulk activate resources",
   "labels.tenant.resources.bulk.deactivate": "Bulk deactivate resources",
-  "groups.tenant_resources": "Resources"
+  "groups.tenant_resources": "Resources",
+  "labels.tenant.services.read": "View services",
+  "labels.tenant.services.write": "Manage the service catalog",
+  "labels.tenant.services.offer": "Manage branch prices and durations",
+  "labels.tenant.services.export": "Export services",
+  "labels.tenant.services.import": "Import services",
+  "labels.tenant.services.bulk.activate": "Bulk activate services",
+  "labels.tenant.services.bulk.deactivate": "Bulk deactivate services",
+  "groups.tenant_services": "Services"
 }

@@ -609,6 +609,56 @@ type RolePermission struct {
 	PermissionID int64 `json:"permission_id"`
 }
 
+type Service struct {
+	ID                  int64              `json:"id"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	OrganizationID      int64              `json:"organization_id"`
+	CategoryID          pgtype.Int8        `json:"category_id"`
+	Name                string             `json:"name"`
+	Description         string             `json:"description"`
+	DurationMinutes     int32              `json:"duration_minutes"`
+	BufferBeforeMinutes int32              `json:"buffer_before_minutes"`
+	BufferAfterMinutes  int32              `json:"buffer_after_minutes"`
+	Price               pgtype.Numeric     `json:"price"`
+	PaymentMode         string             `json:"payment_mode"`
+	StaffMode           string             `json:"staff_mode"`
+	ResourceKinds       []string           `json:"resource_kinds"`
+	ShowOnline          bool               `json:"show_online"`
+	IsActive            bool               `json:"is_active"`
+	SortOrder           int32              `json:"sort_order"`
+	ImageUuid           pgtype.UUID        `json:"image_uuid"`
+	ImageKey            pgtype.Text        `json:"image_key"`
+	ImageContentType    pgtype.Text        `json:"image_content_type"`
+	ImageSizeBytes      pgtype.Int8        `json:"image_size_bytes"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ServiceBranch struct {
+	ID              int64              `json:"id"`
+	OrganizationID  int64              `json:"organization_id"`
+	ServiceID       int64              `json:"service_id"`
+	BranchID        int64              `json:"branch_id"`
+	Price           pgtype.Numeric     `json:"price"`
+	DurationMinutes pgtype.Int4        `json:"duration_minutes"`
+	IsActive        bool               `json:"is_active"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ServiceCategory struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	SortOrder      int32              `json:"sort_order"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
 type ServicePoint struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`
@@ -623,6 +673,17 @@ type ServicePoint struct {
 	IsActive         bool               `json:"is_active"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ServiceStaff struct {
+	ID              int64              `json:"id"`
+	OrganizationID  int64              `json:"organization_id"`
+	ServiceID       int64              `json:"service_id"`
+	StaffID         int64              `json:"staff_id"`
+	Price           pgtype.Numeric     `json:"price"`
+	DurationMinutes pgtype.Int4        `json:"duration_minutes"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Staff struct {

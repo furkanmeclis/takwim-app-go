@@ -108,5 +108,6 @@
   "resources.tenant.one_way_rules": "Tek yön kuralları",
   "resources.platform.organizations": "İşletmeler",
   "resources.tenant.staff": "Personel",
-  "resources.tenant.resources": "Kaynaklar"
+  "resources.tenant.resources": "Kaynaklar",
+  "resources.tenant.services": "Hizmetler"
 }

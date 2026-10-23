@@ -134,5 +134,13 @@
   "labels.tenant.resources.import": "Kaynakları içe aktar",
   "labels.tenant.resources.bulk.activate": "Kaynakları toplu aktifleştir",
   "labels.tenant.resources.bulk.deactivate": "Kaynakları toplu pasifleştir",
-  "groups.tenant_resources": "Kaynaklar"
+  "groups.tenant_resources": "Kaynaklar",
+  "labels.tenant.services.read": "Hizmetleri görüntüle",
+  "labels.tenant.services.write": "Hizmet kataloğunu yönet",
+  "labels.tenant.services.offer": "Şube fiyat ve sürelerini yönet",
+  "labels.tenant.services.export": "Hizmetleri dışa aktar",
+  "labels.tenant.services.import": "Hizmetleri içe aktar",
+  "labels.tenant.services.bulk.activate": "Hizmetleri toplu aktifleştir",
+  "labels.tenant.services.bulk.deactivate": "Hizmetleri toplu pasifleştir",
+  "groups.tenant_services": "Hizmetler"
 }

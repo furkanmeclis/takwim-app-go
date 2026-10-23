@@ -1,6 +1,7 @@
 import {
   Activity,
   Armchair,
+  ConciergeBell,
   Bell,
   Contact,
   Download,
@@ -35,6 +36,7 @@ const ICONS: Record<string, LucideIcon> = {
   branches: Store,
   staff: Contact,
   resources: Armchair,
+  services: ConciergeBell,
 };
 
 export function resolveSearchIcon(name?: string): LucideIcon {

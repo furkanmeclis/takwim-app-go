@@ -21,5 +21,7 @@
   "specs_staff": "Staff",
   "prefix_staff": "staff",
   "prefix_resources": "resource",
-  "specs_resources": "Resources"
+  "specs_resources": "Resources",
+  "prefix_services": "service",
+  "specs_services": "Services"
 }

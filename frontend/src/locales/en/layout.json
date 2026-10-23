@@ -47,5 +47,6 @@
   "nav_tenant_settings_plan": "Plan and usage",
   "nav_tenant_activity": "Activity history",
   "nav_staff": "Staff",
-  "nav_resources": "Resources"
+  "nav_resources": "Resources",
+  "nav_services": "Services"
 }

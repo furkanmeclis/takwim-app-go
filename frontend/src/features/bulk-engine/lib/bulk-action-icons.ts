@@ -40,6 +40,10 @@ const bulkActionIconCatalog: Record<
     activate: CircleCheck,
     deactivate: CircleOff,
   },
+  "tenant.services": {
+    activate: CircleCheck,
+    deactivate: CircleOff,
+  },
 };
 
 export function resolveBulkActionIcon(
