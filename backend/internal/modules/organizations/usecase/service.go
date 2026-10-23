@@ -14,6 +14,8 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/slug"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/localtime"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -225,6 +227,20 @@ func (s *Service) PatchOrganization(ctx context.Context, id uuid.UUID, in orgmod
 	}
 	if in.Settings != nil {
 		params.Settings = in.Settings
+	}
+	if in.Timezone != nil {
+		v := strings.TrimSpace(*in.Timezone)
+		if !localtime.ValidZone(v) {
+			return orgmodel.Organization{}, fmt.Errorf("%w: timezone is not a known IANA zone", ErrInvalidRequest)
+		}
+		params.Timezone = pgtype.Text{String: v, Valid: true}
+	}
+	if in.Currency != nil {
+		v, err := money.ParseCurrency(strings.ToUpper(strings.TrimSpace(*in.Currency)))
+		if err != nil {
+			return orgmodel.Organization{}, fmt.Errorf("%w: currency must be a 3-letter ISO 4217 code", ErrInvalidRequest)
+		}
+		params.Currency = pgtype.Text{String: string(v), Valid: true}
 	}
 	row, err := s.repo.UpdateOrganization(ctx, params)
 	if err != nil {
@@ -662,6 +678,7 @@ func mapOrganization(row db.Organization) orgmodel.Organization {
 	return orgmodel.Organization{
 		ID: row.ID, UUID: row.Uuid, Slug: row.Slug, Name: row.Name,
 		LogoURL: LogoURL(row.Uuid, row.LogoObjectKey), Status: row.Status,
+		Timezone: row.Timezone, Currency: row.Currency,
 		AccessStartsAt: row.AccessStartsAt.Time.UTC(), AccessEndsAt: timePtr(row.AccessEndsAt),
 		Settings: row.Settings, CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
 	}

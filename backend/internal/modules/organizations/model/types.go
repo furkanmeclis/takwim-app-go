@@ -23,6 +23,8 @@ type Organization struct {
 	Name           string          `json:"name"`
 	LogoURL        *string         `json:"logo_url,omitempty"`
 	Status         string          `json:"status"`
+	Timezone       string          `json:"timezone"`
+	Currency       string          `json:"currency"`
 	AccessStartsAt time.Time       `json:"access_starts_at"`
 	AccessEndsAt   *time.Time      `json:"access_ends_at,omitempty"`
 	Settings       json.RawMessage `json:"settings,omitempty"`
@@ -73,6 +75,10 @@ type PatchOrganizationInput struct {
 	Name     *string
 	Slug     *string
 	Settings []byte
+	// Timezone is an IANA zone name ("Europe/Istanbul").
+	Timezone *string
+	// Currency is an ISO 4217 code ("TRY").
+	Currency *string
 }
 
 type ListFilter struct {

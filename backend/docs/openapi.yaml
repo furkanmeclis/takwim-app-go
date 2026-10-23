@@ -3821,7 +3821,7 @@ paths:
       tags: [Tenant]
       operationId: getTenantOrganizationProfile
       summary: Organization profile
-      description: Name and logo of the organization (`tenant.settings.read`). Company / billing details live in `/v1/tenant/settings`.
+      description: Name, logo, time zone and currency of the organization (`tenant.settings.read`). Company / billing details live in `/v1/tenant/settings`.
       security:
         - bearerAuth: []
       parameters:
@@ -3839,8 +3839,8 @@ paths:
     patch:
       tags: [Tenant]
       operationId: patchTenantOrganizationProfile
-      summary: Rename the organization
-      description: "`tenant.settings.write`. Only the name; slug, status and access window are platform-managed."
+      summary: Update the organization profile
+      description: "`tenant.settings.write`. Name, time zone and currency; slug, status and access window are platform-managed."
       security:
         - bearerAuth: []
       parameters:
@@ -5461,13 +5461,15 @@ components:
 
     OrganizationProfile:
       type: object
-      required: [uuid, slug, name, logo_url, status, access_starts_at, access_ends_at, updated_at]
+      required: [uuid, slug, name, logo_url, status, timezone, currency, access_starts_at, access_ends_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
         logo_url: { type: [string, "null"], description: API-owned logo stream; never an object key }
         status: { type: string, enum: [active, suspended] }
+        timezone: { type: string, description: "IANA zone for calendar decisions; instants stay UTC", example: Europe/Istanbul }
+        currency: { type: string, pattern: "^[A-Z]{3}$", description: ISO 4217 code of every amount of the organization, example: TRY }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
         updated_at: { type: string, format: date-time }
@@ -5482,10 +5484,12 @@ components:
 
     OrganizationProfilePatchRequest:
       type: object
-      required: [name]
+      minProperties: 1
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 255 }
+        timezone: { type: string, description: IANA zone name, example: Europe/Istanbul }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: TRY }
 
 
     DayHours:
@@ -6708,7 +6712,7 @@ components:
 
     Organization:
       type: object
-      required: [uuid, slug, name, status, access_starts_at, created_at, updated_at]
+      required: [uuid, slug, name, status, timezone, currency, access_starts_at, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -6717,6 +6721,8 @@ components:
           type: [string, "null"]
           description: "API-owned logo stream (`/v1/organizations/{uuid}/logo?v=...`)"
         status: { type: string, enum: [active, suspended] }
+        timezone: { type: string, description: "IANA zone for calendar decisions; instants stay UTC", example: Europe/Istanbul }
+        currency: { type: string, pattern: "^[A-Z]{3}$", description: ISO 4217 code of every amount of the organization, example: TRY }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
         settings:
@@ -6747,6 +6753,8 @@ components:
       properties:
         name: { type: string }
         slug: { type: string }
+        timezone: { type: string, description: IANA zone name, example: Europe/Istanbul }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: TRY }
         settings:
           type: object
           additionalProperties: true

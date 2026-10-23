@@ -17,6 +17,8 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourcemeta"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/localtime"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 	"github.com/google/uuid"
 )
@@ -317,26 +319,45 @@ func (h *Handler) TenantGetOrganization(w http.ResponseWriter, r *http.Request) 
 	response.JSON(w, r, http.StatusOK, tenantOrganization(org))
 }
 
-// TenantPatchOrganization serves PATCH /v1/tenant/organization (name only;
-// slug, status and access window stay platform-managed).
+// TenantPatchOrganization serves PATCH /v1/tenant/organization (name, time
+// zone and currency; slug, status and access window stay platform-managed).
 func (h *Handler) TenantPatchOrganization(w http.ResponseWriter, r *http.Request) {
 	scope := orgctx.Must(r.Context())
 	var in struct {
-		Name *string `json:"name"`
+		Name     *string `json:"name"`
+		Timezone *string `json:"timezone"`
+		Currency *string `json:"currency"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
-	if in.Name == nil || strings.TrimSpace(*in.Name) == "" || len([]rune(strings.TrimSpace(*in.Name))) > 255 {
-		response.ValidationError(w, r, []response.Detail{{Field: "name", Message: "name is required (max 255 characters)", Code: "required"}})
+	var details []response.Detail
+	if in.Name == nil && in.Timezone == nil && in.Currency == nil {
+		details = append(details, response.Detail{Field: "name", Message: "at least one field is required", Code: "required"})
+	}
+	if in.Name != nil && (strings.TrimSpace(*in.Name) == "" || len([]rune(strings.TrimSpace(*in.Name))) > 255) {
+		details = append(details, response.Detail{Field: "name", Message: "name is required (max 255 characters)", Code: "required"})
+	}
+	if in.Timezone != nil && !localtime.ValidZone(strings.TrimSpace(*in.Timezone)) {
+		details = append(details, response.Detail{Field: "timezone", Message: "timezone must be an IANA zone such as Europe/Istanbul", Code: "invalid"})
+	}
+	if in.Currency != nil {
+		if _, err := money.ParseCurrency(strings.ToUpper(strings.TrimSpace(*in.Currency))); err != nil {
+			details = append(details, response.Detail{Field: "currency", Message: "currency must be a 3-letter ISO 4217 code", Code: "invalid"})
+		}
+	}
+	if len(details) > 0 {
+		response.ValidationError(w, r, details)
 		return
 	}
-	org, err := h.svc.PatchOrganization(r.Context(), scope.UUID, orgmodel.PatchOrganizationInput{Name: in.Name})
+	org, err := h.svc.PatchOrganization(r.Context(), scope.UUID, orgmodel.PatchOrganizationInput{
+		Name: in.Name, Timezone: in.Timezone, Currency: in.Currency,
+	})
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	h.recordProfile(r, "organization.updated", org, map[string]any{"name": org.Name})
+	h.recordProfile(r, "organization.updated", org, map[string]any{"name": org.Name, "timezone": org.Timezone, "currency": org.Currency})
 	response.JSON(w, r, http.StatusOK, tenantOrganization(org))
 }
 
@@ -425,6 +446,8 @@ type TenantOrganization struct {
 	Name           string    `json:"name"`
 	LogoURL        *string   `json:"logo_url"`
 	Status         string    `json:"status"`
+	Timezone       string    `json:"timezone"`
+	Currency       string    `json:"currency"`
 	AccessStartsAt string    `json:"access_starts_at"`
 	AccessEndsAt   *string   `json:"access_ends_at"`
 	UpdatedAt      string    `json:"updated_at"`
@@ -433,6 +456,7 @@ type TenantOrganization struct {
 func tenantOrganization(org orgmodel.Organization) TenantOrganization {
 	out := TenantOrganization{
 		UUID: org.UUID, Slug: org.Slug, Name: org.Name, LogoURL: org.LogoURL, Status: org.Status,
+		Timezone: org.Timezone, Currency: org.Currency,
 		AccessStartsAt: org.AccessStartsAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:      org.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}

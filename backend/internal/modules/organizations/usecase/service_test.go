@@ -270,8 +270,19 @@ func (f *fakeRepo) ListOrganizations(context.Context, db.ListOrganizationsWithSt
 	return nil, 0, nil
 }
 
-func (f *fakeRepo) UpdateOrganization(context.Context, db.UpdateOrganizationParams) (db.Organization, error) {
-	return db.Organization{}, nil
+func (f *fakeRepo) UpdateOrganization(_ context.Context, params db.UpdateOrganizationParams) (db.Organization, error) {
+	org, err := f.GetOrganizationByUUID(context.Background(), params.Uuid)
+	if err != nil {
+		return db.Organization{}, err
+	}
+	if params.Timezone.Valid {
+		org.Timezone = params.Timezone.String
+	}
+	if params.Currency.Valid {
+		org.Currency = params.Currency.String
+	}
+	f.orgs[org.ID] = org
+	return org, nil
 }
 
 func (f *fakeRepo) SetOrganizationStatus(_ context.Context, params db.SetOrganizationStatusParams) (db.Organization, error) {
@@ -516,3 +527,31 @@ func (f *fakeRepo) SetRolePermissions(context.Context, *db.Queries, int64, []str
 }
 
 var _ Repository = (*fakeRepo)(nil)
+
+func TestPatchOrganizationTimezoneAndCurrency(t *testing.T) {
+	t.Parallel()
+	f := newFakeRepo(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC))
+	f.users[10] = db.User{ID: 10, Uuid: uuid.New(), Email: "owner@example.test", Name: "Owner", Surname: "User", Status: "active"}
+	svc := New(f, nil)
+	org, err := svc.CreateOrganization(context.Background(), orgmodel.CreateOrganizationInput{Name: "Salon", OwnerUserID: 10})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	tz, cur := "Europe/Berlin", " eur "
+	got, err := svc.PatchOrganization(context.Background(), org.UUID, orgmodel.PatchOrganizationInput{Timezone: &tz, Currency: &cur})
+	if err != nil {
+		t.Fatalf("patch: %v", err)
+	}
+	if got.Timezone != "Europe/Berlin" || got.Currency != "EUR" {
+		t.Fatalf("timezone/currency = %q %q", got.Timezone, got.Currency)
+	}
+	for _, in := range []orgmodel.PatchOrganizationInput{
+		{Timezone: ptr("Mars/Olympus")},
+		{Timezone: ptr("")},
+		{Currency: ptr("TL")},
+	} {
+		if _, err := svc.PatchOrganization(context.Background(), org.UUID, in); !errors.Is(err, ErrInvalidRequest) {
+			t.Fatalf("patch %+v err = %v", in, err)
+		}
+	}
+}

@@ -12,6 +12,7 @@ import {
 } from "react-day-picker/locale";
 
 import { i18nConfig, type AppLocale } from "@/config/i18n";
+import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from "@/config/regional";
 
 export function dateFnsLocale(
   locale: AppLocale = i18nConfig.defaultLocale,
@@ -47,6 +48,89 @@ export function money(
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function intlLocale(locale: AppLocale) {
+  return locale === "tr" ? "tr-TR" : "en-US";
+}
+
+/**
+ * Parses an API amount ("1300.00", "-0.50") into integer minor units
+ * (kuruş). Sums and splits are done on minor units, never on floats.
+ * Returns null for anything that is not a decimal with at most 2 digits.
+ */
+export function toMinor(value: string): number | null {
+  const m = /^(-)?(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!m) return null;
+  const minor = Number(m[2]) * 100 + Number((m[3] ?? "").padEnd(2, "0"));
+  return m[1] ? -minor : minor;
+}
+
+/** Renders integer minor units back as the API decimal string. */
+export function fromMinor(minor: number): string {
+  const sign = minor < 0 ? "-" : "";
+  const abs = Math.abs(Math.trunc(minor));
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+}
+
+/**
+ * Splits minor units over weights; every part is rounded toward zero and the
+ * remainder goes to the last part, so the parts always add up to the total
+ * (same rule as the API's money.Allocate).
+ */
+export function allocateMinor(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, w) => a + w, 0);
+  if (weights.length === 0 || sum <= 0) return [];
+  const parts = weights.map((w) => Math.trunc((total * w) / sum));
+  parts[parts.length - 1] =
+    total - parts.slice(0, -1).reduce((a, p) => a + p, 0);
+  return parts;
+}
+
+/** Formats an API amount string with its currency ("1.300,00 ₺"). */
+export function amount(
+  value: string | null | undefined,
+  currencyCode: string = DEFAULT_CURRENCY,
+  locale: AppLocale = i18nConfig.defaultLocale,
+) {
+  const minor = value == null ? null : toMinor(value);
+  if (minor == null) return "";
+  return new Intl.NumberFormat(intlLocale(locale), {
+    style: "currency",
+    currency: currencyCode,
+  }).format(minor / 100);
+}
+
+/** Formats a UTC instant in a business / branch time zone. */
+export function datetimeInZone(
+  value: Date | string,
+  timeZone: string = DEFAULT_TIMEZONE,
+  locale: AppLocale = i18nConfig.defaultLocale,
+  options: Intl.DateTimeFormatOptions = {
+    dateStyle: "short",
+    timeStyle: "short",
+  },
+) {
+  const d = typeof value === "string" ? parseISO(value) : value;
+  return new Intl.DateTimeFormat(intlLocale(locale), {
+    ...options,
+    timeZone,
+  }).format(d);
+}
+
+/** The calendar date ("2026-06-01") of a UTC instant in a time zone. */
+export function dateKeyInZone(
+  value: Date | string,
+  timeZone: string = DEFAULT_TIMEZONE,
+) {
+  const d = typeof value === "string" ? parseISO(value) : value;
+  // en-CA renders ISO order: YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 export function date(

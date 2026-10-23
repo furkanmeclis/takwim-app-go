@@ -89,6 +89,14 @@ Domain / auth use cases call `notifications.Service.Enqueue(...)` only. HTTP han
 
 Cross-module signals use the platform event bus (`internal/platform/events`). Use cases `Publish`; bus handlers may enqueue notifications — never SMTP.
 
+## Money and time
+
+- **Amounts** are `pkg/money.Money`: int64 minor units (kuruş) plus a currency. Columns are `NUMERIC(14,2)`; JSON is a decimal string with two digits (`"1300.00"`), never a float. Rounding is half away from zero, applied once. Splitting a total (installments, lines) uses `Money.Allocate` / `Split`: the remainder goes to the last part so the parts add up exactly.
+- **Currency**: every amount field has the currency next to it or inherits `organization.currency` (ISO 4217, default `TRY`).
+- **Instants** are stored as `timestamptz` and returned as RFC 3339 UTC. Calendar decisions (which day, opening hours, "today") use `pkg/localtime` with the zone of the branch, else the business (`organization.timezone`, default `Europe/Istanbul`): `localtime.ZoneOr(branch, org)`.
+- **Ranges** are half-open `[start, end)`: back-to-back appointments touch but do not overlap. Dates are `"2006-01-02"` (`localtime.Date`); `Date.Bounds(zone)` gives the instant range of a local day (23 or 25 hours on DST days).
+- Frontend: `amount`, `toMinor` / `fromMinor` / `allocateMinor`, `datetimeInZone` and `dateKeyInZone` in `frontend/src/lib/utils/format.ts`; defaults in `frontend/src/config/regional.ts`.
+
 ## OpenAPI
 
 Contract: `docs/openapi.yaml` (OpenAPI 3.1) + Scalar at `/docs/`. Run `make openapi-lint` after path/schema changes.
