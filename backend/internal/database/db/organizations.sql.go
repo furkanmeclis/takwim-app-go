@@ -83,30 +83,6 @@ func (q *Queries) CountOrganizationOwners(ctx context.Context, organizationID in
 	return column_1, err
 }
 
-const countOrganizations = `-- name: CountOrganizations :one
-SELECT COUNT(*)::bigint
-FROM organizations
-WHERE deleted_at IS NULL
-  AND ($1::text IS NULL OR status = $1)
-  AND (
-    $2::text IS NULL
-    OR name ILIKE '%' || $2 || '%'
-    OR slug ILIKE '%' || $2 || '%'
-  )
-`
-
-type CountOrganizationsParams struct {
-	Status pgtype.Text `json:"status"`
-	Q      pgtype.Text `json:"q"`
-}
-
-func (q *Queries) CountOrganizations(ctx context.Context, arg CountOrganizationsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countOrganizations, arg.Status, arg.Q)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const createOrganization = `-- name: CreateOrganization :one
 INSERT INTO organizations (
     slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings
@@ -152,50 +128,6 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const createOrganizationInvitation = `-- name: CreateOrganizationInvitation :one
-INSERT INTO organization_invitations (
-    organization_id, email, role_id, token_hash, expires_at, invited_by
-) VALUES (
-    $1, $2, $3, $4, $5, $6
-)
-RETURNING id, uuid, organization_id, email, role_id, token_hash, expires_at, accepted_at, revoked_at, invited_by, created_at
-`
-
-type CreateOrganizationInvitationParams struct {
-	OrganizationID int64              `json:"organization_id"`
-	Email          string             `json:"email"`
-	RoleID         int64              `json:"role_id"`
-	TokenHash      string             `json:"token_hash"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	InvitedBy      pgtype.Int8        `json:"invited_by"`
-}
-
-func (q *Queries) CreateOrganizationInvitation(ctx context.Context, arg CreateOrganizationInvitationParams) (OrganizationInvitation, error) {
-	row := q.db.QueryRow(ctx, createOrganizationInvitation,
-		arg.OrganizationID,
-		arg.Email,
-		arg.RoleID,
-		arg.TokenHash,
-		arg.ExpiresAt,
-		arg.InvitedBy,
-	)
-	var i OrganizationInvitation
-	err := row.Scan(
-		&i.ID,
-		&i.Uuid,
-		&i.OrganizationID,
-		&i.Email,
-		&i.RoleID,
-		&i.TokenHash,
-		&i.ExpiresAt,
-		&i.AcceptedAt,
-		&i.RevokedAt,
-		&i.InvitedBy,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -289,30 +221,6 @@ func (q *Queries) GetOrganizationByUUID(ctx context.Context, argUuid uuid.UUID) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const getOrganizationInvitationByUUID = `-- name: GetOrganizationInvitationByUUID :one
-SELECT id, uuid, organization_id, email, role_id, token_hash, expires_at, accepted_at, revoked_at, invited_by, created_at FROM organization_invitations
-WHERE uuid = $1
-`
-
-func (q *Queries) GetOrganizationInvitationByUUID(ctx context.Context, argUuid uuid.UUID) (OrganizationInvitation, error) {
-	row := q.db.QueryRow(ctx, getOrganizationInvitationByUUID, argUuid)
-	var i OrganizationInvitation
-	err := row.Scan(
-		&i.ID,
-		&i.Uuid,
-		&i.OrganizationID,
-		&i.Email,
-		&i.RoleID,
-		&i.TokenHash,
-		&i.ExpiresAt,
-		&i.AcceptedAt,
-		&i.RevokedAt,
-		&i.InvitedBy,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -468,71 +376,6 @@ func (q *Queries) ListLiveOrganizationIDs(ctx context.Context) ([]int64, error) 
 	return items, nil
 }
 
-const listOrganizationInvitations = `-- name: ListOrganizationInvitations :many
-SELECT oi.id, oi.uuid, oi.organization_id, oi.email, oi.role_id, oi.token_hash, oi.expires_at, oi.accepted_at, oi.revoked_at, oi.invited_by, oi.created_at, r.slug AS role_key, r.name AS role_name
-FROM organization_invitations oi
-INNER JOIN roles r ON r.id = oi.role_id AND r.scope = 'tenant'
-WHERE oi.organization_id = $1
-ORDER BY oi.created_at DESC
-LIMIT $3 OFFSET $2
-`
-
-type ListOrganizationInvitationsParams struct {
-	OrganizationID int64 `json:"organization_id"`
-	OffsetCount    int32 `json:"offset_count"`
-	LimitCount     int32 `json:"limit_count"`
-}
-
-type ListOrganizationInvitationsRow struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Email          string             `json:"email"`
-	RoleID         int64              `json:"role_id"`
-	TokenHash      string             `json:"token_hash"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
-	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
-	InvitedBy      pgtype.Int8        `json:"invited_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	RoleKey        string             `json:"role_key"`
-	RoleName       string             `json:"role_name"`
-}
-
-func (q *Queries) ListOrganizationInvitations(ctx context.Context, arg ListOrganizationInvitationsParams) ([]ListOrganizationInvitationsRow, error) {
-	rows, err := q.db.Query(ctx, listOrganizationInvitations, arg.OrganizationID, arg.OffsetCount, arg.LimitCount)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListOrganizationInvitationsRow{}
-	for rows.Next() {
-		var i ListOrganizationInvitationsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Uuid,
-			&i.OrganizationID,
-			&i.Email,
-			&i.RoleID,
-			&i.TokenHash,
-			&i.ExpiresAt,
-			&i.AcceptedAt,
-			&i.RevokedAt,
-			&i.InvitedBy,
-			&i.CreatedAt,
-			&i.RoleKey,
-			&i.RoleName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listOrganizationMembersByOrg = `-- name: ListOrganizationMembersByOrg :many
 SELECT om.id, om.organization_id, om.user_id, om.role_id, om.created_at, om.updated_at,
        r.slug AS role_key, r.name AS role_name,
@@ -681,80 +524,6 @@ func (q *Queries) ListOrganizationMembershipsByUser(ctx context.Context, userID 
 			&i.LogoObjectKey,
 			&i.OrganizationStatus,
 			&i.AccessEndsAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listOrganizationsFiltered = `-- name: ListOrganizationsFiltered :many
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at
-FROM organizations
-WHERE deleted_at IS NULL
-  AND ($1::text IS NULL OR status = $1)
-  AND (
-    $2::text IS NULL
-    OR name ILIKE '%' || $2 || '%'
-    OR slug ILIKE '%' || $2 || '%'
-  )
-ORDER BY
-  CASE WHEN $3::text = 'name' AND NOT $4::boolean THEN name END ASC,
-  CASE WHEN $3::text = 'name' AND $4::boolean THEN name END DESC,
-  CASE WHEN $3::text = 'slug' AND NOT $4::boolean THEN slug END ASC,
-  CASE WHEN $3::text = 'slug' AND $4::boolean THEN slug END DESC,
-  CASE WHEN $3::text = 'status' AND NOT $4::boolean THEN status END ASC,
-  CASE WHEN $3::text = 'status' AND $4::boolean THEN status END DESC,
-  CASE WHEN $3::text = 'updated_at' AND NOT $4::boolean THEN updated_at END ASC,
-  CASE WHEN $3::text = 'updated_at' AND $4::boolean THEN updated_at END DESC,
-  CASE WHEN $3::text = 'created_at' AND NOT $4::boolean THEN created_at END ASC,
-  CASE WHEN $3::text = 'created_at' AND $4::boolean THEN created_at END DESC,
-  created_at DESC
-LIMIT $6 OFFSET $5
-`
-
-type ListOrganizationsFilteredParams struct {
-	Status      pgtype.Text `json:"status"`
-	Q           pgtype.Text `json:"q"`
-	SortField   string      `json:"sort_field"`
-	SortDesc    bool        `json:"sort_desc"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
-}
-
-func (q *Queries) ListOrganizationsFiltered(ctx context.Context, arg ListOrganizationsFilteredParams) ([]Organization, error) {
-	rows, err := q.db.Query(ctx, listOrganizationsFiltered,
-		arg.Status,
-		arg.Q,
-		arg.SortField,
-		arg.SortDesc,
-		arg.OffsetCount,
-		arg.LimitCount,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Organization{}
-	for rows.Next() {
-		var i Organization
-		if err := rows.Scan(
-			&i.ID,
-			&i.Uuid,
-			&i.Slug,
-			&i.Name,
-			&i.LogoObjectKey,
-			&i.Status,
-			&i.AccessStartsAt,
-			&i.AccessEndsAt,
-			&i.Settings,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}

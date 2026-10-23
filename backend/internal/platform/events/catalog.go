@@ -21,8 +21,6 @@ const (
 	CustomersContactAdded            = "customers.contact_added"
 	CustomersContactVerified         = "customers.contact_verified"
 	CustomersContactRemoved          = "customers.contact_removed"
-	CustomersWorkspaceAdded          = "customers.workspace_added"
-	CustomersWorkspaceRemoved        = "customers.workspace_removed"
 	CustomersAssigned                = "customers.assigned"
 	CustomersUnassigned              = "customers.unassigned"
 	CustomersTransferred             = "customers.transferred"
@@ -52,41 +50,37 @@ const (
 
 // Commerce domain events (COMMERCE_DOMAIN_ADR catalog).
 const (
-	CommerceAppsUpdated                 = "commerce.apps.updated"
-	CommerceConnectionsCreated          = "commerce.connections.created"
-	CommerceConnectionsUpdated          = "commerce.connections.updated"
-	CommerceConnectionsDisconnected     = "commerce.connections.disconnected"
-	CommerceConnectionsWorkspaceAdded   = "commerce.connections.workspace_added"
-	CommerceConnectionsWorkspaceRemoved = "commerce.connections.workspace_removed"
-	CommerceOrdersUpserted              = "commerce.orders.upserted"
-	CommerceOrdersLinkedToCustomer      = "commerce.orders.linked_to_customer"
-	CommerceRefundsUpdated              = "commerce.refunds.updated"
-	CommerceCategoriesUpserted          = "commerce.categories.upserted"
-	CommerceCategoriesDeleted           = "commerce.categories.deleted"
-	CommerceProductsUpserted            = "commerce.products.upserted"
-	CommerceProductsDeleted             = "commerce.products.deleted"
-	CommerceCatalogSyncCompleted        = "commerce.catalog.sync_completed"
-	CommerceCatalogSyncFailed           = "commerce.catalog.sync_failed"
+	CommerceAppsUpdated             = "commerce.apps.updated"
+	CommerceConnectionsCreated      = "commerce.connections.created"
+	CommerceConnectionsUpdated      = "commerce.connections.updated"
+	CommerceConnectionsDisconnected = "commerce.connections.disconnected"
+	CommerceOrdersUpserted          = "commerce.orders.upserted"
+	CommerceOrdersLinkedToCustomer  = "commerce.orders.linked_to_customer"
+	CommerceRefundsUpdated          = "commerce.refunds.updated"
+	CommerceCategoriesUpserted      = "commerce.categories.upserted"
+	CommerceCategoriesDeleted       = "commerce.categories.deleted"
+	CommerceProductsUpserted        = "commerce.products.upserted"
+	CommerceProductsDeleted         = "commerce.products.deleted"
+	CommerceCatalogSyncCompleted    = "commerce.catalog.sync_completed"
+	CommerceCatalogSyncFailed       = "commerce.catalog.sync_failed"
 )
 
 // AI domain events (AI_DOMAIN_ADR catalog). Names only in 022; publish/handlers in 023+.
 const (
-	AIProfilesCreated          = "ai.profiles.created"
-	AIProfilesUpdated          = "ai.profiles.updated"
-	AIProfilesDeleted          = "ai.profiles.deleted"
-	AIProfilesWorkspaceAdded   = "ai.profiles.workspace_added"
-	AIProfilesWorkspaceRemoved = "ai.profiles.workspace_removed"
-	AIProfilesChannelAttached  = "ai.profiles.channel_attached"
-	AIProfilesChannelDetached  = "ai.profiles.channel_detached"
-	AICredentialsCreated       = "ai.credentials.created"
-	AICredentialsUpdated       = "ai.credentials.updated"
-	AICredentialsDeleted       = "ai.credentials.deleted"
-	AIPipelineCompleted        = "ai.pipeline.completed"
-	AIPipelineEscalated        = "ai.pipeline.escalated"
-	AIPipelineGuardFailed      = "ai.pipeline.guard_failed"
-	AIDraftCreated             = "ai.draft.created"
-	AIConversationTakeover     = "ai.conversation.takeover"
-	AIConversationReleased     = "ai.conversation.released"
+	AIProfilesCreated         = "ai.profiles.created"
+	AIProfilesUpdated         = "ai.profiles.updated"
+	AIProfilesDeleted         = "ai.profiles.deleted"
+	AIProfilesChannelAttached = "ai.profiles.channel_attached"
+	AIProfilesChannelDetached = "ai.profiles.channel_detached"
+	AICredentialsCreated      = "ai.credentials.created"
+	AICredentialsUpdated      = "ai.credentials.updated"
+	AICredentialsDeleted      = "ai.credentials.deleted"
+	AIPipelineCompleted       = "ai.pipeline.completed"
+	AIPipelineEscalated       = "ai.pipeline.escalated"
+	AIPipelineGuardFailed     = "ai.pipeline.guard_failed"
+	AIDraftCreated            = "ai.draft.created"
+	AIConversationTakeover    = "ai.conversation.takeover"
+	AIConversationReleased    = "ai.conversation.released"
 )
 
 // Reports domain events (REPORTS_DOMAIN_ADR).
@@ -217,8 +211,6 @@ func catalogConstants() []string {
 		CustomersContactAdded,
 		CustomersContactVerified,
 		CustomersContactRemoved,
-		CustomersWorkspaceAdded,
-		CustomersWorkspaceRemoved,
 		CustomersAssigned,
 		CustomersUnassigned,
 		CustomersTransferred,
@@ -244,8 +236,6 @@ func catalogConstants() []string {
 		CommerceConnectionsCreated,
 		CommerceConnectionsUpdated,
 		CommerceConnectionsDisconnected,
-		CommerceConnectionsWorkspaceAdded,
-		CommerceConnectionsWorkspaceRemoved,
 		CommerceOrdersUpserted,
 		CommerceOrdersLinkedToCustomer,
 		CommerceRefundsUpdated,
@@ -258,8 +248,6 @@ func catalogConstants() []string {
 		AIProfilesCreated,
 		AIProfilesUpdated,
 		AIProfilesDeleted,
-		AIProfilesWorkspaceAdded,
-		AIProfilesWorkspaceRemoved,
 		AIProfilesChannelAttached,
 		AIProfilesChannelDetached,
 		AICredentialsCreated,

@@ -47,7 +47,6 @@ type Drainer interface {
 type Row struct {
 	ID          int64
 	UUID        uuid.UUID
-	TenantID    *int64
 	EventName   string
 	Payload     []byte
 	Status      string
@@ -60,13 +59,16 @@ type Row struct {
 
 // envelope is stored inside payload JSONB alongside the free-form event data.
 type envelope struct {
-	EventID     uuid.UUID      `json:"event_id"`
-	ActorUserID *int64         `json:"actor_user_id,omitempty"`
-	EntityType  string         `json:"entity_type,omitempty"`
-	EntityID    *int64         `json:"entity_id,omitempty"`
-	EntityUUID  *uuid.UUID     `json:"entity_uuid,omitempty"`
-	OccurredAt  time.Time      `json:"occurred_at"`
-	Data        map[string]any `json:"data"`
+	EventID uuid.UUID `json:"event_id"`
+	// OrganizationID survives the round trip in the payload (outbox_events
+	// has no column for it).
+	OrganizationID *int64         `json:"organization_id,omitempty"`
+	ActorUserID    *int64         `json:"actor_user_id,omitempty"`
+	EntityType     string         `json:"entity_type,omitempty"`
+	EntityID       *int64         `json:"entity_id,omitempty"`
+	EntityUUID     *uuid.UUID     `json:"entity_uuid,omitempty"`
+	OccurredAt     time.Time      `json:"occurred_at"`
+	Data           map[string]any `json:"data"`
 }
 
 // Store is the Postgres-backed outbox.
@@ -121,13 +123,14 @@ func marshalEvent(ev events.Event) ([]byte, error) {
 		ev.Payload = map[string]any{}
 	}
 	env := envelope{
-		EventID:     ev.EventID,
-		ActorUserID: ev.ActorUserID,
-		EntityType:  ev.EntityType,
-		EntityID:    ev.EntityID,
-		EntityUUID:  ev.EntityUUID,
-		OccurredAt:  ev.OccurredAt.UTC(),
-		Data:        ev.Payload,
+		EventID:        ev.EventID,
+		OrganizationID: ev.OrganizationID,
+		ActorUserID:    ev.ActorUserID,
+		EntityType:     ev.EntityType,
+		EntityID:       ev.EntityID,
+		EntityUUID:     ev.EntityUUID,
+		OccurredAt:     ev.OccurredAt.UTC(),
+		Data:           ev.Payload,
 	}
 	body, err := json.Marshal(env)
 	if err != nil {
@@ -146,14 +149,15 @@ func unmarshalEvent(eventName string, raw []byte) (events.Event, error) {
 	}
 	env.Data = normalizeJSONNumbers(env.Data).(map[string]any)
 	return events.Event{
-		Name:        eventName,
-		ActorUserID: env.ActorUserID,
-		EntityType:  env.EntityType,
-		EntityID:    env.EntityID,
-		EntityUUID:  env.EntityUUID,
-		Payload:     env.Data,
-		OccurredAt:  env.OccurredAt,
-		EventID:     env.EventID,
+		Name:           eventName,
+		OrganizationID: env.OrganizationID,
+		ActorUserID:    env.ActorUserID,
+		EntityType:     env.EntityType,
+		EntityID:       env.EntityID,
+		EntityUUID:     env.EntityUUID,
+		Payload:        env.Data,
+		OccurredAt:     env.OccurredAt,
+		EventID:        env.EventID,
 	}, nil
 }
 

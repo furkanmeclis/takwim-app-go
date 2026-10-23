@@ -38,6 +38,12 @@ func (h *Handler) ExecuteRoles(w http.ResponseWriter, r *http.Request) {
 	h.execute(w, r, adapters.ResourceRoles)
 }
 
+// Execute returns the bulk handler of a platform resource whose module
+// mounts its own route (POST /v1/platform/<resource>/bulk).
+func (h *Handler) Execute(resource string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) { h.execute(w, r, resource) }
+}
+
 func (h *Handler) execute(w http.ResponseWriter, r *http.Request, resource string) {
 	p := authctx.MustPrincipal(r.Context())
 	var body bulkRequest

@@ -27,6 +27,8 @@ export const routes = {
     },
     organizations: "/organizations",
     noAccess: "/no-access",
+    /** Public staff invitation page (`/v1/invitations/{token}`). */
+    invite: (token: string) => `/invite/${encodeURIComponent(token)}`,
   },
   /**
    * Organization (tenant) shell `/t/{slug}`. The slug in the URL picks the
@@ -95,6 +97,12 @@ export const routes = {
       create: "/platform/settings/roles/create",
       detail: (uuid: string) => `/platform/settings/roles/${uuid}`,
       edit: (uuid: string) => `/platform/settings/roles/${uuid}/edit`,
+    },
+    organizations: {
+      root: "/platform/organizations",
+      create: "/platform/organizations/create",
+      detail: (uuid: string) => `/platform/organizations/${uuid}`,
+      edit: (uuid: string) => `/platform/organizations/${uuid}/edit`,
     },
     users: {
       root: "/platform/users",

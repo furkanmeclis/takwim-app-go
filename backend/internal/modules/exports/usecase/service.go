@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
@@ -187,7 +188,10 @@ func (s *Service) ProcessExport(ctx context.Context, jobID int64) error {
 		return s.fail(ctx, jobID, err.Error())
 	}
 	ext := ioengine.FileExtForExport(ioengine.ExportFormat(job.Format))
-	key := storage.ExportObjectKey(job.Uuid.String(), ext)
+	key, err := s.objectKey(ctx, job, ext)
+	if err != nil {
+		return s.fail(ctx, jobID, err.Error())
+	}
 	filename := ioengine.ExportDownloadFilename(job.Resource, ioengine.ExportFormat(job.Format), job.CreatedAt.Time)
 	if err := s.storage.Upload(ctx, storage.File{
 		Body: bytes.NewReader(data), Size: int64(len(data)),
@@ -310,6 +314,10 @@ func (s *Service) Download(ctx context.Context, jobUUID uuid.UUID, actorID int64
 	if !row.FileKey.Valid || row.Status != "completed" {
 		return nil, "", "", ErrNotFound
 	}
+	if !s.ownsFile(ctx, row) {
+		s.log.Error("export_file_outside_scope", "job", row.Uuid.String(), "key", row.FileKey.String)
+		return nil, "", "", ErrNotFound
+	}
 	rc, _, err := s.storage.Download(ctx, row.FileKey.String)
 	if err != nil {
 		return nil, "", "", err
@@ -317,6 +325,39 @@ func (s *Service) Download(ctx context.Context, jobUUID uuid.UUID, actorID int64
 	format := ioengine.ExportFormat(row.Format)
 	filename := ioengine.ExportDownloadFilename(row.Resource, format, row.CreatedAt.Time)
 	return rc, ioengine.ContentTypeForExport(format), filename, nil
+}
+
+// objectKey is where a job's file is stored: tenant exports live under
+// their organization (organizations/{org_uuid}/exports/...), platform
+// exports under exports/.
+func (s *Service) objectKey(ctx context.Context, job db.ExportJob, ext string) (string, error) {
+	if !job.OrganizationID.Valid {
+		return storage.ExportObjectKey(job.Uuid.String(), ext), nil
+	}
+	org, err := s.q.GetOrganizationByID(ctx, job.OrganizationID.Int64)
+	if err != nil {
+		return "", fmt.Errorf("export organization: %w", err)
+	}
+	return storage.OrganizationExportObjectKey(org.Uuid.String(), job.Uuid.String(), ext), nil
+}
+
+// ownsFile reports whether the stored file key belongs to the job's scope:
+// a tenant job's file under its organization's prefix (or the job's own
+// pre-prefix key, exports/{job_uuid}/), a platform job's file outside every
+// organization.
+func (s *Service) ownsFile(ctx context.Context, row db.ExportJob) bool {
+	key := row.FileKey.String
+	if !row.OrganizationID.Valid {
+		return !strings.HasPrefix(key, storage.OrganizationsRoot)
+	}
+	if strings.HasPrefix(key, "exports/"+row.Uuid.String()+"/") {
+		return true
+	}
+	org, err := s.q.GetOrganizationByID(ctx, row.OrganizationID.Int64)
+	if err != nil {
+		return false
+	}
+	return storage.OrganizationOwnsKey(key, org.Uuid.String())
 }
 
 func mapExportJob(row db.ExportJob) ExportJobView {

@@ -11,6 +11,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// PlatformExport is TenantExport for a platform resource whose module mounts
+// its own route (POST /v1/platform/<resource>/export): the engine scope is
+// the platform because the request carries no organization.
+func (h *Handler) PlatformExport(resource string, allowedQuery ...string) http.HandlerFunc {
+	return h.TenantExport(resource, allowedQuery...)
+}
+
 // TenantExport returns a handler that queues an export of an
 // organization-owned resource. The route guards the tenant permission; the
 // job is stamped with the X-Organization organization by the use case.

@@ -42,5 +42,12 @@
   "sign_in": "Sign in",
   "back_to_login": "Back to sign in",
   "continue": "Continue",
-  "area_requires": "This area requires {{area}} access."
+  "area_requires": "This area requires {{area}} access.",
+  "codes.LAST_ORGANIZATION_OWNER": "The last owner of a business cannot be removed or demoted.",
+  "codes.ALREADY_MEMBER": "This person is already a member.",
+  "codes.INVITATION_EXPIRED": "The invitation has expired.",
+  "codes.INVITATION_USED": "This invitation was already used.",
+  "codes.INVITATION_REVOKED": "This invitation was revoked.",
+  "codes.INVITATION_EMAIL_MISMATCH": "This invitation was sent to another e-mail address.",
+  "codes.ACCOUNT_EXISTS": "An account with this e-mail already exists."
 }

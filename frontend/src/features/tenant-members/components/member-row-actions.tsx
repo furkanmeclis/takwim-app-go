@@ -15,12 +15,15 @@ export type MemberRowActionHandlers = {
 export function MemberRowActions({
   member,
   handlers,
+  writePermission = permissions.tenant.members.write,
 }: {
   member: TenantMember;
   handlers: MemberRowActionHandlers;
+  /** Platform screens pass `platform.organizations.write`. */
+  writePermission?: string;
 }) {
   const { t } = useLocale();
-  const write = permissions.tenant.members.write;
+  const write = writePermission;
   const actions: EntityRowAction[] = [
     {
       id: "edit-access",

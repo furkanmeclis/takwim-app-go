@@ -39,5 +39,8 @@
   "section_tenant_settings": "Settings",
   "nav_tenant_settings_general": "General",
   "nav_tenant_settings_members": "Members",
-  "nav_tenant_settings_roles": "Roles"
+  "nav_tenant_settings_roles": "Roles",
+  "nav_fleet_transfers": "Transfers",
+  "nav_fleet_one_way_rules": "One-way rules",
+  "nav_organizations": "Businesses"
 }

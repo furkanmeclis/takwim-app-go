@@ -53,13 +53,6 @@ func RequireSuperAdmin(next http.Handler) http.Handler {
 	})
 }
 
-// RequireTenant is deprecated; kept as no-op for compatibility during migration cleanup.
-func RequireTenant(_ bool) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return next
-	}
-}
-
 // RequirePermission checks role_permissions (super_admin bypasses).
 func RequirePermission(slug string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

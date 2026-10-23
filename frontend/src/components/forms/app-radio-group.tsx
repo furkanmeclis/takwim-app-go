@@ -6,7 +6,12 @@ import { FormFieldShell } from "@/components/forms/form-field";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-type Option = { label: string; value: string; description?: string };
+type Option = {
+  label: string;
+  value: string;
+  description?: string;
+  disabled?: boolean;
+};
 
 type AppRadioGroupProps = {
   name: string;
@@ -59,6 +64,7 @@ export function AppRadioGroup({
                   value={option.value}
                   id={`${name}-${option.value}`}
                   className="mt-0.5"
+                  disabled={option.disabled}
                 />
                 <div className="grid gap-0.5">
                   <Label

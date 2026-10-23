@@ -761,7 +761,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Platform organizations list metadata */
+        /**
+         * Platform organizations list metadata
+         * @description Table contract of `GET /v1/platform/organizations` (`platform.organizations.read`), including the bulk actions.
+         */
         get: operations["getPlatformOrganizationsMeta"];
         put?: never;
         post?: never;
@@ -778,11 +781,69 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List platform organizations */
+        /**
+         * List platform organizations
+         * @description Organizations with their longest-standing owner and member, branch,
+         *     vehicle and pending invitation counts (`platform.organizations.read`).
+         *     `q` searches name, slug and owner e-mail. Faceted filters take comma
+         *     separated values. Live updates on `resource:platform.organizations`.
+         */
         get: operations["getPlatformOrganizations"];
         put?: never;
-        /** Create organization */
+        /**
+         * Create organization
+         * @description Creates the organization and runs the organization hooks in the same
+         *     transaction (default branch "Merkez"). The owner is either an
+         *     existing account (`owner_user_uuid`, default: the caller) or a new
+         *     e-mail (`owner_email`): the organization then starts without members
+         *     and an owner invitation is e-mailed (same flow as staff invitations).
+         *     The slug is derived from the name with Turkish folding when omitted.
+         */
         post: operations["postPlatformOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export organizations
+         * @description Queues an export of the organizations list (`platform.organizations.export`,
+         *     step-up like the other platform exports). `query` honours `q`, `status`,
+         *     `access`, `window` and `sort`. Poll `GET /v1/platform/exports/{uuid}`.
+         */
+        post: operations["postPlatformOrganizationsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on organizations
+         * @description `activate` (`platform.organizations.bulk.activate`) or `suspend`
+         *     (`platform.organizations.bulk.suspend`), both reversible. Target
+         *     `ids` or `query` (same filters as the list).
+         */
+        post: operations["postPlatformOrganizationsBulk"];
         delete?: never;
         options?: never;
         head?: never;
@@ -796,7 +857,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get organization */
+        /**
+         * Get organization
+         * @description Organization with owner and counts (`platform.organizations.read`).
+         */
         get: operations["getPlatformOrganization"];
         put?: never;
         post?: never;
@@ -817,7 +881,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Set organization status */
+        /**
+         * Set organization status
+         * @description `active` or `suspended`; suspended organizations answer `403 ORGANIZATION_SUSPENDED` on every tenant route at once (cache invalidated).
+         */
         post: operations["postPlatformOrganizationStatus"];
         delete?: never;
         options?: never;
@@ -834,8 +901,71 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Set organization access window */
+        /**
+         * Set organization access window
+         * @description `access_ends_at: null` removes the end. The end must be after the start.
+         */
         post: operations["postPlatformOrganizationAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organization activity
+         * @description Platform operations on the organization plus every activity event recorded inside it, newest first (`platform.organizations.read`).
+         */
+        get: operations["getPlatformOrganizationActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Roles assignable in the organization
+         * @description Template roles plus the organization's own roles (`platform.organizations.read`).
+         */
+        get: operations["getPlatformOrganizationRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Branches of the organization
+         * @description Live branches for member and invitation branch scopes (`platform.organizations.read`).
+         */
+        get: operations["getPlatformOrganizationBranches"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -849,10 +979,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List organization members */
+        /**
+         * List organization members
+         * @description Same shape and filters as `GET /v1/tenant/members` (roles, branch scope, last login).
+         */
         get: operations["getPlatformOrganizationMembers"];
         put?: never;
-        /** Add organization member */
+        /**
+         * Add an existing user as member
+         * @description `role_uuids` (several roles) wins over the legacy `role_key`;
+         *     `branch_scope` `selected` needs `branch_uuids`. The platform operator
+         *     has owner rights inside the organization (no grant limits).
+         */
         post: operations["postPlatformOrganizationMember"];
         delete?: never;
         options?: never;
@@ -870,12 +1008,172 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove organization member */
+        /**
+         * Remove organization member
+         * @description The last owner cannot be removed (`409 LAST_ORGANIZATION_OWNER`).
+         */
         delete: operations["deletePlatformOrganizationMember"];
         options?: never;
         head?: never;
-        /** Change organization member role */
+        /**
+         * Change a member's roles and branch access
+         * @description Same rules as the tenant member update; only `role_key` keeps the legacy single-role replace. Demoting the last owner answers `409 LAST_ORGANIZATION_OWNER`.
+         */
         patch: operations["patchPlatformOrganizationMember"];
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List invitations of an organization
+         * @description Same shape and filters as `GET /v1/tenant/invitations`.
+         */
+        get: operations["getPlatformOrganizationInvitations"];
+        put?: never;
+        /**
+         * Invite an e-mail into an organization
+         * @description Platform operators invite with owner rights (any role, every branch). Rate limited per organization.
+         */
+        post: operations["postPlatformOrganizationInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/invitations/{invitationUuid}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an invitation */
+        post: operations["postPlatformOrganizationInvitationRevoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/invitations/{invitationUuid}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend an invitation
+         * @description Issues a new token (the previous link stops working), renews the 7-day expiry and e-mails it again.
+         */
+        post: operations["postPlatformOrganizationInvitationResend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{uuid}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organization logo
+         * @description Logo bytes for any signed-in user. Clients use the `logo_url` the API returns (it carries a version); object keys never leave the API.
+         */
+        get: operations["getOrganizationLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public invitation preview
+         * @description For the `/invite/{token}` page: organization, inviter name, the
+         *     invited e-mail masked (`a****@e******.com`) and the state
+         *     (`pending`, `expired`, `accepted`, `revoked`). Unknown tokens answer
+         *     `404`. No authentication.
+         */
+        get: operations["getInvitationPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept an invitation
+         * @description Signed-in user whose account e-mail equals the invited e-mail
+         *     (case-insensitive). Creates the membership with the invited roles
+         *     and branch scope; a user who already is a member only closes the
+         *     invitation. Errors: `403 INVITATION_EMAIL_MISMATCH`,
+         *     `410 INVITATION_EXPIRED` / `INVITATION_USED` / `INVITATION_REVOKED`,
+         *     `404` unknown token. Not available while impersonating.
+         */
+        post: operations["postInvitationAccept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/{token}/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the invitee's account and accept
+         * @description Public. Creates a password account for the invited e-mail (taken from
+         *     the invitation) and accepts. The invitation is the admission, so the
+         *     self-registration switch does not apply; otherwise it is a normal
+         *     registration: the e-mail stays unverified and the verification
+         *     e-mail is sent. An existing account answers `409 ACCOUNT_EXISTS`
+         *     (sign in instead). Rate limited per IP like `/v1/auth/register`.
+         */
+        post: operations["postInvitationRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/platform/users": {
@@ -2006,6 +2304,149 @@ export interface paths {
         patch: operations["patchTenantMember"];
         trace?: never;
     };
+    "/v1/tenant/invitations/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Invitations list metadata
+         * @description Table contract of `GET /v1/tenant/invitations` (`tenant.members.read`).
+         */
+        get: operations["getTenantInvitationsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List staff invitations
+         * @description Invitations of the organization (`tenant.members.read`), newest first.
+         *     `q` searches the e-mail. Live updates on
+         *     `org:{org_uuid}:resource:tenant.invitations`.
+         */
+        get: operations["getTenantInvitations"];
+        put?: never;
+        /**
+         * Invite a staff member
+         * @description `tenant.members.write`. E-mails a single-use link
+         *     `${PUBLIC_FRONTEND_URL}/invite/{token}` valid for 7 days; the token
+         *     (32 random bytes) is stored as its sha256 hash and never returned.
+         *     Re-inviting an e-mail revokes its open invitation; inviting a member
+         *     answers `409 ALREADY_MEMBER`.
+         *
+         *     Same guards as member updates (`403 FORBIDDEN`): only owners invite
+         *     owners; a non-owner can only grant roles whose permissions it holds;
+         *     a branch-restricted caller cannot grant `all` and only its own
+         *     branches. Rate limited per organization (`429 RATE_LIMITED`).
+         */
+        post: operations["postTenantInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/invitations/{uuid}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke an invitation
+         * @description `tenant.members.write`; only invitations the caller could have granted. A closed invitation answers `409`.
+         */
+        post: operations["postTenantInvitationRevoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/invitations/{uuid}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend an invitation
+         * @description `tenant.members.write`. New token (the old link stops working), new 7-day expiry, e-mail sent again. Counts towards the rate limit.
+         */
+        post: operations["postTenantInvitationResend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organization profile
+         * @description Name and logo of the organization (`tenant.settings.read`). Company / billing details live in `/v1/tenant/settings`.
+         */
+        get: operations["getTenantOrganizationProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename the organization
+         * @description `tenant.settings.write`. Only the name; slug, status and access window are platform-managed.
+         */
+        patch: operations["patchTenantOrganizationProfile"];
+        trace?: never;
+    };
+    "/v1/tenant/organization/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload the organization logo
+         * @description `tenant.settings.write`. Multipart field `logo` (PNG, JPEG, WebP or SVG, at most 2 MB). The response carries the new API-owned `logo_url`.
+         */
+        put: operations["putTenantOrganizationLogo"];
+        post?: never;
+        /**
+         * Remove the organization logo
+         * @description `tenant.settings.write`.
+         */
+        delete: operations["deleteTenantOrganizationLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/roles/meta": {
         parameters: {
             query?: never;
@@ -2688,6 +3129,290 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        OwnerRef: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: email */
+            email: string;
+            name: string;
+            surname: string;
+        };
+        OrganizationSummary: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            name: string;
+            /** @description API-owned logo stream (`/v1/organizations/{uuid}/logo?v=...`) */
+            logo_url?: string | null;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            /** Format: date-time */
+            access_starts_at: string;
+            /** Format: date-time */
+            access_ends_at?: string | null;
+            settings?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Longest-standing owner; `null` while the owner invitation is pending */
+            owner: components["schemas"]["OwnerRef"] | null;
+            /** @enum {string} */
+            access_state: "open" | "upcoming" | "expired";
+            /** Format: int64 */
+            member_count: number;
+            /** Format: int64 */
+            branch_count: number;
+            /** Format: int64 */
+            pending_invitation_count: number;
+        };
+        OrganizationSummaryPage: {
+            items: components["schemas"]["OrganizationSummary"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeOrganizationSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OrganizationSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeOrganizationSummaryPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OrganizationSummaryPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        CreateOrganizationResult: {
+            organization: components["schemas"]["OrganizationSummary"];
+            /** @description Set when the owner was invited by e-mail */
+            owner_invitation: components["schemas"]["Invitation"] | null;
+        };
+        EnvelopeCreateOrganizationResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CreateOrganizationResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        OrganizationActivityEntry: {
+            /** Format: uuid */
+            uuid: string;
+            /** @example organizations.status_updated */
+            action: string;
+            /** @example platform.organizations */
+            resource: string;
+            /** Format: uuid */
+            resource_uuid: string | null;
+            payload: {
+                [key: string]: unknown;
+            };
+            actor: components["schemas"]["UserRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        OrganizationActivityPage: {
+            items: components["schemas"]["OrganizationActivityEntry"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeOrganizationActivityPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OrganizationActivityPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TenantRoleItems: {
+            items: components["schemas"]["TenantRole"][];
+        };
+        EnvelopeTenantRoleItems: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantRoleItems"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        BranchOption: {
+            /** Format: uuid */
+            uuid: string;
+            /** @example MRK */
+            code: string;
+            /** @example Merkez */
+            name: string;
+            is_active: boolean;
+        };
+        BranchOptionItems: {
+            items: components["schemas"]["BranchOption"][];
+        };
+        EnvelopeBranchOptionItems: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["BranchOptionItems"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlatformMemberRequest: {
+            /** Format: uuid */
+            user_uuid: string;
+            /**
+             * @description Legacy single role (default `member`); ignored when `role_uuids` is set
+             * @example member
+             */
+            role_key?: string;
+            role_uuids?: string[];
+            /** @enum {string} */
+            branch_scope?: "all" | "selected";
+            branch_uuids?: string[];
+        };
+        PlatformMemberPatchRequest: {
+            /**
+             * @description Legacy single-role replace
+             * @example admin
+             */
+            role_key?: string;
+            role_uuids?: string[];
+            /** @enum {string} */
+            branch_scope?: "all" | "selected";
+            branch_uuids?: string[];
+        };
+        UserRef: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: email */
+            email: string;
+            name: string;
+            surname: string;
+        };
+        Invitation: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: email */
+            email: string;
+            /** @enum {string} */
+            status: "pending" | "expired" | "accepted" | "revoked";
+            roles: components["schemas"]["TenantRoleRef"][];
+            /** @enum {string} */
+            branch_scope: "all" | "selected";
+            branches: components["schemas"]["BranchRef"][];
+            invited_by: components["schemas"]["UserRef"] | null;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            accepted_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
+            /** Format: date-time */
+            last_sent_at: string;
+            send_count: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        InvitationPage: {
+            items: components["schemas"]["Invitation"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeInvitation: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Invitation"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeInvitationPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["InvitationPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        CreateInvitationRequest: {
+            /** Format: email */
+            email: string;
+            role_uuids: string[];
+            /**
+             * @default all
+             * @enum {string}
+             */
+            branch_scope: "all" | "selected";
+            /** @description Required with `branch_scope` = `selected` */
+            branch_uuids?: string[];
+        };
+        InvitationPreviewOrganization: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            name: string;
+            logo_url: string | null;
+        };
+        InvitationPreview: {
+            organization: components["schemas"]["InvitationPreviewOrganization"];
+            /** @example Ayşe Kaya */
+            inviter_name: string;
+            /** @example m****@e******.com */
+            email_masked: string;
+            /** @enum {string} */
+            status: "pending" | "expired" | "accepted" | "revoked";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        EnvelopeInvitationPreview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["InvitationPreview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        AcceptInvitationResult: {
+            /** Format: uuid */
+            organization_uuid: string;
+            organization_slug: string;
+            already_member: boolean;
+            /**
+             * Format: email
+             * @description The account e-mail (for signing in after registration)
+             */
+            email: string;
+        };
+        EnvelopeAcceptInvitationResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AcceptInvitationResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        RegisterInvitedRequest: {
+            name: string;
+            surname: string;
+            /** Format: password */
+            password: string;
+        };
+        OrganizationProfile: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            name: string;
+            /** @description API-owned logo stream; never an object key */
+            logo_url: string | null;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            /** Format: date-time */
+            access_starts_at: string;
+            /** Format: date-time */
+            access_ends_at: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        EnvelopeOrganizationProfile: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OrganizationProfile"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        OrganizationProfilePatchRequest: {
+            name: string;
+        };
         DayHours: {
             closed: boolean;
             /**
@@ -3640,7 +4365,8 @@ export interface components {
             uuid: string;
             slug: string;
             name: string;
-            logo_url?: string;
+            /** @description API-owned logo stream (`/v1/organizations/{uuid}/logo?v=...`) */
+            logo_url?: string | null;
             /** @enum {string} */
             status: "active" | "suspended";
             /** Format: date-time */
@@ -3657,12 +4383,18 @@ export interface components {
         };
         CreateOrganizationRequest: {
             name: string;
+            /** @description Derived from the name (Turkish folding) when empty */
             slug?: string;
             /**
              * Format: uuid
-             * @description Owner account; defaults to the caller.
+             * @description Existing owner account; defaults to the caller. Not together with `owner_email`.
              */
             owner_user_uuid?: string;
+            /**
+             * Format: email
+             * @description Invite this e-mail as owner instead (the organization starts without members).
+             */
+            owner_email?: string;
         };
         PatchOrganizationRequest: {
             name?: string;
@@ -3680,56 +4412,6 @@ export interface components {
             access_starts_at?: string | null;
             /** Format: date-time */
             access_ends_at?: string | null;
-        };
-        OrganizationMemberUser: {
-            /** Format: uuid */
-            uuid: string;
-            /** Format: email */
-            email: string;
-            name: string;
-            surname: string;
-            status: string;
-        };
-        OrganizationRoleSummary: {
-            /**
-             * @example owner
-             * @example admin
-             * @example member
-             */
-            key: string;
-            name: string;
-        };
-        OrganizationMember: {
-            user: components["schemas"]["OrganizationMemberUser"];
-            role: components["schemas"]["OrganizationRoleSummary"];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        AddOrganizationMemberRequest: {
-            /** Format: uuid */
-            user_uuid: string;
-            /** @example member */
-            role_key: string;
-        };
-        ChangeOrganizationMemberRoleRequest: {
-            /** @example admin */
-            role_key: string;
-        };
-        OrganizationPage: {
-            items: components["schemas"]["Organization"][];
-            /** Format: int64 */
-            total: number;
-            limit: number;
-            offset: number;
-        };
-        OrganizationMemberPage: {
-            items: components["schemas"]["OrganizationMember"][];
-            /** Format: int64 */
-            total: number;
-            limit: number;
-            offset: number;
         };
         RoleSummary: {
             /** Format: uuid */
@@ -4308,24 +4990,6 @@ export interface components {
             data: components["schemas"]["Organization"];
             meta: components["schemas"]["ResponseMeta"];
         };
-        EnvelopeOrganizationPage: {
-            /** @enum {boolean} */
-            success: true;
-            data: components["schemas"]["OrganizationPage"];
-            meta: components["schemas"]["ResponseMeta"];
-        };
-        EnvelopeOrganizationMember: {
-            /** @enum {boolean} */
-            success: true;
-            data: components["schemas"]["OrganizationMember"];
-            meta: components["schemas"]["ResponseMeta"];
-        };
-        EnvelopeOrganizationMemberPage: {
-            /** @enum {boolean} */
-            success: true;
-            data: components["schemas"]["OrganizationMemberPage"];
-            meta: components["schemas"]["ResponseMeta"];
-        };
         EnvelopeImpersonationResult: {
             /** @enum {boolean} */
             success: true;
@@ -4669,6 +5333,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description `INVITATION_EXPIRED`, `INVITATION_USED` or `INVITATION_REVOKED` */
+        Gone: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description `ORGANIZATION_REQUIRED`: the `X-Organization` header is missing or empty */
         OrganizationRequired: {
             headers: {
@@ -4693,6 +5366,13 @@ export interface components {
         };
     };
     parameters: {
+        InvitationUUID: string;
+        /** @description Raw invitation token from the e-mail link (43 characters, base64url) */
+        InvitationToken: string;
+        /** @description One of `email`, `expires_at`, `created_at`; prefix `-` for descending. Default `-created_at`. */
+        InvitationSort: string;
+        /** @description `pending`, `expired`, `accepted`, `revoked` (comma separated) */
+        InvitationStatus: string;
         /**
          * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
          *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
@@ -6051,9 +6731,14 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 offset?: components["parameters"]["Offset"];
                 q?: components["parameters"]["Q"];
-                /** @description Comma-separated fields; prefix `-` for descending */
-                sort?: components["parameters"]["Sort"];
-                status?: "active" | "suspended";
+                /** @description One of `name`, `slug`, `status`, `member_count`, `branch_count`, `access_ends_at`, `created_at`, `updated_at`; prefix `-` for descending. Default `-created_at`. */
+                sort?: string;
+                /** @description `active`, `suspended` (comma separated) */
+                status?: string;
+                /** @description Access window state: `open`, `upcoming` (before access_starts_at), `expired` (after access_ends_at); comma separated */
+                access?: string;
+                /** @description `unlimited` (no access_ends_at) or `limited`; comma separated */
+                window?: string;
             };
             header?: never;
             path?: never;
@@ -6067,9 +6752,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeOrganizationPage"];
+                    "application/json": components["schemas"]["EnvelopeOrganizationSummaryPage"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
@@ -6088,20 +6774,84 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created organization */
+            /** @description Created organization (and the owner invitation, if any) */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeOrganization"];
+                    "application/json": components["schemas"]["EnvelopeCreateOrganizationResult"];
                 };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    postPlatformOrganizationsExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    postPlatformOrganizationsBulk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getPlatformOrganization: {
@@ -6122,7 +6872,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeOrganization"];
+                    "application/json": components["schemas"]["EnvelopeOrganizationSummary"];
                 };
             };
             401: components["responses"]["Unauthenticated"];
@@ -6253,14 +7003,11 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    getPlatformOrganizationMembers: {
+    getPlatformOrganizationActivity: {
         parameters: {
             query?: {
                 limit?: components["parameters"]["Limit"];
                 offset?: components["parameters"]["Offset"];
-                q?: components["parameters"]["Q"];
-                /** @description Comma-separated fields; prefix `-` for descending */
-                sort?: components["parameters"]["Sort"];
             };
             header?: never;
             path: {
@@ -6271,15 +7018,103 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Organization member page */
+            /** @description Activity page */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeOrganizationMemberPage"];
+                    "application/json": components["schemas"]["EnvelopeOrganizationActivityPage"];
                 };
             };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPlatformOrganizationRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantRoleItems"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPlatformOrganizationBranches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchOptionItems"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPlatformOrganizationMembers: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `email`, `branch_scope`, `last_login_at`, `created_at`; prefix `-` for descending. */
+                sort?: string;
+                /** @description Tenant role uuid; comma-separate for several */
+                role?: string;
+                branch_scope?: "all" | "selected";
+            };
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantMemberPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -6297,17 +7132,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AddOrganizationMemberRequest"];
+                "application/json": components["schemas"]["PlatformMemberRequest"];
             };
         };
         responses: {
-            /** @description Organization member */
+            /** @description Member */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeOrganizationMember"];
+                    "application/json": components["schemas"]["EnvelopeTenantMember"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -6360,17 +7195,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ChangeOrganizationMemberRoleRequest"];
+                "application/json": components["schemas"]["PlatformMemberPatchRequest"];
             };
         };
         responses: {
-            /** @description Organization member */
+            /** @description Member */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeOrganizationMember"];
+                    "application/json": components["schemas"]["EnvelopeTenantMember"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -6378,6 +7213,244 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getPlatformOrganizationInvitations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `email`, `expires_at`, `created_at`; prefix `-` for descending. Default `-created_at`. */
+                sort?: components["parameters"]["InvitationSort"];
+                /** @description `pending`, `expired`, `accepted`, `revoked` (comma separated) */
+                status?: components["parameters"]["InvitationStatus"];
+            };
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postPlatformOrganizationInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Invitation (the token is only e-mailed) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postPlatformOrganizationInvitationRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                invitationUuid: components["parameters"]["InvitationUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked invitation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postPlatformOrganizationInvitationResend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                invitationUuid: components["parameters"]["InvitationUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                    "image/svg+xml": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getInvitationPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Raw invitation token from the e-mail link (43 characters, base64url) */
+                token: components["parameters"]["InvitationToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitationPreview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postInvitationAccept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Raw invitation token from the e-mail link (43 characters, base64url) */
+                token: components["parameters"]["InvitationToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAcceptInvitationResult"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            410: components["responses"]["Gone"];
+        };
+    };
+    postInvitationRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Raw invitation token from the e-mail link (43 characters, base64url) */
+                token: components["parameters"]["InvitationToken"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterInvitedRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created and invitation accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAcceptInvitationResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            410: components["responses"]["Gone"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getPlatformUsers: {
@@ -7949,6 +9022,303 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantInvitationsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantInvitations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `email`, `expires_at`, `created_at`; prefix `-` for descending. Default `-created_at`. */
+                sort?: components["parameters"]["InvitationSort"];
+                /** @description `pending`, `expired`, `accepted`, `revoked` (comma separated) */
+                status?: components["parameters"]["InvitationStatus"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Invitation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postTenantInvitationRevoke: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked invitation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantInvitationResend: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeInvitation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTenantOrganizationProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationProfile"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    patchTenantOrganizationProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationProfilePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    putTenantOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    logo: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    deleteTenantOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationProfile"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantRolesMeta: {

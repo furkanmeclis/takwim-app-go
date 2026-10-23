@@ -16,6 +16,7 @@ import {
   tabOfPath,
   type SettingsTab,
 } from "@/features/tenant-settings/constants";
+import { OrganizationProfileCard } from "@/features/tenant-settings/components/organization-profile-card";
 import { SettingsReadiness } from "@/features/tenant-settings/components/settings-readiness";
 import {
   ChannelsSection,
@@ -248,56 +249,59 @@ export function TenantSettingsPage() {
         { label: t("tenant_settings.title") },
       ]}
     >
-      {query.isLoading ? (
-        <Loading label={t("common.loading")} />
-      ) : query.isError || !current || !defaults ? (
-        <ErrorState
-          title={t("common.error_generic")}
-          description={t("tenant_settings.load_failed")}
-          onRetry={() => void query.refetch()}
-          retryLabel={t("common.retry")}
-        />
-      ) : (
-        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
-          <AppForm<SettingsFormValues>
-            key={current.version}
-            className="space-y-4"
-            schema={schema}
-            defaultValues={defaults}
-            onSubmit={async (values) => {
-              setConflict(false);
-              try {
-                await save.mutateAsync(
-                  formToSaveRequest(values, current.version),
-                );
-              } catch (error) {
-                if (isApiError(error) && error.status === 409) {
-                  setConflict(true);
+      <div className="space-y-6">
+        <OrganizationProfileCard />
+        {query.isLoading ? (
+          <Loading label={t("common.loading")} />
+        ) : query.isError || !current || !defaults ? (
+          <ErrorState
+            title={t("common.error_generic")}
+            description={t("tenant_settings.load_failed")}
+            onRetry={() => void query.refetch()}
+            retryLabel={t("common.retry")}
+          />
+        ) : (
+          <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+            <AppForm<SettingsFormValues>
+              key={current.version}
+              className="space-y-4"
+              schema={schema}
+              defaultValues={defaults}
+              onSubmit={async (values) => {
+                setConflict(false);
+                try {
+                  await save.mutateAsync(
+                    formToSaveRequest(values, current.version),
+                  );
+                } catch (error) {
+                  if (isApiError(error) && error.status === 409) {
+                    setConflict(true);
+                  }
+                  throw error;
                 }
-                throw error;
-              }
-            }}
-          >
-            {(form) => (
-              <SettingsTabs
-                form={form}
-                current={current}
-                canWrite={canWrite}
-                tab={tab}
-                setTab={setTab}
-                conflict={conflict}
-                onReload={() => {
-                  setConflict(false);
-                  void query.refetch();
-                }}
-              />
-            )}
-          </AppForm>
-          <TabsContent value="history">
-            <SettingsVersionsTab currentVersion={current.version} />
-          </TabsContent>
-        </Tabs>
-      )}
+              }}
+            >
+              {(form) => (
+                <SettingsTabs
+                  form={form}
+                  current={current}
+                  canWrite={canWrite}
+                  tab={tab}
+                  setTab={setTab}
+                  conflict={conflict}
+                  onReload={() => {
+                    setConflict(false);
+                    void query.refetch();
+                  }}
+                />
+              )}
+            </AppForm>
+            <TabsContent value="history">
+              <SettingsVersionsTab currentVersion={current.version} />
+            </TabsContent>
+          </Tabs>
+        )}
+      </div>
     </EntityPage>
   );
 }

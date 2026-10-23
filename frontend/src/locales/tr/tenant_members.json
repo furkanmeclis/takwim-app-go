@@ -40,5 +40,8 @@
   "remove.title": "{{name}} işletmeden çıkarılsın mı?",
   "remove.description": "{{name}} bu işletmeye artık erişemez. Hesabı silinmez; tekrar davet edilebilir.",
   "toast.updated": "Üye erişimi güncellendi",
-  "toast.removed": "Üye işletmeden çıkarıldı"
+  "toast.removed": "Üye işletmeden çıkarıldı",
+  "tabs.members": "Üyeler",
+  "tabs.invitations": "Davetler",
+  "columns.status": "Durum"
 }

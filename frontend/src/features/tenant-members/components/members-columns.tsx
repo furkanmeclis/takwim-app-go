@@ -16,16 +16,32 @@ import { tenantRoleLabel } from "@/features/tenant/lib/role-label";
 import { datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
+/**
+ * Account status of the member. Credentials are never shown or managed here:
+ * an organization owner cannot touch another account's password or 2FA.
+ */
+const USER_STATUS_KEYS: Record<string, string> = {
+  active: "users.status.active",
+  disabled: "users.status.disabled",
+  pending: "users.status.pending",
+};
+
 type MembersColumnsOptions = {
   handlers: MemberRowActionHandlers;
   roles: TenantRole[];
+  /** Permission of the row actions (default `tenant.members.write`). */
+  writePermission?: string;
 };
 
 /**
  * Columns follow `GET /v1/tenant/members/meta`: `roles` and `branch_scope`
  * are server-side faceted filters; sortable keys match `sortable_fields`.
  */
-export function useMembersColumns({ handlers, roles }: MembersColumnsOptions) {
+export function useMembersColumns({
+  handlers,
+  roles,
+  writePermission,
+}: MembersColumnsOptions) {
   const { t, locale } = useLocale();
 
   return useMemo(
@@ -55,6 +71,23 @@ export function useMembersColumns({ handlers, roles }: MembersColumnsOptions) {
               {row.original.user.email}
             </span>
           ),
+        }),
+        createColumn<TenantMember>({
+          id: "status",
+          accessorFn: (row) => row.user.status,
+          labelKey: "tenant_members.columns.status",
+          enableSorting: false,
+          cell: ({ row }) => {
+            const status = row.original.user.status;
+            const tone =
+              status === "active"
+                ? "success"
+                : status === "disabled"
+                  ? "danger"
+                  : "warning";
+            const key = USER_STATUS_KEYS[status];
+            return <StatusChip label={key ? t(key) : status} tone={tone} />;
+          },
         }),
         createColumn<TenantMember>({
           id: "roles",
@@ -151,10 +184,14 @@ export function useMembersColumns({ handlers, roles }: MembersColumnsOptions) {
           enableHiding: false,
           enableResizing: false,
           cell: ({ row }) => (
-            <MemberRowActions member={row.original} handlers={handlers} />
+            <MemberRowActions
+              member={row.original}
+              handlers={handlers}
+              writePermission={writePermission}
+            />
           ),
         }),
       ] as ColumnDef<TenantMember, unknown>[],
-    [handlers, locale, roles, t],
+    [handlers, locale, roles, t, writePermission],
   );
 }

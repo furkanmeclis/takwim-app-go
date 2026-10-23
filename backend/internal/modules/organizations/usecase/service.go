@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ type Repository interface {
 	GetOrganizationByUUID(ctx context.Context, id uuid.UUID) (db.Organization, error)
 	GetOrganizationByID(ctx context.Context, id int64) (db.Organization, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
-	ListOrganizations(ctx context.Context, params db.ListOrganizationsFilteredParams) ([]db.Organization, int64, error)
+	ListOrganizations(ctx context.Context, params db.ListOrganizationsWithStatsParams) ([]db.ListOrganizationsWithStatsRow, int64, error)
 	UpdateOrganization(ctx context.Context, params db.UpdateOrganizationParams) (db.Organization, error)
 	SetOrganizationStatus(ctx context.Context, params db.SetOrganizationStatusParams) (db.Organization, error)
 	SetOrganizationAccessWindow(ctx context.Context, params db.SetOrganizationAccessWindowParams) (db.Organization, error)
@@ -91,24 +92,37 @@ func (s *Service) SetInvalidator(inv orgctx.Invalidator) {
 }
 
 func (s *Service) CreateOrganization(ctx context.Context, in orgmodel.CreateOrganizationInput) (orgmodel.Organization, error) {
+	return s.createOrganization(ctx, in, nil)
+}
+
+// createOrganization creates the organization, its owner membership (unless
+// NoOwner) and runs OrganizationHooks.OnCreated in one transaction. after
+// runs last inside the same transaction (owner invitation).
+func (s *Service) createOrganization(
+	ctx context.Context,
+	in orgmodel.CreateOrganizationInput,
+	after func(ctx context.Context, q *db.Queries, org db.Organization) error,
+) (orgmodel.Organization, error) {
 	name := strings.TrimSpace(in.Name)
-	if name == "" || (in.OwnerUserID <= 0 && in.OwnerUserUUID == uuid.Nil) {
+	if name == "" || (!in.NoOwner && in.OwnerUserID <= 0 && in.OwnerUserUUID == uuid.Nil) {
 		return orgmodel.Organization{}, fmt.Errorf("%w: name and owner user are required", ErrInvalidRequest)
 	}
 	var (
 		owner db.User
 		err   error
 	)
-	if in.OwnerUserUUID != uuid.Nil {
-		owner, err = s.repo.GetUserByUUID(ctx, in.OwnerUserUUID)
-	} else {
-		owner, err = s.repo.GetUserByID(ctx, in.OwnerUserID)
-	}
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return orgmodel.Organization{}, ErrUserNotFound
+	if !in.NoOwner {
+		if in.OwnerUserUUID != uuid.Nil {
+			owner, err = s.repo.GetUserByUUID(ctx, in.OwnerUserUUID)
+		} else {
+			owner, err = s.repo.GetUserByID(ctx, in.OwnerUserID)
 		}
-		return orgmodel.Organization{}, err
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return orgmodel.Organization{}, ErrUserNotFound
+			}
+			return orgmodel.Organization{}, err
+		}
 	}
 	allocated, err := s.allocateSlug(ctx, in.Slug, name)
 	if err != nil {
@@ -123,23 +137,28 @@ func (s *Service) CreateOrganization(ctx context.Context, in orgmodel.CreateOrga
 		if err != nil {
 			return err
 		}
-		role, err := s.repo.GetTenantRoleByKey(ctx, q, row.ID, orgctx.RoleOwner)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				return ErrRoleNotFound
+		if !in.NoOwner {
+			role, err := s.repo.GetTenantRoleByKey(ctx, q, row.ID, orgctx.RoleOwner)
+			if err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					return ErrRoleNotFound
+				}
+				return err
 			}
-			return err
-		}
-		if err := s.repo.AddOrganizationMember(ctx, q, db.AddOrganizationMemberParams{
-			OrganizationID: row.ID, UserID: owner.ID, RoleID: role.ID,
-		}); err != nil {
-			return err
+			if err := s.repo.AddOrganizationMember(ctx, q, db.AddOrganizationMemberParams{
+				OrganizationID: row.ID, UserID: owner.ID, RoleID: role.ID,
+			}); err != nil {
+				return err
+			}
 		}
 		created = row
 		if s.hooks != nil {
 			if err := s.hooks.OnCreated(ctx, tx, mapOrganization(row), mapUser(owner)); err != nil {
 				return err
 			}
+		}
+		if after != nil {
+			return after(ctx, q, row)
 		}
 		return nil
 	})
@@ -149,19 +168,35 @@ func (s *Service) CreateOrganization(ctx context.Context, in orgmodel.CreateOrga
 	return mapOrganization(created), nil
 }
 
-func (s *Service) ListOrganizations(ctx context.Context, f orgmodel.ListFilter) ([]orgmodel.Organization, int64, error) {
-	rows, total, err := s.repo.ListOrganizations(ctx, db.ListOrganizationsFilteredParams{
-		Status: pgText(f.Status), Q: pgText(f.Q), SortField: sortOrDefault(f.SortField, "created_at"),
+func (s *Service) ListOrganizations(ctx context.Context, f orgmodel.ListFilter) ([]orgmodel.OrganizationSummary, int64, error) {
+	rows, total, err := s.repo.ListOrganizations(ctx, db.ListOrganizationsWithStatsParams{
+		Statuses: nilIfEmpty(f.Statuses), AccessStates: nilIfEmpty(f.AccessStates), Windows: nilIfEmpty(f.Windows),
+		Q: pgText(f.Q), SortField: sortOrDefault(f.SortField, "created_at"),
 		SortDesc: f.SortDesc, LimitCount: f.Limit, OffsetCount: f.Offset,
 	})
 	if err != nil {
 		return nil, 0, err
 	}
-	out := make([]orgmodel.Organization, 0, len(rows))
+	now := s.now().UTC()
+	out := make([]orgmodel.OrganizationSummary, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, mapOrganization(row))
+		out = append(out, mapOrganizationSummary(row, now))
 	}
 	return out, total, nil
+}
+
+// GetOrganizationSummary returns one organization with owner and counts.
+func (s *Service) GetOrganizationSummary(ctx context.Context, id uuid.UUID) (orgmodel.OrganizationSummary, error) {
+	rows, _, err := s.repo.ListOrganizations(ctx, db.ListOrganizationsWithStatsParams{
+		OrganizationUuid: pgtype.UUID{Bytes: id, Valid: true}, SortField: "created_at", LimitCount: 1,
+	})
+	if err != nil {
+		return orgmodel.OrganizationSummary{}, err
+	}
+	if len(rows) == 0 {
+		return orgmodel.OrganizationSummary{}, ErrNotFound
+	}
+	return mapOrganizationSummary(rows[0], s.now().UTC()), nil
 }
 
 func (s *Service) GetOrganization(ctx context.Context, id uuid.UUID) (orgmodel.Organization, error) {
@@ -383,7 +418,7 @@ func (s *Service) ListForUser(ctx context.Context, userID int64) ([]authmodel.Me
 		}
 		out = append(out, authmodel.MeOrganization{
 			UUID: row.OrganizationUuid, Slug: row.OrganizationSlug, Name: row.OrganizationName,
-			LogoURL: logoURL(row.LogoObjectKey), Status: row.OrganizationStatus,
+			LogoURL: LogoURL(row.OrganizationUuid, row.LogoObjectKey), Status: row.OrganizationStatus,
 			AccessEndsAt: timePtr(row.AccessEndsAt),
 			Role:         authmodel.MeOrganizationRole{Key: row.RoleKey, Name: row.RoleName},
 			Permissions:  perms,
@@ -626,7 +661,7 @@ func pgText(v string) pgtype.Text {
 func mapOrganization(row db.Organization) orgmodel.Organization {
 	return orgmodel.Organization{
 		ID: row.ID, UUID: row.Uuid, Slug: row.Slug, Name: row.Name,
-		LogoURL: logoURL(row.LogoObjectKey), Status: row.Status,
+		LogoURL: LogoURL(row.Uuid, row.LogoObjectKey), Status: row.Status,
 		AccessStartsAt: row.AccessStartsAt.Time.UTC(), AccessEndsAt: timePtr(row.AccessEndsAt),
 		Settings: row.Settings, CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
 	}
@@ -662,10 +697,14 @@ func timePtr(v pgtype.Timestamptz) *time.Time {
 	return &t
 }
 
-func logoURL(v pgtype.Text) *string {
-	if !v.Valid || strings.TrimSpace(v.String) == "" {
+// LogoURL is the API-owned logo stream of an organization; the version
+// parameter changes with every upload (each upload gets a new object key).
+func LogoURL(orgUUID uuid.UUID, key pgtype.Text) *string {
+	if !key.Valid || strings.TrimSpace(key.String) == "" {
 		return nil
 	}
-	u := "/v1/platform/organizations/logo/" + v.String
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key.String))
+	u := fmt.Sprintf("/v1/organizations/%s/logo?v=%x", orgUUID, h.Sum32())
 	return &u
 }

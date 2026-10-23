@@ -117,7 +117,15 @@ func (s *Service) Upload(ctx context.Context, actorID int64, resource string, fo
 	if format == ioengine.ImportJSON {
 		ext = "json"
 	}
+	// Tenant uploads live under their organization.
 	key := storage.ImportSourceObjectKey(row.Uuid.String(), ext)
+	if orgID.Valid {
+		org, err := s.q.GetOrganizationByID(ctx, orgID.Int64)
+		if err != nil {
+			return ImportJobView{}, fmt.Errorf("import organization: %w", err)
+		}
+		key = storage.OrganizationImportSourceObjectKey(org.Uuid.String(), row.Uuid.String(), ext)
+	}
 	if err := s.storage.Upload(ctx, storage.File{
 		Body: bytes.NewReader(data), Size: int64(len(data)), Filename: filename,
 	}, key); err != nil {

@@ -66,5 +66,11 @@
   "tenant_download.state_downloading": "Downloading the file…",
   "tenant_download.state_done": "The download started. You can download the file again.",
   "tenant_download.state_failed": "Could not download the file. Try again.",
-  "tenant_download.again": "Download again"
+  "tenant_download.again": "Download again",
+  "resources.tenant.vehicles": "Vehicles",
+  "resources.tenant.vehicle_documents": "Vehicle documents",
+  "resources.tenant.vehicle_maintenance": "Vehicle maintenance",
+  "resources.tenant.transfers": "Transfers",
+  "resources.tenant.one_way_rules": "One-way rules",
+  "resources.platform.organizations": "Businesses"
 }

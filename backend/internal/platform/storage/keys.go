@@ -1,15 +1,54 @@
 package storage
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // AppLogoObjectKey builds app/branding/logo.{ext} for system letterhead.
 func AppLogoObjectKey(ext string) string {
 	return fmt.Sprintf("app/branding/logo.%s", trimExt(ext))
 }
 
+// OrganizationLogoObjectKey builds
+// organizations/{orgUUID}/branding/logo-{versionUUID}.{ext}. Every upload
+// gets a new version so the API logo URL changes with it (cache busting).
+func OrganizationLogoObjectKey(orgUUID, versionUUID, ext string) string {
+	return fmt.Sprintf("organizations/%s/branding/logo-%s.%s", orgUUID, versionUUID, trimExt(ext))
+}
+
 // ExportObjectKey builds exports/{jobUUID}/export.{ext}.
 func ExportObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("exports/%s/export.%s", jobUUID, trimExt(ext))
+}
+
+// OrganizationsRoot is the common prefix of organization-owned objects.
+const OrganizationsRoot = "organizations/"
+
+// OrganizationPrefix is the key prefix of every object an organization owns:
+// organizations/{orgUUID}/. Tenant uploads and engine files live under it, so
+// an organization's objects can be listed, checked and purged together.
+func OrganizationPrefix(orgUUID string) string {
+	return OrganizationsRoot + orgUUID + "/"
+}
+
+// OrganizationOwnsKey reports whether key lies under the organization's
+// prefix. Streaming endpoints check it before serving a key read from a row
+// (defence in depth on top of the organization filter of the query).
+func OrganizationOwnsKey(key, orgUUID string) bool {
+	return orgUUID != "" && strings.HasPrefix(key, OrganizationPrefix(orgUUID)) && !strings.Contains(key, "/../")
+}
+
+// OrganizationExportObjectKey builds
+// organizations/{orgUUID}/exports/{jobUUID}/export.{ext} for tenant exports.
+func OrganizationExportObjectKey(orgUUID, jobUUID, ext string) string {
+	return fmt.Sprintf("%sexports/%s/export.%s", OrganizationPrefix(orgUUID), jobUUID, trimExt(ext))
+}
+
+// OrganizationImportSourceObjectKey builds
+// organizations/{orgUUID}/imports/{jobUUID}/source.{ext} for tenant imports.
+func OrganizationImportSourceObjectKey(orgUUID, jobUUID, ext string) string {
+	return fmt.Sprintf("%simports/%s/source.%s", OrganizationPrefix(orgUUID), jobUUID, trimExt(ext))
 }
 
 // ImportSourceObjectKey builds imports/{jobUUID}/source.{ext}.

@@ -128,35 +128,6 @@ func PlatformRoles() ResourceMeta {
 	}
 }
 
-// PlatformOrganizations returns meta for GET /v1/platform/organizations.
-func PlatformOrganizations() ResourceMeta {
-	return ResourceMeta{
-		Resource:      "platform.organizations",
-		DefaultSort:   "-created_at",
-		DefaultFields: []string{"uuid", "name", "slug", "status", "access_ends_at"},
-		Capabilities: Capabilities{
-			Create: true, Read: true, Update: true, Delete: true,
-			Search: true, Filter: true, Sort: true,
-		},
-		SearchableFields: []string{"name", "slug"},
-		SortableFields:   []string{"name", "slug", "status", "created_at", "updated_at"},
-		FilterableFields: []string{"status"},
-		Columns: []Column{
-			{Key: "uuid", LabelKey: "organizations.uuid", Type: ColumnTypeUUID, DefaultVisible: true},
-			{Key: "name", LabelKey: "organizations.name", Type: ColumnTypeString, Sortable: true, DefaultVisible: true},
-			{Key: "slug", LabelKey: "organizations.slug", Type: ColumnTypeString, Sortable: true, DefaultVisible: true},
-			{Key: "status", LabelKey: "organizations.status", Type: ColumnTypeEnum, Sortable: true, Filterable: true, FilterVariant: FilterVariantFaceted, DefaultVisible: true},
-			{Key: "access_ends_at", LabelKey: "organizations.access_ends_at", Type: ColumnTypeDatetime, DefaultVisible: true},
-			{Key: "created_at", LabelKey: "organizations.created_at", Type: ColumnTypeDatetime, Sortable: true, DefaultVisible: false},
-		},
-		Filters: []Filter{
-			{Key: "status", LabelKey: "organizations.status", Variant: FilterVariantFaceted, EnumLookup: "organization_status"},
-		},
-		Includes:    []string{"members"},
-		BulkActions: []bulkengine.BulkActionDef{},
-	}
-}
-
 // Notifications returns meta for GET /v1/notifications (inbox).
 func Notifications() ResourceMeta {
 	return ResourceMeta{

@@ -16,9 +16,9 @@ func TestEnqueueAndDrain(t *testing.T) {
 	bus := &recordingBus{}
 	pub := outbox.NewMemoryPublisher(mem, bus, nil)
 
-	tid := int64(7)
+	orgID := int64(7)
 	ev := events.New("customers.created").
-		WithTenant(tid).
+		WithOrganization(orgID).
 		WithPayload(map[string]any{"customer_event_uuid": "ce-1"})
 
 	if err := mem.Enqueue(context.Background(), nil, ev); err != nil {
@@ -47,6 +47,9 @@ func TestEnqueueAndDrain(t *testing.T) {
 	}
 	if bus.evts[0].Payload["customer_event_uuid"] != "ce-1" {
 		t.Fatalf("payload=%v", bus.evts[0].Payload)
+	}
+	if got := bus.evts[0].OrganizationID; got == nil || *got != orgID {
+		t.Fatalf("organization = %v, want %d", got, orgID)
 	}
 }
 

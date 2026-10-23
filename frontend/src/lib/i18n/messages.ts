@@ -18,6 +18,7 @@ import enIntegrations from "@/locales/en/integrations.json";
 import enLogs from "@/locales/en/logs.json";
 import enLayout from "@/locales/en/layout.json";
 import enNotifications from "@/locales/en/notifications.json";
+import enInvitations from "@/locales/en/invitations.json";
 import enOrganizations from "@/locales/en/organizations.json";
 import enPermissions from "@/locales/en/permissions.json";
 import enRoles from "@/locales/en/roles.json";
@@ -51,6 +52,7 @@ import trIntegrations from "@/locales/tr/integrations.json";
 import trLogs from "@/locales/tr/logs.json";
 import trLayout from "@/locales/tr/layout.json";
 import trNotifications from "@/locales/tr/notifications.json";
+import trInvitations from "@/locales/tr/invitations.json";
 import trOrganizations from "@/locales/tr/organizations.json";
 import trPermissions from "@/locales/tr/permissions.json";
 import trRoles from "@/locales/tr/roles.json";
@@ -99,6 +101,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     access: trAccess,
     integrations: trIntegrations,
     stepup: trStepup,
+    invitations: trInvitations,
     tenant: trTenant,
     branches: trBranches,
     tenant_members: trTenantMembers,
@@ -134,6 +137,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     access: enAccess,
     integrations: enIntegrations,
     stepup: enStepup,
+    invitations: enInvitations,
     tenant: enTenant,
     branches: enBranches,
     tenant_members: enTenantMembers,

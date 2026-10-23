@@ -81,8 +81,6 @@ type Preferences struct {
 
 // EnqueueInput creates one or more queued notifications.
 type EnqueueInput struct {
-	TenantID    *int64
-	WorkspaceID *int64
 	// OrganizationID stamps the notification with an organization: it then
 	// shows only in that organization's panel (and never in the platform
 	// shell). Tenant engine jobs pass the job's organization.

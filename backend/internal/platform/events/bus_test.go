@@ -12,21 +12,21 @@ func TestBus_PublishInvokesSubscribers(t *testing.T) {
 	t.Parallel()
 	bus := NewBus(slog.Default())
 	called := 0
-	tenantID := int64(3)
+	orgID := int64(3)
 	bus.Subscribe(CustomersCreated, func(_ context.Context, event Event) error {
 		called++
 		if event.Name != CustomersCreated {
 			t.Fatalf("name = %s", event.Name)
 		}
-		if event.TenantID == nil || *event.TenantID != tenantID {
-			t.Fatalf("tenant = %#v", event.TenantID)
+		if event.OrganizationID == nil || *event.OrganizationID != orgID {
+			t.Fatalf("organization = %#v", event.OrganizationID)
 		}
 		if event.EventID.String() == "" {
 			t.Fatal("expected event id")
 		}
 		return nil
 	})
-	err := bus.Publish(context.Background(), New(CustomersCreated).WithTenant(tenantID))
+	err := bus.Publish(context.Background(), New(CustomersCreated).WithOrganization(orgID))
 	if err != nil {
 		t.Fatal(err)
 	}

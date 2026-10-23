@@ -1,6 +1,6 @@
 # Tenant core — design study
 
-Status: **phase 1 implemented** (backend: schema, organizations module, per-request org context, cache; see §11). Later phases are proposals. Reference implementation: `otopoly-go` (forked from this boilerplate, added organizations on top). This document keeps what worked there, fixes what hurt, and makes it reusable for every app cloned from the boilerplate.
+Status: **phase 1 implemented** (backend: schema, organizations module, per-request org context, cache) and **phase 4 implemented** (engines with organization scope, isolation guard rails and the RT-A01 test, TEC-673; §8). See §11 for the other phases. Reference implementation: `otopoly-go` (forked from this boilerplate, added organizations on top). This document keeps what worked there, fixes what hurt, and makes it reusable for every app cloned from the boilerplate.
 
 ## 1. Goal
 
@@ -71,7 +71,7 @@ ALTER TABLE export_jobs, import_jobs, bulk_jobs, activity_events, notifications
 -- template roles owner (all tenant.*), admin (all but tenant.roles.write), member (read)
 ```
 
-Existing leftovers get wired or deleted in the same work: `EnqueueInput.TenantID/WorkspaceID`, `events.TenantID`, `outbox.TenantID`, `apiquery.Tenant*Sort`, `storage.TenantLogoObjectKey/WorkspaceLogoObjectKey`, deprecated `middleware.RequireTenant`.
+Boilerplate leftovers were wired or deleted in phase 4 (TEC-673): `events.Event.OrganizationID` (`WithOrganization`, carried through the outbox envelope) replaces `TenantID` and reaches `EnqueueInput.OrganizationID` (`TenantID/WorkspaceID` removed); `storage.OrganizationLogoObjectKey` replaces the tenant / workspace / widget logo keys; `middleware.RequireTenant`, the `workspace:` / `conversation:` / `tenant:` channel helpers and the `*.workspace_*` event names are gone. `apiquery.TenantsSort` (platform organizations list) keeps its name for now.
 
 ## 4. Permissions
 
@@ -127,11 +127,15 @@ Registered in `internal/httpserver/server.go`; the core ships with none.
 
 ## 8. Isolation guard rails
 
-1. Every tenant table has `organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE` and an index starting with it.
-2. Repositories take `orgID int64` explicitly (never read it from context inside SQL helpers).
-3. `internal/database/queries_test.go` parses `queries/*.sql`: any query touching a table listed in `tenant_tables.txt` must reference `organization_id`. CI fails otherwise.
-4. IO / bulk / activity engines stamp `organization_id` from `orgctx` (otopoly: `ioengine.QueryOrganizationID`, `activity.WithOrganization`, bulk `executeTenant`).
-5. Optional later: Postgres RLS with `SET LOCAL app.organization_id` per transaction.
+1. Every tenant table has `organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE` and an index starting with it; child tables use composite FKs `(organization_id, parent_id)`, so even a buggy write cannot point at another organization's row.
+2. Repositories take `orgID int64` explicitly (never read it from context inside SQL helpers); body / query / bulk-param uuids are resolved with it (unknown = `not_found` validation, another organization's uuid in the path = 404).
+3. Query guard (`internal/database/queries_test.go`, CI): every sqlc query on a table in `queries/tenant_tables.txt` references `organization_id` (`alias.organization_id` for aliased references); queries on mixed platform/organization tables (`queries/mixed_scope_tables.txt`: jobs, activity, notifications, invitations, roles) name their scope or are listed with a reason in `queries/isolation_exempt.txt`; hand-written SQL literals in Go are scanned the same way.
+4. IO / bulk / activity / notification engines stamp `organization_id` from `orgctx`; workers re-scope from the job row (`orgctx.WithJobScope`); job lookups match the caller's scope (`orgctx.SameEngineScope`). Platform lists over these tables (jobs, activity feed and export, notification log) show platform rows only.
+5. Object keys of an organization live under `organizations/{org_uuid}/` (product images, vehicle documents, export files, import sources, logo); streaming endpoints check `storage.OrganizationOwnsKey`.
+6. Search: tenant documents carry `organization_id` (+ `branch_ids`), ids are `TenantDocumentID(org, uuid)`, `/v1/tenant/search` always filters by the organization; tenant specs never appear in `/v1/search`.
+7. Realtime: tenant resources publish on `org:{org_uuid}:resource:{name}`; subscription tokens only for members whose tenant role has the read permission.
+8. RT-A01 (`internal/httpserver/isolation_test.go`, `TEST_DATABASE_URL`): the real router with two seeded organizations; every `/v1/tenant` route is enumerated (route literals, checked against the mux and `openapi.yaml`) and must answer 403 for a foreign `X-Organization`, 404 for the other organization's uuids, leak none of its identifiers (GET scans, export files, body references), and leave its records unchanged. An uncovered route fails the test. The checklist for new modules is in `.agents/skills/add-tenant-resource` §8.
+9. Optional later: Postgres RLS with `SET LOCAL app.organization_id` per transaction.
 
 ## 9. Frontend
 
@@ -157,7 +161,7 @@ Registered in `internal/httpserver/server.go`; the core ships with none.
 | 1. Schema + core | Migrations 000025–000030, sqlc, `orgctx`, `RequireOrganization` + `RequireTenantPermission`, cache, response codes, `/me` organizations, platform org CRUD + members, OpenAPI | Go tests cover membership, per-org permissions, suspension, access window, last-owner guard, cache invalidation |
 | 2. Frontend shell | `(tenant)` group, provider/guard, `tenantRequest`, nav, switcher, permissions per org, login routing, platform organizations UI | `/t/{slug}` works in two tabs on two orgs at once |
 | 3. Invitations + settings | Invitation flow + email template, tenant settings (name, logo, `settings` JSON), members page | Invite → accept → role change → remove, end to end |
-| 4. Engines | IO / bulk / activity / notifications org stamping, realtime org channels, query lint test | A tenant export only contains its org's rows; lint test in CI |
+| 4. Engines | IO / bulk / activity / notifications org stamping, realtime org channels, query lint test, RT-A01 cross-organization test | **Done (TEC-673).** A tenant export only contains its org's rows; query guard and RT-A01 in `go test ./...` |
 | 5. Docs + skill | Rewrite the AGENTS.md "no tenants" rule, ARCHITECTURE.md, auth.md, new skill `add-tenant-resource` | A new tenant resource can be added by following the skill |
 
 Each phase is one PR (auto-merge after CI) behind `TENANCY_ENABLED`, so `main` stays shippable throughout.

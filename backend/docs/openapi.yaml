@@ -52,6 +52,8 @@ tags:
     description: Centrifugo connection and subscription tokens
   - name: Notifications
     description: In-app notification center, preferences, and admin send
+  - name: Organizations
+    description: Invitation accept flow (`/invite/{token}`) and organization logos
 
 paths:
   /healthz:
@@ -1318,6 +1320,7 @@ paths:
       tags: [Platform]
       operationId: getPlatformOrganizationsMeta
       summary: Platform organizations list metadata
+      description: Table contract of `GET /v1/platform/organizations` (`platform.organizations.read`), including the bulk actions.
       security:
         - bearerAuth: []
       responses:
@@ -1335,23 +1338,41 @@ paths:
       tags: [Platform]
       operationId: getPlatformOrganizations
       summary: List platform organizations
+      description: |
+        Organizations with their longest-standing owner and member, branch,
+        vehicle and pending invitation counts (`platform.organizations.read`).
+        `q` searches name, slug and owner e-mail. Faceted filters take comma
+        separated values. Live updates on `resource:platform.organizations`.
       security:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Q"
-        - $ref: "#/components/parameters/Sort"
+        - name: sort
+          in: query
+          description: "One of `name`, `slug`, `status`, `member_count`, `branch_count`, `access_ends_at`, `created_at`, `updated_at`; prefix `-` for descending. Default `-created_at`."
+          schema: { type: string, example: "-created_at" }
         - name: status
           in: query
-          schema: { type: string, enum: [active, suspended] }
+          description: "`active`, `suspended` (comma separated)"
+          schema: { type: string, example: "active" }
+        - name: access
+          in: query
+          description: "Access window state: `open`, `upcoming` (before access_starts_at), `expired` (after access_ends_at); comma separated"
+          schema: { type: string, example: "open,upcoming" }
+        - name: window
+          in: query
+          description: "`unlimited` (no access_ends_at) or `limited`; comma separated"
+          schema: { type: string, example: "limited" }
       responses:
         "200":
           description: Organization page
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnvelopeOrganizationPage"
+                $ref: "#/components/schemas/EnvelopeOrganizationSummaryPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -1359,6 +1380,13 @@ paths:
       tags: [Platform]
       operationId: postPlatformOrganization
       summary: Create organization
+      description: |
+        Creates the organization and runs the organization hooks in the same
+        transaction (default branch "Merkez"). The owner is either an
+        existing account (`owner_user_uuid`, default: the caller) or a new
+        e-mail (`owner_email`): the organization then starts without members
+        and an owner invitation is e-mailed (same flow as staff invitations).
+        The slug is derived from the name with Turkish folding when omitted.
       security:
         - bearerAuth: []
       requestBody:
@@ -1369,22 +1397,86 @@ paths:
               $ref: "#/components/schemas/CreateOrganizationRequest"
       responses:
         "201":
-          description: Created organization
+          description: Created organization (and the owner invitation, if any)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnvelopeOrganization"
+                $ref: "#/components/schemas/EnvelopeCreateOrganizationResult"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/platform/organizations/export:
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationsExport
+      summary: Export organizations
+      description: |
+        Queues an export of the organizations list (`platform.organizations.export`,
+        step-up like the other platform exports). `query` honours `q`, `status`,
+        `access`, `window` and `sort`. Poll `GET /v1/platform/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/platform/organizations/bulk:
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationsBulk
+      summary: Run a bulk action on organizations
+      description: |
+        `activate` (`platform.organizations.bulk.activate`) or `suspend`
+        (`platform.organizations.bulk.suspend`), both reversible. Target
+        `ids` or `query` (same filters as the list).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /v1/platform/organizations/{uuid}:
     get:
       tags: [Platform]
       operationId: getPlatformOrganization
       summary: Get organization
+      description: Organization with owner and counts (`platform.organizations.read`).
       security:
         - bearerAuth: []
       parameters:
@@ -1395,7 +1487,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnvelopeOrganization"
+                $ref: "#/components/schemas/EnvelopeOrganizationSummary"
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1452,6 +1544,7 @@ paths:
       tags: [Platform]
       operationId: postPlatformOrganizationStatus
       summary: Set organization status
+      description: "`active` or `suspended`; suspended organizations answer `403 ORGANIZATION_SUSPENDED` on every tenant route at once (cache invalidated)."
       security:
         - bearerAuth: []
       parameters:
@@ -1479,6 +1572,7 @@ paths:
       tags: [Platform]
       operationId: postPlatformOrganizationAccess
       summary: Set organization access window
+      description: "`access_ends_at: null` removes the end. The end must be after the start."
       security:
         - bearerAuth: []
       parameters:
@@ -1501,11 +1595,77 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/platform/organizations/{uuid}/activity:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationActivity
+      summary: Organization activity
+      description: Platform operations on the organization plus every activity event recorded inside it, newest first (`platform.organizations.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationActivityPage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/platform/organizations/{uuid}/roles:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationRoles
+      summary: Roles assignable in the organization
+      description: Template roles plus the organization's own roles (`platform.organizations.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Roles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantRoleItems"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/platform/organizations/{uuid}/branches:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationBranches
+      summary: Branches of the organization
+      description: Live branches for member and invitation branch scopes (`platform.organizations.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Branches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchOptionItems"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/platform/organizations/{uuid}/members:
     get:
       tags: [Platform]
       operationId: getPlatformOrganizationMembers
       summary: List organization members
+      description: Same shape and filters as `GET /v1/tenant/members` (roles, branch scope, last login).
       security:
         - bearerAuth: []
       parameters:
@@ -1513,21 +1673,36 @@ paths:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Q"
-        - $ref: "#/components/parameters/Sort"
+        - name: sort
+          in: query
+          description: "One of `name`, `email`, `branch_scope`, `last_login_at`, `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - name: role
+          in: query
+          description: Tenant role uuid; comma-separate for several
+          schema: { type: string }
+        - name: branch_scope
+          in: query
+          schema: { type: string, enum: [all, selected] }
       responses:
         "200":
-          description: Organization member page
+          description: Member page
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnvelopeOrganizationMemberPage"
+                $ref: "#/components/schemas/EnvelopeTenantMemberPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Platform]
       operationId: postPlatformOrganizationMember
-      summary: Add organization member
+      summary: Add an existing user as member
+      description: |
+        `role_uuids` (several roles) wins over the legacy `role_key`;
+        `branch_scope` `selected` needs `branch_uuids`. The platform operator
+        has owner rights inside the organization (no grant limits).
       security:
         - bearerAuth: []
       parameters:
@@ -1537,14 +1712,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AddOrganizationMemberRequest"
+              $ref: "#/components/schemas/PlatformMemberRequest"
       responses:
         "201":
-          description: Organization member
+          description: Member
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnvelopeOrganizationMember"
+                $ref: "#/components/schemas/EnvelopeTenantMember"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1555,7 +1730,8 @@ paths:
     patch:
       tags: [Platform]
       operationId: patchPlatformOrganizationMember
-      summary: Change organization member role
+      summary: Change a member's roles and branch access
+      description: "Same rules as the tenant member update; only `role_key` keeps the legacy single-role replace. Demoting the last owner answers `409 LAST_ORGANIZATION_OWNER`."
       security:
         - bearerAuth: []
       parameters:
@@ -1566,14 +1742,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChangeOrganizationMemberRoleRequest"
+              $ref: "#/components/schemas/PlatformMemberPatchRequest"
       responses:
         "200":
-          description: Organization member
+          description: Member
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnvelopeOrganizationMember"
+                $ref: "#/components/schemas/EnvelopeTenantMember"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1583,6 +1759,7 @@ paths:
       tags: [Platform]
       operationId: deletePlatformOrganizationMember
       summary: Remove organization member
+      description: "The last owner cannot be removed (`409 LAST_ORGANIZATION_OWNER`)."
       security:
         - bearerAuth: []
       parameters:
@@ -1599,6 +1776,218 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/organizations/{uuid}/invitations:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationInvitations
+      summary: List invitations of an organization
+      description: Same shape and filters as `GET /v1/tenant/invitations`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/InvitationSort"
+        - $ref: "#/components/parameters/InvitationStatus"
+      responses:
+        "200":
+          description: Invitation page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitationPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationInvitation
+      summary: Invite an e-mail into an organization
+      description: Platform operators invite with owner rights (any role, every branch). Rate limited per organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvitationRequest"
+      responses:
+        "201":
+          description: Invitation (the token is only e-mailed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/platform/organizations/{uuid}/invitations/{invitationUuid}/revoke:
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationInvitationRevoke
+      summary: Revoke an invitation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/InvitationUUID"
+      responses:
+        "200":
+          description: Revoked invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/organizations/{uuid}/invitations/{invitationUuid}/resend:
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationInvitationResend
+      summary: Resend an invitation
+      description: Issues a new token (the previous link stops working), renews the 7-day expiry and e-mails it again.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/InvitationUUID"
+      responses:
+        "200":
+          description: Invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/organizations/{uuid}/logo:
+    get:
+      tags: [Organizations]
+      operationId: getOrganizationLogo
+      summary: Organization logo
+      description: Logo bytes for any signed-in user. Clients use the `logo_url` the API returns (it carries a version); object keys never leave the API.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+            image/svg+xml:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/invitations/{token}:
+    get:
+      tags: [Organizations]
+      operationId: getInvitationPreview
+      summary: Public invitation preview
+      description: |
+        For the `/invite/{token}` page: organization, inviter name, the
+        invited e-mail masked (`a****@e******.com`) and the state
+        (`pending`, `expired`, `accepted`, `revoked`). Unknown tokens answer
+        `404`. No authentication.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitationPreview"
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/invitations/{token}/accept:
+    post:
+      tags: [Organizations]
+      operationId: postInvitationAccept
+      summary: Accept an invitation
+      description: |
+        Signed-in user whose account e-mail equals the invited e-mail
+        (case-insensitive). Creates the membership with the invited roles
+        and branch scope; a user who already is a member only closes the
+        invitation. Errors: `403 INVITATION_EMAIL_MISMATCH`,
+        `410 INVITATION_EXPIRED` / `INVITATION_USED` / `INVITATION_REVOKED`,
+        `404` unknown token. Not available while impersonating.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAcceptInvitationResult"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+
+  /v1/invitations/{token}/register:
+    post:
+      tags: [Organizations]
+      operationId: postInvitationRegister
+      summary: Create the invitee's account and accept
+      description: |
+        Public. Creates a password account for the invited e-mail (taken from
+        the invitation) and accepts. The invitation is the admission, so the
+        self-registration switch does not apply; otherwise it is a normal
+        registration: the e-mail stays unverified and the verification
+        e-mail is sent. An existing account answers `409 ACCOUNT_EXISTS`
+        (sign in instead). Rate limited per IP like `/v1/auth/register`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInvitedRequest"
+      responses:
+        "201":
+          description: Account created and invitation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAcceptInvitationResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/platform/users:
     get:
@@ -3291,6 +3680,237 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /v1/tenant/invitations/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantInvitationsMeta
+      summary: Invitations list metadata
+      description: Table contract of `GET /v1/tenant/invitations` (`tenant.members.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/invitations:
+    get:
+      tags: [Tenant]
+      operationId: getTenantInvitations
+      summary: List staff invitations
+      description: |
+        Invitations of the organization (`tenant.members.read`), newest first.
+        `q` searches the e-mail. Live updates on
+        `org:{org_uuid}:resource:tenant.invitations`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/InvitationSort"
+        - $ref: "#/components/parameters/InvitationStatus"
+      responses:
+        "200":
+          description: Invitation page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitationPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantInvitation
+      summary: Invite a staff member
+      description: |
+        `tenant.members.write`. E-mails a single-use link
+        `${PUBLIC_FRONTEND_URL}/invite/{token}` valid for 7 days; the token
+        (32 random bytes) is stored as its sha256 hash and never returned.
+        Re-inviting an e-mail revokes its open invitation; inviting a member
+        answers `409 ALREADY_MEMBER`.
+
+        Same guards as member updates (`403 FORBIDDEN`): only owners invite
+        owners; a non-owner can only grant roles whose permissions it holds;
+        a branch-restricted caller cannot grant `all` and only its own
+        branches. Rate limited per organization (`429 RATE_LIMITED`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvitationRequest"
+      responses:
+        "201":
+          description: Invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/tenant/invitations/{uuid}/revoke:
+    post:
+      tags: [Tenant]
+      operationId: postTenantInvitationRevoke
+      summary: Revoke an invitation
+      description: "`tenant.members.write`; only invitations the caller could have granted. A closed invitation answers `409`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Revoked invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/invitations/{uuid}/resend:
+    post:
+      tags: [Tenant]
+      operationId: postTenantInvitationResend
+      summary: Resend an invitation
+      description: "`tenant.members.write`. New token (the old link stops working), new 7-day expiry, e-mail sent again. Counts towards the rate limit."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeInvitation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/tenant/organization:
+    get:
+      tags: [Tenant]
+      operationId: getTenantOrganizationProfile
+      summary: Organization profile
+      description: Name and logo of the organization (`tenant.settings.read`). Company / billing details live in `/v1/tenant/settings`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationProfile"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantOrganizationProfile
+      summary: Rename the organization
+      description: "`tenant.settings.write`. Only the name; slug, status and access window are platform-managed."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationProfilePatchRequest"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationProfile"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/organization/logo:
+    put:
+      tags: [Tenant]
+      operationId: putTenantOrganizationLogo
+      summary: Upload the organization logo
+      description: "`tenant.settings.write`. Multipart field `logo` (PNG, JPEG, WebP or SVG, at most 2 MB). The response carries the new API-owned `logo_url`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [logo]
+              properties:
+                logo: { type: string, format: binary }
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationProfile"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantOrganizationLogo
+      summary: Remove the organization logo
+      description: "`tenant.settings.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationProfile"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/roles/meta:
     get:
       tags: [Tenant]
@@ -4373,6 +4993,27 @@ components:
       bearerFormat: JWT
 
   parameters:
+    InvitationUUID:
+      name: invitationUuid
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InvitationToken:
+      name: token
+      in: path
+      required: true
+      description: Raw invitation token from the e-mail link (43 characters, base64url)
+      schema: { type: string }
+    InvitationSort:
+      name: sort
+      in: query
+      description: "One of `email`, `expires_at`, `created_at`; prefix `-` for descending. Default `-created_at`."
+      schema: { type: string, example: "-created_at" }
+    InvitationStatus:
+      name: status
+      in: query
+      description: "`pending`, `expired`, `accepted`, `revoked` (comma separated)"
+      schema: { type: string, example: "pending" }
     XOrganization:
       name: X-Organization
       in: header
@@ -4473,6 +5114,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    Gone:
+      description: "`INVITATION_EXPIRED`, `INVITATION_USED` or `INVITATION_REVOKED`"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     OrganizationRequired:
       description: "`ORGANIZATION_REQUIRED`: the `X-Organization` header is missing or empty"
       content:
@@ -4490,6 +5137,356 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
+
+    OwnerRef:
+      type: object
+      required: [uuid, email, name, surname]
+      properties:
+        uuid: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        surname: { type: string }
+
+    OrganizationSummary:
+      type: object
+      required: [uuid, slug, name, status, access_starts_at, created_at, updated_at, owner, access_state, member_count, branch_count, pending_invitation_count]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        logo_url:
+          type: [string, "null"]
+          description: "API-owned logo stream (`/v1/organizations/{uuid}/logo?v=...`)"
+        status: { type: string, enum: [active, suspended] }
+        access_starts_at: { type: string, format: date-time }
+        access_ends_at: { type: [string, "null"], format: date-time }
+        settings:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        owner:
+          description: Longest-standing owner; `null` while the owner invitation is pending
+          oneOf:
+            - $ref: "#/components/schemas/OwnerRef"
+            - type: "null"
+        access_state: { type: string, enum: [open, upcoming, expired] }
+        member_count: { type: integer, format: int64 }
+        branch_count: { type: integer, format: int64 }
+        pending_invitation_count: { type: integer, format: int64 }
+
+    OrganizationSummaryPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationSummary" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeOrganizationSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganizationSummaryPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationSummaryPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    CreateOrganizationResult:
+      type: object
+      required: [organization, owner_invitation]
+      properties:
+        organization: { $ref: "#/components/schemas/OrganizationSummary" }
+        owner_invitation:
+          description: Set when the owner was invited by e-mail
+          oneOf:
+            - $ref: "#/components/schemas/Invitation"
+            - type: "null"
+
+    EnvelopeCreateOrganizationResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CreateOrganizationResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    OrganizationActivityEntry:
+      type: object
+      required: [uuid, action, resource, resource_uuid, payload, actor, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        action: { type: string, example: organizations.status_updated }
+        resource: { type: string, example: platform.organizations }
+        resource_uuid: { type: [string, "null"], format: uuid }
+        payload: { type: object, additionalProperties: true }
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    OrganizationActivityPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationActivityEntry" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeOrganizationActivityPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationActivityPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantRoleItems:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantRole" }
+
+    EnvelopeTenantRoleItems:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantRoleItems" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    BranchOption:
+      type: object
+      required: [uuid, code, name, is_active]
+      properties:
+        uuid: { type: string, format: uuid }
+        code: { type: string, example: MRK }
+        name: { type: string, example: Merkez }
+        is_active: { type: boolean }
+
+    BranchOptionItems:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BranchOption" }
+
+    EnvelopeBranchOptionItems:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BranchOptionItems" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    PlatformMemberRequest:
+      type: object
+      required: [user_uuid]
+      additionalProperties: false
+      properties:
+        user_uuid: { type: string, format: uuid }
+        role_key:
+          type: string
+          description: Legacy single role (default `member`); ignored when `role_uuids` is set
+          examples: [member]
+        role_uuids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        branch_scope: { type: string, enum: [all, selected] }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    PlatformMemberPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        role_key: { type: string, description: Legacy single-role replace, examples: [admin] }
+        role_uuids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        branch_scope: { type: string, enum: [all, selected] }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    UserRef:
+      type: object
+      required: [uuid, email, name, surname]
+      properties:
+        uuid: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        surname: { type: string }
+
+    Invitation:
+      type: object
+      required: [uuid, email, status, roles, branch_scope, branches, invited_by, expires_at, accepted_at, revoked_at, last_sent_at, send_count, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        email: { type: string, format: email }
+        status: { type: string, enum: [pending, expired, accepted, revoked] }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/TenantRoleRef" }
+        branch_scope: { type: string, enum: [all, selected] }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/BranchRef" }
+        invited_by:
+          oneOf:
+            - $ref: "#/components/schemas/UserRef"
+            - type: "null"
+        expires_at: { type: string, format: date-time }
+        accepted_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        last_sent_at: { type: string, format: date-time }
+        send_count: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    InvitationPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Invitation" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeInvitation:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Invitation" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeInvitationPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/InvitationPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    CreateInvitationRequest:
+      type: object
+      required: [email, role_uuids]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+        role_uuids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        branch_scope: { type: string, enum: [all, selected], default: all }
+        branch_uuids:
+          type: array
+          description: Required with `branch_scope` = `selected`
+          items: { type: string, format: uuid }
+
+    InvitationPreviewOrganization:
+      type: object
+      required: [uuid, slug, name, logo_url]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        logo_url: { type: [string, "null"] }
+
+    InvitationPreview:
+      type: object
+      required: [organization, inviter_name, email_masked, status, expires_at]
+      properties:
+        organization: { $ref: "#/components/schemas/InvitationPreviewOrganization" }
+        inviter_name: { type: string, example: Ayşe Kaya }
+        email_masked: { type: string, example: "m****@e******.com" }
+        status: { type: string, enum: [pending, expired, accepted, revoked] }
+        expires_at: { type: string, format: date-time }
+
+    EnvelopeInvitationPreview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/InvitationPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    AcceptInvitationResult:
+      type: object
+      required: [organization_uuid, organization_slug, already_member, email]
+      properties:
+        organization_uuid: { type: string, format: uuid }
+        organization_slug: { type: string }
+        already_member: { type: boolean }
+        email: { type: string, format: email, description: The account e-mail (for signing in after registration) }
+
+    EnvelopeAcceptInvitationResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/AcceptInvitationResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    RegisterInvitedRequest:
+      type: object
+      required: [name, surname, password]
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 100 }
+        surname: { type: string, maxLength: 100 }
+        password: { type: string, format: password, minLength: 8, maxLength: 128 }
+
+    OrganizationProfile:
+      type: object
+      required: [uuid, slug, name, logo_url, status, access_starts_at, access_ends_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        logo_url: { type: [string, "null"], description: API-owned logo stream; never an object key }
+        status: { type: string, enum: [active, suspended] }
+        access_starts_at: { type: string, format: date-time }
+        access_ends_at: { type: [string, "null"], format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    EnvelopeOrganizationProfile:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationProfile" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    OrganizationProfilePatchRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+
 
     DayHours:
       type: object
@@ -5716,7 +6713,9 @@ components:
         uuid: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
-        logo_url: { type: string }
+        logo_url:
+          type: [string, "null"]
+          description: "API-owned logo stream (`/v1/organizations/{uuid}/logo?v=...`)"
         status: { type: string, enum: [active, suspended] }
         access_starts_at: { type: string, format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
@@ -5732,11 +6731,15 @@ components:
       additionalProperties: false
       properties:
         name: { type: string }
-        slug: { type: string }
+        slug: { type: string, description: Derived from the name (Turkish folding) when empty }
         owner_user_uuid:
           type: string
           format: uuid
-          description: Owner account; defaults to the caller.
+          description: Existing owner account; defaults to the caller. Not together with `owner_email`.
+        owner_email:
+          type: string
+          format: email
+          description: Invite this e-mail as owner instead (the organization starts without members).
 
     PatchOrganizationRequest:
       type: object
@@ -5761,73 +6764,6 @@ components:
       properties:
         access_starts_at: { type: [string, "null"], format: date-time }
         access_ends_at: { type: [string, "null"], format: date-time }
-
-    OrganizationMemberUser:
-      type: object
-      required: [uuid, email, name, surname, status]
-      properties:
-        uuid: { type: string, format: uuid }
-        email: { type: string, format: email }
-        name: { type: string }
-        surname: { type: string }
-        status: { type: string }
-
-    OrganizationRoleSummary:
-      type: object
-      required: [key, name]
-      properties:
-        key: { type: string, examples: [owner, admin, member] }
-        name: { type: string }
-
-    OrganizationMember:
-      type: object
-      required: [user, role, created_at, updated_at]
-      properties:
-        user:
-          $ref: "#/components/schemas/OrganizationMemberUser"
-        role:
-          $ref: "#/components/schemas/OrganizationRoleSummary"
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-
-    AddOrganizationMemberRequest:
-      type: object
-      required: [user_uuid, role_key]
-      additionalProperties: false
-      properties:
-        user_uuid: { type: string, format: uuid }
-        role_key: { type: string, examples: [member] }
-
-    ChangeOrganizationMemberRoleRequest:
-      type: object
-      required: [role_key]
-      additionalProperties: false
-      properties:
-        role_key: { type: string, examples: [admin] }
-
-    OrganizationPage:
-      type: object
-      required: [items, total, limit, offset]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Organization"
-        total: { type: integer, format: int64 }
-        limit: { type: integer }
-        offset: { type: integer }
-
-    OrganizationMemberPage:
-      type: object
-      required: [items, total, limit, offset]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/OrganizationMember"
-        total: { type: integer, format: int64 }
-        limit: { type: integer }
-        offset: { type: integer }
 
     RoleSummary:
       type: object
@@ -6631,30 +7567,6 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/Organization" }
-        meta: { $ref: "#/components/schemas/ResponseMeta" }
-
-    EnvelopeOrganizationPage:
-      type: object
-      required: [success, data, meta]
-      properties:
-        success: { type: boolean, enum: [true] }
-        data: { $ref: "#/components/schemas/OrganizationPage" }
-        meta: { $ref: "#/components/schemas/ResponseMeta" }
-
-    EnvelopeOrganizationMember:
-      type: object
-      required: [success, data, meta]
-      properties:
-        success: { type: boolean, enum: [true] }
-        data: { $ref: "#/components/schemas/OrganizationMember" }
-        meta: { $ref: "#/components/schemas/ResponseMeta" }
-
-    EnvelopeOrganizationMemberPage:
-      type: object
-      required: [success, data, meta]
-      properties:
-        success: { type: boolean, enum: [true] }
-        data: { $ref: "#/components/schemas/OrganizationMemberPage" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeImpersonationResult:

@@ -201,6 +201,27 @@ func TestNotificationOrganizationScope(t *testing.T) {
 		t.Fatalf("unread A=%d B=%d platform=%d, want 2 2 1", a, b, p)
 	}
 
+	// The platform notification log (operators, own rows without read_all)
+	// lists platform rows only: organization-stamped rows belong to their
+	// organization's panel.
+	for _, actor := range []authctx.Principal{
+		{UserID: alice.Uuid, UserInternal: alice.ID},
+		{UserID: alice.Uuid, UserInternal: alice.ID, Permissions: []string{rbac.PermPlatformNotificationsReadAll}},
+	} {
+		page, err := svc.ListPlatform(ctx, actor, apiquery.Query{Limit: 100}, "", "", "", alice.Uuid.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range page.Items {
+			if n.OrganizationUUID != nil {
+				t.Fatalf("platform log lists an organization notification: %q (%v)", n.Title, *n.OrganizationUUID)
+			}
+		}
+		if page.Total != 1 || len(page.Items) != 1 || page.Items[0].Title != "platform" {
+			t.Fatalf("platform log = %d items, total %d, want only \"platform\"", len(page.Items), page.Total)
+		}
+	}
+
 	// HTTP: /v1/tenant/notifications with X-Organization, /v1/notifications
 	// without.
 	tokens, err := jwt.NewManager("test-access-secret-0123456789abcdef", time.Minute, time.Hour)

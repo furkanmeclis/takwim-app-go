@@ -1,0 +1,14 @@
+# Tables that hold platform rows and organization rows side by side
+# (organization_id NULL = platform; roles also carry scope = 'platform' /
+# 'tenant'). Every sqlc query on one must mention one of the scope markers
+# listed after the table name, or be listed in isolation_exempt.txt with the
+# reason the caller enforces the scope (internal/database/queries_test.go).
+#
+# table                    markers
+export_jobs                organization_id
+import_jobs                organization_id
+bulk_jobs                  organization_id
+activity_events            organization_id
+notifications              organization_id
+organization_invitations   organization_id
+roles                      organization_id scope

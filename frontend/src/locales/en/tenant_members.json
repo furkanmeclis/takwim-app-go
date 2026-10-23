@@ -40,5 +40,8 @@
   "remove.title": "Remove {{name}} from the business?",
   "remove.description": "{{name}} loses access to this business. The account is kept and can be invited again.",
   "toast.updated": "Member access updated",
-  "toast.removed": "Member removed from the business"
+  "toast.removed": "Member removed from the business",
+  "tabs.members": "Members",
+  "tabs.invitations": "Invitations",
+  "columns.status": "Status"
 }

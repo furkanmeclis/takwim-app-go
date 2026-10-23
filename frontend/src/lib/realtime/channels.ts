@@ -5,27 +5,19 @@ import { realtimeConfig } from "@/config/realtime";
  */
 export const RealtimeChannels = {
   systemNotifications: () => realtimeConfig.channels.systemNotifications,
-  tenant: (tenantUuid: string) => realtimeConfig.channels.tenant(tenantUuid),
   user: (userId: number | string) => realtimeConfig.channels.user(userId),
-  workspace: (workspaceUuid: string) =>
-    realtimeConfig.channels.workspace(workspaceUuid),
-  conversation: (conversationUuid: string) =>
-    realtimeConfig.channels.conversation(conversationUuid),
   resource: (resource: string) => realtimeConfig.channels.resource(resource),
-  /** @deprecated Prefer `tenant` — kept for transitional imports */
-  dealer: (dealerId: number | string) =>
-    realtimeConfig.channels.tenant(String(dealerId)),
+  organizationResource: (organizationUuid: string, resource: string) =>
+    realtimeConfig.channels.organizationResource(organizationUuid, resource),
 } as const;
 
 export type RealtimeChannelBuilder = typeof RealtimeChannels;
 
 export function isAuthorizedChannelShape(channel: string): boolean {
   if (channel === realtimeConfig.channels.systemNotifications) return true;
-  if (/^tenant:[0-9a-fA-F-]+$/.test(channel)) return true;
   if (/^user:[0-9a-fA-F-]+$/.test(channel)) return true;
   if (/^user:\d+$/.test(channel)) return true;
-  if (/^workspace:[0-9a-fA-F-]+$/.test(channel)) return true;
-  if (/^conversation:[0-9a-fA-F-]+$/.test(channel)) return true;
   if (/^resource:[a-z0-9._-]+$/.test(channel)) return true;
+  if (/^org:[0-9a-fA-F-]+:resource:[a-z0-9._-]+$/.test(channel)) return true;
   return false;
 }

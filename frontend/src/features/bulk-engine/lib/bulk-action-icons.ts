@@ -24,6 +24,10 @@ const bulkActionIconCatalog: Record<
   "platform.roles": {
     delete: Trash2,
   },
+  "platform.organizations": {
+    activate: CircleCheck,
+    suspend: CircleOff,
+  },
   "tenant.branches": {
     activate: CircleCheck,
     deactivate: CircleOff,

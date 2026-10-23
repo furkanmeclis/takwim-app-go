@@ -1,4 +1,5 @@
 import type { ListRealtimeOptions } from "@/components/tables";
+import { RealtimeChannels } from "@/lib/realtime";
 
 /**
  * Live list channel of an organization-owned resource
@@ -7,7 +8,7 @@ import type { ListRealtimeOptions } from "@/components/tables";
  * the resource's read permission.
  */
 export function tenantResourceChannel(orgUuid: string, resource: string) {
-  return `org:${orgUuid}:resource:${resource}`;
+  return RealtimeChannels.organizationResource(orgUuid, resource);
 }
 
 /** `useServerListState` realtime option for a tenant list; off until the organization is known. */

@@ -4,8 +4,11 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.narg(organization_id))
 RETURNING *;
 
 -- name: ListActivityEvents :many
+-- Platform audit feed: platform events only. Organization events are read
+-- per resource through ListOrganizationResourceActivity.
 SELECT * FROM activity_events
-WHERE (sqlc.narg(actor_user_id)::bigint IS NULL OR actor_user_id = sqlc.narg(actor_user_id))
+WHERE organization_id IS NULL
+  AND (sqlc.narg(actor_user_id)::bigint IS NULL OR actor_user_id = sqlc.narg(actor_user_id))
   AND (sqlc.narg(resource)::text IS NULL OR resource = sqlc.narg(resource))
   AND (sqlc.narg(action)::text IS NULL OR action = sqlc.narg(action))
   AND (
@@ -18,7 +21,8 @@ LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountActivityEvents :one
 SELECT COUNT(*)::bigint FROM activity_events
-WHERE (sqlc.narg(actor_user_id)::bigint IS NULL OR actor_user_id = sqlc.narg(actor_user_id))
+WHERE organization_id IS NULL
+  AND (sqlc.narg(actor_user_id)::bigint IS NULL OR actor_user_id = sqlc.narg(actor_user_id))
   AND (sqlc.narg(resource)::text IS NULL OR resource = sqlc.narg(resource))
   AND (sqlc.narg(action)::text IS NULL OR action = sqlc.narg(action))
   AND (
