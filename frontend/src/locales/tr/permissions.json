@@ -142,5 +142,9 @@
   "labels.tenant.services.import": "Hizmetleri içe aktar",
   "labels.tenant.services.bulk.activate": "Hizmetleri toplu aktifleştir",
   "labels.tenant.services.bulk.deactivate": "Hizmetleri toplu pasifleştir",
-  "groups.tenant_services": "Hizmetler"
+  "groups.tenant_services": "Hizmetler",
+  "labels.tenant.customers.export": "Müşterileri dışa aktar",
+  "labels.tenant.customers.import": "Müşterileri içe aktar",
+  "labels.tenant.customers.bulk.tag": "Müşterileri toplu etiketle",
+  "labels.tenant.customers.bulk.delete": "Müşterileri toplu sil"
 }

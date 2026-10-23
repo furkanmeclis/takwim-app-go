@@ -109,5 +109,6 @@
   "resources.platform.organizations": "İşletmeler",
   "resources.tenant.staff": "Personel",
   "resources.tenant.resources": "Kaynaklar",
-  "resources.tenant.services": "Hizmetler"
+  "resources.tenant.services": "Hizmetler",
+  "resources.tenant.customers": "Müşteriler"
 }

@@ -4,38 +4,38 @@ Single-scope role model for this boilerplate: users are global; permissions come
 
 ## Roles
 
-| Role | Type | Notes |
-|------|------|-------|
-| `super_admin` | system (`is_system=true`) | All permissions; cannot delete slug or demote last member |
-| `cms_user` | editable seed | `auth.session`, `notifications.read` |
-| Custom roles | platform-managed | Created via `/v1/platform/roles`; permissions from DB catalog only |
+| Role          | Type                      | Notes                                                              |
+| ------------- | ------------------------- | ------------------------------------------------------------------ |
+| `super_admin` | system (`is_system=true`) | All permissions; cannot delete slug or demote last member          |
+| `cms_user`    | editable seed             | `auth.session`, `notifications.read`                               |
+| Custom roles  | platform-managed          | Created via `/v1/platform/roles`; permissions from DB catalog only |
 
 `users.is_super_admin` column is removed. JWT and `/me` still expose `is_super_admin` when the user has the `super_admin` role.
 
 ## Permissions (seed)
 
-| Permission | Purpose |
-|------------|---------|
-| `platform.users.read` / `.write` / `.export` / `.import` | Platform user CRUD + I/O |
-| `platform.users.impersonate` | Impersonate another user from platform admin (step-up) |
-| `platform.users.bulk.disable` / `.bulk.enable` | User bulk actions |
-| `platform.roles.read` / `.write` / `.export` / `.import` | Role CRUD + I/O |
-| `platform.roles.bulk.delete` | Role bulk delete |
-| `platform.bulk.read` | Bulk job list / rollback |
-| `platform.notifications.read` / `.read_all` / `.export` | Platform notification log (`.read_all` unlocks other users' rows) |
-| `platform.settings.read` / `.write` | Letterhead / export branding |
-| `platform.activity.read` | Audit log |
-| `platform.imports.read` / `platform.exports.read` | I/O job lists |
-| `platform.storage.read` / `.write` | S3/MinIO file browser |
-| `platform.logs.read` / `.write` | Application logs + purge |
-| `platform.access.read` / `.write` | Step-up policy |
-| `platform.auth.settings.read` / `.write` | Registration policy (also requires super admin) |
-| `platform.integrations.github.read` / `.write` | GitHub App settings (also requires super admin) |
-| `platform.integrations.google.read` / `.write` | Google OAuth settings (also requires super admin) |
-| `platform.integrations.facebook.read` / `.write` | Facebook OAuth settings (also requires super admin) |
-| `platform.integrations.apple.read` / `.write` | Apple OAuth settings (also requires super admin) |
-| `auth.session` | Sign-in / account pages |
-| `notifications.read` / `notifications.manage` | User notifications |
+| Permission                                               | Purpose                                                           |
+| -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `platform.users.read` / `.write` / `.export` / `.import` | Platform user CRUD + I/O                                          |
+| `platform.users.impersonate`                             | Impersonate another user from platform admin (step-up)            |
+| `platform.users.bulk.disable` / `.bulk.enable`           | User bulk actions                                                 |
+| `platform.roles.read` / `.write` / `.export` / `.import` | Role CRUD + I/O                                                   |
+| `platform.roles.bulk.delete`                             | Role bulk delete                                                  |
+| `platform.bulk.read`                                     | Bulk job list / rollback                                          |
+| `platform.notifications.read` / `.read_all` / `.export`  | Platform notification log (`.read_all` unlocks other users' rows) |
+| `platform.settings.read` / `.write`                      | Letterhead / export branding                                      |
+| `platform.activity.read`                                 | Audit log                                                         |
+| `platform.imports.read` / `platform.exports.read`        | I/O job lists                                                     |
+| `platform.storage.read` / `.write`                       | S3/MinIO file browser                                             |
+| `platform.logs.read` / `.write`                          | Application logs + purge                                          |
+| `platform.access.read` / `.write`                        | Step-up policy                                                    |
+| `platform.auth.settings.read` / `.write`                 | Registration policy (also requires super admin)                   |
+| `platform.integrations.github.read` / `.write`           | GitHub App settings (also requires super admin)                   |
+| `platform.integrations.google.read` / `.write`           | Google OAuth settings (also requires super admin)                 |
+| `platform.integrations.facebook.read` / `.write`         | Facebook OAuth settings (also requires super admin)               |
+| `platform.integrations.apple.read` / `.write`            | Apple OAuth settings (also requires super admin)                  |
+| `auth.session`                                           | Sign-in / account pages                                           |
+| `notifications.read` / `notifications.manage`            | User notifications                                                |
 
 Super admin bypasses permission checks in `HasPermission`. Most platform HTTP routes use `RequirePermission` only. Auth settings and OAuth integration routes also use `RequireSuperAdmin`.
 
@@ -49,10 +49,10 @@ Super admin bypasses permission checks in `HasPermission`. Most platform HTTP ro
 
 ## Email code sign-in (web + mobile)
 
-| Method | Path | Auth |
-|--------|------|------|
-| POST | `/v1/auth/email-code/request` `{email}` | — |
-| POST | `/v1/auth/email-code/verify` `{email, code, totp_code?}` | — |
+| Method | Path                                                     | Auth |
+| ------ | -------------------------------------------------------- | ---- |
+| POST   | `/v1/auth/email-code/request` `{email}`                  | —    |
+| POST   | `/v1/auth/email-code/verify` `{email, code, totp_code?}` | —    |
 
 - 6-digit code, 10 min TTL, 5 attempts, single use, stored as SHA-256 (`otp_codes.type = login_code`).
 - `request` always answers `200 {status: accepted}` (no enumeration). Disabled / deactivated users still get a code so `verify` can report `FORBIDDEN` / `ACCOUNT_DEACTIVATED` after the mailbox is proven.
@@ -65,12 +65,12 @@ Super admin bypasses permission checks in `HasPermission`. Most platform HTTP ro
 
 NextAuth keeps handling web OAuth; mobile apps send the SDK id_token to the API.
 
-| Method | Path | Body |
-|--------|------|------|
-| POST | `/v1/auth/oauth/{apple\|google}/native` | `{id_token, nonce?, given_name?, family_name?, authorization_code?, totp_code?}` |
-| POST | `/v1/auth/oauth/link/request` | `{link_ticket, email}` |
-| POST | `/v1/auth/oauth/link/verify` | `{link_ticket, email, code, totp_code?}` |
-| POST | `/v1/auth/oauth/link/create` | `{link_ticket, totp_code?}` |
+| Method | Path                                    | Body                                                                             |
+| ------ | --------------------------------------- | -------------------------------------------------------------------------------- |
+| POST   | `/v1/auth/oauth/{apple\|google}/native` | `{id_token, nonce?, given_name?, family_name?, authorization_code?, totp_code?}` |
+| POST   | `/v1/auth/oauth/link/request`           | `{link_ticket, email}`                                                           |
+| POST   | `/v1/auth/oauth/link/verify`            | `{link_ticket, email, code, totp_code?}`                                         |
+| POST   | `/v1/auth/oauth/link/create`            | `{link_ticket, totp_code?}`                                                      |
 
 - Verification: RS256 signature against the provider JWKS (cached per `Cache-Control`, refetch on unknown `kid` at most once a minute), `iss`, `exp`, `aud`, optional `nonce` (raw or SHA-256 hex).
 - Audiences: Apple `AUTH_APPLE_NATIVE_CLIENT_IDS`; Google `AUTH_GOOGLE_NATIVE_CLIENT_IDS` (iOS + Android client ids) plus the web client id stored in Google OAuth settings (Android Credential Manager tokens use it as `aud`). Native sign-in is enabled when a provider has at least one audience; otherwise `403 OAUTH_PROVIDER_DISABLED`.
@@ -81,10 +81,10 @@ NextAuth keeps handling web OAuth; mobile apps send the SDK id_token to the API.
 
 ## Account deletion (deactivation)
 
-| Method | Path | Auth |
-|--------|------|------|
-| POST | `/v1/auth/account/deactivate/request` | Bearer — emails `auth.account_deactivation_code` |
-| POST | `/v1/auth/account/deactivate` `{code?}` | Bearer + recent step-up **or** `code` |
+| Method | Path                                    | Auth                                             |
+| ------ | --------------------------------------- | ------------------------------------------------ |
+| POST   | `/v1/auth/account/deactivate/request`   | Bearer — emails `auth.account_deactivation_code` |
+| POST   | `/v1/auth/account/deactivate` `{code?}` | Bearer + recent step-up **or** `code`            |
 
 - No data is deleted. `users.status = disabled`, `users.deactivated_at = now()`; all refresh tokens revoked; step-up grant revoked; stored Apple refresh tokens revoked via `https://appleid.apple.com/auth/revoke` (skipped when none stored or no key/secret configured); `auth.account_deactivated` email.
 - Every login path (password, refresh, email code, native OAuth, NextAuth OAuth / passkey session issue, org context) returns `403 ACCOUNT_DEACTIVATED`; existing access tokens stop working on the next request (identity loader rejects disabled users).
@@ -108,11 +108,11 @@ Phishing note: QR sign-in can be abused by showing a victim an attacker's QR. Th
 
 ## Linked identities
 
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/v1/auth/identities` | Bearer → `{items, total, has_password}` |
-| POST | `/v1/auth/identities/{apple\|google}/native` | Bearer, `{id_token, nonce?, authorization_code?}` → `LinkedIdentity` |
-| DELETE | `/v1/auth/identities/{provider}` | Bearer (`github`, `google`, `facebook`, `apple`) |
+| Method | Path                                         | Auth                                                                 |
+| ------ | -------------------------------------------- | -------------------------------------------------------------------- |
+| GET    | `/v1/auth/identities`                        | Bearer → `{items, total, has_password}`                              |
+| POST   | `/v1/auth/identities/{apple\|google}/native` | Bearer, `{id_token, nonce?, authorization_code?}` → `LinkedIdentity` |
+| DELETE | `/v1/auth/identities/{provider}`             | Bearer (`github`, `google`, `facebook`, `apple`)                     |
 
 - `has_password` comes from `users.password_set`: OAuth / native sign-up stores a random hash and sets it `false`; any password update (reset, change, admin set) sets it `true`.
 - Native link verifies the token like native sign-in (same audiences, nonce, rate limit). Idempotent for the same user; `409 CONFLICT` when the identity belongs to another user or the user already has a different identity for that provider. Apple `authorization_code` → stored refresh token.
@@ -130,29 +130,29 @@ HS256 claims: `sub`, `roles`, `is_super_admin`, `exp`, `knd` (token kind, `staff
 
 Refresh tokens are listed as devices. `sid` on the access token marks the current row.
 
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/v1/auth/sessions` | Bearer |
-| DELETE | `/v1/auth/sessions/{uuid}` | Bearer (own session) |
-| POST | `/v1/auth/sessions/revoke-others` | Bearer (keeps current `sid`) |
+| Method | Path                              | Auth                         |
+| ------ | --------------------------------- | ---------------------------- |
+| GET    | `/v1/auth/sessions`               | Bearer                       |
+| DELETE | `/v1/auth/sessions/{uuid}`        | Bearer (own session)         |
+| POST   | `/v1/auth/sessions/revoke-others` | Bearer (keeps current `sid`) |
 
 ## Rate limits
 
 Redis INCR, 15-minute window, fail-open if Redis is down. `429 RATE_LIMITED` + `Retry-After`.
 
-| Endpoint | Key | Max |
-|----------|-----|-----|
-| Login | IP + email | 10 |
-| Register | IP | 5 |
-| Forgot password | IP + email | 5 |
-| Reset password | IP | 10 |
-| Verify email (`/auth/email/verify`) | IP | 10 |
-| Verification email request | user | 5 |
-| Email code request / OAuth link request | IP 10, email 5 | |
-| Email code verify / OAuth link verify | IP 30, email 10 | |
-| Native OAuth | IP | 30 |
-| OAuth link create | IP (register bucket) | 5 |
-| Account deletion code request / deactivate | user | 5 / 10 |
+| Endpoint                                   | Key                  | Max    |
+| ------------------------------------------ | -------------------- | ------ |
+| Login                                      | IP + email           | 10     |
+| Register                                   | IP                   | 5      |
+| Forgot password                            | IP + email           | 5      |
+| Reset password                             | IP                   | 10     |
+| Verify email (`/auth/email/verify`)        | IP                   | 10     |
+| Verification email request                 | user                 | 5      |
+| Email code request / OAuth link request    | IP 10, email 5       |        |
+| Email code verify / OAuth link verify      | IP 30, email 10      |        |
+| Native OAuth                               | IP                   | 30     |
+| OAuth link create                          | IP (register bucket) | 5      |
+| Account deletion code request / deactivate | user                 | 5 / 10 |
 
 The BFF forwards the browser IP as `X-Forwarded-For`; the Go API must not be reachable directly from clients or the header could be spoofed.
 
@@ -162,30 +162,30 @@ Returns `user`, `roles[]`, `permissions[]`, self-service links, and realtime hin
 
 ## Platform users
 
-| Method | Path | Permission |
-|--------|------|------------|
-| GET | `/v1/platform/users/meta` | `platform.users.read` |
-| GET | `/v1/platform/users` | `platform.users.read` — query: `limit`,`offset`,`q`,`sort`,`status`,`role` |
-| POST | `/v1/platform/users` | `platform.users.write` — body includes `role_uuids[]` |
-| GET | `/v1/platform/users/{uuid}` | `platform.users.read` — includes `roles[]` |
-| PATCH | `/v1/platform/users/{uuid}` | `platform.users.write` — optional `role_uuids[]` |
-| POST | `/v1/platform/users/{uuid}/password` | `platform.users.write` |
-| POST | `/v1/platform/users/{uuid}/impersonate` | `platform.users.impersonate` (step-up) |
-| POST | `/v1/auth/impersonation/stop` | Bearer (active impersonation session) |
+| Method | Path                                    | Permission                                                                 |
+| ------ | --------------------------------------- | -------------------------------------------------------------------------- |
+| GET    | `/v1/platform/users/meta`               | `platform.users.read`                                                      |
+| GET    | `/v1/platform/users`                    | `platform.users.read` — query: `limit`,`offset`,`q`,`sort`,`status`,`role` |
+| POST   | `/v1/platform/users`                    | `platform.users.write` — body includes `role_uuids[]`                      |
+| GET    | `/v1/platform/users/{uuid}`             | `platform.users.read` — includes `roles[]`                                 |
+| PATCH  | `/v1/platform/users/{uuid}`             | `platform.users.write` — optional `role_uuids[]`                           |
+| POST   | `/v1/platform/users/{uuid}/password`    | `platform.users.write`                                                     |
+| POST   | `/v1/platform/users/{uuid}/impersonate` | `platform.users.impersonate` (step-up)                                     |
+| POST   | `/v1/auth/impersonation/stop`           | Bearer (active impersonation session)                                      |
 
 Last super admin cannot be demoted via role removal or disable.
 
 ## Platform roles
 
-| Method | Path | Permission |
-|--------|------|------------|
-| GET | `/v1/platform/roles/meta` | `platform.roles.read` |
-| GET | `/v1/platform/roles` | `platform.roles.read` |
-| POST | `/v1/platform/roles` | `platform.roles.write` |
-| GET | `/v1/platform/roles/{uuid}` | `platform.roles.read` |
-| PATCH | `/v1/platform/roles/{uuid}` | `platform.roles.write` — system role slug immutable |
-| DELETE | `/v1/platform/roles/{uuid}` | `platform.roles.write` — system roles → `409` |
-| GET | `/v1/platform/permissions` | `platform.roles.read` — read-only catalog |
+| Method | Path                        | Permission                                          |
+| ------ | --------------------------- | --------------------------------------------------- |
+| GET    | `/v1/platform/roles/meta`   | `platform.roles.read`                               |
+| GET    | `/v1/platform/roles`        | `platform.roles.read`                               |
+| POST   | `/v1/platform/roles`        | `platform.roles.write`                              |
+| GET    | `/v1/platform/roles/{uuid}` | `platform.roles.read`                               |
+| PATCH  | `/v1/platform/roles/{uuid}` | `platform.roles.write` — system role slug immutable |
+| DELETE | `/v1/platform/roles/{uuid}` | `platform.roles.write` — system roles → `409`       |
+| GET    | `/v1/platform/permissions`  | `platform.roles.read` — read-only catalog           |
 
 New permission slugs are added via migrations/seeds only (no permission CRUD API).
 
@@ -197,20 +197,20 @@ Behind `TENANCY_ENABLED` (default `false`). Design: [`docs/design/tenant-core.md
 
 **Chain.** `Authenticate` → `RequireOrganization(resolver)` → `RequireTenantPermission("tenant.x.y")` → handler. `RequireOrganization` resolves the organization and the caller's membership (`orgctx.Resolver`) and stores an `orgctx.Scope` (`orgctx.From` / `orgctx.Must`); handlers pass `scope.ID` to repositories.
 
-| Case | Response |
-|------|----------|
-| Header missing or empty | `400 ORGANIZATION_REQUIRED` |
-| Unknown organization, or not a member | `403 NO_TENANT_MEMBERSHIP` (same answer for both: no organization enumeration) |
-| Organization suspended | `403 ORGANIZATION_SUSPENDED` |
-| Outside the access window (`access_starts_at` / `access_ends_at`) | `403 ORGANIZATION_ACCESS_EXPIRED` |
-| `X-Branch` names a branch that is unknown or outside the member's branch scope | `403 BRANCH_NOT_ALLOWED` |
-| Tenant permission missing in this organization | `403 FORBIDDEN` |
+| Case                                                                           | Response                                                                       |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Header missing or empty                                                        | `400 ORGANIZATION_REQUIRED`                                                    |
+| Unknown organization, or not a member                                          | `403 NO_TENANT_MEMBERSHIP` (same answer for both: no organization enumeration) |
+| Organization suspended                                                         | `403 ORGANIZATION_SUSPENDED`                                                   |
+| Outside the access window (`access_starts_at` / `access_ends_at`)              | `403 ORGANIZATION_ACCESS_EXPIRED`                                              |
+| `X-Branch` names a branch that is unknown or outside the member's branch scope | `403 BRANCH_NOT_ALLOWED`                                                       |
+| Tenant permission missing in this organization                                 | `403 FORBIDDEN`                                                                |
 
 **Branch picker.** The optional `X-Branch` header (branch uuid) is the branch picked in the panel header. `RequireOrganization` checks it against the member's branch scope and sets `Scope.SelectedBranchID`; `orgctx.BranchScope(ctx)` then returns only that branch, so every branch-bound list, count, facet, export and the overview narrow to it. Access checks on single records (`CheckBranch`, `RequireAllBranches`) keep using the member's full scope. No header = all branches the member may access.
 
 **Per-organization permissions.** Platform permissions (`platform.*`, global roles) are unchanged. Tenant permissions (`tenant.*`) come only from the membership role in the **current** organization: an owner of A who is a member of B has member rights in B. `super_admin` is not exempt: it needs a membership (or impersonation) like everyone else, and `RequireTenantPermission` has no super-admin bypass. Tenant slugs follow the same triad rule (migration + `internal/platform/rbac` + `frontend/src/config/permissions.ts`).
 
-**Several roles per member.** A member holds one or more tenant roles (`organization_member_roles`, migration 000032); its permissions are the **union** over them (`Scope.Permissions`, `Scope.MemberRoles`). `organization_members.role_id` stays as the primary (display) role for compatibility: it is always one of the member's roles and the usecase keeps it in sync (precedence owner, admin, sube_yoneticisi, resepsiyon, member). Template roles (organization-less, read-only, migration 000042): `owner` (İşletme Sahibi, every `tenant.*`), `admin` (Yönetici, everything except `tenant.roles.write`), `sube_yoneticisi` (Şube Yöneticisi: branch-bound reservations, schedules, staff and resources (read, write, export), services (read, export and the branch offers of `tenant.services.offer`), customers, finance and activity history; integrations read-only), `resepsiyon` (reservations and customers, schedules, staff, resources and services read-only), `member` (Çalışan: only `.own` slugs plus `tenant.payment.collect`); organizations add their own roles through `/v1/tenant/roles`. Sensitive actions have their own slugs (`tenant.price.override`, `tenant.discount.apply`, `tenant.payment.collect`, `tenant.payment.refund`, `tenant.document.download`, `tenant.report.export`); `price.override` and `payment.refund` are only on owner/admin or a custom role.
+**Several roles per member.** A member holds one or more tenant roles (`organization_member_roles`, migration 000032); its permissions are the **union** over them (`Scope.Permissions`, `Scope.MemberRoles`). `organization_members.role_id` stays as the primary (display) role for compatibility: it is always one of the member's roles and the usecase keeps it in sync (precedence owner, admin, sube_yoneticisi, resepsiyon, member). Template roles (organization-less, read-only, migration 000042): `owner` (İşletme Sahibi, every `tenant.*`), `admin` (Yönetici, everything except `tenant.roles.write`), `sube_yoneticisi` (Şube Yöneticisi: branch-bound reservations, schedules, staff and resources (read, write, export), services (read, export and the branch offers of `tenant.services.offer`), customers (read, write, export, bulk tag), finance and activity history; integrations read-only), `resepsiyon` (reservations and customers, schedules, staff, resources and services read-only), `member` (Çalışan: only `.own` slugs plus `tenant.payment.collect`); organizations add their own roles through `/v1/tenant/roles`. Sensitive actions have their own slugs (`tenant.price.override`, `tenant.discount.apply`, `tenant.payment.collect`, `tenant.payment.refund`, `tenant.document.download`, `tenant.report.export`); `price.override` and `payment.refund` are only on owner/admin or a custom role.
 
 **Own-record access.** Record modules that staff see only partially (reservations, schedules, earnings) have a full slug and an `.own` slug (`tenant.reservations.read` / `tenant.reservations.own`). Handlers call `scope.Reach(full, own)`: `ReachAll` lists every record in the branch scope, `ReachOwn` filters to records whose staff member is the caller, `ReachNone` answers 403. Branch filtering (`Scope.BranchScope`) applies on top in both cases. Guards: only owners grant or revoke `owner`, a non-owner only grants roles / permissions it holds, the last owner stays.
 

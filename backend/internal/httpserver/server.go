@@ -35,6 +35,11 @@ import (
 	bulkmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk"
 	bulkhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/handler"
 	bulkusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/usecase"
+	customersmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers"
+	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
+	customershandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/handler"
+	customersrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/repository"
+	customersusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/usecase"
 	entitlementsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/entitlements"
 	exportmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports"
 	exporthandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/handler"
@@ -225,6 +230,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewSearch(deps.Queries),
 		resourcesadapters.NewSearch(deps.Queries),
 		servicesadapters.NewSearch(deps.Queries),
+		customersadapters.NewSearch(deps.Queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, deps.Queue, log)
@@ -316,6 +322,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	resourcesSvc := resourcesusecase.New(resourcesrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	servicesSvc := servicesusecase.New(servicesrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	servicesSvc.SetStorage(deps.Storage)
+	customersSvc := customersusecase.New(customersrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	orgSvc := orgusecase.New(
 		orgrepository.NewPostgres(deps.DB, deps.Queries),
 		branchusecase.NewOrganizationHooks(searchIndexer),
@@ -383,6 +390,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffmodule.RegisterLiveResources(tenantLive)
 	resourcesmodule.RegisterLiveResources(tenantLive)
 	servicesmodule.RegisterLiveResources(tenantLive)
+	customersmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
 	resourceEvents.AddResolver(tenantmodule.ChannelResolver(tenantmodule.QueriesLookup(deps.Queries)))
@@ -417,6 +425,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewIO(staffSvc),
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
+		customersadapters.NewIO(customersSvc),
 		orgadapters.NewIO(orgSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
@@ -428,6 +437,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewBulk(staffSvc),
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
+		customersadapters.NewBulk(customersSvc),
 		orgadapters.NewBulk(orgSvc),
 	)
 	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, jobQueue, notifSvc, activityRec, cfg.Bulk, log)
@@ -500,6 +510,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Import: importH.TenantUpload(servicesmodule.Resource),
 		Sample: importH.TenantSample(servicesmodule.Resource),
 		Bulk:   bulkH.TenantExecute(servicesmodule.Resource),
+	}, tokens, loader, tenantResolver)
+	customersH := customershandler.New(customersSvc, activityRec)
+	customersH.SetResourceEvents(resourceEvents)
+	customersmodule.RegisterRoutes(mux, customersH, customersmodule.EngineHandlers{
+		Export: exportH.TenantExport(customersmodule.Resource, customersmodule.ExportQueryKeys...),
+		Import: importH.TenantUpload(customersmodule.Resource),
+		Sample: importH.TenantSample(customersmodule.Resource),
+		Bulk:   bulkH.TenantExecute(customersmodule.Resource),
 	}, tokens, loader, tenantResolver)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),

@@ -48,5 +48,9 @@
   "confirm.resources.deactivate": "Seçili {{count}} kaynak pasifleştirilsin mi? Yeni rezervasyonlarda seçilemezler.",
   "actions.services.activate": "Hizmetleri aktifleştir",
   "actions.services.deactivate": "Hizmetleri pasifleştir",
-  "confirm.services.deactivate": "Seçili {{count}} hizmet pasifleştirilsin mi? Yeni randevularda seçilemezler."
+  "confirm.services.deactivate": "Seçili {{count}} hizmet pasifleştirilsin mi? Yeni randevularda seçilemezler.",
+  "actions.customers.add_tag": "Etiket ekle",
+  "actions.customers.remove_tag": "Etiketi kaldır",
+  "actions.customers.delete": "Müşterileri sil",
+  "confirm.customers.delete": "Seçili {{count}} müşteri silinsin mi? İşlem geri alma süresi içinde geri alınabilir."
 }

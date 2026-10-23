@@ -23,6 +23,7 @@ import {
   Sparkles,
   Store,
   Upload,
+  UserRound,
   Users,
 } from "lucide-react";
 
@@ -312,6 +313,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: ConciergeBell,
             permission: permissions.tenant.services.read,
             module: "services",
+          },
+          {
+            id: "customers",
+            titleKey: "layout.nav_customers",
+            href: routes.tenant.customers.root(slug),
+            icon: UserRound,
+            permission: permissions.tenant.customers.read,
+            module: "customers",
           },
         ],
       },

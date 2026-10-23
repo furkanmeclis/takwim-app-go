@@ -37,6 +37,7 @@ type Querier interface {
 	CountBranchImages(ctx context.Context, arg CountBranchImagesParams) (int64, error)
 	CountBranches(ctx context.Context, arg CountBranchesParams) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
+	CountCustomers(ctx context.Context, arg CountCustomersParams) (int64, error)
 	// Live branches and staff seats of a business: members, open invitations
 	// and staff without an account (a staff record linked to a member uses the
 	// member's seat).
@@ -79,6 +80,12 @@ type Querier interface {
 	CreateBranch(ctx context.Context, arg CreateBranchParams) (Branch, error)
 	CreateBranchImage(ctx context.Context, arg CreateBranchImageParams) (BranchImage, error)
 	CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error)
+	// Tenant resource: customers (TEC-896). Every query on customers and
+	// customer_identity_links filters by organization_id. customer_identities is
+	// platform-level: only the link use case touches it, and no tenant response
+	// carries its uuid.
+	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
+	CreateCustomerIdentityLink(ctx context.Context, arg CreateCustomerIdentityLinkParams) (CustomerIdentityLink, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
 	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
 	// Staff invitations (TEC-671). Organization-side queries are scoped by
@@ -106,12 +113,14 @@ type Querier interface {
 	CreateTenantRole(ctx context.Context, arg CreateTenantRoleParams) (CreateTenantRoleRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
+	CustomerPhoneTaken(ctx context.Context, arg CustomerPhoneTakenParams) (bool, error)
 	// Self-service account deletion: keep every row, mark the user disabled.
 	DeactivateUser(ctx context.Context, id int64) (User, error)
 	DeleteAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteAppLogsByUUIDs(ctx context.Context, uuids []uuid.UUID) (int64, error)
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
 	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
+	DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCustomerIdentityLinkParams) (int64, error)
 	DeleteLogPurgeRule(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteMemberBranches(ctx context.Context, arg DeleteMemberBranchesParams) error
 	DeleteMemberRoles(ctx context.Context, arg DeleteMemberRolesParams) error
@@ -160,6 +169,12 @@ type Querier interface {
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
 	GetCurrentOrganizationSettings(ctx context.Context, organizationID int64) (GetCurrentOrganizationSettingsRow, error)
+	GetCustomer(ctx context.Context, arg GetCustomerParams) (GetCustomerRow, error)
+	// Import key: the live record of the business with the phone.
+	GetCustomerByPhone(ctx context.Context, arg GetCustomerByPhoneParams) (GetCustomerByPhoneRow, error)
+	GetCustomerIdentityByPhone(ctx context.Context, phoneE164 string) (CustomerIdentity, error)
+	GetCustomerIdentityLink(ctx context.Context, arg GetCustomerIdentityLinkParams) (CustomerIdentityLink, error)
+	GetCustomerSearchDocument(ctx context.Context, arg GetCustomerSearchDocumentParams) (GetCustomerSearchDocumentRow, error)
 	GetExportJobByID(ctx context.Context, id int64) (ExportJob, error)
 	GetExportJobByUUID(ctx context.Context, argUuid uuid.UUID) (ExportJob, error)
 	GetGitHubAppSettings(ctx context.Context) (GithubAppSetting, error)
@@ -169,6 +184,8 @@ type Querier interface {
 	GetIntegrationAccountByID(ctx context.Context, arg GetIntegrationAccountByIDParams) (GetIntegrationAccountByIDRow, error)
 	GetInvitationByUUID(ctx context.Context, arg GetInvitationByUUIDParams) (OrganizationInvitation, error)
 	GetInvitationPreviewByTokenHash(ctx context.Context, tokenHash string) (GetInvitationPreviewByTokenHashRow, error)
+	// The business's own record of an identity (customer panel, online booking).
+	GetLinkedCustomer(ctx context.Context, arg GetLinkedCustomerParams) (GetLinkedCustomerRow, error)
 	GetLogPurgeRuleByUUID(ctx context.Context, argUuid uuid.UUID) (LogPurgeRule, error)
 	// A member account of the organization (staff link target).
 	GetMemberUserByUUID(ctx context.Context, arg GetMemberUserByUUIDParams) (GetMemberUserByUUIDRow, error)
@@ -274,6 +291,12 @@ type Querier interface {
 	ListBranchesForExport(ctx context.Context, arg ListBranchesForExportParams) ([]Branch, error)
 	ListBulkChangesForJob(ctx context.Context, jobID int64) ([]BulkChange, error)
 	ListBulkJobsForActor(ctx context.Context, arg ListBulkJobsForActorParams) ([]BulkJob, error)
+	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)
+	ListCustomerSourceFacets(ctx context.Context, organizationID int64) ([]ListCustomerSourceFacetsRow, error)
+	ListCustomerTagFacets(ctx context.Context, organizationID int64) ([]ListCustomerTagFacetsRow, error)
+	ListCustomerUUIDs(ctx context.Context, arg ListCustomerUUIDsParams) ([]uuid.UUID, error)
+	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
+	ListCustomersForExport(ctx context.Context, arg ListCustomersForExportParams) ([]ListCustomersForExportRow, error)
 	ListDuePushTickets(ctx context.Context, arg ListDuePushTicketsParams) ([]ListDuePushTicketsRow, error)
 	// The sweep: runner jobs whose next call is due, across organizations
 	// (each row carries its organization_id; the runner re-scopes from it).
@@ -433,6 +456,8 @@ type Querier interface {
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
 	ResourceNameTaken(ctx context.Context, arg ResourceNameTakenParams) (bool, error)
+	// Bulk delete rollback.
+	RestoreCustomer(ctx context.Context, arg RestoreCustomerParams) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
 	RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (OrganizationInvitation, error)
 	// Re-inviting an e-mail replaces its open (possibly expired) invitation.
@@ -449,6 +474,7 @@ type Querier interface {
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)
 	SetBranchImageSort(ctx context.Context, arg SetBranchImageSortParams) (int64, error)
+	SetCustomerTags(ctx context.Context, arg SetCustomerTagsParams) error
 	SetIntegrationAccountCheck(ctx context.Context, arg SetIntegrationAccountCheckParams) error
 	SetIntegrationAccountStatus(ctx context.Context, arg SetIntegrationAccountStatusParams) (int64, error)
 	SetMemberBranchScope(ctx context.Context, arg SetMemberBranchScopeParams) error
@@ -465,6 +491,7 @@ type Querier interface {
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
+	SoftDeleteCustomer(ctx context.Context, arg SoftDeleteCustomerParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
 	SoftDeleteResource(ctx context.Context, arg SoftDeleteResourceParams) (int64, error)
 	SoftDeleteService(ctx context.Context, arg SoftDeleteServiceParams) (int64, error)
@@ -481,6 +508,7 @@ type Querier interface {
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error)
+	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateGitHubAppSettings(ctx context.Context, arg UpdateGitHubAppSettingsParams) (GithubAppSetting, error)
 	UpdateImportJobFileKey(ctx context.Context, arg UpdateImportJobFileKeyParams) (ImportJob, error)
 	UpdateImportJobMapping(ctx context.Context, arg UpdateImportJobMappingParams) (ImportJob, error)
@@ -516,6 +544,8 @@ type Querier interface {
 	UpdateUserTOTPRecoveryHashes(ctx context.Context, arg UpdateUserTOTPRecoveryHashesParams) error
 	UpdateWebAuthnCredentialCounter(ctx context.Context, arg UpdateWebAuthnCredentialCounterParams) error
 	UpdateWebAuthnCredentialName(ctx context.Context, arg UpdateWebAuthnCredentialNameParams) (WebauthnCredential, error)
+	// Platform-level: called only after the phone was proven.
+	UpsertCustomerIdentity(ctx context.Context, arg UpsertCustomerIdentityParams) (CustomerIdentity, error)
 	// Records a job once per provider and idempotency key; a repeated key
 	// counts the delivery and returns the existing row (inserted = false).
 	UpsertIntegrationJob(ctx context.Context, arg UpsertIntegrationJobParams) (UpsertIntegrationJobRow, error)

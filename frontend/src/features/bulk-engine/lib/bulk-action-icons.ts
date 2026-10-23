@@ -1,4 +1,6 @@
 import {
+  BadgeMinus,
+  BadgePlus,
   CircleCheck,
   CircleOff,
   Trash2,
@@ -43,6 +45,11 @@ const bulkActionIconCatalog: Record<
   "tenant.services": {
     activate: CircleCheck,
     deactivate: CircleOff,
+  },
+  "tenant.customers": {
+    add_tag: BadgePlus,
+    remove_tag: BadgeMinus,
+    delete: Trash2,
   },
 };
 

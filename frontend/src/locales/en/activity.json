@@ -195,5 +195,19 @@
   "fields.tenant.services.is_active": "Active",
   "fields.tenant.services.sort_order": "Order",
   "fields.tenant.services.offers": "Branch offers",
-  "fields.tenant.services.staff": "Staff"
+  "fields.tenant.services.staff": "Staff",
+  "resources.tenant.customers": "Customers",
+  "actions.customers.created": "Customer added",
+  "actions.customers.updated": "Customer updated",
+  "actions.customers.deleted": "Customer deleted",
+  "fields.tenant.customers.first_name": "First name",
+  "fields.tenant.customers.last_name": "Last name",
+  "fields.tenant.customers.phone": "Phone",
+  "fields.tenant.customers.email": "Email",
+  "fields.tenant.customers.birth_date": "Birth date",
+  "fields.tenant.customers.notes": "Notes",
+  "fields.tenant.customers.tags": "Tags",
+  "fields.tenant.customers.sms_consent": "SMS consent",
+  "fields.tenant.customers.email_consent": "Email consent",
+  "fields.tenant.customers.verified": "Verified phone"
 }

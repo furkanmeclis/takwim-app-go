@@ -132,6 +132,46 @@ type BulkJob struct {
 	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
+type Customer struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	FirstName        string             `json:"first_name"`
+	LastName         string             `json:"last_name"`
+	PhoneE164        pgtype.Text        `json:"phone_e164"`
+	Email            string             `json:"email"`
+	BirthDate        pgtype.Date        `json:"birth_date"`
+	Notes            string             `json:"notes"`
+	Tags             []string           `json:"tags"`
+	SmsConsent       bool               `json:"sms_consent"`
+	EmailConsent     bool               `json:"email_consent"`
+	ConsentUpdatedAt pgtype.Timestamptz `json:"consent_updated_at"`
+	Source           string             `json:"source"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type CustomerIdentity struct {
+	ID              int64              `json:"id"`
+	Uuid            uuid.UUID          `json:"uuid"`
+	PhoneE164       string             `json:"phone_e164"`
+	PhoneVerifiedAt pgtype.Timestamptz `json:"phone_verified_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomerIdentityLink struct {
+	ID                int64              `json:"id"`
+	OrganizationID    int64              `json:"organization_id"`
+	CustomerID        int64              `json:"customer_id"`
+	IdentityID        int64              `json:"identity_id"`
+	Source            string             `json:"source"`
+	VerifiedPhoneE164 string             `json:"verified_phone_e164"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
 type ExportJob struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

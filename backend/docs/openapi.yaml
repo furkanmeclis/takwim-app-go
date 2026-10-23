@@ -6388,6 +6388,355 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/customers/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomersMeta
+      summary: Customer list metadata
+      description: Table contract of `GET /v1/tenant/customers` (`tenant.customers.read`, `customers` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customers/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomersFacets
+      summary: Customer faceted filter options
+      description: Tags and sources (with counts) in use in the organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCustomerFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/customers:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomers
+      summary: List customers of the organization
+      description: |
+        The business's own customer records (`tenant.customers.read`); every
+        reader sees every record of the business. `q` searches the full
+        name, the email and, when it looks like a phone fragment, the phone
+        (a leading national `0` is ignored). Records of other businesses
+        are never listed, even for the same person.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `phone`, `email`, `source`, `created_at`, `updated_at`; prefix `-` for descending. Default: first name, last name."
+          schema: { type: string, example: name }
+        - name: tag
+          in: query
+          description: "Tags (exact, any of); comma-separate or repeat"
+          schema: { type: string }
+        - name: source
+          in: query
+          description: "Sources (`panel`, `import`, `online`); comma-separate or repeat"
+          schema: { type: string }
+        - name: verified
+          in: query
+          description: Linked to a person who proved the phone
+          schema: { type: boolean }
+        - name: sms_consent
+          in: query
+          schema: { type: boolean }
+        - name: email_consent
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Customer page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCustomerPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomer
+      summary: Create a customer
+      description: |
+        `tenant.customers.write`. The phone is normalized to E.164 (numbers
+        without a country code are read as Turkish); one live record per
+        phone in a business (`409`, detail `phone` / `taken`). A record
+        created here is never verified: only the person proving the phone
+        (OTP, customer panel) links it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantCustomerCreateRequest"
+      responses:
+        "201":
+          description: Created customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCustomer"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/customers/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomersExport
+      summary: Export customers
+      description: |
+        Queues an export of the organization's customers
+        (`tenant.customers.export`). `query` honours `q`, `tag`, `source`,
+        `verified`, `sms_consent` and `email_consent`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customers/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomersImport
+      summary: Upload a customer import file
+      description: |
+        Creates an import job (`tenant.customers.import`). A row whose phone
+        matches a live customer updates it, any other row creates one with
+        source `import`. Imported phones stay unverified. Continue with
+        `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customers/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomersImportSample
+      summary: Download a customer import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customers/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomersBulk
+      summary: Run a bulk action on customers
+      description: |
+        Actions `add_tag` and `remove_tag` (`tenant.customers.bulk.tag`,
+        the tag in `target.params.tag`) and `delete`
+        (`tenant.customers.bulk.delete`, restored on rollback); all
+        reversible. Targets are resolved inside the organization only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customers/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomer
+      summary: Get a customer
+      description: A uuid of another organization answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCustomer"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantCustomer
+      summary: Update a customer
+      description: |
+        `tenant.customers.write`. Omitted fields are unchanged; `phone` and
+        `birth_date` take `null` to clear. Changes stay in this business.
+        Changing the phone of a verified record removes the verification.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantCustomerPatchRequest"
+      responses:
+        "200":
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCustomer"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantCustomer
+      summary: Delete a customer (soft)
+      description: "`tenant.customers.write`. The phone becomes free for a new record."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/customers/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerActivity
+      summary: Activity of a customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -11378,6 +11727,123 @@ components:
         data: { $ref: "#/components/schemas/NotificationPreferences" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
+    TenantCustomerVerification:
+      type: object
+      description: The record is linked to a person who proved the phone. The shared identity itself is never exposed.
+      required: [source, verified_at]
+      properties:
+        source: { type: string, enum: [otp, panel_login] }
+        verified_at: { type: string, format: date-time }
+
+    TenantCustomer:
+      type: object
+      required: [uuid, first_name, last_name, full_name, phone, phone_display, email, birth_date, notes, tags,
+        sms_consent, email_consent, consent_updated_at, source, verification, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        first_name: { type: string }
+        last_name: { type: string }
+        full_name: { type: string }
+        phone: { type: [string, "null"], description: "E.164", example: "+905321234567" }
+        phone_display: { type: string, description: "National format for local numbers, international otherwise", example: "0532 123 45 67" }
+        email: { type: string }
+        birth_date: { type: [string, "null"], format: date }
+        notes: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        sms_consent: { type: boolean }
+        email_consent: { type: boolean }
+        consent_updated_at: { type: [string, "null"], format: date-time }
+        source: { type: string, enum: [panel, import, online] }
+        verification:
+          oneOf:
+            - $ref: "#/components/schemas/TenantCustomerVerification"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantCustomerPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        first_name: { type: string, maxLength: 80 }
+        last_name: { type: string, maxLength: 80 }
+        phone: { type: [string, "null"], description: "Any common spelling; stored as E.164" }
+        email: { type: string, maxLength: 254 }
+        birth_date: { type: [string, "null"], format: date }
+        notes: { type: string, maxLength: 5000 }
+        tags:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 32 }
+        sms_consent: { type: boolean }
+        email_consent: { type: boolean }
+
+    TenantCustomerCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [first_name]
+      properties:
+        first_name: { type: string, maxLength: 80 }
+        last_name: { type: string, maxLength: 80 }
+        phone: { type: [string, "null"], description: "Any common spelling; stored as E.164" }
+        email: { type: string, maxLength: 254 }
+        birth_date: { type: [string, "null"], format: date }
+        notes: { type: string, maxLength: 5000 }
+        tags:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 32 }
+        sms_consent: { type: boolean }
+        email_consent: { type: boolean }
+
+    TenantCustomerPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantCustomer" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantCustomerFacets:
+      type: object
+      required: [tag, source]
+      properties:
+        tag:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+        source:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+
+    EnvelopeTenantCustomer:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantCustomer" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantCustomerPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantCustomerPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantCustomerFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantCustomerFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     EnvelopeResourceMeta:
       type: object
       required: [success, data, meta]
@@ -11414,6 +11880,10 @@ components:
           items: { type: string, format: uuid }
         query:
           type: object
+          additionalProperties: { type: string }
+        params:
+          type: object
+          description: Arguments of a parameterised action (for example `tag` of the customer `add_tag` action).
           additionalProperties: { type: string }
 
     BulkExecuteRequest:

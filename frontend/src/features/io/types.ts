@@ -107,6 +107,7 @@ export type IoResource =
   | "tenant.staff"
   | "tenant.resources"
   | "tenant.services"
+  | "tenant.customers"
   | "platform.organizations";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
@@ -119,6 +120,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.staff": "/v1/tenant/staff/export",
   "tenant.resources": "/v1/tenant/resources/export",
   "tenant.services": "/v1/tenant/services/export",
+  "tenant.customers": "/v1/tenant/customers/export",
 };
 
 export const IMPORT_PATHS: Partial<
@@ -147,6 +149,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.services": {
     upload: "/v1/tenant/services/import",
     sample: "/v1/tenant/services/import/sample",
+  },
+  "tenant.customers": {
+    upload: "/v1/tenant/customers/import",
+    sample: "/v1/tenant/customers/import/sample",
   },
 };
 
@@ -207,6 +213,21 @@ export const IMPORT_SCHEMA: Partial<
     { key: "is_active", labelKey: "resources.fields.is_active" },
     { key: "sort_order", labelKey: "resources.fields.sort_order" },
     { key: "description", labelKey: "resources.fields.description" },
+  ],
+  "tenant.customers": [
+    {
+      key: "first_name",
+      labelKey: "customers.fields.first_name",
+      required: true,
+    },
+    { key: "last_name", labelKey: "customers.fields.last_name" },
+    { key: "phone", labelKey: "customers.fields.phone" },
+    { key: "email", labelKey: "customers.fields.email" },
+    { key: "birth_date", labelKey: "customers.fields.birth_date" },
+    { key: "tags", labelKey: "customers.fields.tags" },
+    { key: "sms_consent", labelKey: "customers.fields.sms_consent" },
+    { key: "email_consent", labelKey: "customers.fields.email_consent" },
+    { key: "notes", labelKey: "customers.fields.notes" },
   ],
   "tenant.services": [
     { key: "category", labelKey: "services.fields.category" },

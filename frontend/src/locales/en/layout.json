@@ -48,5 +48,6 @@
   "nav_tenant_activity": "Activity history",
   "nav_staff": "Staff",
   "nav_resources": "Resources",
-  "nav_services": "Services"
+  "nav_services": "Services",
+  "nav_customers": "Customers"
 }
