@@ -5279,6 +5279,524 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/staff/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffMeta
+      summary: Staff list metadata
+      description: Table contract of `GET /v1/tenant/staff` (`tenant.staff.read`, `staff` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffFacets
+      summary: Staff faceted filter options
+      description: Branches (with staff counts) for the faceted `branch` filter, inside the caller's branch scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/staff/linkable-members:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffLinkableMembers
+      summary: Members that can be linked to a staff record
+      description: "`tenant.staff.write`. Members of the business without a staff record."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffLinkableMembers"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaff
+      summary: List staff of the organization
+      description: |
+        Staff of the `X-Organization` organization (`tenant.staff.read`).
+        `q` searches name, title, phone, email and the linked account. A member
+        with `branch_scope` = `selected` only sees staff assigned to one of its
+        branches; anyone else answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `title`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default `-created_at`."
+          schema: { type: string, example: name }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat (see `/v1/tenant/staff/facets`)"
+          schema: { type: string }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: show_online
+          in: query
+          schema: { type: boolean }
+        - name: has_account
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Staff page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaff
+      summary: Create a staff member
+      description: |
+        `tenant.staff.write`. A member limited to some branches must give at
+        least one of its branches. Staff without an account take a plan seat
+        (`409 LIMIT_REACHED` when the plan is full); an account already linked
+        to another staff record answers `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffCreateRequest"
+      responses:
+        "201":
+          description: Created staff member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaff"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/staff/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffExport
+      summary: Export staff
+      description: |
+        Queues an export of the organization's staff (`tenant.staff.export`).
+        `query` honours `q`, `branch`, `is_active`, `show_online` and
+        `has_account`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffImport
+      summary: Upload a staff import file
+      description: |
+        Creates an import job (`tenant.staff.import`). A row with a known
+        `uuid` updates that person, any other row creates one; branches are
+        given as `branch_codes`. Continue with
+        `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffImportSample
+      summary: Download a staff import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffBulk
+      summary: Run a bulk action on staff
+      description: |
+        Actions `activate` (`tenant.staff.bulk.activate`) and `deactivate`
+        (`tenant.staff.bulk.deactivate`), both reversible. Targets are resolved
+        inside the organization and the caller's branch scope only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffMember
+      summary: Get a staff member
+      description: With `assignments` (shifts per branch). A uuid of another organization, or of staff outside the caller's branch scope, answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Staff member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaff"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantStaffMember
+      summary: Update a staff member
+      description: |
+        `tenant.staff.write`. Omitted fields are unchanged; `account_uuid: null`
+        unlinks the account (a seat is then needed). `branch_uuids` replaces the
+        branches the caller may manage; assignments outside its scope are kept.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffPatchRequest"
+      responses:
+        "200":
+          description: Updated staff member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaff"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantStaffMember
+      summary: Delete a staff member (soft)
+      description: "`tenant.staff.write`. A branch-limited caller gets `403` when the person also works in a branch outside its scope."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffActivity
+      summary: Activity of a staff member
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff/{uuid}/branches/{branchUuid}/shifts:
+    put:
+      tags: [Tenant]
+      operationId: putTenantStaffShifts
+      summary: Replace the weekly shifts of a person in a branch
+      description: |
+        `tenant.staff.read` + `tenant.schedules.write`. Times are `HH:MM`
+        wall-clock of the branch (`24:00` allowed as an end). Shifts of a day
+        must not overlap (`overlap`), breaks must sit inside their shift
+        (`outside`) and the same hours in another branch of the person answer
+        `branch_overlap`. A branch the person is not assigned to (or outside the
+        caller's scope) answers `404`. Returns the person with assignments.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: branchUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffWeeklyShifts"
+      responses:
+        "200":
+          description: Staff member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaff"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff/{uuid}/time-off:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffTimeOff
+      summary: Time off of a staff member
+      description: Newest first. `from` / `to` keep the entries overlapping that range.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Time off page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffTimeOffPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffTimeOff
+      summary: Add a time off
+      description: "`tenant.staff.read` + `tenant.schedules.write`. The person is unavailable in every branch for the period (at most 366 days)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffTimeOffCreateRequest"
+      responses:
+        "201":
+          description: Created time off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffTimeOff"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff/{uuid}/time-off/{timeOffUuid}:
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantStaffTimeOff
+      summary: Update a time off
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: timeOffUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffTimeOffPatchRequest"
+      responses:
+        "200":
+          description: Updated time off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffTimeOff"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantStaffTimeOff
+      summary: Delete a time off
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: timeOffUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/tenant/notifications:
     get:
       tags: [Tenant]
@@ -7264,6 +7782,246 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/TenantActivityFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    StaffBreak:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: string, example: "12:30" }
+        end: { type: string, example: "13:00" }
+
+    StaffShift:
+      type: object
+      required: [start, end, breaks]
+      properties:
+        start: { type: string, example: "09:00" }
+        end: { type: string, description: "`HH:MM`; `24:00` allowed", example: "18:00" }
+        breaks:
+          type: array
+          maxItems: 4
+          items: { $ref: "#/components/schemas/StaffBreak" }
+
+    StaffWeeklyShifts:
+      type: object
+      description: Shifts per weekday (at most 6 a day); an empty day is a day off in that branch.
+      required: [mon, tue, wed, thu, fri, sat, sun]
+      properties:
+        mon: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+        tue: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+        wed: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+        thu: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+        fri: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+        sat: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+        sun: { type: array, items: { $ref: "#/components/schemas/StaffShift" } }
+
+    StaffAccount:
+      type: object
+      required: [uuid, name, surname, email]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
+
+    StaffBranchRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    StaffAssignment:
+      type: object
+      required: [branch_uuid, branch_name, branch_code, branch_hours, shifts, editable]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        branch_name: { type: string }
+        branch_code: { type: string }
+        branch_hours: { $ref: "#/components/schemas/WeeklyHours" }
+        shifts: { $ref: "#/components/schemas/StaffWeeklyShifts" }
+        editable: { type: boolean, description: False for branches outside the caller's branch scope }
+
+    Staff:
+      type: object
+      required: [uuid, name, title, bio, phone, email, color, show_online, is_active, account, branches, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string, example: Ayşe Yılmaz }
+        title: { type: string, example: Kuaför }
+        bio: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        color: { type: string, description: Calendar color `#RRGGBB`, example: "#2563EB" }
+        show_online: { type: boolean, description: Bookable on the customer booking screens }
+        is_active: { type: boolean }
+        account:
+          oneOf:
+            - $ref: "#/components/schemas/StaffAccount"
+            - type: "null"
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/StaffBranchRef" }
+        assignments:
+          type: array
+          description: Branches with their shifts (detail response only)
+          items: { $ref: "#/components/schemas/StaffAssignment" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    StaffCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 120 }
+        title: { type: string }
+        bio: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        color: { type: string, example: "#2563EB" }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+        account_uuid: { type: [string, "null"], format: uuid, description: Member user to link }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    StaffPatchRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        title: { type: string }
+        bio: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        color: { type: string }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+        account_uuid: { type: [string, "null"], format: uuid, description: "`null` unlinks the account" }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    StaffPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Staff" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    StaffBranchFacet:
+      type: object
+      required: [value, label, count]
+      properties:
+        value: { type: string, format: uuid }
+        label: { type: string }
+        count: { type: integer, format: int64 }
+
+    StaffFacets:
+      type: object
+      required: [branch]
+      properties:
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/StaffBranchFacet" }
+
+    StaffLinkableMembers:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffAccount" }
+
+    StaffTimeOff:
+      type: object
+      required: [uuid, kind, starts_at, ends_at, note, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [leave, sick, training, other] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        note: { type: string }
+        created_at: { type: string, format: date-time }
+
+    StaffTimeOffCreateRequest:
+      type: object
+      required: [kind, starts_at, ends_at]
+      properties:
+        kind: { type: string, enum: [leave, sick, training, other] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 1000 }
+
+    StaffTimeOffPatchRequest:
+      type: object
+      properties:
+        kind: { type: string, enum: [leave, sick, training, other] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 1000 }
+
+    StaffTimeOffPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffTimeOff" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeStaff:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Staff" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffLinkableMembers:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffLinkableMembers" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffTimeOff:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffTimeOff" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffTimeOffPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffTimeOffPage" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     OrganizationCompanySettings:

@@ -36,6 +36,11 @@ function fieldLabel(t: Translate, resource: string, path: string) {
     const branch = t(key);
     if (branch !== key) return branch;
   }
+  if (resource === "tenant.staff") {
+    const key = `staff.fields.${path}`;
+    const staff = t(key);
+    if (staff !== key) return staff;
+  }
   return null;
 }
 

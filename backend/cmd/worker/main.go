@@ -27,6 +27,9 @@ import (
 	orgadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/adapters"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
+	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
+	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/observability"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
@@ -123,6 +126,7 @@ func main() {
 	activityRec := activity.NewRecorder(queries, log)
 	// Tenant resources: adapters read the organization from the job row.
 	branchSvc := branchusecase.New(branchrepository.NewPostgres(queries), nil)
+	staffSvc := staffusecase.New(staffrepository.NewPostgres(pool, queries), nil)
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
@@ -138,6 +142,7 @@ func main() {
 		ioadapters.NewNotifications(queries),
 		ioadapters.NewActivity(queries),
 		branchadapters.NewIO(branchSvc),
+		staffadapters.NewIO(staffSvc),
 		orgadapters.NewIO(jobScopes),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
@@ -146,6 +151,7 @@ func main() {
 		bulkadapters.NewUsers(queries),
 		bulkadapters.NewRoles(queries),
 		branchadapters.NewBulk(branchSvc),
+		staffadapters.NewBulk(staffSvc),
 		orgadapters.NewBulk(jobScopes),
 	)
 	bulkSvc := bulkusecase.New(queries, bulkReg, nil, notifSvc, activityRec, cfg.Bulk, log)
@@ -159,6 +165,7 @@ func main() {
 		searchadapters.NewUsers(queries),
 		searchadapters.NewRoles(queries),
 		branchadapters.NewSearch(queries),
+		staffadapters.NewSearch(queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, nil, log)

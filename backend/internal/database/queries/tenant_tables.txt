@@ -12,3 +12,6 @@ organization_invitation_roles
 organization_invitation_branches
 integration_accounts
 organization_usage
+staff
+staff_branches
+staff_time_off

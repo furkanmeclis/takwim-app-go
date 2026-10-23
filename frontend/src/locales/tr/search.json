@@ -17,5 +17,7 @@
   "prefix_users": "kullanıcılar",
   "prefix_roles": "roller",
   "specs_branches": "Şubeler",
-  "prefix_branches": "şube"
+  "prefix_branches": "şube",
+  "specs_staff": "Personel",
+  "prefix_staff": "personel"
 }

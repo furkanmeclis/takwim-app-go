@@ -120,5 +120,12 @@
   "groups.tenant_finance": "Finans",
   "groups.tenant_earnings": "Çalışan kazançları",
   "labels.tenant.activity.read": "İşlem geçmişini görüntüle",
-  "groups.tenant_activity": "İşlem geçmişi"
+  "groups.tenant_activity": "İşlem geçmişi",
+  "labels.tenant.staff.read": "Personeli görüntüle",
+  "labels.tenant.staff.write": "Personeli yönet",
+  "labels.tenant.staff.export": "Personeli dışa aktar",
+  "labels.tenant.staff.import": "Personeli içe aktar",
+  "labels.tenant.staff.bulk.activate": "Personeli toplu aktifleştir",
+  "labels.tenant.staff.bulk.deactivate": "Personeli toplu pasifleştir",
+  "groups.tenant_staff": "Personel"
 }

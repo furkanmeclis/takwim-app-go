@@ -1,6 +1,7 @@
 import {
   Activity,
   Bell,
+  Contact,
   Download,
   HardDrive,
   KeyRound,
@@ -31,6 +32,7 @@ const ICONS: Record<string, LucideIcon> = {
   home: LayoutDashboard,
   github: githubNavIcon,
   branches: Store,
+  staff: Contact,
 };
 
 export function resolveSearchIcon(name?: string): LucideIcon {

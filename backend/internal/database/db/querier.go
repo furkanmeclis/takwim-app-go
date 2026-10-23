@@ -18,6 +18,7 @@ type Querier interface {
 	AddMemberRole(ctx context.Context, arg AddMemberRoleParams) error
 	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) (OrganizationMember, error)
 	AddOrganizationUsage(ctx context.Context, arg AddOrganizationUsageParams) (OrganizationUsage, error)
+	AddStaffBranch(ctx context.Context, arg AddStaffBranchParams) error
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams) (bool, error)
 	BranchSlugTaken(ctx context.Context, arg BranchSlugTakenParams) (bool, error)
@@ -36,8 +37,9 @@ type Querier interface {
 	CountBranchImages(ctx context.Context, arg CountBranchImagesParams) (int64, error)
 	CountBranches(ctx context.Context, arg CountBranchesParams) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
-	// Live branches and staff seats (members plus open invitations) of a
-	// business.
+	// Live branches and staff seats of a business: members, open invitations
+	// and staff without an account (a staff record linked to a member uses the
+	// member's seat).
 	CountEntitlementUsage(ctx context.Context, organizationID int64) (CountEntitlementUsageRow, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
@@ -58,6 +60,9 @@ type Querier interface {
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
+	// The linked account counts only while the user is a member.
+	CountStaff(ctx context.Context, arg CountStaffParams) (int64, error)
+	CountStaffTimeOff(ctx context.Context, arg CountStaffTimeOffParams) (int64, error)
 	CountStorageActivity(ctx context.Context, objectKey string) (int64, error)
 	CountStorageTrash(ctx context.Context) (int64, error)
 	CountTenantActivity(ctx context.Context, arg CountTenantActivityParams) (int64, error)
@@ -83,6 +88,9 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
 	CreateServicePoint(ctx context.Context, arg CreateServicePointParams) (ServicePoint, error)
+	// Tenant resource: staff (TEC-890). Every query filters by organization_id.
+	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
+	CreateStaffTimeOff(ctx context.Context, arg CreateStaffTimeOffParams) (StaffTimeOff, error)
 	CreateTenantRole(ctx context.Context, arg CreateTenantRoleParams) (CreateTenantRoleRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
@@ -103,6 +111,7 @@ type Querier interface {
 	DeletePushTickets(ctx context.Context, ids []int64) error
 	DeleteRole(ctx context.Context, argUuid uuid.UUID) error
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
+	DeleteStaffTimeOff(ctx context.Context, arg DeleteStaffTimeOffParams) (int64, error)
 	DeleteStorageShare(ctx context.Context, argUuid uuid.UUID) error
 	DeleteStorageStar(ctx context.Context, arg DeleteStorageStarParams) error
 	DeleteStorageTrashByUUID(ctx context.Context, argUuid uuid.UUID) error
@@ -146,6 +155,8 @@ type Querier interface {
 	GetInvitationByUUID(ctx context.Context, arg GetInvitationByUUIDParams) (OrganizationInvitation, error)
 	GetInvitationPreviewByTokenHash(ctx context.Context, tokenHash string) (GetInvitationPreviewByTokenHashRow, error)
 	GetLogPurgeRuleByUUID(ctx context.Context, argUuid uuid.UUID) (LogPurgeRule, error)
+	// A member account of the organization (staff link target).
+	GetMemberUserByUUID(ctx context.Context, arg GetMemberUserByUUIDParams) (GetMemberUserByUUIDRow, error)
 	GetNotificationByID(ctx context.Context, id int64) (Notification, error)
 	GetNotificationByUUID(ctx context.Context, argUuid uuid.UUID) (Notification, error)
 	GetNotificationPreferences(ctx context.Context, userID int64) (NotificationPreference, error)
@@ -167,6 +178,10 @@ type Querier interface {
 	GetRunnerJob(ctx context.Context, arg GetRunnerJobParams) (GetRunnerJobRow, error)
 	GetRunnerJobByUUID(ctx context.Context, arg GetRunnerJobByUUIDParams) (GetRunnerJobByUUIDRow, error)
 	GetServicePoint(ctx context.Context, arg GetServicePointParams) (ServicePoint, error)
+	// The linked account counts only while the user is a member.
+	GetStaff(ctx context.Context, arg GetStaffParams) (GetStaffRow, error)
+	GetStaffSearchDocument(ctx context.Context, arg GetStaffSearchDocumentParams) (GetStaffSearchDocumentRow, error)
+	GetStaffTimeOff(ctx context.Context, arg GetStaffTimeOffParams) (StaffTimeOff, error)
 	GetStepupSettings(ctx context.Context) (StepupSetting, error)
 	GetStorageLinkBySlug(ctx context.Context, slug pgtype.Text) (StorageLink, error)
 	GetStorageLinkByTokenHash(ctx context.Context, tokenHash pgtype.Text) (StorageLink, error)
@@ -248,6 +263,8 @@ type Querier interface {
 	// status: 'pending' (open, not expired), 'expired' (open, past expires_at),
 	// 'accepted', 'revoked'.
 	ListInvitations(ctx context.Context, arg ListInvitationsParams) ([]ListInvitationsRow, error)
+	// Members without a staff record yet.
+	ListLinkableMembers(ctx context.Context, organizationID int64) ([]ListLinkableMembersRow, error)
 	ListLiveOrganizationIDs(ctx context.Context) ([]int64, error)
 	ListLogPurgeRules(ctx context.Context) ([]LogPurgeRule, error)
 	ListMemberBranchIDs(ctx context.Context, arg ListMemberBranchIDsParams) ([]int64, error)
@@ -291,6 +308,18 @@ type Querier interface {
 	ListRolesForUserIDs(ctx context.Context, userIds []int64) ([]ListRolesForUserIDsRow, error)
 	ListServicePointsByBranch(ctx context.Context, arg ListServicePointsByBranchParams) ([]ServicePoint, error)
 	ListSharedKeys(ctx context.Context, keys []string) ([]string, error)
+	// The linked account counts only while the user is a member.
+	ListStaff(ctx context.Context, arg ListStaffParams) ([]ListStaffRow, error)
+	// Branch assignments of one person with the shifts and the branch hours.
+	ListStaffAssignments(ctx context.Context, arg ListStaffAssignmentsParams) ([]ListStaffAssignmentsRow, error)
+	// Branches with their staff count, inside the caller's branch scope.
+	ListStaffBranchFacets(ctx context.Context, arg ListStaffBranchFacetsParams) ([]ListStaffBranchFacetsRow, error)
+	// The linked account counts only while the user is a member.
+	ListStaffForExport(ctx context.Context, arg ListStaffForExportParams) ([]ListStaffForExportRow, error)
+	ListStaffSearchDocuments(ctx context.Context, organizationID int64) ([]ListStaffSearchDocumentsRow, error)
+	ListStaffTimeOff(ctx context.Context, arg ListStaffTimeOffParams) ([]StaffTimeOff, error)
+	// The linked account counts only while the user is a member.
+	ListStaffUUIDs(ctx context.Context, arg ListStaffUUIDsParams) ([]uuid.UUID, error)
 	ListStorageActivity(ctx context.Context, arg ListStorageActivityParams) ([]ListStorageActivityRow, error)
 	ListStorageLinksByKey(ctx context.Context, objectKey string) ([]StorageLink, error)
 	ListStorageSharesByKey(ctx context.Context, objectKey string) ([]ListStorageSharesByKeyRow, error)
@@ -321,6 +350,8 @@ type Querier interface {
 	// Claims a job for one provider call (one worker at a time; an expired
 	// claim of a crashed worker is free again).
 	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
+	// Serializes the shift edits of one person (A04 overlap check).
+	LockStaff(ctx context.Context, arg LockStaffParams) (int64, error)
 	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) (int64, error)
 	MarkBulkJobCompleted(ctx context.Context, arg MarkBulkJobCompletedParams) (BulkJob, error)
 	MarkBulkJobFailed(ctx context.Context, arg MarkBulkJobFailedParams) (BulkJob, error)
@@ -349,6 +380,7 @@ type Querier interface {
 	MarkUserPasswordUnset(ctx context.Context, id int64) error
 	PingDB(ctx context.Context) (int32, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
+	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
@@ -376,10 +408,13 @@ type Querier interface {
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
 	SetRolePermissions(ctx context.Context, roleID int64) error
+	SetStaffActive(ctx context.Context, arg SetStaffActiveParams) error
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
+	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
+	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
 	// Distinct resources and actions (with counts) in the caller's scope, for
 	// the faceted filters.
 	TenantActivityFacets(ctx context.Context, arg TenantActivityFacetsParams) ([]TenantActivityFacetsRow, error)
@@ -404,6 +439,9 @@ type Querier interface {
 	UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOrganizationMemberRoleParams) (OrganizationMember, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)
+	UpdateStaff(ctx context.Context, arg UpdateStaffParams) (Staff, error)
+	UpdateStaffShifts(ctx context.Context, arg UpdateStaffShiftsParams) (int64, error)
+	UpdateStaffTimeOff(ctx context.Context, arg UpdateStaffTimeOffParams) (StaffTimeOff, error)
 	UpdateStepupSettings(ctx context.Context, arg UpdateStepupSettingsParams) (StepupSetting, error)
 	UpdateTenantRole(ctx context.Context, arg UpdateTenantRoleParams) (int64, error)
 	UpdateUserLastLogin(ctx context.Context, id int64) error

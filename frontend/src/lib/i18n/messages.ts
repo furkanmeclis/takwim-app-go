@@ -4,6 +4,7 @@ import enAccess from "@/locales/en/access.json";
 import enActivity from "@/locales/en/activity.json";
 import enAuth from "@/locales/en/auth.json";
 import enBranches from "@/locales/en/branches.json";
+import enStaff from "@/locales/en/staff.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
 import enChart from "@/locales/en/chart.json";
@@ -40,6 +41,7 @@ import trAccess from "@/locales/tr/access.json";
 import trActivity from "@/locales/tr/activity.json";
 import trAuth from "@/locales/tr/auth.json";
 import trBranches from "@/locales/tr/branches.json";
+import trStaff from "@/locales/tr/staff.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
 import trChart from "@/locales/tr/chart.json";
@@ -110,6 +112,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     entitlements: trEntitlements,
     tenant: trTenant,
     branches: trBranches,
+    staff: trStaff,
     tenant_members: trTenantMembers,
     tenant_roles: trTenantRoles,
     tenant_settings: trTenantSettings,
@@ -148,6 +151,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     entitlements: enEntitlements,
     tenant: enTenant,
     branches: enBranches,
+    staff: enStaff,
     tenant_members: enTenantMembers,
     tenant_roles: enTenantRoles,
     tenant_settings: enTenantSettings,

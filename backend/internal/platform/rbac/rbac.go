@@ -72,6 +72,14 @@ const (
 	// PermTenantActivityRead opens the activity history (TEC-893), limited
 	// to the member's branch scope.
 	PermTenantActivityRead = "tenant.activity.read"
+	// Staff (TEC-890): profiles and branch assignments. Shifts and time
+	// off are schedule data (PermTenantSchedulesWrite).
+	PermTenantStaffRead           = "tenant.staff.read"
+	PermTenantStaffWrite          = "tenant.staff.write"
+	PermTenantStaffExport         = "tenant.staff.export"
+	PermTenantStaffImport         = "tenant.staff.import"
+	PermTenantStaffBulkActivate   = "tenant.staff.bulk.activate"
+	PermTenantStaffBulkDeactivate = "tenant.staff.bulk.deactivate"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

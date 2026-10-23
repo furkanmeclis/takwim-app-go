@@ -2327,7 +2327,7 @@ export interface paths {
          *     before / after of each changed field in `payload.changes`. A member
          *     limited to some branches (or with `X-Branch` set) only sees events of
          *     those branches; business-wide events are hidden from them. `q`
-         *     searches the action, resource, actor and branch name.
+         *     searches the action, the actor and the branch name.
          */
         get: operations["getTenantActivity"];
         put?: never;
@@ -3309,6 +3309,294 @@ export interface paths {
          * @description A point of another branch answers `404`. `working_hours = null` follows the branch hours.
          */
         patch: operations["patchTenantBranchServicePoint"];
+        trace?: never;
+    };
+    "/v1/tenant/staff/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff list metadata
+         * @description Table contract of `GET /v1/tenant/staff` (`tenant.staff.read`, `staff` module).
+         */
+        get: operations["getTenantStaffMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff faceted filter options
+         * @description Branches (with staff counts) for the faceted `branch` filter, inside the caller's branch scope.
+         */
+        get: operations["getTenantStaffFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/linkable-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Members that can be linked to a staff record
+         * @description `tenant.staff.write`. Members of the business without a staff record.
+         */
+        get: operations["getTenantStaffLinkableMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List staff of the organization
+         * @description Staff of the `X-Organization` organization (`tenant.staff.read`).
+         *     `q` searches name, title, phone, email and the linked account. A member
+         *     with `branch_scope` = `selected` only sees staff assigned to one of its
+         *     branches; anyone else answers `404`.
+         */
+        get: operations["getTenantStaff"];
+        put?: never;
+        /**
+         * Create a staff member
+         * @description `tenant.staff.write`. A member limited to some branches must give at
+         *     least one of its branches. Staff without an account take a plan seat
+         *     (`409 LIMIT_REACHED` when the plan is full); an account already linked
+         *     to another staff record answers `409`.
+         */
+        post: operations["postTenantStaff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export staff
+         * @description Queues an export of the organization's staff (`tenant.staff.export`).
+         *     `query` honours `q`, `branch`, `is_active`, `show_online` and
+         *     `has_account`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantStaffExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a staff import file
+         * @description Creates an import job (`tenant.staff.import`). A row with a known
+         *     `uuid` updates that person, any other row creates one; branches are
+         *     given as `branch_codes`. Continue with
+         *     `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+         */
+        post: operations["postTenantStaffImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a staff import sample */
+        get: operations["getTenantStaffImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on staff
+         * @description Actions `activate` (`tenant.staff.bulk.activate`) and `deactivate`
+         *     (`tenant.staff.bulk.deactivate`), both reversible. Targets are resolved
+         *     inside the organization and the caller's branch scope only.
+         */
+        post: operations["postTenantStaffBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a staff member
+         * @description With `assignments` (shifts per branch). A uuid of another organization, or of staff outside the caller's branch scope, answers `404`.
+         */
+        get: operations["getTenantStaffMember"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a staff member (soft)
+         * @description `tenant.staff.write`. A branch-limited caller gets `403` when the person also works in a branch outside its scope.
+         */
+        delete: operations["deleteTenantStaffMember"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a staff member
+         * @description `tenant.staff.write`. Omitted fields are unchanged; `account_uuid: null`
+         *     unlinks the account (a seat is then needed). `branch_uuids` replaces the
+         *     branches the caller may manage; assignments outside its scope are kept.
+         */
+        patch: operations["patchTenantStaffMember"];
+        trace?: never;
+    };
+    "/v1/tenant/staff/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity of a staff member */
+        get: operations["getTenantStaffActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/{uuid}/branches/{branchUuid}/shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the weekly shifts of a person in a branch
+         * @description `tenant.staff.read` + `tenant.schedules.write`. Times are `HH:MM`
+         *     wall-clock of the branch (`24:00` allowed as an end). Shifts of a day
+         *     must not overlap (`overlap`), breaks must sit inside their shift
+         *     (`outside`) and the same hours in another branch of the person answer
+         *     `branch_overlap`. A branch the person is not assigned to (or outside the
+         *     caller's scope) answers `404`. Returns the person with assignments.
+         */
+        put: operations["putTenantStaffShifts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/{uuid}/time-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Time off of a staff member
+         * @description Newest first. `from` / `to` keep the entries overlapping that range.
+         */
+        get: operations["getTenantStaffTimeOff"];
+        put?: never;
+        /**
+         * Add a time off
+         * @description `tenant.staff.read` + `tenant.schedules.write`. The person is unavailable in every branch for the period (at most 366 days).
+         */
+        post: operations["postTenantStaffTimeOff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff/{uuid}/time-off/{timeOffUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a time off */
+        delete: operations["deleteTenantStaffTimeOff"];
+        options?: never;
+        head?: never;
+        /** Update a time off */
+        patch: operations["patchTenantStaffTimeOff"];
         trace?: never;
     };
     "/v1/tenant/notifications": {
@@ -4827,6 +5115,208 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["TenantActivityFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        StaffBreak: {
+            /** @example 12:30 */
+            start: string;
+            /** @example 13:00 */
+            end: string;
+        };
+        StaffShift: {
+            /** @example 09:00 */
+            start: string;
+            /**
+             * @description `HH:MM`; `24:00` allowed
+             * @example 18:00
+             */
+            end: string;
+            breaks: components["schemas"]["StaffBreak"][];
+        };
+        /** @description Shifts per weekday (at most 6 a day); an empty day is a day off in that branch. */
+        StaffWeeklyShifts: {
+            mon: components["schemas"]["StaffShift"][];
+            tue: components["schemas"]["StaffShift"][];
+            wed: components["schemas"]["StaffShift"][];
+            thu: components["schemas"]["StaffShift"][];
+            fri: components["schemas"]["StaffShift"][];
+            sat: components["schemas"]["StaffShift"][];
+            sun: components["schemas"]["StaffShift"][];
+        };
+        StaffAccount: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            surname: string;
+            email: string;
+        };
+        StaffBranchRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        StaffAssignment: {
+            /** Format: uuid */
+            branch_uuid: string;
+            branch_name: string;
+            branch_code: string;
+            branch_hours: components["schemas"]["WeeklyHours"];
+            shifts: components["schemas"]["StaffWeeklyShifts"];
+            /** @description False for branches outside the caller's branch scope */
+            editable: boolean;
+        };
+        Staff: {
+            /** Format: uuid */
+            uuid: string;
+            /** @example Ayşe Yılmaz */
+            name: string;
+            /** @example Kuaför */
+            title: string;
+            bio: string;
+            phone: string;
+            email: string;
+            /**
+             * @description Calendar color `#RRGGBB`
+             * @example #2563EB
+             */
+            color: string;
+            /** @description Bookable on the customer booking screens */
+            show_online: boolean;
+            is_active: boolean;
+            account: components["schemas"]["StaffAccount"] | null;
+            branches: components["schemas"]["StaffBranchRef"][];
+            /** @description Branches with their shifts (detail response only) */
+            assignments?: components["schemas"]["StaffAssignment"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        StaffCreateRequest: {
+            name: string;
+            title?: string;
+            bio?: string;
+            phone?: string;
+            email?: string;
+            /** @example #2563EB */
+            color?: string;
+            show_online?: boolean;
+            is_active?: boolean;
+            /**
+             * Format: uuid
+             * @description Member user to link
+             */
+            account_uuid?: string | null;
+            branch_uuids?: string[];
+        };
+        StaffPatchRequest: {
+            name?: string;
+            title?: string;
+            bio?: string;
+            phone?: string;
+            email?: string;
+            color?: string;
+            show_online?: boolean;
+            is_active?: boolean;
+            /**
+             * Format: uuid
+             * @description `null` unlinks the account
+             */
+            account_uuid?: string | null;
+            branch_uuids?: string[];
+        };
+        StaffPage: {
+            items: components["schemas"]["Staff"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        StaffBranchFacet: {
+            /** Format: uuid */
+            value: string;
+            label: string;
+            /** Format: int64 */
+            count: number;
+        };
+        StaffFacets: {
+            branch: components["schemas"]["StaffBranchFacet"][];
+        };
+        StaffLinkableMembers: {
+            items: components["schemas"]["StaffAccount"][];
+        };
+        StaffTimeOff: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "leave" | "sick" | "training" | "other";
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            note: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        StaffTimeOffCreateRequest: {
+            /** @enum {string} */
+            kind: "leave" | "sick" | "training" | "other";
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            note?: string;
+        };
+        StaffTimeOffPatchRequest: {
+            /** @enum {string} */
+            kind?: "leave" | "sick" | "training" | "other";
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+            note?: string;
+        };
+        StaffTimeOffPage: {
+            items: components["schemas"]["StaffTimeOff"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeStaff: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Staff"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffLinkableMembers: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffLinkableMembers"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffTimeOff: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffTimeOff"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffTimeOffPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffTimeOffPage"];
             meta: components["schemas"]["ResponseMeta"];
         };
         OrganizationCompanySettings: {
@@ -12102,6 +12592,662 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeServicePoint"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantStaffMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantStaffLinkableMembers: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffLinkableMembers"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaff: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `title`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default `-created_at`. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat (see `/v1/tenant/staff/facets`) */
+                branch?: string;
+                is_active?: boolean;
+                show_online?: boolean;
+                has_account?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Staff page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantStaff: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created staff member */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaff"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantStaffExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantStaffImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantStaffBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Staff member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaff"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantStaffMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantStaffMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated staff member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaff"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantStaffActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTenantStaffShifts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                branchUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffWeeklyShifts"];
+            };
+        };
+        responses: {
+            /** @description Staff member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaff"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantStaffTimeOff: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                from?: string;
+                to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Time off page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffTimeOffPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantStaffTimeOff: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffTimeOffCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created time off */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffTimeOff"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantStaffTimeOff: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                timeOffUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantStaffTimeOff: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                timeOffUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffTimeOffPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated time off */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffTimeOff"];
                 };
             };
             400: components["responses"]["BadRequest"];

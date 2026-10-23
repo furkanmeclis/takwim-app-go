@@ -53,7 +53,12 @@ SELECT
       WHERE om.organization_id = $1)
      + (SELECT COUNT(*) FROM organization_invitations oi
         WHERE oi.organization_id = $1
-          AND oi.revoked_at IS NULL AND oi.accepted_at IS NULL AND oi.expires_at > NOW()))::bigint AS staff
+          AND oi.revoked_at IS NULL AND oi.accepted_at IS NULL AND oi.expires_at > NOW())
+     + (SELECT COUNT(*) FROM staff s
+        WHERE s.organization_id = $1 AND s.deleted_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM organization_members sm
+            WHERE sm.organization_id = s.organization_id AND sm.user_id = s.user_id)))::bigint AS staff
 `
 
 type CountEntitlementUsageRow struct {
@@ -61,8 +66,9 @@ type CountEntitlementUsageRow struct {
 	Staff    int64 `json:"staff"`
 }
 
-// Live branches and staff seats (members plus open invitations) of a
-// business.
+// Live branches and staff seats of a business: members, open invitations
+// and staff without an account (a staff record linked to a member uses the
+// member's seat).
 func (q *Queries) CountEntitlementUsage(ctx context.Context, organizationID int64) (CountEntitlementUsageRow, error) {
 	row := q.db.QueryRow(ctx, countEntitlementUsage, organizationID)
 	var i CountEntitlementUsageRow

@@ -104,6 +104,7 @@ export type IoResource =
   | "platform.notifications"
   | "platform.activity"
   | "tenant.branches"
+  | "tenant.staff"
   | "platform.organizations";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
@@ -113,6 +114,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "platform.activity": "/v1/platform/activity/export",
   "platform.organizations": "/v1/platform/organizations/export",
   "tenant.branches": "/v1/tenant/branches/export",
+  "tenant.staff": "/v1/tenant/staff/export",
 };
 
 export const IMPORT_PATHS: Partial<
@@ -129,6 +131,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.branches": {
     upload: "/v1/tenant/branches/import",
     sample: "/v1/tenant/branches/import/sample",
+  },
+  "tenant.staff": {
+    upload: "/v1/tenant/staff/import",
+    sample: "/v1/tenant/staff/import/sample",
   },
 };
 
@@ -161,5 +167,16 @@ export const IMPORT_SCHEMA: Partial<
     { key: "longitude", labelKey: "branches.fields.longitude" },
     { key: "prep_minutes", labelKey: "branches.fields.prep_minutes" },
     { key: "is_active", labelKey: "branches.fields.is_active" },
+  ],
+  "tenant.staff": [
+    { key: "name", labelKey: "staff.fields.name", required: true },
+    { key: "title", labelKey: "staff.fields.title" },
+    { key: "phone", labelKey: "staff.fields.phone" },
+    { key: "email", labelKey: "staff.fields.email" },
+    { key: "branch_codes", labelKey: "staff.fields.branch_codes" },
+    { key: "color", labelKey: "staff.fields.color" },
+    { key: "show_online", labelKey: "staff.fields.show_online" },
+    { key: "is_active", labelKey: "staff.fields.is_active" },
+    { key: "uuid", labelKey: "staff.columns.uuid" },
   ],
 };
