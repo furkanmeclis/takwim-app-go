@@ -83,6 +83,7 @@ type Branch struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+	Timezone          pgtype.Text        `json:"timezone"`
 }
 
 type BulkChange struct {
@@ -302,6 +303,8 @@ type Organization struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+	Timezone       string             `json:"timezone"`
+	Currency       string             `json:"currency"`
 }
 
 type OrganizationInvitation struct {

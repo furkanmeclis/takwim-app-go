@@ -171,6 +171,8 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 		Name     *string          `json:"name"`
 		Slug     *string          `json:"slug"`
 		Settings *json.RawMessage `json:"settings"`
+		Timezone *string          `json:"timezone"`
+		Currency *string          `json:"currency"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
@@ -180,7 +182,7 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 		settings = []byte(*in.Settings)
 	}
 	org, err := h.svc.PatchOrganization(r.Context(), id, orgmodel.PatchOrganizationInput{
-		Name: in.Name, Slug: in.Slug, Settings: settings,
+		Name: in.Name, Slug: in.Slug, Settings: settings, Timezone: in.Timezone, Currency: in.Currency,
 	})
 	if err != nil {
 		writeError(w, r, err)

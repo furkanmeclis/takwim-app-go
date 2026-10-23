@@ -7,12 +7,13 @@ import { z } from "zod";
 
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
 import { EntitySectionCard } from "@/components/entity";
-import { AppForm, AppInput } from "@/components/forms";
+import { AppCombobox, AppForm, AppInput, AppSelect } from "@/components/forms";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { permissions } from "@/config/permissions";
+import { CURRENCIES, timeZones } from "@/config/regional";
 import type { components } from "@/generated/api";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantKeys } from "@/features/tenant/services/tenant.service";
@@ -32,22 +33,33 @@ const MAX_BYTES = 2 * 1024 * 1024;
 
 const profileKey = (slug: string) => ["tenant", slug, "organization"] as const;
 
-function createNameSchema(t: (key: string) => string) {
+function createProfileSchema(t: (key: string) => string) {
   return z.object({
     name: z
       .string()
       .trim()
       .min(1, t("tenant_settings.profile.validation.name_required"))
       .max(255, t("tenant_settings.profile.validation.name_too_long")),
+    timezone: z
+      .string()
+      .min(1, t("tenant_settings.profile.validation.timezone_required")),
+    currency: z
+      .string()
+      .regex(
+        /^[A-Z]{3}$/,
+        t("tenant_settings.profile.validation.currency_required"),
+      ),
   });
 }
 
-type NameValues = z.infer<ReturnType<typeof createNameSchema>>;
+type ProfileValues = z.infer<ReturnType<typeof createProfileSchema>>;
 
 /**
- * Organization profile (TEC-671): display name and logo. Company / billing
- * details stay in the settings document below. The logo is uploaded through
- * the API and shown from the API-owned `logo_url` only.
+ * Organization profile: display name, logo, time zone and currency. Company
+ * / billing details stay in the settings document below. The logo is
+ * uploaded through the API and shown from the API-owned `logo_url` only.
+ * Times are stored in UTC and shown in the business time zone; every amount
+ * of the business is in its currency.
  */
 export function OrganizationProfileCard() {
   const { t } = useLocale();
@@ -58,7 +70,19 @@ export function OrganizationProfileCard() {
   const canWrite = can(permissions.tenant.settings.write);
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const schema = useMemo(() => createNameSchema(t), [t]);
+  const schema = useMemo(() => createProfileSchema(t), [t]);
+  const zoneOptions = useMemo(
+    () => timeZones().map((zone) => ({ value: zone, label: zone })),
+    [],
+  );
+  const currencyOptions = useMemo(
+    () =>
+      CURRENCIES.map((code) => ({
+        value: code,
+        label: t(`tenant_settings.profile.currencies.${code}`),
+      })),
+    [t],
+  );
 
   const query = useQuery({
     queryKey: profileKey(slug),
@@ -72,13 +96,17 @@ export function OrganizationProfileCard() {
     void hydrateProfile();
   };
 
-  const rename = useMutation({
-    mutationFn: (values: NameValues) =>
+  const save = useMutation({
+    mutationFn: (values: ProfileValues) =>
       tenantRequest<OrganizationProfile>(slug, "PATCH", PATH, {
-        body: { name: values.name.trim() },
+        body: {
+          name: values.name.trim(),
+          timezone: values.timezone,
+          currency: values.currency,
+        },
       }),
     onSuccess: (profile) => {
-      appToast.success(t("tenant_settings.profile.toast.renamed"));
+      appToast.success(t("tenant_settings.profile.toast.saved"));
       refresh(profile);
     },
   });
@@ -182,13 +210,17 @@ export function OrganizationProfileCard() {
             ) : null}
           </div>
 
-          <AppForm<NameValues>
+          <AppForm<ProfileValues>
             key={profile.updated_at}
-            className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end"
+            className="grid flex-1 gap-3 sm:grid-cols-2"
             schema={schema}
-            defaultValues={{ name: profile.name }}
+            defaultValues={{
+              name: profile.name,
+              timezone: profile.timezone,
+              currency: profile.currency,
+            }}
             onSubmit={async (values) => {
-              await rename.mutateAsync(values);
+              await save.mutateAsync(values);
             }}
           >
             <AppInput
@@ -198,16 +230,29 @@ export function OrganizationProfileCard() {
                 slug: profile.slug,
               })}
               disabled={!canWrite}
-              className="flex-1"
+              className="sm:col-span-2"
+            />
+            <AppCombobox
+              name="timezone"
+              label={t("tenant_settings.profile.timezone")}
+              description={t("tenant_settings.profile.timezone_hint")}
+              options={zoneOptions}
+              searchPlaceholder={t("tenant_settings.profile.timezone_search")}
+              disabled={!canWrite}
+            />
+            <AppSelect
+              name="currency"
+              label={t("tenant_settings.profile.currency")}
+              description={t("tenant_settings.profile.currency_hint")}
+              options={currencyOptions}
+              disabled={!canWrite}
             />
             {canWrite ? (
-              <Button
-                type="submit"
-                disabled={rename.isPending}
-                className="sm:mb-6"
-              >
-                {t("tenant_settings.profile.save")}
-              </Button>
+              <div className="sm:col-span-2">
+                <Button type="submit" disabled={save.isPending}>
+                  {t("tenant_settings.profile.save")}
+                </Button>
+              </div>
             ) : null}
           </AppForm>
         </div>

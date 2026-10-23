@@ -30,7 +30,9 @@ UPDATE organizations
 SET name = COALESCE(sqlc.narg(name), name),
     slug = COALESCE(sqlc.narg(slug), slug),
     logo_object_key = COALESCE(sqlc.narg(logo_object_key), logo_object_key),
-    settings = COALESCE(sqlc.narg(settings), settings)
+    settings = COALESCE(sqlc.narg(settings), settings),
+    timezone = COALESCE(sqlc.narg(timezone), timezone),
+    currency = COALESCE(sqlc.narg(currency), currency)
 WHERE uuid = sqlc.arg(uuid) AND deleted_at IS NULL
 RETURNING *;
 

@@ -2408,7 +2408,7 @@ export interface paths {
         };
         /**
          * Organization profile
-         * @description Name and logo of the organization (`tenant.settings.read`). Company / billing details live in `/v1/tenant/settings`.
+         * @description Name, logo, time zone and currency of the organization (`tenant.settings.read`). Company / billing details live in `/v1/tenant/settings`.
          */
         get: operations["getTenantOrganizationProfile"];
         put?: never;
@@ -2417,8 +2417,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename the organization
-         * @description `tenant.settings.write`. Only the name; slug, status and access window are platform-managed.
+         * Update the organization profile
+         * @description `tenant.settings.write`. Name, time zone and currency; slug, status and access window are platform-managed.
          */
         patch: operations["patchTenantOrganizationProfile"];
         trace?: never;
@@ -3397,6 +3397,16 @@ export interface components {
             logo_url: string | null;
             /** @enum {string} */
             status: "active" | "suspended";
+            /**
+             * @description IANA zone for calendar decisions; instants stay UTC
+             * @example Europe/Istanbul
+             */
+            timezone: string;
+            /**
+             * @description ISO 4217 code of every amount of the organization
+             * @example TRY
+             */
+            currency: string;
             /** Format: date-time */
             access_starts_at: string;
             /** Format: date-time */
@@ -3411,7 +3421,14 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         OrganizationProfilePatchRequest: {
-            name: string;
+            name?: string;
+            /**
+             * @description IANA zone name
+             * @example Europe/Istanbul
+             */
+            timezone?: string;
+            /** @example TRY */
+            currency?: string;
         };
         DayHours: {
             closed: boolean;
@@ -4369,6 +4386,16 @@ export interface components {
             logo_url?: string | null;
             /** @enum {string} */
             status: "active" | "suspended";
+            /**
+             * @description IANA zone for calendar decisions; instants stay UTC
+             * @example Europe/Istanbul
+             */
+            timezone: string;
+            /**
+             * @description ISO 4217 code of every amount of the organization
+             * @example TRY
+             */
+            currency: string;
             /** Format: date-time */
             access_starts_at: string;
             /** Format: date-time */
@@ -4399,6 +4426,13 @@ export interface components {
         PatchOrganizationRequest: {
             name?: string;
             slug?: string;
+            /**
+             * @description IANA zone name
+             * @example Europe/Istanbul
+             */
+            timezone?: string;
+            /** @example TRY */
+            currency?: string;
             settings?: {
                 [key: string]: unknown;
             };
