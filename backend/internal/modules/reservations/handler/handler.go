@@ -90,6 +90,25 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, out)
 }
 
+// Agenda serves GET /v1/tenant/reservations/agenda (TEC-902): the signed-in
+// member's own programme for ?from=&to= local dates (at most a week),
+// include_cancelled=true. Any member who may see reservations gets its own
+// staff record, whatever its reach.
+func (h *Handler) Agenda(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	values := r.URL.Query()
+	f := model.AgendaFilter{
+		From: values.Get("from"), To: values.Get("to"),
+		IncludeCancelled: values.Get("include_cancelled") == "true",
+	}
+	out, err := h.svc.Agenda(r.Context(), scope.ID, authctx.MustPrincipal(r.Context()).UserInternal, f)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // Meta serves GET /v1/tenant/reservations/meta.
 func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, Meta())
@@ -469,6 +488,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		conflict(w, r, "expected_version", "stale", err)
 	case errors.Is(err, usecase.ErrInvalidTransition):
 		conflict(w, r, "status", "invalid_transition", err)
+	case errors.Is(err, usecase.ErrOtherStaff):
+		conflict(w, r, "lines", "other_staff", err)
 	case errors.Is(err, availabilityusecase.ErrHoldExpired):
 		conflict(w, r, "status", "expired", err)
 	default:

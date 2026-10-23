@@ -169,6 +169,8 @@ type Querier interface {
 	// The organization's active account of a kind (payments go to it).
 	GetActiveIntegrationAccount(ctx context.Context, arg GetActiveIntegrationAccountParams) (GetActiveIntegrationAccountRow, error)
 	GetActiveOTPByEmailType(ctx context.Context, arg GetActiveOTPByEmailTypeParams) (OtpCode, error)
+	// The staff record of a member (TEC-902 agenda).
+	GetAgendaStaff(ctx context.Context, arg GetAgendaStaffParams) (GetAgendaStaffRow, error)
 	GetAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (AppLog, error)
 	GetAppSettings(ctx context.Context) (AppSetting, error)
 	GetAuthSettings(ctx context.Context) (GetAuthSettingsRow, error)
@@ -315,6 +317,12 @@ type Querier interface {
 	// Platform audit feed: platform events only. Organization events are read
 	// per resource through ListOrganizationResourceActivity.
 	ListActivityEvents(ctx context.Context, arg ListActivityEventsParams) ([]ActivityEvent, error)
+	// Lines a person serves overlapping [since, until), in the caller's branch
+	// scope, with their visit.
+	ListAgendaLines(ctx context.Context, arg ListAgendaLinesParams) ([]ListAgendaLinesRow, error)
+	// The branches a person works in (inside the caller's branch scope), with
+	// the person's shifts and the branch hours.
+	ListAgendaShifts(ctx context.Context, arg ListAgendaShiftsParams) ([]ListAgendaShiftsRow, error)
 	ListAllBulkJobs(ctx context.Context, arg ListAllBulkJobsParams) ([]BulkJob, error)
 	ListAllExportJobs(ctx context.Context, arg ListAllExportJobsParams) ([]ExportJob, error)
 	ListAllImportJobs(ctx context.Context, arg ListAllImportJobsParams) ([]ImportJob, error)

@@ -105,8 +105,12 @@ type BusySource interface {
 // Caller narrows a search to the caller's own calendar: OwnUserID > 0 means
 // the member holds only tenant.reservations.own, so every line that takes a
 // staff member is planned with the member's own staff record.
+// KeepOthers lets lines pinned to another person through (moving a visit
+// shared with colleagues: their lines keep their person and are checked
+// again like every other line).
 type Caller struct {
-	OwnUserID int64
+	OwnUserID  int64
+	KeepOthers bool
 }
 
 // Service answers availability questions.
@@ -388,7 +392,7 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		}
 		ownStaffID = own.ID
 		for _, l := range in.Lines {
-			if l.StaffUUID != nil && *l.StaffUUID != own.Uuid {
+			if l.StaffUUID != nil && *l.StaffUUID != own.Uuid && !caller.KeepOthers {
 				return nil, ErrForbidden
 			}
 		}
@@ -447,7 +451,7 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 				if pinned && row.Uuid != *l.StaffUUID {
 					continue
 				}
-				if ownStaffID > 0 && row.ID != ownStaffID {
+				if ownStaffID > 0 && row.ID != ownStaffID && !pinned {
 					continue
 				}
 				matched = true

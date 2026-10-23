@@ -37,6 +37,17 @@ export type CalendarParams = {
   include_cancelled?: "true";
 };
 
+export type ReservationAgenda = Schemas["TenantReservationAgenda"];
+export type AgendaItem = Schemas["TenantReservationAgendaItem"];
+export type AgendaWork = Schemas["TenantReservationAgendaWork"];
+
+/** Query of `GET /v1/tenant/reservations/agenda`. */
+export type AgendaParams = {
+  from: string;
+  to: string;
+  include_cancelled?: "true";
+};
+
 export type AvailabilitySearchRequest =
   Schemas["TenantAvailabilitySearchRequest"];
 export type Availability = Schemas["TenantAvailability"];

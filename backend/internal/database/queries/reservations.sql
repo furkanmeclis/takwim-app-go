@@ -285,3 +285,40 @@ WHERE l.organization_id = sqlc.arg(organization_id)
   AND (sqlc.arg(include_cancelled)::boolean OR r.status NOT IN ('cancelled', 'rejected'))
   AND (sqlc.narg(own_user_id)::bigint IS NULL OR r.created_by = sqlc.narg(own_user_id) OR l.staff_id = sqlc.narg(own_staff_id))
 ORDER BY l.starts_at, r.number, l.line_index;
+
+-- name: GetAgendaStaff :one
+-- The staff record of a member (TEC-902 agenda).
+SELECT id, uuid, name, color FROM staff
+WHERE organization_id = sqlc.arg(organization_id) AND user_id = sqlc.arg(user_id) AND deleted_at IS NULL;
+
+-- name: ListAgendaShifts :many
+-- The branches a person works in (inside the caller's branch scope), with
+-- the person's shifts and the branch hours.
+SELECT b.id, b.uuid, b.name, b.working_hours, b.holiday_exceptions,
+       COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone, sb.shifts
+FROM staff_branches sb
+JOIN branches b ON b.organization_id = sb.organization_id AND b.id = sb.branch_id
+JOIN organizations o ON o.id = b.organization_id
+WHERE sb.organization_id = sqlc.arg(organization_id) AND sb.staff_id = sqlc.arg(staff_id)
+  AND b.deleted_at IS NULL AND b.is_active
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR b.id = ANY(sqlc.narg(branch_ids)::bigint[]))
+ORDER BY b.name, b.id;
+
+-- name: ListAgendaLines :many
+-- Lines a person serves overlapping [since, until), in the caller's branch
+-- scope, with their visit.
+SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.ends_at,
+       l.buffer_before_minutes, l.buffer_after_minutes,
+       r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
+       r.source, r.version, r.customer_note,
+       b.uuid AS branch_uuid, b.name AS branch_name,
+       c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE l.organization_id = sqlc.arg(organization_id) AND l.staff_id = sqlc.arg(staff_id)
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND l.starts_at < sqlc.arg(until) AND l.ends_at > sqlc.arg(since)
+  AND (sqlc.arg(include_cancelled)::boolean OR r.status NOT IN ('cancelled', 'rejected'))
+ORDER BY l.starts_at, r.number, l.line_index;

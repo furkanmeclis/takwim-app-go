@@ -66,6 +66,13 @@ func (s *Service) transition(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if in.ExpectedVersion != nil && *in.ExpectedVersion != int(row.Version) {
 			return ErrStaleVersion
 		}
+		// A status belongs to the whole visit: an own calendar member
+		// changes it only when it serves every staffed line.
+		if shared, err := s.sharedWithOthers(ctx, tx.Q, orgID, row, caller); err != nil {
+			return err
+		} else if shared {
+			return ErrOtherStaff
+		}
 		next := stateOf(row)
 		if err := step(tx, row, &next); err != nil {
 			return err

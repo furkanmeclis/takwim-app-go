@@ -4331,6 +4331,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My programme
+         * @description The signed-in member's own programme for local dates `from`..`to` (at
+         *     most 7 days): its staff record, its working periods in every branch of
+         *     its scope (shifts inside the opening hours), its leave and the visit
+         *     lines it serves, with the customer's phone and note. `staff` is null
+         *     and the lists are empty when the member has no staff record. Needs
+         *     `tenant.reservations.read` or `tenant.reservations.own`; either way the
+         *     answer is the member's own. Cancelled and rejected visits only with
+         *     `include_cancelled=true`.
+         */
+        get: operations["getTenantReservationsAgenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations": {
         parameters: {
             query?: never;
@@ -4409,7 +4436,10 @@ export interface paths {
          *     capacity is let go, in one transaction; when the new time is not
          *     free nothing changes (`409` `starts_at` / `taken`). Lines with the
          *     same service and staff member keep their booked price. The version
-         *     rises, so confirmation jobs of the old time no longer apply.
+         *     rises, so confirmation jobs of the old time no longer apply. A member
+         *     with only `tenant.reservations.own` changes its own lines; a
+         *     colleague's lines keep their service and person and move with the
+         *     visit (`409` `lines` / `other_staff` otherwise).
          */
         post: operations["postTenantReservationReschedule"];
         delete?: never;
@@ -4431,6 +4461,7 @@ export interface paths {
          * Accept a request
          * @description A pending request: paid on site it becomes an active booking; with online payment the hold now waits for the payment (payment hold time). Any other state is `409` detail `status` / `invalid_transition`;
          *     `expected_version` refuses a stale action (`expected_version` / `stale`).
+         *     A member with only `tenant.reservations.own` acts on a visit shared with colleagues only when it serves every staffed line (`409` `lines` / `other_staff`).
          */
         post: operations["postTenantReservationAccept"];
         delete?: never;
@@ -4452,6 +4483,7 @@ export interface paths {
          * Reject a request
          * @description A pending request is rejected and its capacity freed. Any other state is `409` detail `status` / `invalid_transition`;
          *     `expected_version` refuses a stale action (`expected_version` / `stale`).
+         *     A member with only `tenant.reservations.own` acts on a visit shared with colleagues only when it serves every staffed line (`409` `lines` / `other_staff`).
          */
         post: operations["postTenantReservationReject"];
         delete?: never;
@@ -4473,6 +4505,7 @@ export interface paths {
          * Cancel a reservation
          * @description A request or an active booking; the capacity is freed. `reason` (at most 32 characters) defaults to `cancelled`. A paid booking moves to `refund_pending`. Any other state is `409` detail `status` / `invalid_transition`;
          *     `expected_version` refuses a stale action (`expected_version` / `stale`).
+         *     A member with only `tenant.reservations.own` acts on a visit shared with colleagues only when it serves every staffed line (`409` `lines` / `other_staff`).
          */
         post: operations["postTenantReservationCancel"];
         delete?: never;
@@ -4494,6 +4527,7 @@ export interface paths {
          * Start serving
          * @description An active booking moves to `in_service`. Any other state is `409` detail `status` / `invalid_transition`;
          *     `expected_version` refuses a stale action (`expected_version` / `stale`).
+         *     A member with only `tenant.reservations.own` acts on a visit shared with colleagues only when it serves every staffed line (`409` `lines` / `other_staff`).
          */
         post: operations["postTenantReservationStart"];
         delete?: never;
@@ -4515,6 +4549,7 @@ export interface paths {
          * Complete a visit
          * @description An active or in-service booking is completed; its time stays booked. Any other state is `409` detail `status` / `invalid_transition`;
          *     `expected_version` refuses a stale action (`expected_version` / `stale`).
+         *     A member with only `tenant.reservations.own` acts on a visit shared with colleagues only when it serves every staffed line (`409` `lines` / `other_staff`).
          */
         post: operations["postTenantReservationComplete"];
         delete?: never;
@@ -4536,6 +4571,7 @@ export interface paths {
          * Record a no-show
          * @description An active booking becomes `no_show`; its time stays booked. Any other state is `409` detail `status` / `invalid_transition`;
          *     `expected_version` refuses a stale action (`expected_version` / `stale`).
+         *     A member with only `tenant.reservations.own` acts on a visit shared with colleagues only when it serves every staffed line (`409` `lines` / `other_staff`).
          */
         post: operations["postTenantReservationNoShow"];
         delete?: never;
@@ -8931,6 +8967,36 @@ export interface components {
             columns: components["schemas"]["TenantReservationCalendarColumn"][];
             items: components["schemas"]["TenantReservationCalendarItem"][];
         };
+        TenantReservationAgendaItem: components["schemas"]["TenantReservationCalendarItem"] & {
+            branch_name: string;
+            customer_phone: string | null;
+            customer_note: string;
+        };
+        TenantReservationAgendaWork: {
+            branch: components["schemas"]["TenantAvailabilityRef"];
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+        };
+        TenantReservationAgenda: {
+            staff: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                color: string;
+            } | null;
+            /** @example Europe/Istanbul */
+            timezone: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            work: components["schemas"]["TenantReservationAgendaWork"][];
+            /** @description Leave of the member. */
+            off: components["schemas"]["TenantReservationInterval"][];
+            items: components["schemas"]["TenantReservationAgendaItem"][];
+        };
         TenantReservation: {
             /** Format: uuid */
             uuid: string;
@@ -9018,6 +9084,12 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["TenantReservationCalendar"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantReservationAgenda: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantReservationAgenda"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeTenantReservationFacets: {
@@ -17415,6 +17487,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeTenantReservationCalendar"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantReservationsAgenda: {
+        parameters: {
+            query?: {
+                /** @description Default today in the business time zone. */
+                from?: string;
+                /** @description Inclusive; default `from`. */
+                to?: string;
+                include_cancelled?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Programme */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationAgenda"];
                 };
             };
             400: components["responses"]["BadRequest"];

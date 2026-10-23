@@ -198,5 +198,22 @@
   "bulk_report.reasons.not_found": "Bulunamadı",
   "bulk_report.empty_title": "Atlanan kayıt yok",
   "bulk_report.empty_description": "Seçilen tüm rezervasyonlar işlendi.",
-  "bulk_report.close": "Kapat"
+  "bulk_report.close": "Kapat",
+  "agenda.title": "Programım",
+  "agenda.description": "Bugün nerede, ne zaman çalıştığınız ve hizmet vereceğiniz randevular.",
+  "agenda.time": "Saat",
+  "agenda.note": "Müşteri notu",
+  "agenda.shift": "Çalışma saatleri",
+  "agenda.leave": "İzin",
+  "agenda.no_shift": "Bu gün için vardiyanız yok.",
+  "agenda.visits": "Randevularım",
+  "agenda.empty_title": "Randevu yok",
+  "agenda.empty_description": "Bu gün size atanmış randevu bulunmuyor.",
+  "agenda.no_staff_title": "Çalışan kaydınız yok",
+  "agenda.no_staff_description": "Programınızı görmek için yöneticinizden hesabınızı bir çalışan kaydına bağlamasını isteyin.",
+  "agenda.load_failed": "Program yüklenemedi.",
+  "errors.other_staff": "Bu randevuda başka bir çalışanın da hizmeti var; yalnızca kendi hizmetinizi değiştirebilirsiniz.",
+  "errors.taken": "Seçilen saat artık müsait değil. Başka bir saat seçin.",
+  "errors.stale": "Randevu siz bakarken değişti. Sayfa yenilendi; tekrar deneyin.",
+  "errors.invalid_transition": "Randevunun şu anki durumunda bu işlem yapılamaz."
 }

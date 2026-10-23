@@ -41,6 +41,10 @@ var (
 	// ErrOnlineNotReady: online bookings need the approval mode and a
 	// payment method in the business settings.
 	ErrOnlineNotReady = errors.New("online booking rules are not configured")
+	// ErrOtherStaff: an own calendar member acted on the whole visit (or
+	// changed a line) while colleagues serve other lines of it (K-003: a
+	// member manages only its own line).
+	ErrOtherStaff = errors.New("other staff members serve lines of this visit")
 )
 
 // Detail is one field-level validation problem.
@@ -404,6 +408,41 @@ func (s *Service) visible(ctx context.Context, q *db.Queries, orgID int64, id uu
 		return row, ErrNotFound
 	}
 	return row, nil
+}
+
+// ownStaff is the staff record of an own calendar caller (0 = none, or the
+// caller is not limited to its own calendar).
+func (s *Service) ownStaff(ctx context.Context, q *db.Queries, orgID int64, caller availabilityusecase.Caller) (int64, error) {
+	if caller.OwnUserID == 0 {
+		return 0, nil
+	}
+	member, err := q.GetAvailabilityStaffByUser(ctx, db.GetAvailabilityStaffByUserParams{OrganizationID: orgID, UserID: pgtype.Int8{Int64: caller.OwnUserID, Valid: true}})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return member.ID, err
+}
+
+// sharedWithOthers reports whether an own calendar caller shares the visit
+// with colleagues: another person serves one of its lines.
+func (s *Service) sharedWithOthers(ctx context.Context, q *db.Queries, orgID int64, row db.Reservation, caller availabilityusecase.Caller) (bool, error) {
+	if caller.OwnUserID == 0 {
+		return false, nil
+	}
+	own, err := s.ownStaff(ctx, q, orgID, caller)
+	if err != nil {
+		return false, err
+	}
+	ids, err := q.ListReservationStaffIDs(ctx, db.ListReservationStaffIDsParams{OrganizationID: orgID, ReservationID: row.ID})
+	if err != nil {
+		return false, err
+	}
+	for _, id := range ids {
+		if id != own {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Reservation, error) {

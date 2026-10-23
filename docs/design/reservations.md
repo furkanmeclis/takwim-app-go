@@ -83,6 +83,14 @@ Roles (migration 000050): owner, admin and branch manager get export and every b
 
 The panel calendar (`/t/{slug}/calendar`) shows a day (one column per person / resource / branch) or a week (one column per day, all visits or one column's). Clicking free space opens the booking form with branch, day, person and time filled in (the time is picked once the slot engine offers it). Dragging a visit asks for confirmation and calls reschedule with the visit shifted as a whole; dropped on another person's column, the dragged line goes to that person. The API decides whether the new time is free. The page refetches on the live channel of `tenant.reservations`.
 
+## Staff panel (TEC-902)
+
+`GET /v1/tenant/reservations/agenda?from=&to=` is the signed-in member's own programme (at most a week, default today): its staff record, its working periods in every branch of its scope (shifts inside the opening hours), its leave and the lines it serves with the customer's phone and note. Any member who may see reservations (`read` or `own`) gets its own record; `staff` is null when the account is not linked to a staff record.
+
+A member with only `tenant.reservations.own` acts on its own visits. A visit shared with a colleague (another person serves one of its lines) changes status only when the member serves every staffed line; otherwise the API answers `409` `lines` / `other_staff`. It can move a shared visit as a whole: the colleague's lines must keep their service and person and are checked again at the new time (the own pin is relaxed for them only). Notes stay editable. Earnings are left to TEC-917.
+
+The panel page `/t/{slug}/my-agenda` ("Programım") shows a day: the shifts and leave as chips, the visits in a table (cards on a phone) with status, phone (tap to call), note and the same action and reschedule dialogs as the list. Known conflicts (`other_staff`, `taken`, `stale`, `invalid_transition`) are toasted in the panel's language.
+
 ## Visibility
 
 Every read and write checks the business and the caller's branch scope; a member with only `tenant.reservations.own` sees the reservations it created or serves. Anything else is `ErrNotFound`.

@@ -2,11 +2,13 @@ import type { ResourceMeta } from "@/features/io/types";
 import type {
   Availability,
   AvailabilitySearchRequest,
+  AgendaParams,
   CalendarParams,
   ListReservationsParams,
   Reservation,
   ReservationAction,
   ReservationActionRequest,
+  ReservationAgenda,
   ReservationCalendar,
   ReservationCreateRequest,
   ReservationFacets,
@@ -43,6 +45,14 @@ export const reservationsService = {
     });
   },
 
+  /** The signed-in member's own shifts, leave and visits. */
+  agenda(slug: string, params: AgendaParams) {
+    return tenantRequest<ReservationAgenda>(slug, "GET", `${BASE}/agenda`, {
+      query: params,
+      branch: false,
+    });
+  },
+
   get(slug: string, uuid: string) {
     return tenantRequest<Reservation>(slug, "GET", `${BASE}/${uuid}`);
   },
@@ -61,7 +71,7 @@ export const reservationsService = {
       slug,
       "POST",
       `${BASE}/${uuid}/${action}`,
-      { body },
+      { body, silent: true },
     );
   },
 
@@ -70,7 +80,7 @@ export const reservationsService = {
       slug,
       "POST",
       `${BASE}/${uuid}/reschedule`,
-      { body },
+      { body, silent: true },
     );
   },
 

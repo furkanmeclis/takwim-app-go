@@ -270,6 +270,36 @@ func (q *Queries) DeleteReservationLines(ctx context.Context, arg DeleteReservat
 	return err
 }
 
+const getAgendaStaff = `-- name: GetAgendaStaff :one
+SELECT id, uuid, name, color FROM staff
+WHERE organization_id = $1 AND user_id = $2 AND deleted_at IS NULL
+`
+
+type GetAgendaStaffParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	UserID         pgtype.Int8 `json:"user_id"`
+}
+
+type GetAgendaStaffRow struct {
+	ID    int64     `json:"id"`
+	Uuid  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
+}
+
+// The staff record of a member (TEC-902 agenda).
+func (q *Queries) GetAgendaStaff(ctx context.Context, arg GetAgendaStaffParams) (GetAgendaStaffRow, error) {
+	row := q.db.QueryRow(ctx, getAgendaStaff, arg.OrganizationID, arg.UserID)
+	var i GetAgendaStaffRow
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Name,
+		&i.Color,
+	)
+	return i, err
+}
+
 const getReservation = `-- name: GetReservation :one
 SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, b.uuid AS branch_uuid, b.name AS branch_name,
        c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
@@ -531,6 +561,168 @@ func (q *Queries) GetReservationRecord(ctx context.Context, arg GetReservationRe
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAgendaLines = `-- name: ListAgendaLines :many
+SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.ends_at,
+       l.buffer_before_minutes, l.buffer_after_minutes,
+       r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
+       r.source, r.version, r.customer_note,
+       b.uuid AS branch_uuid, b.name AS branch_name,
+       c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE l.organization_id = $1 AND l.staff_id = $2
+  AND ($3::bigint[] IS NULL OR r.branch_id = ANY($3::bigint[]))
+  AND l.starts_at < $4 AND l.ends_at > $5
+  AND ($6::boolean OR r.status NOT IN ('cancelled', 'rejected'))
+ORDER BY l.starts_at, r.number, l.line_index
+`
+
+type ListAgendaLinesParams struct {
+	OrganizationID   int64              `json:"organization_id"`
+	StaffID          pgtype.Int8        `json:"staff_id"`
+	BranchIds        []int64            `json:"branch_ids"`
+	Until            pgtype.Timestamptz `json:"until"`
+	Since            pgtype.Timestamptz `json:"since"`
+	IncludeCancelled bool               `json:"include_cancelled"`
+}
+
+type ListAgendaLinesRow struct {
+	LineIndex           int32              `json:"line_index"`
+	ServiceName         string             `json:"service_name"`
+	StaffName           pgtype.Text        `json:"staff_name"`
+	Resources           []byte             `json:"resources"`
+	StartsAt            pgtype.Timestamptz `json:"starts_at"`
+	EndsAt              pgtype.Timestamptz `json:"ends_at"`
+	BufferBeforeMinutes int32              `json:"buffer_before_minutes"`
+	BufferAfterMinutes  int32              `json:"buffer_after_minutes"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	Number              int64              `json:"number"`
+	Status              string             `json:"status"`
+	ApprovalStatus      string             `json:"approval_status"`
+	ConfirmationStatus  string             `json:"confirmation_status"`
+	PaymentStatus       string             `json:"payment_status"`
+	Source              string             `json:"source"`
+	Version             int32              `json:"version"`
+	CustomerNote        string             `json:"customer_note"`
+	BranchUuid          uuid.UUID          `json:"branch_uuid"`
+	BranchName          string             `json:"branch_name"`
+	CustomerFirstName   string             `json:"customer_first_name"`
+	CustomerLastName    string             `json:"customer_last_name"`
+	CustomerPhone       pgtype.Text        `json:"customer_phone"`
+}
+
+// Lines a person serves overlapping [since, until), in the caller's branch
+// scope, with their visit.
+func (q *Queries) ListAgendaLines(ctx context.Context, arg ListAgendaLinesParams) ([]ListAgendaLinesRow, error) {
+	rows, err := q.db.Query(ctx, listAgendaLines,
+		arg.OrganizationID,
+		arg.StaffID,
+		arg.BranchIds,
+		arg.Until,
+		arg.Since,
+		arg.IncludeCancelled,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAgendaLinesRow{}
+	for rows.Next() {
+		var i ListAgendaLinesRow
+		if err := rows.Scan(
+			&i.LineIndex,
+			&i.ServiceName,
+			&i.StaffName,
+			&i.Resources,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.BufferBeforeMinutes,
+			&i.BufferAfterMinutes,
+			&i.Uuid,
+			&i.Number,
+			&i.Status,
+			&i.ApprovalStatus,
+			&i.ConfirmationStatus,
+			&i.PaymentStatus,
+			&i.Source,
+			&i.Version,
+			&i.CustomerNote,
+			&i.BranchUuid,
+			&i.BranchName,
+			&i.CustomerFirstName,
+			&i.CustomerLastName,
+			&i.CustomerPhone,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgendaShifts = `-- name: ListAgendaShifts :many
+SELECT b.id, b.uuid, b.name, b.working_hours, b.holiday_exceptions,
+       COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone, sb.shifts
+FROM staff_branches sb
+JOIN branches b ON b.organization_id = sb.organization_id AND b.id = sb.branch_id
+JOIN organizations o ON o.id = b.organization_id
+WHERE sb.organization_id = $1 AND sb.staff_id = $2
+  AND b.deleted_at IS NULL AND b.is_active
+  AND ($3::bigint[] IS NULL OR b.id = ANY($3::bigint[]))
+ORDER BY b.name, b.id
+`
+
+type ListAgendaShiftsParams struct {
+	OrganizationID int64   `json:"organization_id"`
+	StaffID        int64   `json:"staff_id"`
+	BranchIds      []int64 `json:"branch_ids"`
+}
+
+type ListAgendaShiftsRow struct {
+	ID                int64     `json:"id"`
+	Uuid              uuid.UUID `json:"uuid"`
+	Name              string    `json:"name"`
+	WorkingHours      []byte    `json:"working_hours"`
+	HolidayExceptions []byte    `json:"holiday_exceptions"`
+	Timezone          string    `json:"timezone"`
+	Shifts            []byte    `json:"shifts"`
+}
+
+// The branches a person works in (inside the caller's branch scope), with
+// the person's shifts and the branch hours.
+func (q *Queries) ListAgendaShifts(ctx context.Context, arg ListAgendaShiftsParams) ([]ListAgendaShiftsRow, error) {
+	rows, err := q.db.Query(ctx, listAgendaShifts, arg.OrganizationID, arg.StaffID, arg.BranchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAgendaShiftsRow{}
+	for rows.Next() {
+		var i ListAgendaShiftsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.Name,
+			&i.WorkingHours,
+			&i.HolidayExceptions,
+			&i.Timezone,
+			&i.Shifts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCalendarBranches = `-- name: ListCalendarBranches :many

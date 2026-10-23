@@ -55,12 +55,25 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if err != nil {
 			return err
 		}
-		lines := in.Lines
-		if len(lines) == 0 {
-			current, err := tx.Q.ListReservationLines(ctx, db.ListReservationLinesParams{OrganizationID: orgID, ReservationID: row.ID})
+		current, err := tx.Q.ListReservationLines(ctx, db.ListReservationLinesParams{OrganizationID: orgID, ReservationID: row.ID})
+		if err != nil {
+			return err
+		}
+		// An own calendar member moves a shared visit as a whole: the
+		// colleagues' lines keep their service and person and are checked
+		// again with the rest; it changes only its own lines.
+		if caller.OwnUserID > 0 {
+			own, err := s.ownStaff(ctx, tx.Q, orgID, caller)
 			if err != nil {
 				return err
 			}
+			if err := keepsOthers(current, in.Lines, own); err != nil {
+				return err
+			}
+			caller.KeepOthers = true
+		}
+		lines := in.Lines
+		if len(lines) == 0 {
 			for _, l := range current {
 				if !l.ServiceUuid.Valid {
 					ve.add("lines", "required", "a service of the booking was deleted; choose the services again")
@@ -194,4 +207,36 @@ func (s *Service) UpdateNotes(ctx context.Context, orgID int64, id uuid.UUID, ca
 
 func pgInt8(v int64) pgtype.Int8 {
 	return pgtype.Int8{Int64: v, Valid: v != 0}
+}
+
+// keepsOthers checks that new lines leave the colleagues' lines (served by
+// someone other than own) as they are: same position, service and person.
+func keepsOthers(current []db.ListReservationLinesRow, next []availabilitymodel.LineInput, own int64) error {
+	if len(next) == 0 {
+		return nil
+	}
+	shared := false
+	for _, l := range current {
+		if l.StaffID.Valid && l.StaffID.Int64 != own {
+			shared = true
+			break
+		}
+	}
+	if !shared {
+		return nil
+	}
+	if len(next) != len(current) {
+		return ErrOtherStaff
+	}
+	for i, l := range current {
+		if !l.StaffID.Valid || l.StaffID.Int64 == own {
+			continue
+		}
+		n := next[i]
+		if !l.ServiceUuid.Valid || n.ServiceUUID != uuid.UUID(l.ServiceUuid.Bytes) ||
+			n.StaffUUID == nil || !l.StaffUuid.Valid || *n.StaffUUID != uuid.UUID(l.StaffUuid.Bytes) {
+			return ErrOtherStaff
+		}
+	}
+	return nil
 }
