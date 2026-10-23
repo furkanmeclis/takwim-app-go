@@ -292,6 +292,16 @@ func (f *fakeRepo) UpdateOrganization(_ context.Context, params db.UpdateOrganiz
 	return org, nil
 }
 
+func (f *fakeRepo) UpdateOrganizationEntitlements(_ context.Context, params db.UpdateOrganizationEntitlementsParams) (db.Organization, error) {
+	org, err := f.GetOrganizationByUUID(context.Background(), params.Uuid)
+	if err != nil {
+		return db.Organization{}, err
+	}
+	org.Plan, org.Addons, org.BranchLimit, org.StaffLimit = params.Plan, params.Addons, params.BranchLimit, params.StaffLimit
+	f.orgs[org.ID] = org
+	return org, nil
+}
+
 func (f *fakeRepo) SetOrganizationStatus(_ context.Context, params db.SetOrganizationStatusParams) (db.Organization, error) {
 	org, err := f.GetOrganizationByUUID(context.Background(), params.Uuid)
 	if err != nil {
@@ -586,5 +596,34 @@ func TestOrganizationSector(t *testing.T) {
 	}
 	if _, err := svc.PatchOrganization(ctx, org.UUID, orgmodel.PatchOrganizationInput{Sector: ptr("")}); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("empty sector err = %v", err)
+	}
+}
+
+func TestSetEntitlements(t *testing.T) {
+	t.Parallel()
+	f := newFakeRepo(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC))
+	f.users[10] = db.User{ID: 10, Uuid: uuid.New(), Email: "owner@example.test", Name: "Owner", Surname: "User", Status: "active"}
+	svc := New(f, nil)
+	ctx := context.Background()
+	org, err := svc.CreateOrganization(ctx, orgmodel.CreateOrganizationInput{Name: "Salon", OwnerUserID: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	two := int32(2)
+	got, err := svc.SetEntitlements(ctx, org.UUID, orgmodel.SetEntitlementsInput{
+		Plan: "growth", Addons: []string{"confirmation", "confirmation"}, BranchLimit: &two,
+	})
+	if err != nil || got.Plan != "growth" || len(got.Addons) != 1 || got.BranchLimit == nil || *got.BranchLimit != 2 || got.StaffLimit != nil {
+		t.Fatalf("set = %+v, %v", got, err)
+	}
+	zero := int32(0)
+	for _, in := range []orgmodel.SetEntitlementsInput{
+		{Plan: "gold"},
+		{Plan: "starter", Addons: []string{"sms"}},
+		{Plan: "starter", StaffLimit: &zero},
+	} {
+		if _, err := svc.SetEntitlements(ctx, org.UUID, in); !errors.Is(err, ErrInvalidRequest) {
+			t.Fatalf("set %+v err = %v", in, err)
+		}
 	}
 }

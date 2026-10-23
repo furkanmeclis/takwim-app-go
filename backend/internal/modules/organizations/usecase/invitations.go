@@ -269,6 +269,9 @@ func (m *Management) CreateInvitation(ctx context.Context, scope orgctx.Scope, a
 		if err := m.orgs.repo.LockOrganizationRow(ctx, q, scope.ID); err != nil {
 			return mapRepoNotFound(err, ErrNotFound)
 		}
+		if err := m.orgs.checkStaffAdd(ctx, q, scope); err != nil {
+			return err
+		}
 		row, token, err = m.insertInvitation(ctx, q, scope.ID, actor, grant)
 		return err
 	})

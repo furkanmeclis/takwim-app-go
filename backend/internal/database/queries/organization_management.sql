@@ -6,7 +6,7 @@
 -- access_ends_at, 'open' otherwise. Window: 'unlimited' without an end.
 SELECT o.id, o.uuid, o.slug, o.name, o.logo_object_key, o.status,
        o.access_starts_at, o.access_ends_at, o.settings, o.created_at, o.updated_at,
-       o.timezone, o.currency, o.sector,
+       o.timezone, o.currency, o.sector, o.plan, o.addons, o.branch_limit, o.staff_limit,
        mc.member_count::bigint AS member_count,
        bc.branch_count::bigint AS branch_count,
        ic.invitation_count::bigint AS pending_invitation_count,

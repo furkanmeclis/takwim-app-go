@@ -26,7 +26,7 @@ The catalog is code, not data: a sector is a product decision and every client (
 | Klinik | branch → appointment type → specialist → datetime → contact → summary → payment | specialist time; a room when needed | uzman / oda | calendar, staff, resources | products, classes, vehicles |
 | Güzellik salonu | branch → service → specialist → datetime → products → contact → summary → payment | specialist time; room / device when needed | uzman / oda-cihaz | resources, packages, staff shares | classes, vehicles |
 
-Modules: reservations, calendar, customers, services, packages, products, staff, staff_shares, resources, classes, vehicles, cash, finance, reports, confirmation, booking_page. Core areas (home, branches, members, roles, settings, integrations) are not modules; every business has them. Plan entitlements (TEC-883) narrow the visible set further and never add a module the sector hides.
+Modules: reservations, calendar, customers, services, packages, products, staff, staff_shares, resources, classes, vehicles, cash, finance, reports, confirmation, booking_page. Core areas (home, branches, members, roles, settings, integrations) are not modules; every business has them. Plan entitlements (TEC-883, `docs/design/entitlements.md`) narrow the visible set further and never add a module the sector hides.
 
 ## Panel rules
 

@@ -373,6 +373,10 @@ type Organization struct {
 	Timezone       string             `json:"timezone"`
 	Currency       string             `json:"currency"`
 	Sector         string             `json:"sector"`
+	Plan           string             `json:"plan"`
+	Addons         []string           `json:"addons"`
+	BranchLimit    pgtype.Int4        `json:"branch_limit"`
+	StaffLimit     pgtype.Int4        `json:"staff_limit"`
 }
 
 type OrganizationInvitation struct {
@@ -439,6 +443,14 @@ type OrganizationSettingsVersion struct {
 	Data           []byte             `json:"data"`
 	CreatedBy      pgtype.Int8        `json:"created_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrganizationUsage struct {
+	OrganizationID int64              `json:"organization_id"`
+	Metric         string             `json:"metric"`
+	Period         pgtype.Date        `json:"period"`
+	Quantity       int64              `json:"quantity"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type OtpCode struct {

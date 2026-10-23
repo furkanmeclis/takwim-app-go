@@ -103,7 +103,6 @@
   "status_tab.access_unlimited": "Access has no end date.",
   "status_tab.access_ends_hint": "Leave empty for no end.",
   "status_tab.clear_end": "Remove end",
-  "placeholders.plan": "Plans and feature entitlements arrive with TEC-674.",
   "placeholders.domains": "Custom domains are part of M5.",
   "placeholders.integrations": "External system connections are part of M0 / M5.",
   "members.add": "Add member",

@@ -97,5 +97,6 @@
   "actions.invitations.accepted": "Davet kabul edildi",
   "actions.organization.updated": "İşletme adı güncellendi",
   "actions.organization.logo_updated": "İşletme logosu güncellendi",
-  "actions.organization.logo_removed": "İşletme logosu kaldırıldı"
+  "actions.organization.logo_removed": "İşletme logosu kaldırıldı",
+  "actions.organizations.entitlements_updated": "İşletme paketi güncellendi"
 }

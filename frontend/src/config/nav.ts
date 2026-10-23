@@ -1,4 +1,5 @@
 import {
+  Gauge,
   PlugZap,
   Activity,
   Bell,
@@ -312,6 +313,13 @@ export function tenantNav(slug: string): NavCatalog {
             href: routes.tenant.settings.integrations(slug),
             icon: PlugZap,
             permission: permissions.tenant.integrations.manage,
+          },
+          {
+            id: "settings-plan",
+            titleKey: "layout.nav_tenant_settings_plan",
+            href: routes.tenant.settings.plan(slug),
+            icon: Gauge,
+            permission: permissions.tenant.settings.read,
           },
         ],
       },

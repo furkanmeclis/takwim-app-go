@@ -11,18 +11,21 @@ type TermNoun = keyof Sector["terms"];
 
 /**
  * The current organization's sector (TEC-882): its definition, module
- * visibility and the words the panel uses ("Masa", "Oda / cihaz",
- * "Uzman"). Outside the tenant shell, or before the scope loads, `sector`
- * is null, `hasModule` answers false and `term` falls back to the generic
- * word.
+ * visibility (narrowed by the plan's add-ons, TEC-883) and the words the
+ * panel uses ("Masa", "Oda / cihaz", "Uzman"). Outside the tenant shell, or
+ * before the scope loads, `sector` is null, `hasModule` answers false and
+ * `term` falls back to the generic word.
  */
 export function useSector() {
-  const sector = useOptionalTenant()?.sector ?? null;
+  const tenant = useOptionalTenant();
+  const sector = tenant?.sector ?? null;
+  // Plan add-ons narrow the sector's modules (TEC-883).
+  const modules = tenant?.entitlements?.modules ?? sector?.modules;
   const { t } = useLocale();
 
   const hasModule = useCallback(
-    (module: SectorModule) => Boolean(sector?.modules.includes(module)),
-    [sector],
+    (module: SectorModule) => Boolean(modules?.includes(module)),
+    [modules],
   );
 
   const term = useCallback(

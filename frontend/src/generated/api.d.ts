@@ -892,6 +892,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/platform/organizations/{uuid}/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organization plan, add-ons, limits and usage
+         * @description Effective entitlements (TEC-883) with the stored limit overrides, the
+         *     current use (branches, staff seats = members + open invitations),
+         *     this month's communication usage and the plan / add-on catalog.
+         */
+        get: operations["getPlatformOrganizationEntitlements"];
+        /**
+         * Assign plan, add-ons and limit overrides
+         * @description Replaces the plan, the granted add-ons and the limit overrides
+         *     (`null` = plan default). Takes effect at once (scope cache
+         *     invalidated). Limits are checked when something is added: lowering a
+         *     limit below the current use blocks new branches / seats, it removes
+         *     nothing.
+         */
+        put: operations["putPlatformOrganizationEntitlements"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/platform/organizations/{uuid}/access": {
         parameters: {
             query?: never;
@@ -2208,6 +2238,30 @@ export interface paths {
          *     business stores only its sector code. Any signed-in user.
          */
         get: operations["listSectors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan, add-ons, limits and usage of the organization
+         * @description Read-only for the organization (`tenant.settings.read`); Takwim
+         *     assigns plans and add-ons. Adding a branch or a staff seat over the
+         *     limit answers `409 PLAN_LIMIT_REACHED` with `{kind, limit, used}`; a
+         *     module route of a module the organization may not use answers
+         *     `403 MODULE_NOT_ENABLED`.
+         */
+        get: operations["getTenantEntitlements"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4266,6 +4320,79 @@ export interface components {
             /** @description Modules the panel puts first (subset of `modules`) */
             highlights: components["schemas"]["SectorModule"][];
         };
+        /**
+         * @description Plan (TEC-883); a set of default limits, no price
+         * @enum {string}
+         */
+        PlanCode: "starter" | "growth" | "enterprise";
+        /**
+         * @description Module sold on top of the plan (Konfirmasyon)
+         * @enum {string}
+         */
+        Addon: "confirmation";
+        Plan: {
+            code: components["schemas"]["PlanCode"];
+            /** @description `null` = unlimited */
+            branch_limit: number | null;
+            /** @description `null` = unlimited */
+            staff_limit: number | null;
+        };
+        Entitlements: {
+            plan: components["schemas"]["PlanCode"];
+            addons: components["schemas"]["Addon"][];
+            /** @description Effective limit (override, else plan); `null` = unlimited */
+            branch_limit: number | null;
+            /** @description Staff seats: members plus open invitations; `null` = unlimited */
+            staff_limit: number | null;
+            /** @description Modules the organization may use (the sector's modules minus add-ons not granted) */
+            modules: components["schemas"]["SectorModule"][];
+        };
+        EntitlementSummary: components["schemas"]["Entitlements"] & {
+            used: {
+                branches: number;
+                staff: number;
+            };
+            /**
+             * @description Current month in the organization time zone
+             * @example 2026-10
+             */
+            period: string;
+            usage: {
+                /** @enum {string} */
+                metric: "sms" | "whatsapp" | "email" | "voice_call";
+                quantity: number;
+            }[];
+        };
+        PlatformEntitlements: components["schemas"]["EntitlementSummary"] & {
+            overrides: {
+                branch_limit: number | null;
+                staff_limit: number | null;
+            };
+            catalog: {
+                plans: components["schemas"]["Plan"][];
+                addons: components["schemas"]["Addon"][];
+            };
+        };
+        SetEntitlementsRequest: {
+            plan: components["schemas"]["PlanCode"];
+            addons: components["schemas"]["Addon"][];
+            /** @description Override; `null` = plan default */
+            branch_limit: number | null;
+            /** @description Override; `null` = plan default */
+            staff_limit: number | null;
+        };
+        EnvelopeEntitlementSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["EntitlementSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePlatformEntitlements: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PlatformEntitlements"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeSectorList: {
             /** @enum {boolean} */
             success: true;
@@ -4526,6 +4653,7 @@ export interface components {
         TenantContext: {
             organization: components["schemas"]["TenantOrganization"];
             sector: components["schemas"]["Sector"];
+            entitlements: components["schemas"]["Entitlements"];
             /**
              * @description Caller's primary tenant role key in this organization (`owner`, `admin`, `member`, a Rentopia template or a custom key)
              * @example owner
@@ -4896,6 +5024,12 @@ export interface components {
              */
             currency: string;
             sector: components["schemas"]["SectorCode"];
+            plan: components["schemas"]["PlanCode"];
+            addons: components["schemas"]["Addon"][];
+            /** @description Stored override; `null` = plan default */
+            branch_limit: number | null;
+            /** @description Stored override; `null` = plan default */
+            staff_limit: number | null;
             /** Format: date-time */
             access_starts_at: string;
             /** Format: date-time */
@@ -7536,6 +7670,63 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getPlatformOrganizationEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entitlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePlatformEntitlements"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putPlatformOrganizationEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetEntitlementsRequest"];
+            };
+        };
+        responses: {
+            /** @description Entitlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePlatformEntitlements"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     postPlatformOrganizationAccess: {
         parameters: {
             query?: never;
@@ -9407,6 +9598,36 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantEntitlements: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entitlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeEntitlementSummary"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
         };
     };

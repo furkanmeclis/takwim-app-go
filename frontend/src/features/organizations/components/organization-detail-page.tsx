@@ -24,15 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
-import {
-  isoToLocalInput,
-  localInputToISO,
-} from "@/lib/datetime/local-input";
+import { isoToLocalInput, localInputToISO } from "@/lib/datetime/local-input";
 import {
   OrganizationAccessChip,
   OrganizationStatusChip,
   ownerLabel,
 } from "@/features/organizations/components/organization-cells";
+import { PlatformEntitlementsTab } from "@/features/entitlements/components/platform-entitlements-tab";
 import { OrganizationMembersTab } from "@/features/organizations/components/organization-members-tab";
 import {
   useDeleteOrganization,
@@ -553,10 +551,7 @@ export function OrganizationDetailPage({
               <StatusTab org={org} />
             </TabsContent>
             <TabsContent value="plan">
-              <PlaceholderTab
-                title={t("organizations.tabs.plan")}
-                body={t("organizations.placeholders.plan")}
-              />
+              <PlatformEntitlementsTab uuid={org.uuid} />
             </TabsContent>
             <TabsContent value="domains">
               <PlaceholderTab

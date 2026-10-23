@@ -135,7 +135,7 @@ const listOrganizationsWithStats = `-- name: ListOrganizationsWithStats :many
 
 SELECT o.id, o.uuid, o.slug, o.name, o.logo_object_key, o.status,
        o.access_starts_at, o.access_ends_at, o.settings, o.created_at, o.updated_at,
-       o.timezone, o.currency, o.sector,
+       o.timezone, o.currency, o.sector, o.plan, o.addons, o.branch_limit, o.staff_limit,
        mc.member_count::bigint AS member_count,
        bc.branch_count::bigint AS branch_count,
        ic.invitation_count::bigint AS pending_invitation_count,
@@ -244,6 +244,10 @@ type ListOrganizationsWithStatsRow struct {
 	Timezone               string             `json:"timezone"`
 	Currency               string             `json:"currency"`
 	Sector                 string             `json:"sector"`
+	Plan                   string             `json:"plan"`
+	Addons                 []string           `json:"addons"`
+	BranchLimit            pgtype.Int4        `json:"branch_limit"`
+	StaffLimit             pgtype.Int4        `json:"staff_limit"`
 	MemberCount            int64              `json:"member_count"`
 	BranchCount            int64              `json:"branch_count"`
 	PendingInvitationCount int64              `json:"pending_invitation_count"`
@@ -291,6 +295,10 @@ func (q *Queries) ListOrganizationsWithStats(ctx context.Context, arg ListOrgani
 			&i.Timezone,
 			&i.Currency,
 			&i.Sector,
+			&i.Plan,
+			&i.Addons,
+			&i.BranchLimit,
+			&i.StaffLimit,
 			&i.MemberCount,
 			&i.BranchCount,
 			&i.PendingInvitationCount,
@@ -382,7 +390,7 @@ const setOrganizationLogo = `-- name: SetOrganizationLogo :one
 UPDATE organizations
 SET logo_object_key = $1
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
 `
 
 type SetOrganizationLogoParams struct {
@@ -409,6 +417,10 @@ func (q *Queries) SetOrganizationLogo(ctx context.Context, arg SetOrganizationLo
 		&i.Timezone,
 		&i.Currency,
 		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
 	)
 	return i, err
 }

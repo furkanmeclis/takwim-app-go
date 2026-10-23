@@ -43,5 +43,6 @@
   "nav_tenant_settings_integrations": "Entegrasyonlar",
   "nav_fleet_transfers": "Transferler",
   "nav_fleet_one_way_rules": "Tek yön kuralları",
-  "nav_organizations": "İşletmeler"
+  "nav_organizations": "İşletmeler",
+  "nav_tenant_settings_plan": "Plan ve kullanım"
 }

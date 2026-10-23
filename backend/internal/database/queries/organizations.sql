@@ -172,7 +172,7 @@ WHERE om.organization_id = $1;
 
 -- name: ResolveOrganizationScopeByUUID :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       o.sector, o.timezone, o.currency,
+       o.sector, o.timezone, o.currency, o.plan, o.addons, o.branch_limit, o.staff_limit,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)
@@ -181,7 +181,7 @@ WHERE o.uuid = sqlc.arg(uuid) AND o.deleted_at IS NULL;
 
 -- name: ResolveOrganizationScopeBySlug :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       o.sector, o.timezone, o.currency,
+       o.sector, o.timezone, o.currency, o.plan, o.addons, o.branch_limit, o.staff_limit,
        om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)

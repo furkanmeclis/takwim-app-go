@@ -15,6 +15,7 @@ import {
 } from "@/features/tenant/services/tenant.service";
 import { useAuth } from "@/providers/auth-provider";
 import { NavModulesProvider } from "@/features/nav-engine/lib/modules";
+import type { Entitlements } from "@/features/entitlements/types";
 import type { Sector, SectorCode } from "@/features/sectors/types";
 import { PermissionProvider } from "@/providers/permission-provider";
 
@@ -49,6 +50,11 @@ export type TenantScope = {
    * the API confirms the scope.
    */
   sector: Sector | null;
+  /**
+   * Plan, add-ons, limits and the modules the organization may use (the
+   * sector's modules minus add-ons not granted); null until the API answers.
+   */
+  entitlements: Entitlements | null;
   /** The API confirmed the membership for this slug. */
   verified: boolean;
   /**
@@ -153,6 +159,7 @@ export function TenantProvider({
         branchScope: data.branch_scope ?? "all",
         permissions: data.permissions ?? EMPTY,
         sector: data.sector,
+        entitlements: data.entitlements,
         verified: true,
         optimistic,
         isLoading: false,
@@ -170,6 +177,7 @@ export function TenantProvider({
       branchScope: "all",
       permissions: membership?.permissions ?? EMPTY,
       sector: null,
+      entitlements: null,
       verified: false,
       optimistic,
       isLoading,
@@ -193,7 +201,7 @@ export function TenantProvider({
     <TenantContext.Provider value={value}>
       <PermissionProvider permissions={scopedPermissions} roles={roles}>
         <NavModulesProvider
-          modules={value.sector?.modules ?? null}
+          modules={value.entitlements?.modules ?? value.sector?.modules ?? null}
           highlights={value.sector?.highlights}
         >
           {children}

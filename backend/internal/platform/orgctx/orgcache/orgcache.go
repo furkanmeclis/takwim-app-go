@@ -66,10 +66,11 @@ func New(inner orgctx.Resolver, rdb *redis.Client, ttl time.Duration, appEnv str
 		env = "dev"
 	}
 	return &CachedResolver{
-		inner:  inner,
-		rdb:    rdb,
-		ttl:    ttl,
-		prefix: "app:" + env + ":orgctx:",
+		inner: inner,
+		rdb:   rdb,
+		ttl:   ttl,
+		// v2: the scope carries sector, zone, currency and entitlements.
+		prefix: "app:" + env + ":orgctx:v2:",
 		now:    time.Now,
 	}
 }

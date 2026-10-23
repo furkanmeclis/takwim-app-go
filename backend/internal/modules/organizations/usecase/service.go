@@ -12,6 +12,7 @@ import (
 	authmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/auth/model"
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/slug"
@@ -39,6 +40,7 @@ type Repository interface {
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	ListOrganizations(ctx context.Context, params db.ListOrganizationsWithStatsParams) ([]db.ListOrganizationsWithStatsRow, int64, error)
 	UpdateOrganization(ctx context.Context, params db.UpdateOrganizationParams) (db.Organization, error)
+	UpdateOrganizationEntitlements(ctx context.Context, params db.UpdateOrganizationEntitlementsParams) (db.Organization, error)
 	SetOrganizationStatus(ctx context.Context, params db.SetOrganizationStatusParams) (db.Organization, error)
 	SetOrganizationAccessWindow(ctx context.Context, params db.SetOrganizationAccessWindowParams) (db.Organization, error)
 	SoftDeleteOrganization(ctx context.Context, id uuid.UUID) (db.Organization, error)
@@ -83,7 +85,26 @@ type Service struct {
 	repo        Repository
 	hooks       OrganizationHooks
 	invalidator orgctx.Invalidator
+	staff       StaffLimiter
 	now         func() time.Time
+}
+
+// StaffLimiter enforces the staff seat limit of the plan (TEC-883): q is
+// the transaction that locked the organization row.
+type StaffLimiter interface {
+	CheckStaffAdd(ctx context.Context, q *db.Queries, scope orgctx.Scope) error
+}
+
+// SetStaffLimiter attaches the plan limit check of members and invitations.
+func (s *Service) SetStaffLimiter(l StaffLimiter) {
+	s.staff = l
+}
+
+func (s *Service) checkStaffAdd(ctx context.Context, q *db.Queries, scope orgctx.Scope) error {
+	if s.staff == nil {
+		return nil
+	}
+	return s.staff.CheckStaffAdd(ctx, q, scope)
 }
 
 func New(repo Repository, hooks OrganizationHooks) *Service {
@@ -263,6 +284,63 @@ func (s *Service) PatchOrganization(ctx context.Context, id uuid.UUID, in orgmod
 	}
 	_ = orgctx.Invalidate(ctx, s.invalidator, row.ID)
 	return mapOrganization(row), nil
+}
+
+// SetEntitlements replaces the plan, add-ons and limit overrides of an
+// organization (platform only; TEC-883).
+func (s *Service) SetEntitlements(ctx context.Context, id uuid.UUID, in orgmodel.SetEntitlementsInput) (orgmodel.Organization, error) {
+	plan := strings.TrimSpace(in.Plan)
+	if !entitlement.ValidPlan(plan) {
+		return orgmodel.Organization{}, fmt.Errorf("%w: plan is not known", ErrInvalidRequest)
+	}
+	addons := []string{}
+	seen := map[string]bool{}
+	for _, a := range in.Addons {
+		a = strings.TrimSpace(a)
+		if !entitlement.ValidAddon(a) {
+			return orgmodel.Organization{}, fmt.Errorf("%w: add-on %q is not known", ErrInvalidRequest, a)
+		}
+		if !seen[a] {
+			seen[a] = true
+			addons = append(addons, a)
+		}
+	}
+	for _, l := range []*int32{in.BranchLimit, in.StaffLimit} {
+		if l != nil && *l < 1 {
+			return orgmodel.Organization{}, fmt.Errorf("%w: a limit must be at least 1", ErrInvalidRequest)
+		}
+	}
+	row, err := s.repo.UpdateOrganizationEntitlements(ctx, db.UpdateOrganizationEntitlementsParams{
+		Uuid: id, Plan: plan, Addons: addons,
+		BranchLimit: int4From(in.BranchLimit), StaffLimit: int4From(in.StaffLimit),
+	})
+	if err != nil {
+		return orgmodel.Organization{}, mapRepoNotFound(err, ErrNotFound)
+	}
+	_ = orgctx.Invalidate(ctx, s.invalidator, row.ID)
+	return mapOrganization(row), nil
+}
+
+func int4Ptr(v pgtype.Int4) *int32 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int32
+	return &n
+}
+
+func int4From(v *int32) pgtype.Int4 {
+	if v == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: *v, Valid: true}
+}
+
+func nonNilStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
 }
 
 func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status string) (orgmodel.Organization, error) {
@@ -470,6 +548,10 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		rowName     string
 		rowStatus   string
 		rowSector   string
+		rowPlan     string
+		rowAddons   []string
+		rowBranches pgtype.Int4
+		rowStaff    pgtype.Int4
 		rowZone     string
 		rowCurrency string
 		startsAt    pgtype.Timestamptz
@@ -488,6 +570,7 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		startsAt, endsAt, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleKey
 		memberID, branchScope = row.MemberID, row.BranchScope
 		rowSector, rowZone, rowCurrency = row.Sector, row.Timezone, row.Currency
+		rowPlan, rowAddons, rowBranches, rowStaff = row.Plan, row.Addons, row.BranchLimit, row.StaffLimit
 	} else {
 		row, err := s.repo.ResolveOrganizationScopeBySlug(ctx, strings.ToLower(ref), userID)
 		if err != nil {
@@ -497,6 +580,7 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		startsAt, endsAt, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleKey
 		memberID, branchScope = row.MemberID, row.BranchScope
 		rowSector, rowZone, rowCurrency = row.Sector, row.Timezone, row.Currency
+		rowPlan, rowAddons, rowBranches, rowStaff = row.Plan, row.Addons, row.BranchLimit, row.StaffLimit
 	}
 	if rowStatus == orgctx.StatusSuspended {
 		return orgctx.Scope{}, orgctx.ErrSuspended
@@ -539,6 +623,7 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		ID: rowID, UUID: rowUUID, Slug: rowSlug, Name: rowName, Status: rowStatus,
 		AccessStartsAt: startsAt.Time.UTC(), AccessEndsAt: accessEnds,
 		Sector: rowSector, Timezone: rowZone, Currency: rowCurrency,
+		Plan: rowPlan, Addons: nonNilStrings(rowAddons), BranchLimit: int4Ptr(rowBranches), StaffLimit: int4Ptr(rowStaff),
 		MemberRole: roleKey, MemberRoles: roleKeys, Permissions: perms, BranchIDs: branchIDs,
 	}, nil
 }
@@ -700,6 +785,8 @@ func mapOrganization(row db.Organization) orgmodel.Organization {
 		ID: row.ID, UUID: row.Uuid, Slug: row.Slug, Name: row.Name,
 		LogoURL: LogoURL(row.Uuid, row.LogoObjectKey), Status: row.Status,
 		Timezone: row.Timezone, Currency: row.Currency, Sector: row.Sector,
+		Plan: row.Plan, Addons: nonNilStrings(row.Addons),
+		BranchLimit: int4Ptr(row.BranchLimit), StaffLimit: int4Ptr(row.StaffLimit),
 		AccessStartsAt: row.AccessStartsAt.Time.UTC(), AccessEndsAt: timePtr(row.AccessEndsAt),
 		Settings: row.Settings, CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
 	}

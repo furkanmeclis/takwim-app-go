@@ -57,6 +57,13 @@ type Scope struct {
 	// Timezone is the business IANA zone; Currency its ISO 4217 code.
 	Timezone string
 	Currency string
+	// Plan, Addons and the limit overrides are the stored entitlements
+	// (internal/platform/entitlement resolves the effective ones). A nil
+	// limit override means the plan default.
+	Plan        string
+	Addons      []string
+	BranchLimit *int32
+	StaffLimit  *int32
 	// MemberRole is the primary tenant role key of the caller in this
 	// organization (owner, admin, member, a Rentopia template or a custom
 	// role key). Kept for display; permissions come from MemberRoles.
