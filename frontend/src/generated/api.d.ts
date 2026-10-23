@@ -5412,6 +5412,15 @@ export interface components {
          *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
          */
         XOrganization: string;
+        /**
+         * @description Client-generated key (a UUID) for an unsafe request the client may
+         *     retry. Scoped to the caller, `X-Organization`, method and path; kept
+         *     24 hours. Same key + same body replays the first response with
+         *     `Idempotent-Replayed: true`; same key + another body is `422
+         *     IDEMPOTENCY_KEY_REUSED`; while the first request runs a retry gets
+         *     `409 IDEMPOTENCY_IN_PROGRESS`. 5xx outcomes are not kept.
+         */
+        IdempotencyKey: string;
         /** @description QR sign-in session id (from the QR URL) */
         QRSessionID: string;
         /** @description Resource UUID */
@@ -9266,6 +9275,15 @@ export interface operations {
                  *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
                  */
                 "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Client-generated key (a UUID) for an unsafe request the client may
+                 *     retry. Scoped to the caller, `X-Organization`, method and path; kept
+                 *     24 hours. Same key + same body replays the first response with
+                 *     `Idempotent-Replayed: true`; same key + another body is `422
+                 *     IDEMPOTENCY_KEY_REUSED`; while the first request runs a retry gets
+                 *     `409 IDEMPOTENCY_IN_PROGRESS`. 5xx outcomes are not kept.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
             cookie?: never;

@@ -124,7 +124,7 @@ Internal NextAuth adapter routes (not in OpenAPI): `/v1/internal/auth/oauth/{pro
 
 ## JWT
 
-HS256 claims: `sub`, `roles`, `is_super_admin`, `exp`, optional `imp` (impersonator user UUID), optional `sid` (refresh-session UUID). No `tid` / `wid`.
+HS256 claims: `sub`, `roles`, `is_super_admin`, `exp`, `knd` (token kind, `staff`; a missing claim reads as `staff`), optional `imp` (impersonator user UUID), optional `sid` (refresh-session UUID). No `tid` / `wid`. Tokens of any other kind (customer panel, appointment links) are rejected by the `/v1` Bearer middleware.
 
 ## Sessions
 
