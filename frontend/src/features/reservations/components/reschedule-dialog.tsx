@@ -5,7 +5,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 
 import { Loading } from "@/components/common/loading";
 import { AppDialog } from "@/components/dialogs/app-dialog";
-import { AppForm, AppSelect, AppTextarea } from "@/components/forms";
+import { AppForm, AppInput, AppSelect, AppTextarea } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { SlotPicker } from "@/features/reservations/components/slot-picker";
 import {
@@ -18,9 +18,11 @@ import {
   ANY_STAFF,
   createRescheduleSchema,
   toLineInputs,
+  toPartySize,
   type RescheduleFormValues,
 } from "@/features/reservations/schemas/reservation-forms";
 import type { Reservation } from "@/features/reservations/types";
+import { useSector } from "@/features/sectors/hooks/use-sector";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { dateKeyInZone, datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -99,7 +101,12 @@ function RescheduleForm({
   const { organization } = useTenant();
   const zone = organization?.timezone ?? undefined;
   const reschedule = useRescheduleReservation();
-  const schema = useMemo(() => createRescheduleSchema(t), [t]);
+  // Restaurants may change the party with the time (a bigger table).
+  const party = Boolean(useSector().sector?.capacity.party_size);
+  const schema = useMemo(
+    () => createRescheduleSchema(t, { party }),
+    [t, party],
+  );
   // A deleted service cannot be planned again.
   const editableLines = reservation.lines.every((line) => line.service_uuid);
 
@@ -113,6 +120,8 @@ function RescheduleForm({
           service_uuid: line.service_uuid ?? "",
           staff_uuid: line.staff?.uuid ?? ANY_STAFF,
         })),
+        party_size:
+          reservation.party_size != null ? String(reservation.party_size) : "",
         date: dateKeyInZone(reservation.starts_at, zone),
         starts_at: "",
         note: "",
@@ -123,6 +132,7 @@ function RescheduleForm({
           body: {
             starts_at: values.starts_at,
             lines: toLineInputs(values.lines),
+            ...(party ? { party_size: toPartySize(values.party_size) } : {}),
             expected_version: reservation.version,
             note: values.note || undefined,
           },
@@ -142,6 +152,7 @@ function RescheduleForm({
       <RescheduleFields
         reservation={reservation}
         editableLines={editableLines}
+        party={party}
       />
       <AppTextarea
         name="note"
@@ -155,25 +166,32 @@ function RescheduleForm({
 function RescheduleFields({
   reservation,
   editableLines,
+  party,
 }: {
   reservation: Reservation;
   editableLines: boolean;
+  party: boolean;
 }) {
   const { t } = useLocale();
   const { control, setValue, formState } =
     useFormContext<RescheduleFormValues>();
-  const [lines, date, startsAt] = useWatch({
+  const [lines, date, startsAt, partyInput] = useWatch({
     control,
-    name: ["lines", "date", "starts_at"],
+    name: ["lines", "date", "starts_at", "party_size"],
   });
+  const partySize = toPartySize(partyInput);
+  // The booked area stays; the search keeps to it.
   const { query, ready } = useSlotSearch({
     branchUuid: editableLines ? reservation.branch.uuid : "",
     lines,
     date,
+    partySize,
+    zone: reservation.zone || undefined,
+    partyRequired: party,
   });
 
-  // Another person or day: the picked start belongs to the old answer.
-  const inputs = `${JSON.stringify(toLineInputs(lines))}|${date}`;
+  // Another person, party or day: the picked start belongs to the old answer.
+  const inputs = `${JSON.stringify(toLineInputs(lines))}|${date}|${partySize ?? ""}`;
   const lastInputs = useRef(inputs);
   useEffect(() => {
     if (lastInputs.current === inputs) return;
@@ -191,6 +209,21 @@ function RescheduleFields({
 
   return (
     <>
+      {party ? (
+        <AppInput
+          name="party_size"
+          label={t("reservations.fields.party_size")}
+          description={
+            reservation.zone
+              ? t("reservations.fields.party_size_zone_hint", {
+                  zone: reservation.zone,
+                })
+              : t("reservations.fields.party_size_hint")
+          }
+          inputMode="numeric"
+          autoComplete="off"
+        />
+      ) : null}
       {reservation.lines.map((line, index) => (
         <div
           key={line.index}

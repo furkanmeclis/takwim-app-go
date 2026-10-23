@@ -27,13 +27,14 @@ SELECT currency::TEXT FROM organizations WHERE id = sqlc.arg(organization_id);
 INSERT INTO reservations (
     organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status,
     confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields,
-    customer_note, internal_note, created_by
+    customer_note, internal_note, created_by, party_size, zone
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(number), sqlc.arg(branch_id), sqlc.arg(customer_id), sqlc.narg(hold_id),
     sqlc.arg(status), sqlc.arg(approval_mode), sqlc.arg(approval_status), sqlc.arg(confirmation_status),
     sqlc.arg(payment_status), sqlc.arg(source), sqlc.arg(starts_at), sqlc.arg(ends_at), sqlc.arg(total_price),
-    sqlc.arg(currency), sqlc.arg(custom_fields), sqlc.arg(customer_note), sqlc.arg(internal_note), sqlc.narg(created_by)
+    sqlc.arg(currency), sqlc.arg(custom_fields), sqlc.arg(customer_note), sqlc.arg(internal_note), sqlc.narg(created_by),
+    sqlc.narg(party_size), sqlc.arg(zone)
 )
 RETURNING *;
 
@@ -215,7 +216,8 @@ ORDER BY st.name;
 -- A change of time / services / staff: the new commitment and times.
 UPDATE reservations
 SET hold_id = sqlc.arg(hold_id), starts_at = sqlc.arg(starts_at), ends_at = sqlc.arg(ends_at),
-    total_price = sqlc.arg(total_price), version = version + 1
+    total_price = sqlc.arg(total_price), party_size = sqlc.narg(party_size), zone = sqlc.arg(zone),
+    version = version + 1
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
 RETURNING *;
 
@@ -271,7 +273,7 @@ SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.e
        l.buffer_before_minutes, l.buffer_after_minutes,
        st.uuid AS staff_uuid,
        r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
-       r.source, r.version,
+       r.source, r.version, r.party_size,
        b.uuid AS branch_uuid,
        c.first_name AS customer_first_name, c.last_name AS customer_last_name
 FROM reservation_lines l
@@ -310,7 +312,7 @@ ORDER BY b.name, b.id;
 SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.ends_at,
        l.buffer_before_minutes, l.buffer_after_minutes,
        r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
-       r.source, r.version, r.customer_note,
+       r.source, r.version, r.party_size, r.customer_note,
        b.uuid AS branch_uuid, b.name AS branch_name,
        c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone
 FROM reservation_lines l

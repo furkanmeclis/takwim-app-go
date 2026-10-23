@@ -13,9 +13,10 @@ import (
 )
 
 const createPublicCheckout = `-- name: CreatePublicCheckout :one
-INSERT INTO public_checkouts (organization_id, branch_id, hold_id, channel, lines, starts_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, uuid, organization_id, branch_id, hold_id, channel, lines, starts_at, reservation_id, created_at, updated_at
+INSERT INTO public_checkouts (organization_id, branch_id, hold_id, channel, lines, starts_at, party_size, zone)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8)
+RETURNING id, uuid, organization_id, branch_id, hold_id, channel, lines, starts_at, reservation_id, created_at, updated_at, party_size, zone
 `
 
 type CreatePublicCheckoutParams struct {
@@ -25,6 +26,8 @@ type CreatePublicCheckoutParams struct {
 	Channel        string             `json:"channel"`
 	Lines          []byte             `json:"lines"`
 	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	PartySize      pgtype.Int4        `json:"party_size"`
+	Zone           string             `json:"zone"`
 }
 
 func (q *Queries) CreatePublicCheckout(ctx context.Context, arg CreatePublicCheckoutParams) (PublicCheckout, error) {
@@ -35,6 +38,8 @@ func (q *Queries) CreatePublicCheckout(ctx context.Context, arg CreatePublicChec
 		arg.Channel,
 		arg.Lines,
 		arg.StartsAt,
+		arg.PartySize,
+		arg.Zone,
 	)
 	var i PublicCheckout
 	err := row.Scan(
@@ -49,12 +54,14 @@ func (q *Queries) CreatePublicCheckout(ctx context.Context, arg CreatePublicChec
 		&i.ReservationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
 
 const getPublicCheckout = `-- name: GetPublicCheckout :one
-SELECT pc.id, pc.uuid, pc.organization_id, pc.branch_id, pc.hold_id, pc.channel, pc.lines, pc.starts_at, pc.reservation_id, pc.created_at, pc.updated_at, b.uuid AS branch_uuid, b.name AS branch_name, h.uuid AS hold_uuid,
+SELECT pc.id, pc.uuid, pc.organization_id, pc.branch_id, pc.hold_id, pc.channel, pc.lines, pc.starts_at, pc.reservation_id, pc.created_at, pc.updated_at, pc.party_size, pc.zone, b.uuid AS branch_uuid, b.name AS branch_name, h.uuid AS hold_uuid,
        h.status AS hold_status, h.ends_at AS hold_ends_at, h.expires_at AS hold_expires_at,
        r.uuid AS reservation_uuid
 FROM public_checkouts pc
@@ -81,6 +88,8 @@ type GetPublicCheckoutRow struct {
 	ReservationID   pgtype.Int8        `json:"reservation_id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	PartySize       pgtype.Int4        `json:"party_size"`
+	Zone            string             `json:"zone"`
 	BranchUuid      uuid.UUID          `json:"branch_uuid"`
 	BranchName      string             `json:"branch_name"`
 	HoldUuid        uuid.UUID          `json:"hold_uuid"`
@@ -105,6 +114,8 @@ func (q *Queries) GetPublicCheckout(ctx context.Context, arg GetPublicCheckoutPa
 		&i.ReservationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 		&i.BranchUuid,
 		&i.BranchName,
 		&i.HoldUuid,
@@ -117,7 +128,7 @@ func (q *Queries) GetPublicCheckout(ctx context.Context, arg GetPublicCheckoutPa
 }
 
 const getPublicCheckoutForUpdate = `-- name: GetPublicCheckoutForUpdate :one
-SELECT id, uuid, organization_id, branch_id, hold_id, channel, lines, starts_at, reservation_id, created_at, updated_at FROM public_checkouts
+SELECT id, uuid, organization_id, branch_id, hold_id, channel, lines, starts_at, reservation_id, created_at, updated_at, party_size, zone FROM public_checkouts
 WHERE organization_id = $1 AND uuid = $2
 FOR UPDATE
 `
@@ -142,6 +153,8 @@ func (q *Queries) GetPublicCheckoutForUpdate(ctx context.Context, arg GetPublicC
 		&i.ReservationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PartySize,
+		&i.Zone,
 	)
 	return i, err
 }
@@ -270,6 +283,45 @@ func (q *Queries) ListPublicBranchImages(ctx context.Context, arg ListPublicBran
 	for rows.Next() {
 		var i ListPublicBranchImagesRow
 		if err := rows.Scan(&i.Uuid, &i.BranchID, &i.SortOrder); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicBranchZones = `-- name: ListPublicBranchZones :many
+SELECT DISTINCT branch_id, zone::TEXT AS zone FROM resources
+WHERE organization_id = $1 AND branch_id = ANY($2::BIGINT[])
+  AND deleted_at IS NULL AND is_active AND show_online AND zone <> '' AND kind IN ('table', 'area')
+ORDER BY branch_id, zone
+`
+
+type ListPublicBranchZonesParams struct {
+	OrganizationID int64   `json:"organization_id"`
+	BranchIds      []int64 `json:"branch_ids"`
+}
+
+type ListPublicBranchZonesRow struct {
+	BranchID int64  `json:"branch_id"`
+	Zone     string `json:"zone"`
+}
+
+// Areas the customer may choose (restaurant): zones of the active, online
+// tables and areas of each branch.
+func (q *Queries) ListPublicBranchZones(ctx context.Context, arg ListPublicBranchZonesParams) ([]ListPublicBranchZonesRow, error) {
+	rows, err := q.db.Query(ctx, listPublicBranchZones, arg.OrganizationID, arg.BranchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPublicBranchZonesRow{}
+	for rows.Next() {
+		var i ListPublicBranchZonesRow
+		if err := rows.Scan(&i.BranchID, &i.Zone); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

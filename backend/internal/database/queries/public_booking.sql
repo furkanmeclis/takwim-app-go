@@ -63,8 +63,9 @@ FROM service_staff ss
 WHERE ss.organization_id = sqlc.arg(organization_id);
 
 -- name: CreatePublicCheckout :one
-INSERT INTO public_checkouts (organization_id, branch_id, hold_id, channel, lines, starts_at)
-VALUES (sqlc.arg(organization_id), sqlc.arg(branch_id), sqlc.arg(hold_id), sqlc.arg(channel), sqlc.arg(lines), sqlc.arg(starts_at))
+INSERT INTO public_checkouts (organization_id, branch_id, hold_id, channel, lines, starts_at, party_size, zone)
+VALUES (sqlc.arg(organization_id), sqlc.arg(branch_id), sqlc.arg(hold_id), sqlc.arg(channel), sqlc.arg(lines), sqlc.arg(starts_at),
+        sqlc.narg(party_size), sqlc.arg(zone))
 RETURNING *;
 
 -- name: GetPublicCheckout :one
@@ -99,3 +100,11 @@ FROM reservations r
 JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
 JOIN organizations o ON o.id = r.organization_id
 WHERE r.organization_id = sqlc.arg(organization_id) AND r.uuid = sqlc.arg(uuid);
+
+-- name: ListPublicBranchZones :many
+-- Areas the customer may choose (restaurant): zones of the active, online
+-- tables and areas of each branch.
+SELECT DISTINCT branch_id, zone::TEXT AS zone FROM resources
+WHERE organization_id = sqlc.arg(organization_id) AND branch_id = ANY(sqlc.arg(branch_ids)::BIGINT[])
+  AND deleted_at IS NULL AND is_active AND show_online AND zone <> '' AND kind IN ('table', 'area')
+ORDER BY branch_id, zone;

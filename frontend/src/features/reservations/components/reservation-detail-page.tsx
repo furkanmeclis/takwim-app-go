@@ -46,6 +46,7 @@ import {
 } from "@/features/reservations/hooks/use-reservations";
 import {
   cancelReasonLabel,
+  partyLabel,
   sourceLabel,
   statusLabel,
 } from "@/features/reservations/lib/labels";
@@ -228,6 +229,15 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
                       label: t("reservations.fields.branch"),
                       value: reservation.branch.name,
                     },
+                    ...(reservation.party_size != null || reservation.zone
+                      ? [
+                          {
+                            key: "party",
+                            label: t("reservations.columns.party"),
+                            value: partyLabel(t, reservation),
+                          },
+                        ]
+                      : []),
                     {
                       key: "starts_at",
                       label: t("reservations.columns.starts_at"),

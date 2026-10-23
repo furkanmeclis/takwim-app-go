@@ -123,6 +123,7 @@ func (s *Service) Agenda(ctx context.Context, orgID, userID int64, f model.Agend
 				BufferBeforeMinutes: int(row.BufferBeforeMinutes), BufferAfterMinutes: int(row.BufferAfterMinutes),
 				Status: row.Status, ApprovalStatus: row.ApprovalStatus, ConfirmationStatus: row.ConfirmationStatus,
 				PaymentStatus: row.PaymentStatus, Source: row.Source, Version: int(row.Version),
+				PartySize: partyOf(row.PartySize),
 			},
 			BranchName: row.BranchName, CustomerNote: row.CustomerNote,
 		}

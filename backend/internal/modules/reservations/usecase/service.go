@@ -208,6 +208,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 	if in.CustomFields == nil {
 		in.CustomFields = map[string]any{}
 	}
+	in.Zone = strings.TrimSpace(in.Zone)
 	customFields, err := json.Marshal(in.CustomFields)
 	if err != nil {
 		ve.add("custom_fields", "invalid", "custom fields must be an object")
@@ -242,6 +243,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 		}
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
 			BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: channel, StartsAt: in.StartsAt, Reason: p.holdReason,
+			PartySize: in.PartySize, Zone: in.Zone,
 		}, caller, actorID)
 		if err != nil {
 			return err
@@ -266,6 +268,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 			StartsAt: ts(created.Slot.StartsAt), EndsAt: ts(created.Slot.EndsAt), TotalPrice: total.Numeric(),
 			Currency: currency, CustomFields: customFields, CustomerNote: in.CustomerNote, InternalNote: in.InternalNote,
 			CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
+			PartySize: pgParty(in.PartySize), Zone: in.Zone,
 		})
 		if err != nil {
 			return err
@@ -349,6 +352,11 @@ func (s *Service) priceLines(ctx context.Context, tx *availabilityusecase.Tx, sl
 			line.StaffName = pgtype.Text{String: l.Staff.Name, Valid: true}
 		}
 		out = append(out, line)
+	}
+	// Nothing to collect online: a free booking (a restaurant table without
+	// a priced menu or event) is paid, if at all, at the business.
+	if method == model.MethodOnline && total.IsZero() {
+		ve.add("payment", "not_allowed", "a booking without a price cannot be paid online")
 	}
 	return out, total, ve.orNil()
 }
@@ -461,6 +469,7 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 		StartsAt: row.StartsAt.Time.UTC(), EndsAt: row.EndsAt.Time.UTC(),
 		TotalPrice: money.FromNumericOrZero(row.TotalPrice), Currency: row.Currency, CustomFields: map[string]any{},
 		CustomerNote: row.CustomerNote, InternalNote: row.InternalNote, Version: int(row.Version),
+		PartySize: partyOf(row.PartySize), Zone: row.Zone,
 		Lines: []model.Line{}, Events: []model.Event{},
 		CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
 	}
@@ -526,4 +535,21 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 
 func ts(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
+// partyOf reads a stored party size.
+func partyOf(v pgtype.Int4) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int32)
+	return &n
+}
+
+// pgParty stores a party size.
+func pgParty(v *int) pgtype.Int4 {
+	if v == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*v), Valid: true}
 }

@@ -34,3 +34,13 @@ export const sourceLabel = (t: Translate, v: string) =>
 
 export const cancelReasonLabel = (t: Translate, v: string) =>
   CANCEL_REASON_KEYS[v] ? t(CANCEL_REASON_KEYS[v]) : v;
+
+/** "4 kişi · Bahçe" for a restaurant booking; "" when it has no party. */
+export const partyLabel = (
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  v: { party_size?: number | null; zone?: string },
+) => {
+  if (v.party_size == null) return v.zone ?? "";
+  const guests = t("reservations.party_count", { count: v.party_size });
+  return v.zone ? `${guests} · ${v.zone}` : guests;
+};

@@ -8,6 +8,7 @@ import {
   Plus,
   Trash2,
   UserRound,
+  Users,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +21,7 @@ import { EntityForm, EntityPage } from "@/components/entity";
 import {
   AppCombobox,
   AppForm,
+  AppInput,
   AppSelect,
   AppTextarea,
   FormActions,
@@ -38,15 +40,20 @@ import { SlotPicker } from "@/features/reservations/components/slot-picker";
 import { MAX_LINES } from "@/features/reservations/constants";
 import { useCreateReservation } from "@/features/reservations/hooks/use-reservations";
 import { useSlotSearch } from "@/features/reservations/hooks/use-slot-search";
+import { useZoneOptions } from "@/features/reservations/hooks/use-zone-options";
 import { clock, zoned } from "@/features/reservations/lib/calendar-time";
 import { WRITE_ANY } from "@/features/reservations/lib/permissions";
 import { staffOptions } from "@/features/reservations/lib/staff-options";
 import {
   ANY_STAFF,
+  ANY_ZONE,
   createBookingSchema,
   toLineInputs,
+  toPartySize,
+  toZone,
   type BookingFormValues,
 } from "@/features/reservations/schemas/reservation-forms";
+import { useSector } from "@/features/sectors/hooks/use-sector";
 import { useServicesList } from "@/features/services/hooks/use-services";
 import { useAccessibleBranches } from "@/features/staff/hooks/use-staff";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -76,7 +83,9 @@ export function ReservationCreatePage() {
   const create = useCreateReservation();
   const branches = useAccessibleBranches();
   const [selectedBranch] = useSelectedBranch(slug);
-  const schema = useMemo(() => createBookingSchema(t), [t]);
+  // Restaurants book a table for a party: guests and area come first.
+  const party = Boolean(useSector().sector?.capacity.party_size);
+  const schema = useMemo(() => createBookingSchema(t, { party }), [t, party]);
   const zone = organization?.timezone ?? undefined;
 
   // From the calendar: ?branch=&date=&at=HH:MM&staff= (free space clicked).
@@ -104,6 +113,8 @@ export function ReservationCreatePage() {
       branch_uuid: branch,
       customer_uuid: "",
       lines: [{ ...EMPTY_LINE, staff_uuid: preset.staff || ANY_STAFF }],
+      party_size: "",
+      zone: ANY_ZONE,
       date: preset.date || dateKeyInZone(new Date(), zone),
       starts_at: "",
       customer_note: "",
@@ -150,6 +161,8 @@ export function ReservationCreatePage() {
                 branch_uuid: values.branch_uuid,
                 customer_uuid: values.customer_uuid,
                 lines: toLineInputs(values.lines),
+                party_size: toPartySize(values.party_size),
+                zone: toZone(values.zone),
                 starts_at: values.starts_at,
                 customer_note: values.customer_note || undefined,
                 internal_note: values.internal_note || undefined,
@@ -161,6 +174,7 @@ export function ReservationCreatePage() {
           >
             {(form) => (
               <BookingFields
+                party={party}
                 preferredTime={preset.at}
                 branchOptions={(branches.data?.items ?? []).map((branch) => ({
                   value: branch.uuid,
@@ -180,11 +194,14 @@ export function ReservationCreatePage() {
 }
 
 function BookingFields({
+  party,
   preferredTime,
   branchOptions,
   isSubmitting,
   onCancel,
 }: {
+  /** The sector books by party size (restaurant flow). */
+  party: boolean;
   /** "HH:MM" to pick once its slot is offered (calendar click). */
   preferredTime: string;
   branchOptions: { value: string; label: string }[];
@@ -196,10 +213,13 @@ function BookingFields({
   const form = useFormContext<BookingFormValues>();
   const { control, setValue } = form;
   const lineArray = useFieldArray({ control, name: "lines" });
-  const [branchUuid, lines, date, startsAt] = useWatch({
+  const [branchUuid, lines, date, startsAt, partyInput, zoneInput] = useWatch({
     control,
-    name: ["branch_uuid", "lines", "date", "starts_at"],
+    name: ["branch_uuid", "lines", "date", "starts_at", "party_size", "zone"],
   });
+  const partySize = toPartySize(partyInput);
+  const areaZone = toZone(zoneInput);
+  const zoneOptions = useZoneOptions(party);
   const [customerDialog, setCustomerDialog] = useState(false);
   const [createdCustomers, setCreatedCustomers] = useState<ComboboxOption[]>(
     [],
@@ -224,7 +244,22 @@ function BookingFields({
     [services.data?.items, t],
   );
 
-  const { query, ready } = useSlotSearch({ branchUuid, lines, date });
+  const { query, ready } = useSlotSearch({
+    branchUuid,
+    lines,
+    date,
+    partySize,
+    zone: areaZone,
+    partyRequired: party,
+  });
+
+  // A restaurant usually offers one service (the table); pick it for them.
+  const onlyService =
+    party && serviceOptions.length === 1 ? serviceOptions[0].value : "";
+  useEffect(() => {
+    if (!onlyService || lines.length !== 1 || lines[0]?.service_uuid) return;
+    setValue("lines.0.service_uuid", onlyService, { shouldValidate: true });
+  }, [lines, onlyService, setValue]);
 
   // The time clicked on the calendar, picked once when it is free.
   const preferred = useRef(preferredTime);
@@ -250,13 +285,13 @@ function BookingFields({
 
   // The picked start belongs to the old inputs; pick again.
   const linesKey = JSON.stringify(toLineInputs(lines));
-  const lastInputs = useRef(`${branchUuid}|${linesKey}|${date}`);
+  const inputsKey = `${branchUuid}|${linesKey}|${date}|${partySize ?? ""}|${areaZone ?? ""}`;
+  const lastInputs = useRef(inputsKey);
   useEffect(() => {
-    const next = `${branchUuid}|${linesKey}|${date}`;
-    if (lastInputs.current === next) return;
-    lastInputs.current = next;
+    if (lastInputs.current === inputsKey) return;
+    lastInputs.current = inputsKey;
     setValue("starts_at", "");
-  }, [branchUuid, date, linesKey, setValue]);
+  }, [inputsKey, setValue]);
 
   const loadCustomers = useCallback(
     async (q: string) => {
@@ -394,6 +429,29 @@ function BookingFields({
         title={t("reservations.form.section_time")}
         description={t("reservations.form.section_time_desc")}
       >
+        {party ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AppInput
+              name="party_size"
+              label={t("reservations.fields.party_size")}
+              description={t("reservations.fields.party_size_hint")}
+              startIcon={Users}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            {zoneOptions.length > 0 ? (
+              <AppSelect
+                name="zone"
+                label={t("reservations.fields.zone")}
+                description={t("reservations.fields.zone_hint")}
+                options={[
+                  { value: ANY_ZONE, label: t("reservations.fields.zone_any") },
+                  ...zoneOptions,
+                ]}
+              />
+            ) : null}
+          </div>
+        ) : null}
         <SlotPicker
           query={query}
           ready={ready}

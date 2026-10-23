@@ -336,7 +336,7 @@ func (h *Holds) CreateIn(ctx context.Context, tx *Tx, in model.HoldInput, caller
 	planner := New(tx.Q, h.settings)
 	planner.SetClock(func() time.Time { return now })
 	planner.SetBusySource(AllocationBusy{Q: tx.Q, Now: func() time.Time { return now }})
-	search := model.SearchInput{BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: in.Channel}
+	search := model.SearchInput{BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: in.Channel, PartySize: in.PartySize, Zone: in.Zone}
 	slot, ok, err := planner.Check(ctx, tx.OrgID, search, caller, *in.StartsAt)
 	if err != nil {
 		return Created{}, err

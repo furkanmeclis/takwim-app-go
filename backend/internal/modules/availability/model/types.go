@@ -31,6 +31,10 @@ type SearchInput struct {
 	To          string      `json:"to"`
 	StepMinutes *int        `json:"step_minutes"`
 	Channel     string      `json:"channel"`
+	// PartySize is the number of people (restaurant): every resource must
+	// seat them. Zone narrows the resources to one area.
+	PartySize *int   `json:"party_size"`
+	Zone      string `json:"zone"`
 }
 
 // Ref names a staff member or a resource.
@@ -45,6 +49,13 @@ type ResourceRef struct {
 	Name string    `json:"name"`
 	Kind string    `json:"kind"`
 }
+
+// Party limits.
+const (
+	MinPartySize = 1
+	MaxPartySize = 1000
+	MaxZone      = 64
+)
 
 // LineInfo describes a requested line as the engine planned it.
 type LineInfo struct {
@@ -128,6 +139,8 @@ type HoldInput struct {
 	StartsAt   *time.Time  `json:"starts_at"`
 	Reason     string      `json:"reason"`
 	Minutes    *int        `json:"minutes"`
+	PartySize  *int        `json:"party_size"`
+	Zone       string      `json:"zone"`
 }
 
 // ExtendInput is the POST /v1/tenant/availability/holds/{uuid}/extend body.

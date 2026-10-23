@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/model"
 	orgsettings "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 )
 
 // Limits of a search.
@@ -316,6 +318,17 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 			ve.add("step_minutes", "invalid", fmt.Sprintf("step must be a multiple of %d between %d and %d", MinStep, MinStep, MaxStep))
 		}
 	}
+	party := 0
+	if in.PartySize != nil {
+		party = *in.PartySize
+		if party < model.MinPartySize || party > model.MaxPartySize {
+			ve.add("party_size", "invalid", fmt.Sprintf("party size must be between %d and %d", model.MinPartySize, model.MaxPartySize))
+		}
+	}
+	zone := strings.TrimSpace(in.Zone)
+	if len(zone) > model.MaxZone {
+		ve.add("zone", "too_long", "zone is too long")
+	}
 	if err := ve.orNil(); err != nil {
 		return nil, err
 	}
@@ -350,7 +363,10 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		Branch: model.Ref{UUID: branch.Uuid, Name: branch.Name}, Timezone: loc.String(), Channel: channel,
 		StepMinutes: step, EarliestStart: now.UTC(),
 	}
-	req := engine.Request{Location: loc, FirstDay: first, LastDay: last, Step: time.Duration(step) * time.Minute, NotBefore: now}
+	req := engine.Request{
+		Location: loc, FirstDay: first, LastDay: last, Step: time.Duration(step) * time.Minute, NotBefore: now,
+		PartySize: party, Zone: zone, Combine: channel == model.ChannelPanel,
+	}
 	if channel == model.ChannelOnline {
 		if s.settings == nil {
 			return nil, ErrOnlineNotReady
@@ -483,6 +499,11 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		p.services = append(p.services, svc.Uuid)
 		result.Lines = append(result.Lines, info)
 	}
+	// A sector that books by party (restaurant) needs the party size for
+	// lines that take a resource: the resource must seat it.
+	if party == 0 && len(kinds) > 0 && partySector(ctx) {
+		ve.add("party_size", "required", "the number of people is required")
+	}
 	if err := ve.orNil(); err != nil {
 		return nil, err
 	}
@@ -531,7 +552,10 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 				}
 				open = engine.OpenIntervals(loc, first, last, own, nil)
 			}
-			req.Resources = append(req.Resources, engine.Resource{ID: row.ID, Kind: row.Kind, Open: open})
+			req.Resources = append(req.Resources, engine.Resource{
+				ID: row.ID, Kind: row.Kind, Open: open,
+				MinCapacity: int(row.MinCapacity), Capacity: int(row.Capacity), Zone: row.Zone, Combinable: row.Combinable,
+			})
 			p.resources[row.ID] = model.ResourceRef{UUID: row.Uuid, Name: row.Name, Kind: row.Kind}
 			resourceIDs = append(resourceIDs, row.ID)
 		}
@@ -571,6 +595,16 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 	p.req = req
 	p.result = result
 	return p, nil
+}
+
+// partySector reports whether the business's sector books by party size.
+func partySector(ctx context.Context) bool {
+	scope, ok := orgctx.From(ctx)
+	if !ok {
+		return false
+	}
+	def, ok := sector.Get(sector.Code(scope.Sector))
+	return ok && def.Capacity.PartySize
 }
 
 // window resolves the local dates of the search.

@@ -40,7 +40,7 @@ WHERE organization_id = sqlc.arg(organization_id) AND staff_id = ANY(sqlc.arg(st
   AND starts_at < sqlc.arg(until) AND ends_at > sqlc.arg(since);
 
 -- name: ListAvailabilityResources :many
-SELECT id, uuid, name, kind, zone, show_online, working_hours
+SELECT id, uuid, name, kind, zone, show_online, working_hours, min_capacity, capacity, combinable
 FROM resources
 WHERE organization_id = sqlc.arg(organization_id) AND branch_id = sqlc.arg(branch_id)
   AND kind = ANY(sqlc.arg(kinds)::TEXT[]) AND deleted_at IS NULL AND is_active

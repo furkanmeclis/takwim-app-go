@@ -33,12 +33,13 @@ export function useResourcesMeta() {
   });
 }
 
-export function useResourcesFacets() {
+export function useResourcesFacets({ enabled = true } = {}) {
   const { slug } = useTenant();
   return useQuery({
     queryKey: resourcesKeys.facets(slug),
     queryFn: () => resourcesService.facets(slug),
     staleTime: 60_000,
+    enabled,
   });
 }
 

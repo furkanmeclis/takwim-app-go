@@ -19,11 +19,12 @@ import {
   ReservationRowActions,
   type ReservationRowActionHandlers,
 } from "@/features/reservations/components/reservation-row-actions";
-import { sourceLabel } from "@/features/reservations/lib/labels";
+import { partyLabel, sourceLabel } from "@/features/reservations/lib/labels";
 import type {
   ReservationFacets,
   ReservationListItem,
 } from "@/features/reservations/types";
+import { useSector } from "@/features/sectors/hooks/use-sector";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { amount, datetime, datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -53,6 +54,7 @@ export function useReservationColumns({ handlers, facets }: Options) {
   const { t, locale } = useLocale();
   const { organization } = useTenant();
   const zone = organization?.timezone ?? undefined;
+  const party = Boolean(useSector().sector?.capacity.party_size);
 
   return useMemo(() => {
     const facetOptions = (list?: ReservationFacets["branch"]) =>
@@ -109,6 +111,14 @@ export function useReservationColumns({ handlers, facets }: Options) {
         cell: ({ row }) => (
           <span className="line-clamp-2">{row.original.services || "—"}</span>
         ),
+      }),
+      createColumn<ReservationListItem>({
+        accessorKey: "party_size",
+        labelKey: "reservations.columns.party",
+        enableSorting: false,
+        // Shown where the sector books by party size (restaurants).
+        defaultHidden: !party,
+        cell: ({ row }) => partyLabel(t, row.original) || "—",
       }),
       createColumn<ReservationListItem>({
         accessorKey: "staff",
@@ -206,5 +216,5 @@ export function useReservationColumns({ handlers, facets }: Options) {
         ),
       }),
     ] as ColumnDef<ReservationListItem, unknown>[];
-  }, [facets?.branch, facets?.staff, handlers, locale, t, zone]);
+  }, [facets?.branch, facets?.staff, handlers, locale, party, t, zone]);
 }

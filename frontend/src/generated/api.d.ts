@@ -10207,6 +10207,10 @@ export interface components {
             source: components["schemas"]["TenantResourceFacet"][];
         };
         TenantAvailabilitySearchRequest: {
+            /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
+            party_size?: number | null;
+            /** @description Area of the branch (resource zone) the resources must be in; empty = any. */
+            zone?: string;
             /** Format: uuid */
             branch_uuid: string;
             lines: {
@@ -10306,6 +10310,10 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         TenantCapacityHoldCreateRequest: {
+            /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
+            party_size?: number | null;
+            /** @description Area of the branch (resource zone) the resources must be in; empty = any. */
+            zone?: string;
             /** Format: uuid */
             branch_uuid: string;
             lines: {
@@ -10380,6 +10388,10 @@ export interface components {
             staff_uuid?: string | null;
         };
         TenantReservationCreateRequest: {
+            /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
+            party_size?: number | null;
+            /** @description Area of the branch (resource zone) the resources must be in; empty = any. */
+            zone?: string;
             /** Format: uuid */
             branch_uuid: string;
             /** Format: uuid */
@@ -10404,6 +10416,10 @@ export interface components {
             internal_note?: string;
         };
         TenantReservationRescheduleRequest: {
+            /** @description New number of people; omitted or null keeps the booked party. */
+            party_size?: number | null;
+            /** @description New area; omitted or null keeps the booked one. */
+            zone?: string | null;
             /** Format: date-time */
             starts_at: string;
             lines?: components["schemas"]["TenantReservationLineInput"][];
@@ -10435,6 +10451,10 @@ export interface components {
         /** @enum {string} */
         TenantReservationSource: "panel" | "online" | "embed";
         TenantReservationListItem: {
+            /** @description Number of people (restaurant). */
+            party_size: number | null;
+            /** @description Area asked for; empty = any. */
+            zone: string;
             /** Format: uuid */
             uuid: string;
             /** Format: int64 */
@@ -10496,6 +10516,8 @@ export interface components {
             off: components["schemas"]["TenantReservationInterval"][];
         };
         TenantReservationCalendarItem: {
+            /** @description Number of people (restaurant). */
+            party_size: number | null;
             /** Format: uuid */
             reservation_uuid: string;
             /** Format: int64 */
@@ -10566,6 +10588,10 @@ export interface components {
             items: components["schemas"]["TenantReservationAgendaItem"][];
         };
         TenantReservation: {
+            /** @description Number of people (restaurant). */
+            party_size: number | null;
+            /** @description Area asked for; empty = any. */
+            zone: string;
             /** Format: uuid */
             uuid: string;
             /** Format: int64 */
@@ -10860,6 +10886,8 @@ export interface components {
             branch_count: number;
         };
         PublicBranch: {
+            /** @description Areas a party may ask for (zones of the online tables and areas), for the restaurant flow's area step. */
+            zones: string[];
             /** Format: uuid */
             uuid: string;
             slug: string;
@@ -10944,6 +10972,10 @@ export interface components {
             staff_uuid?: string | null;
         };
         PublicAvailabilityRequest: {
+            /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
+            party_size?: number | null;
+            /** @description Area of the branch (resource zone) the resources must be in; empty = any. */
+            zone?: string;
             /** Format: uuid */
             branch_uuid: string;
             lines: components["schemas"]["PublicLineInput"][];
@@ -10996,6 +11028,10 @@ export interface components {
             }[];
         };
         PublicCheckoutRequest: {
+            /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
+            party_size?: number | null;
+            /** @description Area of the branch (resource zone) the resources must be in; empty = any. */
+            zone?: string;
             /** Format: uuid */
             branch_uuid: string;
             lines: components["schemas"]["PublicLineInput"][];
@@ -11007,6 +11043,10 @@ export interface components {
             channel?: components["schemas"]["PublicChannel"];
         };
         PublicCheckout: {
+            /** @description Number of people (restaurant). */
+            party_size: number | null;
+            /** @description Area asked for; empty = any. */
+            zone: string;
             /**
              * Format: uuid
              * @description The checkout token (secret of the client).
@@ -11053,6 +11093,10 @@ export interface components {
             website?: string;
         };
         PublicReservation: {
+            /** @description Number of people (restaurant). */
+            party_size: number | null;
+            /** @description Area asked for; empty = any. */
+            zone: string;
             /** Format: uuid */
             uuid: string;
             /** Format: int64 */

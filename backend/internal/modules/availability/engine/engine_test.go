@@ -551,3 +551,61 @@ func TestAnyStaffTiesFollowTheLineOrder(t *testing.T) {
 		t.Fatalf("09:00 went to %d, want 2", d.Slots[0].Lines[0].StaffID)
 	}
 }
+
+// TestPartySeating (TEC-903): a party gets the smallest table that seats it
+// in the chosen zone; the panel joins combinable tables of one zone when no
+// single table is large enough, online does not.
+func TestPartySeating(t *testing.T) {
+	table := func(id int64, minCap, capacity int, zone string, combinable bool, busy ...Interval) Resource {
+		return Resource{ID: id, Kind: "table", Open: []Interval{iv("09:00", "11:00")}, Busy: busy,
+			MinCapacity: minCap, Capacity: capacity, Zone: zone, Combinable: combinable}
+	}
+	req := func(party int, zone string, combine bool, tables ...Resource) Request {
+		r := base()
+		r.Open = []Interval{iv("09:00", "11:00")}
+		r.Lines[0].StaffMode = StaffNone
+		r.Lines[0].Staff = nil
+		r.Lines[0].ResourceKinds = []string{"table"}
+		r.Resources = tables
+		r.PartySize, r.Zone, r.Combine = party, zone, combine
+		return r
+	}
+	first := func(d Day) []int64 {
+		if len(d.Slots) == 0 {
+			return nil
+		}
+		return d.Slots[0].Lines[0].ResourceIDs
+	}
+	tables := []Resource{
+		table(1, 1, 6, "salon", false),
+		table(2, 1, 2, "salon", true),
+		table(3, 3, 4, "salon", true),
+		table(4, 1, 4, "bahçe", true),
+		table(5, 1, 4, "bahçe", true),
+	}
+	if ids := first(only(t, req(2, "", false, tables...))); !reflect.DeepEqual(ids, []int64{2}) {
+		t.Fatalf("party of 2 = %v, want the two-seat table", ids)
+	}
+	if ids := first(only(t, req(4, "", false, tables...))); !reflect.DeepEqual(ids, []int64{3}) {
+		t.Fatalf("party of 4 = %v, want the smallest four-seat table with the highest minimum", ids)
+	}
+	if ids := first(only(t, req(4, "bahçe", false, tables...))); !reflect.DeepEqual(ids, []int64{4}) {
+		t.Fatalf("party of 4 in the garden = %v", ids)
+	}
+	if ids := first(only(t, req(1, "", false, table(3, 3, 4, "salon", false)))); ids != nil {
+		t.Fatalf("party of 1 at a table for 3+ = %v, want none", ids)
+	}
+	// Eight people: no single table; online offers nothing, the panel joins
+	// the garden tables (the salon's combinable ones seat only six).
+	if d := only(t, req(8, "", false, tables...)); d.Status != DayFull {
+		t.Fatalf("online party of 8 = %+v, want full", d)
+	}
+	if ids := first(only(t, req(8, "", true, tables...))); !reflect.DeepEqual(ids, []int64{4, 5}) {
+		t.Fatalf("panel party of 8 = %v, want the joined garden tables", ids)
+	}
+	// A busy table is skipped: the next fit takes the party.
+	busy := []Resource{table(2, 1, 2, "salon", false, iv("09:00", "11:00")), table(3, 1, 4, "salon", false)}
+	if ids := first(only(t, req(2, "", false, busy...))); !reflect.DeepEqual(ids, []int64{3}) {
+		t.Fatalf("busy two-seat table: got %v", ids)
+	}
+}

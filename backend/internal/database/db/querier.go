@@ -147,6 +147,10 @@ type Querier interface {
 	// Tenant resource: staff (TEC-890). Every query filters by organization_id.
 	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
 	CreateStaffTimeOff(ctx context.Context, arg CreateStaffTimeOffParams) (StaffTimeOff, error)
+	CreateTemplateResource(ctx context.Context, arg CreateTemplateResourceParams) (CreateTemplateResourceRow, error)
+	// TEC-903: starter records a new business gets from its sector template.
+	CreateTemplateService(ctx context.Context, arg CreateTemplateServiceParams) (CreateTemplateServiceRow, error)
+	CreateTemplateServiceOffer(ctx context.Context, arg CreateTemplateServiceOfferParams) error
 	CreateTenantRole(ctx context.Context, arg CreateTenantRoleParams) (CreateTenantRoleRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
@@ -495,6 +499,9 @@ type Querier interface {
 	ListProducts(ctx context.Context, arg ListProductsParams) ([]ListProductsRow, error)
 	ListProductsForExport(ctx context.Context, arg ListProductsForExportParams) ([]ListProductsForExportRow, error)
 	ListPublicBranchImages(ctx context.Context, arg ListPublicBranchImagesParams) ([]ListPublicBranchImagesRow, error)
+	// Areas the customer may choose (restaurant): zones of the active, online
+	// tables and areas of each branch.
+	ListPublicBranchZones(ctx context.Context, arg ListPublicBranchZonesParams) ([]ListPublicBranchZonesRow, error)
 	// Active branches shown on the customer screens.
 	ListPublicBranches(ctx context.Context, organizationID int64) ([]ListPublicBranchesRow, error)
 	// Active branch offers of services (branch price / duration overrides).

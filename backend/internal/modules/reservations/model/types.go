@@ -87,6 +87,10 @@ type CreateInput struct {
 	CustomFields map[string]any           `json:"custom_fields"`
 	CustomerNote string                   `json:"customer_note"`
 	InternalNote string                   `json:"internal_note"`
+	// PartySize and Zone: the number of people and the area asked for
+	// (restaurant); the resources must seat the party.
+	PartySize *int   `json:"party_size"`
+	Zone      string `json:"zone"`
 }
 
 // Ref names a related record.
@@ -147,6 +151,8 @@ type Reservation struct {
 	CustomFields       map[string]any `json:"custom_fields"`
 	CustomerNote       string         `json:"customer_note"`
 	InternalNote       string         `json:"internal_note"`
+	PartySize          *int           `json:"party_size"`
+	Zone               string         `json:"zone"`
 	Version            int            `json:"version"`
 	CancelReason       *string        `json:"cancel_reason"`
 	// HoldExpiresAt is when a waiting request lets its capacity go.
@@ -167,6 +173,9 @@ type RescheduleInput struct {
 	Lines           []availability.LineInput `json:"lines"`
 	ExpectedVersion *int                     `json:"expected_version"`
 	Note            string                   `json:"note"`
+	// PartySize / Zone change the party (nil keeps the booked one).
+	PartySize *int    `json:"party_size"`
+	Zone      *string `json:"zone"`
 }
 
 // NotesInput edits the notes and form answers.
@@ -218,6 +227,8 @@ type ListItem struct {
 	EndsAt             time.Time   `json:"ends_at"`
 	TotalPrice         money.Money `json:"total_price"`
 	Currency           string      `json:"currency"`
+	PartySize          *int        `json:"party_size"`
+	Zone               string      `json:"zone"`
 	Version            int         `json:"version"`
 	CreatedAt          time.Time   `json:"created_at"`
 }
@@ -290,6 +301,7 @@ type CalendarItem struct {
 	ConfirmationStatus  string    `json:"confirmation_status"`
 	PaymentStatus       string    `json:"payment_status"`
 	Source              string    `json:"source"`
+	PartySize           *int      `json:"party_size"`
 	Version             int       `json:"version"`
 }
 

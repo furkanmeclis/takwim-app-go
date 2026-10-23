@@ -334,6 +334,14 @@ func (s *Service) Branches(ctx context.Context, o Org) ([]model.Branch, error) {
 	if err != nil {
 		return nil, err
 	}
+	zones, err := s.q.ListPublicBranchZones(ctx, db.ListPublicBranchZonesParams{OrganizationID: o.ID, BranchIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	zonesOf := map[int64][]string{}
+	for _, z := range zones {
+		zonesOf[z.BranchID] = append(zonesOf[z.BranchID], z.Zone)
+	}
 	byBranch := map[int64][]model.Image{}
 	for _, img := range images {
 		byBranch[img.BranchID] = append(byBranch[img.BranchID], model.Image{
@@ -347,6 +355,10 @@ func (s *Service) Branches(ctx context.Context, o Org) ([]model.Branch, error) {
 			City: r.City, District: r.District, Latitude: float(r.Latitude), Longitude: float(r.Longitude),
 			Phone: r.Phone, Email: r.Email, Timezone: r.Timezone,
 			WorkingHours: map[string]model.Hours{}, SpecialDays: []model.SpecialDay{}, Images: byBranch[r.ID],
+			Zones: zonesOf[r.ID],
+		}
+		if b.Zones == nil {
+			b.Zones = []string{}
 		}
 		if b.Images == nil {
 			b.Images = []model.Image{}
@@ -621,7 +633,7 @@ func (s *Service) Availability(ctx context.Context, o Org, in model.Availability
 	}
 	res, err := s.availability.Search(ctx, o.ID, availabilitymodel.SearchInput{
 		BranchUUID: in.BranchUUID, Lines: in.Lines, From: in.From, To: in.To,
-		StepMinutes: in.StepMinutes, Channel: availabilitymodel.ChannelOnline,
+		StepMinutes: in.StepMinutes, Channel: availabilitymodel.ChannelOnline, PartySize: in.PartySize, Zone: in.Zone,
 	}, availabilityusecase.Caller{})
 	if err != nil {
 		return model.Availability{}, err
@@ -677,7 +689,7 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 	err = s.holds.Run(ctx, o.ID, func(tx *availabilityusecase.Tx) error {
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
 			BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: availabilitymodel.ChannelOnline,
-			StartsAt: in.StartsAt, Reason: availabilitymodel.ReasonCheckout,
+			StartsAt: in.StartsAt, Reason: availabilitymodel.ReasonCheckout, PartySize: in.PartySize, Zone: in.Zone,
 		}, availabilityusecase.Caller{}, 0)
 		if err != nil {
 			return err
@@ -689,6 +701,7 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 		row, err := tx.Q.CreatePublicCheckout(ctx, db.CreatePublicCheckoutParams{
 			OrganizationID: o.ID, BranchID: created.Slot.BranchID, HoldID: created.ID, Channel: channel,
 			Lines: raw, StartsAt: pgtype.Timestamptz{Time: created.Slot.StartsAt, Valid: true},
+			PartySize: partyParam(in.PartySize), Zone: strings.TrimSpace(in.Zone),
 		})
 		if err != nil {
 			return err
@@ -726,6 +739,11 @@ func (s *Service) Checkout(ctx context.Context, o Org, token uuid.UUID) (model.C
 	out := model.Checkout{
 		Token: row.Uuid, Channel: row.Channel, Branch: model.Ref{UUID: row.BranchUuid, Name: row.BranchName},
 		StartsAt: row.StartsAt.Time.UTC(), EndsAt: row.HoldEndsAt.Time.UTC(), Lines: []model.CheckoutLine{},
+		Zone: row.Zone,
+	}
+	if row.PartySize.Valid {
+		n := int(row.PartySize.Int32)
+		out.PartySize = &n
 	}
 	if err := json.Unmarshal(row.Lines, &out.Lines); err != nil {
 		return model.Checkout{}, err
@@ -880,6 +898,11 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 	input := reservationsmodel.CreateInput{
 		BranchUUID: checkout.BranchUuid, StartsAt: &checkout.StartsAt.Time, Source: reservationsmodel.SourceOnline,
 		Payment: in.Payment, CustomFields: in.CustomFields, CustomerNote: strings.TrimSpace(in.CustomerNote),
+		Zone: checkout.Zone,
+	}
+	if checkout.PartySize.Valid {
+		n := int(checkout.PartySize.Int32)
+		input.PartySize = &n
 	}
 	if checkout.Channel == model.ChannelWidget {
 		input.Source = reservationsmodel.SourceEmbed
@@ -1007,6 +1030,7 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		Branch: model.Ref{UUID: r.Branch.UUID, Name: r.Branch.Name}, Timezone: meta.Timezone,
 		StartsAt: r.StartsAt, EndsAt: r.EndsAt, TotalPrice: r.TotalPrice, Currency: r.Currency,
 		CustomerNote: r.CustomerNote, ExpiresAt: r.HoldExpiresAt, CancelReason: r.CancelReason,
+		PartySize: r.PartySize, Zone: r.Zone,
 		Lines: make([]model.Line, 0, len(r.Lines)), CreatedAt: r.CreatedAt, AccessToken: s.AccessToken(o, r.UUID),
 	}
 	for _, l := range r.Lines {
@@ -1020,4 +1044,12 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		out.Lines = append(out.Lines, line)
 	}
 	return out, nil
+}
+
+// partyParam stores a party size.
+func partyParam(v *int) pgtype.Int4 {
+	if v == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*v), Valid: true}
 }
