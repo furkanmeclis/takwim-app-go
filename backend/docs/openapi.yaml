@@ -1,0 +1,5041 @@
+openapi: 3.1.0
+info:
+  title: App API
+  version: 0.1.0
+  summary: Boilerplate HTTP API — auth, RBAC, users, roles, notifications, realtime
+  description: |
+    Starter HTTP API for the Next.js + Go boilerplate.
+
+    **In scope:** authentication, global RBAC, platform users/roles, notifications,
+    Web Push (VAPID), passkeys, and Centrifugo realtime tokens.
+
+    **Out of scope:** tenants, workspaces, CRM, inbox, commerce, AI, tickets, reports.
+    Those product modules were stripped. Live Go routes (`internal/modules/**/routes.go`)
+    are the source of truth if a path below is missing from the router.
+
+    **Roles:**
+    - `super_admin` — system role; assigned via `make create-super-admin`
+    - `cms_user` — seed role for CMS access
+    - Custom roles via `/v1/platform/roles`
+
+    **Auth:** Bearer JWT access tokens + opaque refresh tokens.
+    See `docs/auth.md` for the permission matrix and token claims.
+    Error catalog: `docs/api/errors.md`.
+
+    **Conventions:**
+    - Success/error envelope: `{success,data|error,meta.request_id}` on all `/v1/*`.
+    - Lists: `{items,total,limit,offset}` under `data` (`limit`/`offset`/`q`/`sort`; never `page`/`search`).
+    - Probes `/healthz` and `/readyz` are **not** enveloped.
+    - See `API_CONVENTIONS.md` and `docs/api/errors.md`.
+  contact:
+    name: App
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development
+
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Auth
+    description: Register, login, tokens, sessions, profile
+  - name: Search
+    description: Command-palette search (Meilisearch-backed record lookup)
+  - name: Platform
+    description: Super-admin platform tenant/user catalog
+  - name: Tenant
+    description: Organization-scoped routes (`X-Organization` header; `TENANCY_ENABLED`)
+  - name: Realtime
+    description: Centrifugo connection and subscription tokens
+  - name: Notifications
+    description: In-app notification center, preferences, and admin send
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      operationId: getHealthz
+      summary: Liveness probe
+      description: Process is alive. Does not check dependencies.
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthzResponse"
+
+  /readyz:
+    get:
+      tags: [Health]
+      operationId: getReadyz
+      summary: Readiness probe
+      description: |
+        Pings Postgres and Redis. Returns 200 when both are up, 503 otherwise.
+        Object storage is a soft check (logged only).
+      security: []
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyzResponse"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyzResponse"
+
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      operationId: postAuthRegister
+      summary: Self-serve user register
+      description: |
+        Creates a global user account and returns it. Tokens are issued on login.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRegister"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: postAuthLogin
+      summary: Login
+      description: |
+        Authenticates with email/password and returns a token pair.
+        A self-deleted account returns `403 ACCOUNT_DEACTIVATED` (after the
+        password is verified); `/v1/auth/refresh` and every other sign-in path
+        do the same.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTokens"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: postAuthRefresh
+      summary: Refresh tokens
+      description: Rotates an opaque refresh token and returns a new token pair.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTokens"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: postAuthLogout
+      summary: Logout
+      description: Revokes the given refresh token. Requires a valid access JWT.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getAuthMe
+      summary: Current session
+      description: Hydrates the authenticated user, roles, permissions, and tenant memberships.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeMe"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/search/specs:
+    get:
+      tags: [Search]
+      operationId: getSearchSpecs
+      summary: Searchable resource specs
+      description: Returns Meilisearch-backed specs visible to the caller (permission-filtered).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Spec catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSearchSpecs"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/search:
+    get:
+      tags: [Search]
+      operationId: getSearch
+      summary: Search indexed records
+      description: Typo-tolerant search across allowed specs. Use `q` (not `search`). Optional `spec` scopes to one resource.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: spec
+          in: query
+          schema:
+            type: string
+            example: users
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Search hits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSearchHits"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/step-up:
+    get:
+      tags: [Auth]
+      operationId: getAuthStepUp
+      summary: Step-up grant status
+      description: Returns whether the caller has a recent step-up grant and enabled verification methods.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Step-up status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStepUpStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/step-up/password:
+    post:
+      tags: [Auth]
+      operationId: postAuthStepUpPassword
+      summary: Verify password for step-up
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepUpPasswordRequest"
+      responses:
+        "200":
+          description: Grant issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStepUpGrant"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/step-up/passkey/options:
+    post:
+      tags: [Auth]
+      operationId: postAuthStepUpPasskeyOptions
+      summary: Begin passkey step-up assertion
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: WebAuthn request options
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/step-up/passkey/verify:
+    post:
+      tags: [Auth]
+      operationId: postAuthStepUpPasskeyVerify
+      summary: Finish passkey step-up assertion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Grant issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStepUpGrant"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/step-up/totp:
+    post:
+      tags: [Auth]
+      operationId: postAuthStepUpTOTP
+      summary: Verify authenticator code for step-up
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TOTPCodeRequest"
+      responses:
+        "200":
+          description: Grant issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStepUpGrant"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/totp:
+    get:
+      tags: [Auth]
+      operationId: getAuthTOTP
+      summary: Authenticator 2FA status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: TOTP status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTOTPStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/totp/setup:
+    post:
+      tags: [Auth]
+      operationId: postAuthTOTPSetup
+      summary: Begin authenticator 2FA setup
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Setup secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTOTPSetup"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/totp/confirm:
+    post:
+      tags: [Auth]
+      operationId: postAuthTOTPConfirm
+      summary: Confirm authenticator 2FA setup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TOTPCodeRequest"
+      responses:
+        "200":
+          description: Confirmed with recovery codes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTOTPConfirm"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/totp/disable:
+    post:
+      tags: [Auth]
+      operationId: postAuthTOTPDisable
+      summary: Disable authenticator 2FA
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TOTPCodeRequest"
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/access/settings:
+    get:
+      tags: [Platform]
+      operationId: getPlatformAccessSettings
+      summary: Read step-up policy
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Access policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStepUpPolicy"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformAccessSettings
+      summary: Update step-up policy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchStepUpPolicyRequest"
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStepUpPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/integrations/github:
+    get:
+      tags: [Platform]
+      operationId: getPlatformGitHubIntegrationSettings
+      summary: Read GitHub App integration settings
+      description: Super admin only. Secrets are never returned; only configured flags.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: GitHub integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeGitHubIntegrationSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformGitHubIntegrationSettings
+      summary: Update GitHub App integration settings
+      description: Super admin only. Omit blank secret fields to keep existing values.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchGitHubIntegrationSettingsRequest"
+      responses:
+        "200":
+          description: Updated GitHub integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeGitHubIntegrationSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/system/info:
+    get:
+      tags: [Platform]
+      operationId: getPlatformSystemInfo
+      summary: Read system runtime metrics, infrastructure health, and environment diagnostics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: System runtime info and health diagnostics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSystemInfo"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/system/ping:
+    post:
+      tags: [Platform]
+      operationId: pingPlatformSystem
+      summary: Trigger a live health and latency probe across all backing services
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Live probe results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSystemInfo"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/settings:
+    get:
+      tags: [Platform]
+      operationId: getPlatformSettings
+      summary: Read app branding / letterhead settings (app_settings singleton)
+      description: Requires `platform.settings.read`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: App settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAppSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformSettings
+      summary: Partially update app branding / letterhead settings
+      description: Requires `platform.settings.write`. Omitted fields are left unchanged.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchAppSettingsRequest"
+      responses:
+        "200":
+          description: Updated app settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAppSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/settings/logo:
+    get:
+      tags: [Platform]
+      operationId: getPlatformSettingsLogo
+      summary: Stream the app logo image
+      description: Any authenticated user. Returns the raw image bytes.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logo image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+            image/svg+xml:
+              schema: { type: string, format: binary }
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Platform]
+      operationId: putPlatformSettingsLogo
+      summary: Upload or replace the app logo
+      description: Requires `platform.settings.write`. Multipart form with a `logo` file field.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [logo]
+              properties:
+                logo: { type: string, format: binary }
+      responses:
+        "200":
+          description: Updated app settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAppSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Platform]
+      operationId: deletePlatformSettingsLogo
+      summary: Remove the app logo
+      description: Requires `platform.settings.write`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Updated app settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAppSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/auth/settings:
+    get:
+      tags: [Platform]
+      operationId: getPlatformAuthSettings
+      summary: Read registration and auth method settings
+      description: Super admin only.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Auth settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAuthSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformAuthSettings
+      summary: Update registration and auth method settings
+      description: Super admin only.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchAuthSettingsRequest"
+      responses:
+        "200":
+          description: Updated auth settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeAuthSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/integrations/google:
+    get:
+      tags: [Platform]
+      operationId: getPlatformGoogleIntegrationSettings
+      summary: Read Google OAuth integration settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Google integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOAuthProviderSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformGoogleIntegrationSettings
+      summary: Update Google OAuth integration settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchOAuthProviderSettingsRequest"
+      responses:
+        "200":
+          description: Updated Google integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOAuthProviderSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/integrations/facebook:
+    get:
+      tags: [Platform]
+      operationId: getPlatformFacebookIntegrationSettings
+      summary: Read Facebook OAuth integration settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Facebook integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOAuthProviderSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformFacebookIntegrationSettings
+      summary: Update Facebook OAuth integration settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchOAuthProviderSettingsRequest"
+      responses:
+        "200":
+          description: Updated Facebook integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOAuthProviderSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/integrations/apple:
+    get:
+      tags: [Platform]
+      operationId: getPlatformAppleIntegrationSettings
+      summary: Read Apple OAuth integration settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Apple integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOAuthProviderSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformAppleIntegrationSettings
+      summary: Update Apple OAuth integration settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchOAuthProviderSettingsRequest"
+      responses:
+        "200":
+          description: Updated Apple integration settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOAuthProviderSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/identities:
+    get:
+      tags: [Auth]
+      operationId: getAuthIdentities
+      summary: List linked OAuth identities
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Linked identities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeIdentityList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/identities/{provider}:
+    delete:
+      tags: [Auth]
+      operationId: deleteAuthIdentity
+      summary: Unlink an OAuth identity
+      description: |
+        `409 LAST_SIGN_IN_METHOD` when the user has no password
+        (`has_password: false`), no passkey and this is the last linked identity.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [github, google, facebook, apple]
+      responses:
+        "200":
+          description: Unlinked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`LAST_SIGN_IN_METHOD`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/identities/{provider}/native:
+    post:
+      tags: [Auth]
+      operationId: postAuthIdentityNative
+      summary: Link a native Apple / Google id_token to the current user
+      description: |
+        Mobile "linked accounts" screen. The `id_token` is verified exactly like
+        `POST /v1/auth/oauth/{provider}/native` (JWKS, `iss`, `exp`, `aud`,
+        `nonce`). Idempotent when the identity is already linked to the
+        caller. `409 CONFLICT` when the identity is linked to another user or
+        the caller already has a different identity for this provider.
+        Apple: send `authorization_code` to store a refresh token (revoked on
+        account deletion).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [apple, google]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeIdentityLinkRequest"
+      responses:
+        "200":
+          description: Linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeLinkedIdentity"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: "`UNAUTHENTICATED` or `INVALID_ID_TOKEN`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`OAUTH_PROVIDER_DISABLED`, `ACCOUNT_DEACTIVATED`, `FORBIDDEN`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`CONFLICT`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/passkeys:
+    get:
+      tags: [Auth]
+      operationId: getAuthPasskeys
+      summary: List own passkeys
+      description: Requires `auth.session`. Returns passkeys registered for the current user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Passkeys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePasskeyList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/passkeys/{uuid}:
+    patch:
+      tags: [Auth]
+      operationId: patchAuthPasskey
+      summary: Rename a passkey
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPasskeyRequest"
+      responses:
+        "200":
+          description: Updated passkey
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePasskey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Auth]
+      operationId: deleteAuthPasskey
+      summary: Delete a passkey
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/users/meta:
+    get:
+      tags: [Platform]
+      operationId: getPlatformUsersMeta
+      summary: Platform users list metadata
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/platform/users/bulk:
+    post:
+      tags: [Platform]
+      operationId: postPlatformUsersBulk
+      summary: Run a bulk action on platform users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/platform/roles/bulk:
+    post:
+      tags: [Platform]
+      operationId: postPlatformRolesBulk
+      summary: Run a bulk action on platform roles
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/platform/bulk:
+    get:
+      tags: [Platform]
+      operationId: listPlatformBulkJobs
+      summary: List bulk jobs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Bulk job page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJobPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/platform/bulk/{uuid}:
+    get:
+      tags: [Platform]
+      operationId: getPlatformBulkJob
+      summary: Get bulk job status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Bulk job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/platform/bulk/{uuid}/rollback:
+    post:
+      tags: [Platform]
+      operationId: postPlatformBulkJobRollback
+      summary: Roll back a completed bulk job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Rolled back job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/platform/organizations/meta:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationsMeta
+      summary: Platform organizations list metadata
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/platform/organizations:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizations
+      summary: List platform organizations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Sort"
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, suspended] }
+      responses:
+        "200":
+          description: Organization page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationPage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganization
+      summary: Create organization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrganizationRequest"
+      responses:
+        "201":
+          description: Created organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganization"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/platform/organizations/{uuid}:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganization
+      summary: Get organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganization"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformOrganization
+      summary: Patch organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchOrganizationRequest"
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganization"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Platform]
+      operationId: deletePlatformOrganization
+      summary: Soft-delete organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/platform/organizations/{uuid}/status:
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationStatus
+      summary: Set organization status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetOrganizationStatusRequest"
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganization"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/platform/organizations/{uuid}/access:
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationAccess
+      summary: Set organization access window
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetOrganizationAccessRequest"
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganization"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/platform/organizations/{uuid}/members:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationMembers
+      summary: List organization members
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Organization member page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationMemberPage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Platform]
+      operationId: postPlatformOrganizationMember
+      summary: Add organization member
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrganizationMemberRequest"
+      responses:
+        "201":
+          description: Organization member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationMember"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/organizations/{uuid}/members/{userUuid}:
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformOrganizationMember
+      summary: Change organization member role
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/UserUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeOrganizationMemberRoleRequest"
+      responses:
+        "200":
+          description: Organization member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationMember"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Platform]
+      operationId: deletePlatformOrganizationMember
+      summary: Remove organization member
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/UserUUID"
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/users:
+    get:
+      tags: [Platform]
+      operationId: getPlatformUsers
+      summary: List platform users
+      description: Requires `super_admin` and `platform.users.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Sort"
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: is_super_admin
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: User page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicUserPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Platform]
+      operationId: postPlatformUser
+      summary: Create platform user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlatformUserRequest"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/users/{uuid}:
+    get:
+      tags: [Platform]
+      operationId: getPlatformUser
+      summary: Get platform user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: User with memberships
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePlatformUserDetail"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Platform]
+      operationId: patchPlatformUser
+      summary: Update platform user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPlatformUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/users/{uuid}/password:
+    post:
+      tags: [Platform]
+      operationId: postPlatformUserPassword
+      summary: Admin set user password
+      description: Sets password and revokes all refresh tokens.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPlatformUserPasswordRequest"
+      responses:
+        "200":
+          description: Password set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/platform/users/{uuid}/impersonate:
+    post:
+      tags: [Platform]
+      operationId: postPlatformUserImpersonate
+      summary: Impersonate user
+      description: |
+        Issues tokens for the target user while preserving the actor in the `imp` JWT claim
+        and refresh token metadata. Requires step-up verification.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Impersonation session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImpersonationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/impersonation/stop:
+    post:
+      tags: [Auth]
+      operationId: postAuthImpersonationStop
+      summary: Stop impersonation
+      description: Restores the original actor session when the access token includes an impersonator claim.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Impersonation stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImpersonationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/realtime/connection-token:
+    post:
+      tags: [Realtime]
+      operationId: postRealtimeConnectionToken
+      summary: Issue Centrifugo connection JWT
+      description: |
+        Returns `{ token, expires_at, ws_url }`. JWT `sub` is the user UUID string.
+        Requires `auth.session`. Disabled Centrifugo → `503 REALTIME_DISABLED`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Connection token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRealtimeConnectionToken"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          description: Realtime disabled
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/realtime/subscription-token:
+    post:
+      tags: [Realtime]
+      operationId: postRealtimeSubscriptionToken
+      summary: Issue Centrifugo subscription JWT
+      description: |
+        Body `{ channel }`. Allowlist `user:{own_uuid}`, member `workspace:{uuid}`,
+        and `conversation:{uuid}` (authenticated session; HTTP inbox ACL is the hard boundary).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RealtimeSubscriptionTokenRequest"
+      responses:
+        "200":
+          description: Subscription token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRealtimeSubscriptionToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          description: Realtime disabled
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/profile:
+    patch:
+      tags: [Auth]
+      operationId: patchAuthProfile
+      summary: Update own profile
+      description: Partial update of name/surname. Email/password/status/roles are not changeable here.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchProfileRequest"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeMe"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/password/forgot:
+    post:
+      tags: [Auth]
+      operationId: postAuthPasswordForgot
+      summary: Request password reset
+      description: Always returns accepted. If the email exists, enqueues a reset OTP email via Notification Center.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/password/reset:
+    post:
+      tags: [Auth]
+      operationId: postAuthPasswordReset
+      summary: Reset password with OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/password/change:
+    post:
+      tags: [Auth]
+      operationId: postAuthPasswordChange
+      summary: Change password
+      description: Verifies current password, sets a new one, and revokes all refresh tokens (including the current session).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/email/verify-request:
+    post:
+      tags: [Auth]
+      operationId: postAuthEmailVerifyRequest
+      summary: Request email verification OTP
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/email/verify:
+    post:
+      tags: [Auth]
+      operationId: postAuthEmailVerify
+      summary: Verify email with OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+      responses:
+        "200":
+          description: Verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/email-code/request:
+    post:
+      tags: [Auth]
+      operationId: postAuthEmailCodeRequest
+      summary: Request an email sign-in code
+      description: |
+        Emails a 6-digit one-time sign-in code (valid 10 minutes, 5 attempts,
+        single use, stored hashed). The response is identical whether or not the
+        email belongs to an account. Rate limited per IP and per email.
+
+        Unknown email: when self-registration is enabled
+        (`auth_settings.registration_enabled`) a sign-up code is sent as well
+        and `/v1/auth/email-code/verify` creates the account. When it is
+        disabled no email is sent (same response).
+
+        App review: emails listed in `AUTH_REVIEW_ACCOUNTS` receive no email;
+        their fixed code works for that email only.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailCodeRequest"
+      responses:
+        "200":
+          description: Accepted (always, for any well-formed email)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/email-code/verify:
+    post:
+      tags: [Auth]
+      operationId: postAuthEmailCodeVerify
+      summary: Sign in with an email code
+      description: |
+        Exchanges an email code for the same token pair as `/v1/auth/login`.
+        When the user has authenticator 2FA, a call without `totp_code` returns
+        `403 MFA_REQUIRED` and the email code stays valid; retry with the same
+        `code` plus `totp_code`. A wrong `totp_code` (`401 INVALID_MFA_CODE`)
+        counts against the code's 5 attempts.
+
+        Sign-up: for an email without an account, when self-registration is
+        enabled, a valid code creates the user (email verified, no password,
+        `name` = email local part, empty `surname`, default role) and returns
+        tokens like a normal login. With registration disabled an unknown email gets
+        `400 INVALID_EMAIL_CODE`.
+
+        Errors: `400 INVALID_EMAIL_CODE` (wrong / expired / used / exhausted),
+        `403 MFA_REQUIRED`, `401 INVALID_MFA_CODE`, `403 ACCOUNT_DEACTIVATED`,
+        `403 FORBIDDEN` (disabled by an admin), `403 NO_TENANT_MEMBERSHIP`,
+        `429 RATE_LIMITED`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailCodeVerifyRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTokens"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/oauth/{provider}/native:
+    post:
+      tags: [Auth]
+      operationId: postAuthOAuthNative
+      summary: Sign in with a native Apple / Google id_token
+      description: |
+        For mobile apps using the platform SDKs. The `id_token` signature is
+        verified against the provider JWKS (cached), plus `iss`, `exp`, `aud`
+        (Apple: `AUTH_APPLE_NATIVE_CLIENT_IDS`;
+        Google: `AUTH_GOOGLE_NATIVE_CLIENT_IDS` plus the web client id from
+        OAuth settings) and `nonce` when sent (raw nonce, or its hex SHA-256
+        in the token).
+
+        - Identity already linked → tokens (same shape as `/v1/auth/login`,
+          including the `MFA_REQUIRED` / `totp_code` round-trip).
+        - Not linked, an account with the same email exists →
+          `409 OAUTH_ACCOUNT_NOT_LINKED` (same policy as the web: sign in with
+          the existing method and link from the profile).
+        - Not linked, Apple private-relay email (`@privaterelay.appleid.com`),
+          no account → `409 OAUTH_LINK_CHOICE_REQUIRED`; `error.details`
+          carries `link_ticket`, `provider`, `expires_in` (seconds, 900) and
+          `register_allowed` (`"true"`/`"false"`). Continue with
+          `/v1/auth/oauth/link/*`.
+        - Not linked, no account → the account is created (OAuth sign-up; needs
+          registration enabled, else `403 FORBIDDEN`) and tokens returned.
+
+        Apple: send `authorization_code` so the server can store a refresh
+        token (revoked on account deletion; needs `AUTH_APPLE_*` key config),
+        and `given_name` / `family_name` on the first sign-in.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [apple, google]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeOAuthRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTokens"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: "`INVALID_ID_TOKEN` or `INVALID_MFA_CODE`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "`MFA_REQUIRED`, `ACCOUNT_DEACTIVATED`, `OAUTH_PROVIDER_DISABLED`, `FORBIDDEN`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`OAUTH_ACCOUNT_NOT_LINKED` or `OAUTH_LINK_CHOICE_REQUIRED`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error:
+                  code: OAUTH_LINK_CHOICE_REQUIRED
+                  message: Choose whether to link this sign-in to an existing account or create a new one
+                  details:
+                    - { field: link_ticket, message: "<opaque>" }
+                    - { field: provider, message: apple }
+                    - { field: expires_in, message: "900" }
+                    - { field: register_allowed, message: "true" }
+                meta: { request_id: "00000000-0000-0000-0000-000000000000" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/oauth/link/request:
+    post:
+      tags: [Auth]
+      operationId: postAuthOAuthLinkRequest
+      summary: Email a link code to an existing account
+      description: |
+        "Yes, I have an account": emails a 6-digit link code (10 minutes) to
+        `email` if an account exists. Always `200 accepted` for a valid ticket
+        (no enumeration). `400 INVALID_LINK_TICKET` when the ticket is
+        tampered or expired.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthLinkRequest"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/oauth/link/verify:
+    post:
+      tags: [Auth]
+      operationId: postAuthOAuthLinkVerify
+      summary: Link the provider identity to an existing account and sign in
+      description: |
+        Verifies the link code, links the ticket's identity to the account and
+        returns tokens. Same `MFA_REQUIRED` / `totp_code` round-trip as login
+        (the code stays valid until it succeeds). Errors: `400 INVALID_LINK_TICKET`,
+        `400 INVALID_EMAIL_CODE`, `409 CONFLICT` (identity linked elsewhere or
+        the account already has another identity for this provider),
+        `403 ACCOUNT_DEACTIVATED`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthLinkVerifyRequest"
+      responses:
+        "200":
+          description: Linked and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTokens"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/oauth/link/create:
+    post:
+      tags: [Auth]
+      operationId: postAuthOAuthLinkCreate
+      summary: Create a new account for the provider identity and sign in
+      description: |
+        "No, I don't have an account": creates the account exactly like an
+        OAuth sign-up (registration policy, default role, welcome email) with
+        the ticket's relay email, links the identity and returns tokens.
+        Retrying with the same ticket signs into the account created by the
+        first call. Errors: `400 INVALID_LINK_TICKET`, `403 FORBIDDEN`
+        (registration disabled), `409 CONFLICT` (email registered meanwhile).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthLinkCreateRequest"
+      responses:
+        "200":
+          description: Created and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTokens"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/account/deactivate/request:
+    post:
+      tags: [Auth]
+      operationId: postAuthAccountDeactivateRequest
+      summary: Email an account-deletion confirmation code
+      description: |
+        Sends a 6-digit confirmation code (10 minutes) to the caller's email.
+        Intended for passwordless accounts (Apple / Google / email code) that
+        cannot complete a password / passkey / TOTP step-up.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/account/deactivate:
+    post:
+      tags: [Auth]
+      operationId: postAuthAccountDeactivate
+      summary: Delete (deactivate) own account
+      description: |
+        Account deletion keeps all data: the user becomes `disabled` with
+        `deactivated_at`, every refresh session is revoked, stored Apple
+        refresh tokens are revoked via Apple `/auth/revoke` (best effort), and
+        every sign-in path returns `403 ACCOUNT_DEACTIVATED` afterwards.
+
+        Confirm with either a recent step-up grant (`/v1/auth/step-up/*`,
+        send `{}`) or `code` from `/v1/auth/account/deactivate/request`.
+        Without either → `403 STEP_UP_REQUIRED`. Wrong code →
+        `400 INVALID_EMAIL_CODE`. The last super admin gets `409 CONFLICT`.
+        Refused while impersonating (`403 FORBIDDEN`). A platform admin can
+        reactivate the user by setting status `active`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeactivateRequest"
+      responses:
+        "200":
+          description: Deactivated (`data.status = deactivated`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/qr/sessions:
+    post:
+      tags: [Auth]
+      operationId: postAuthQRSession
+      summary: Start a QR sign-in (web login page)
+      description: |
+        Creates a short-lived (120 s) QR sign-in session for the calling browser
+        tab. Render `qr_url` (`{frontend}/login/qr/{session_id}`) as a QR; the
+        signed-in mobile app opens it (universal link or in-app scanner).
+
+        Keep `browser_secret` in the tab only: it is required to read the state
+        and to exchange an approval. `realtime` holds an **anonymous** Centrifugo
+        connection token (`sub: ""`) and a subscription token for exactly one
+        private channel `qrlogin:{random}` (unrelated to the session id). Both
+        expire 30 s after the session. Channel events (`data.type`):
+        `scanned`, `approved` (with `exchange_token`), `rejected`.
+
+        The request's User-Agent and client IP (first `X-Forwarded-For` hop) are
+        stored for the approval screen. Errors: `429 RATE_LIMITED` (60 / 15 min
+        per IP), `503 REALTIME_DISABLED`.
+      security: []
+      responses:
+        "201":
+          description: QR session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeQRLoginCreated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          description: Realtime disabled
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/qr/sessions/{id}:
+    get:
+      tags: [Auth]
+      operationId: getAuthQRSession
+      summary: QR sign-in details (mobile)
+      description: |
+        Shows who is asking to sign in: browser / OS parsed from the web
+        request's User-Agent, its IP and approximate location (`null` when
+        unknown), created / expiry time. The first signed-in viewer claims the
+        session; other accounts then get `409 QR_SESSION_CLAIMED`.
+
+        Errors: `404 QR_SESSION_NOT_FOUND` (unknown / expired / used),
+        `409 QR_SESSION_CLAIMED`, `429 RATE_LIMITED`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QRSessionID"
+      responses:
+        "200":
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeQRLoginDetails"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/qr/sessions/{id}/approve:
+    post:
+      tags: [Auth]
+      operationId: postAuthQRSessionApprove
+      summary: Approve a QR sign-in (mobile)
+      description: |
+        Signs the waiting browser tab in as the caller.
+        Publishes `{type: "approved", exchange_token}` to the tab's channel;
+        the exchange window is 60 s. Exactly one approve / reject succeeds.
+
+        Errors: `403 ACCOUNT_DEACTIVATED`, `403 FORBIDDEN` (impersonating or
+        disabled), `404 QR_SESSION_NOT_FOUND`, `409 QR_SESSION_RESOLVED`,
+        `409 QR_SESSION_CLAIMED`, `429 RATE_LIMITED`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QRSessionID"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/qr/sessions/{id}/reject:
+    post:
+      tags: [Auth]
+      operationId: postAuthQRSessionReject
+      summary: Reject a QR sign-in (mobile)
+      description: |
+        Publishes `{type: "rejected"}` to the tab's channel. Errors as approve
+        (no account-state check).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QRSessionID"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/qr/sessions/{id}/state:
+    post:
+      tags: [Auth]
+      operationId: postAuthQRSessionState
+      summary: QR sign-in state for the owning tab
+      description: |
+        Read once after the tab (re)subscribes to its channel so an event sent
+        while the socket was down is not lost. Not meant for polling. Wrong
+        secrets count against 5 attempts, after which the session is deleted.
+
+        Errors: `400 QR_LOGIN_INVALID`, `404 QR_SESSION_NOT_FOUND`,
+        `429 RATE_LIMITED`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/QRSessionID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [browser_secret]
+              additionalProperties: false
+              properties:
+                browser_secret: { type: string }
+      responses:
+        "200":
+          description: Current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeQRLoginState"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/qr/exchange:
+    post:
+      tags: [Auth]
+      operationId: postAuthQRExchange
+      summary: Redeem an approved QR sign-in (web server)
+      description: |
+        Called by the web server (NextAuth `qr-login` credentials provider), not
+        by browser JS (the BFF blocks it). Needs the session id, the tab's
+        `browser_secret` and the `exchange_token` from the approval event.
+        Single use: the session is deleted on success. Returns the same token
+        pair as `/v1/auth/login` plus the signed-in user. The session row keeps
+        the User-Agent / IP of the browser that showed the QR.
+
+        Errors: `400 QR_LOGIN_INVALID` (wrong secret / token, not approved yet),
+        `404 QR_SESSION_NOT_FOUND`, `403 ACCOUNT_DEACTIVATED`,
+        `429 RATE_LIMITED`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QRLoginExchangeRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeQRLoginExchanged"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/notifications:
+    get:
+      tags: [Notifications]
+      operationId: getNotifications
+      summary: List own inbox
+      description: Requires `notifications.read`. Supports `limit`,`offset`,`q`,`sort`,`status`,`channel`,`unread`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Sort"
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: channel
+          in: query
+          schema: { type: string }
+        - name: unread
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Page of notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotificationPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/notifications/meta:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationsMeta
+      summary: Notifications list metadata
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationsUnreadCount
+      summary: Unread in-app count
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeUnreadCount"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/notifications/read-all:
+    post:
+      tags: [Notifications]
+      operationId: postNotificationsReadAll
+      summary: Mark all in-app as read
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/notifications/test:
+    post:
+      tags: [Notifications]
+      operationId: postNotificationsTest
+      summary: Enqueue a test notification to self
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: boolean
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotificationItems"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /v1/notifications/send:
+    post:
+      tags: [Notifications]
+      operationId: postNotificationsSend
+      summary: Send notification to a user (tenant admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendNotificationRequest"
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotificationItems"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/notifications/{uuid}:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationByUUID
+      summary: Get own notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotification"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/notifications/{uuid}/action:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationAction
+      summary: Redeem a signed notification action
+      description: >
+        Verifies `exp` + `sig`, marks the in-app notification read, and returns
+        the stored destination. Requires `notifications.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: exp
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Action destination and updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotificationAction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/notifications/{uuid}/read:
+    post:
+      tags: [Notifications]
+      operationId: postNotificationRead
+      summary: Mark notification read
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotification"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/notification-preferences:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationPreferences
+      summary: Get own preferences
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePreferences"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    put:
+      tags: [Notifications]
+      operationId: putNotificationPreferences
+      summary: Update own preferences
+      description: |
+        Security emails (password reset / email verification) ignore `email_enabled`.
+        Web push requires `push_enabled` and an active browser subscription; it follows in-app delivery.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreferences"
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePreferences"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /v1/push-devices:
+    post:
+      tags: [Notifications]
+      operationId: registerPushDevice
+      summary: Register a mobile push device (Expo)
+      description: |
+        Upserts the caller's Expo push token (call after login and on app start).
+        The token is unique: a token already registered by another account on the
+        same phone moves to the caller. Refreshes `locale`, `app_version`,
+        `device_name` and `last_seen_at`, and re-enables a token that Expo had
+        reported as `DeviceNotRegistered`.
+
+        Devices are **user-level**: every in-app
+        notification of the user is mirrored as a push to all active devices,
+        in addition to browser Web Push. The first registration creates the
+        user's preference row with `push_enabled=true`; an existing preference
+        is left untouched and returned as `push_enabled` (toggle it with
+        `PUT /v1/notification-preferences`).
+
+        Push payload (Expo message) — lock-screen safe (fixed texts per
+        notification kind, only whitelisted variables); rendered in the user's locale (`users.locale`,
+        falling back to the device `locale`):
+        `{ "title": "...", "body": "...", "sound": "default", "priority": "high",
+        "data": { "url": "/platform/exports/{uuid}", "notification_uuid": "uuid", "kind": "exports.ready" } }`.
+        `data.url` is the same relative web path the in-app notification links to
+        (omitted when the notification has no link); `kind` is the
+        notification kind or template code.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushDeviceInput"
+      responses:
+        "200":
+          description: Registered device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePushDeviceRegistration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/push-devices/{token}:
+    delete:
+      tags: [Notifications]
+      operationId: deletePushDevice
+      summary: Unregister a mobile push device
+      description: |
+        Removes the caller's device (call on logout, before dropping the access
+        token). The token must be URL-encoded (`ExponentPushToken%5B...%5D`).
+        Idempotent: unknown tokens or tokens of another user return 200 and
+        change nothing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: Expo push token, URL-encoded
+          schema: { type: string, example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]" }
+      responses:
+        "200":
+          description: Removed (or nothing to remove)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatusOK"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/platform/notifications:
+    get:
+      tags: [Platform]
+      operationId: getPlatformNotifications
+      summary: List platform notifications
+      description: |
+        Defaults to the caller's own notifications (`scope=me`).
+        `platform.notifications.read_all` is required for `scope=all` or `user_uuid`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Sort"
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: channel
+          in: query
+          schema: { type: string }
+        - name: scope
+          in: query
+          description: "me (default) or all (requires read_all)"
+          schema:
+            type: string
+            enum: [me, all]
+        - name: user_uuid
+          in: query
+          description: "Filter to one user (requires read_all)"
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotificationPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/platform/notifications/meta:
+    get:
+      tags: [Platform]
+      operationId: getPlatformNotificationsMeta
+      summary: Platform notifications meta
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/app/config:
+    get:
+      tags: [Health]
+      operationId: getAppConfig
+      summary: Public app config
+      description: Unauthenticated bootstrap payload (auth methods, branding).
+      security: []
+      responses:
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/sessions:
+    get:
+      tags: [Auth]
+      operationId: listAuthSessions
+      summary: List active sessions
+      description: Refresh-token sessions for the current user. `current` is the session bound to this access token.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSessionList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /v1/auth/sessions/revoke-others:
+    post:
+      tags: [Auth]
+      operationId: revokeOtherAuthSessions
+      summary: Revoke other sessions
+      description: Signs out every session except the current one.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Remaining current session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/sessions/{uuid}:
+    delete:
+      tags: [Auth]
+      operationId: revokeAuthSession
+      summary: Revoke a session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/tenant/context:
+    get:
+      tags: [Tenant]
+      operationId: getTenantContext
+      summary: Current organization scope
+      description: |
+        Resolves the organization named by `X-Organization` and the caller's
+        membership in it, and returns what tenant routes see: the organization,
+        the caller's tenant role and its `tenant.*` permissions in this
+        organization only. Mounted only when `TENANCY_ENABLED=true`.
+
+        Errors: missing header → `400 ORGANIZATION_REQUIRED`; unknown
+        organization or no membership → `403 NO_TENANT_MEMBERSHIP` (same
+        answer for both; `super_admin` is not exempt); suspended →
+        `403 ORGANIZATION_SUSPENDED`; outside the access window →
+        `403 ORGANIZATION_ACCESS_EXPIRED`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Organization scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantContext"
+        "400":
+          $ref: "#/components/responses/OrganizationRequired"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/TenantForbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XOrganization:
+      name: X-Organization
+      in: header
+      required: true
+      description: |
+        Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+        in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+      schema: { type: string, maxLength: 64, example: acme }
+    QRSessionID:
+      name: id
+      in: path
+      required: true
+      description: QR sign-in session id (from the QR URL)
+      schema: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+    ResourceUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Resource UUID
+      schema:
+        type: string
+        format: uuid
+    UserUUID:
+      name: userUuid
+      in: path
+      required: true
+      description: User UUID
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    Q:
+      name: q
+      in: query
+      schema: { type: string }
+    Sort:
+      name: sort
+      in: query
+      description: Comma-separated fields; prefix `-` for descending
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation or malformed request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthenticated:
+      description: Missing or invalid credentials / access token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: Rate limited
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    Forbidden:
+      description: Authenticated but not allowed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Conflict (duplicate / constraint)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    OrganizationRequired:
+      description: "`ORGANIZATION_REQUIRED`: the `X-Organization` header is missing or empty"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TenantForbidden:
+      description: |
+        `NO_TENANT_MEMBERSHIP` (unknown organization or not a member),
+        `ORGANIZATION_SUSPENDED`, `ORGANIZATION_ACCESS_EXPIRED`, or `FORBIDDEN`
+        (tenant permission missing in this organization)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+
+    TenantOrganization:
+      type: object
+      required: [uuid, slug, name, status, access_ends_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string, example: acme }
+        name: { type: string, example: Acme }
+        status: { type: string, enum: [active, suspended] }
+        access_ends_at:
+          type: [string, "null"]
+          format: date-time
+          description: End of the access window; `null` = no end
+
+    TenantContext:
+      type: object
+      required: [organization, role, permissions]
+      properties:
+        organization: { $ref: "#/components/schemas/TenantOrganization" }
+        role:
+          type: string
+          description: Caller's tenant role key in this organization (`owner`, `admin`, `member` or a custom key)
+          example: owner
+        permissions:
+          type: array
+          description: "`tenant.*` permission slugs granted in this organization only"
+          items: { type: string }
+
+    EnvelopeTenantContext:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantContext" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    SearchSpec:
+      type: object
+      required: [id, label_key]
+      properties:
+        id: { type: string, example: users }
+        label_key: { type: string, example: search.specs.users }
+        permission: { type: [string, "null"] }
+        icon: { type: [string, "null"] }
+        searchable_fields:
+          type: array
+          items: { type: string }
+        filterable_fields:
+          type: array
+          items: { type: string }
+
+    SearchHit:
+      type: object
+      required: [spec, id, title, href]
+      properties:
+        spec: { type: string }
+        id: { type: string, format: uuid }
+        title: { type: string }
+        subtitle: { type: [string, "null"] }
+        href: { type: string }
+        icon: { type: [string, "null"] }
+        score: { type: [number, "null"], format: double }
+
+    SearchSpecsData:
+      type: object
+      required: [items, enabled]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SearchSpec" }
+        enabled: { type: boolean }
+
+    SearchHitsData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SearchHit" }
+
+    EnvelopeSearchSpecs:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SearchSpecsData" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeSearchHits:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SearchHitsData" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    PushDeviceInput:
+      type: object
+      required: [token, platform]
+      properties:
+        token:
+          type: string
+          description: Expo push token (`ExponentPushToken[...]` or `ExpoPushToken[...]`)
+          example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+        platform: { type: string, enum: [ios, android] }
+        locale:
+          type: string
+          description: Device locale (`tr`, `en`, `tr-TR`, ...); stored as `tr` | `en` | empty
+          example: tr-TR
+        app_version: { type: string, maxLength: 32, example: "1.4.0 (57)" }
+        device_name: { type: string, maxLength: 120, example: "iPhone 16" }
+
+    PushDevice:
+      type: object
+      required: [uuid, token, platform, locale, app_version, device_name, last_seen_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        token: { type: string }
+        platform: { type: string, enum: [ios, android] }
+        locale: { type: string, enum: [tr, en, ""] }
+        app_version: { type: string }
+        device_name: { type: string }
+        last_seen_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    PushDeviceRegistration:
+      type: object
+      required: [device, push_enabled]
+      properties:
+        device: { $ref: "#/components/schemas/PushDevice" }
+        push_enabled:
+          type: boolean
+          description: Current `push_enabled` preference of the user
+
+    EnvelopePushDeviceRegistration:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PushDeviceRegistration" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStatusOK:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [ok] }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ErrorDetail:
+      type: object
+      required: [message]
+      properties:
+        field: { type: string }
+        message: { type: string }
+        code: { type: string }
+
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          examples:
+            - VALIDATION_ERROR
+            - INVALID_RESET_CODE
+            - INVALID_VERIFICATION_CODE
+            - INVALID_CREDENTIALS
+            - UNAUTHENTICATED
+            - FORBIDDEN
+            - NOT_FOUND
+            - CONFLICT
+            - PASSWORD_RESET_FAILED
+            - INTERNAL_ERROR
+            - MFA_REQUIRED
+            - INVALID_MFA_CODE
+            - RATE_LIMITED
+            - STEP_UP_REQUIRED
+            - ACCOUNT_DEACTIVATED
+            - INVALID_EMAIL_CODE
+            - INVALID_ID_TOKEN
+            - OAUTH_ACCOUNT_NOT_LINKED
+            - OAUTH_LINK_CHOICE_REQUIRED
+            - INVALID_LINK_TICKET
+            - OAUTH_PROVIDER_DISABLED
+            - ORGANIZATION_REQUIRED
+            - NO_TENANT_MEMBERSHIP
+            - ORGANIZATION_SUSPENDED
+            - ORGANIZATION_ACCESS_EXPIRED
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+
+    ResponseMeta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id: { type: string }
+
+    Error:
+      type: object
+      required: [success, error, meta]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          $ref: "#/components/schemas/ErrorBody"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+
+    Tokens:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, refresh_expires_at]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          examples: [Bearer]
+        expires_in:
+          type: integer
+          format: int64
+          description: Access token lifetime in seconds
+        refresh_expires_at:
+          type: string
+          format: date-time
+
+    PublicUser:
+      type: object
+      required: [uuid, email, name, surname, status, is_super_admin, email_verified]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        surname:
+          type: string
+        status:
+          type: string
+          examples: [active, disabled]
+        is_super_admin:
+          type: boolean
+        email_verified:
+          type: boolean
+        locale:
+          type: string
+          enum: [tr, en]
+          default: tr
+
+    MeLinks:
+      type: object
+      required: [profile, change_password, notification_preferences]
+      properties:
+        profile: { type: string, examples: ["/v1/auth/profile"] }
+        change_password: { type: string, examples: ["/v1/auth/password/change"] }
+        notification_preferences: { type: string, examples: ["/v1/notification-preferences"] }
+
+    MeChannels:
+      type: object
+      properties:
+        user:
+          type: string
+          description: Centrifugo channel hint
+          examples: ["user:uuid"]
+
+    MeRealtime:
+      type: object
+      required: [enabled, user_channel]
+      properties:
+        enabled: { type: boolean }
+        ws_url: { type: string }
+        user_channel:
+          type: string
+          examples: ["user:uuid"]
+
+    MeOrganizationRole:
+      type: object
+      required: [key, name]
+      properties:
+        key: { type: string, examples: [owner, admin, member] }
+        name: { type: string }
+
+    MeOrganization:
+      type: object
+      required: [uuid, slug, name, status, role, permissions]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        logo_url: { type: string }
+        status: { type: string, enum: [active, suspended] }
+        access_ends_at: { type: [string, "null"], format: date-time }
+        role:
+          $ref: "#/components/schemas/MeOrganizationRole"
+        permissions:
+          type: array
+          items: { type: string }
+
+    Me:
+      type: object
+      required: [user, roles, permissions, links, channels, realtime]
+      properties:
+        user:
+          $ref: "#/components/schemas/PublicUser"
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        organizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeOrganization"
+        links:
+          $ref: "#/components/schemas/MeLinks"
+        channels:
+          $ref: "#/components/schemas/MeChannels"
+        realtime:
+          $ref: "#/components/schemas/MeRealtime"
+        impersonation:
+          $ref: "#/components/schemas/MeImpersonation"
+
+    MeImpersonation:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/PublicUser"
+
+    SessionSwitch:
+      type: object
+      required: [user_uuid, email]
+      properties:
+        user_uuid:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        impersonator_uuid:
+          type: string
+          format: uuid
+
+    ImpersonationResult:
+      allOf:
+        - $ref: "#/components/schemas/Tokens"
+        - type: object
+          required: [session]
+          properties:
+            session:
+              $ref: "#/components/schemas/SessionSwitch"
+
+    RegisterRequest:
+      type: object
+      required: [email, password, name, surname]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        name:
+          type: string
+        surname:
+          type: string
+
+    RegisterResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/PublicUser"
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        totp_code:
+          type: string
+          description: Authenticator or recovery code when 2FA is enabled
+          maxLength: 32
+
+    TOTPCodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+
+    TOTPStatus:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        confirmed_at: { type: [string, "null"], format: date-time }
+
+    TOTPSetup:
+      type: object
+      required: [secret, otpauth_url]
+      properties:
+        secret: { type: string }
+        otpauth_url: { type: string }
+
+    TOTPConfirm:
+      type: object
+      required: [enabled, recovery_codes]
+      properties:
+        enabled: { type: boolean }
+        recovery_codes:
+          type: array
+          items: { type: string }
+
+    EnvelopeTOTPStatus:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TOTPStatus" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTOTPSetup:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TOTPSetup" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTOTPConfirm:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TOTPConfirm" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    LogoutRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    CreatePlatformUserRequest:
+      type: object
+      required: [email, password, name, surname]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+        name: { type: string }
+        surname: { type: string }
+        status: { type: string, examples: [active, pending, disabled] }
+        role_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    PatchPlatformUserRequest:
+      type: object
+      properties:
+        name: { type: string }
+        surname: { type: string }
+        status: { type: string }
+        role_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    SetPlatformUserPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, format: password }
+
+    Organization:
+      type: object
+      required: [uuid, slug, name, status, access_starts_at, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        logo_url: { type: string }
+        status: { type: string, enum: [active, suspended] }
+        access_starts_at: { type: string, format: date-time }
+        access_ends_at: { type: [string, "null"], format: date-time }
+        settings:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateOrganizationRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        owner_user_uuid:
+          type: string
+          format: uuid
+          description: Owner account; defaults to the caller.
+
+    PatchOrganizationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        settings:
+          type: object
+          additionalProperties: true
+
+    SetOrganizationStatusRequest:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [active, suspended] }
+
+    SetOrganizationAccessRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        access_starts_at: { type: [string, "null"], format: date-time }
+        access_ends_at: { type: [string, "null"], format: date-time }
+
+    OrganizationMemberUser:
+      type: object
+      required: [uuid, email, name, surname, status]
+      properties:
+        uuid: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        surname: { type: string }
+        status: { type: string }
+
+    OrganizationRoleSummary:
+      type: object
+      required: [key, name]
+      properties:
+        key: { type: string, examples: [owner, admin, member] }
+        name: { type: string }
+
+    OrganizationMember:
+      type: object
+      required: [user, role, created_at, updated_at]
+      properties:
+        user:
+          $ref: "#/components/schemas/OrganizationMemberUser"
+        role:
+          $ref: "#/components/schemas/OrganizationRoleSummary"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AddOrganizationMemberRequest:
+      type: object
+      required: [user_uuid, role_key]
+      additionalProperties: false
+      properties:
+        user_uuid: { type: string, format: uuid }
+        role_key: { type: string, examples: [member] }
+
+    ChangeOrganizationMemberRoleRequest:
+      type: object
+      required: [role_key]
+      additionalProperties: false
+      properties:
+        role_key: { type: string, examples: [admin] }
+
+    OrganizationPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    OrganizationMemberPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMember"
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    RoleSummary:
+      type: object
+      required: [uuid, name, slug]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: [string, "null"] }
+        is_system: { type: boolean }
+
+    PlatformUserDetail:
+      allOf:
+        - $ref: "#/components/schemas/PublicUser"
+        - type: object
+          required: [roles, auth_methods]
+          properties:
+            roles:
+              type: array
+              items:
+                $ref: "#/components/schemas/RoleSummary"
+            auth_methods:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserAuthMethod"
+
+    UserAuthMethod:
+      type: object
+      required: [kind, linked_at]
+      properties:
+        kind:
+          type: string
+          enum: [password, passkey, oauth]
+        provider:
+          type: string
+          description: OAuth provider slug when kind is oauth
+          examples: [github, google, facebook, apple]
+        label:
+          type: [string, "null"]
+          description: Optional display label (e.g. passkey name)
+        linked_at:
+          type: string
+          format: date-time
+
+    PublicUserPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformUserDetail"
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    RealtimeConnectionToken:
+      type: object
+      required: [token, expires_at, ws_url]
+      properties:
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+        ws_url: { type: string }
+
+    RealtimeSubscriptionTokenRequest:
+      type: object
+      required: [channel]
+      properties:
+        channel: { type: string }
+
+    RealtimeSubscriptionToken:
+      type: object
+      required: [token, channel, expires_at]
+      properties:
+        token: { type: string }
+        channel: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      required: [uuid, channel, status, priority, title, body, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        channel: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        title: { type: string }
+        body: { type: string }
+        payload: { type: object, additionalProperties: true }
+        action_url: { type: string }
+        signed_action_url: { type: string }
+        recipient: { type: string }
+        template_code: { type: string }
+        source_event: { type: string }
+        sent_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        user:
+          $ref: "#/components/schemas/NotificationUser"
+
+    NotificationUser:
+      type: object
+      required: [uuid, name, surname, email]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string, format: email }
+
+    NotificationPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    NotificationPreferences:
+      type: object
+      required: [email_enabled, inapp_enabled, realtime_enabled, push_enabled]
+      properties:
+        email_enabled: { type: boolean }
+        inapp_enabled: { type: boolean }
+        realtime_enabled: { type: boolean }
+        push_enabled: { type: boolean }
+
+    ResourceMeta:
+      type: object
+      required: [resource, default_sort, capabilities]
+      properties:
+        resource: { type: string }
+        default_sort: { type: string }
+        default_fields:
+          type: array
+          items: { type: string }
+        capabilities:
+          type: object
+          additionalProperties: { type: boolean }
+        searchable_fields:
+          type: array
+          items: { type: string }
+        sortable_fields:
+          type: array
+          items: { type: string }
+        filterable_fields:
+          type: array
+          items: { type: string }
+        columns:
+          type: array
+          items: { type: object, additionalProperties: true }
+        filters:
+          type: array
+          items: { type: object, additionalProperties: true }
+        includes:
+          type: array
+          items: { type: string }
+        bulk_actions:
+          type: array
+          items: { type: string }
+
+    PatchProfileRequest:
+      type: object
+      properties:
+        name: { type: string }
+        surname: { type: string }
+        locale:
+          type: string
+          enum: [tr, en]
+
+    EmailCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    EmailCodeVerifyRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email: { type: string, format: email }
+        code:
+          type: string
+          description: 6-digit code from the email
+          maxLength: 32
+        totp_code:
+          type: string
+          description: Authenticator or recovery code when 2FA is enabled
+          maxLength: 32
+
+    NativeOAuthRequest:
+      type: object
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+          description: Provider id_token from the native SDK
+        nonce:
+          type: string
+          description: Raw nonce passed to the SDK (token may carry it raw or SHA-256 hex)
+        given_name:
+          type: string
+          description: Apple first sign-in only (Apple sends the name to the app, not in the token)
+        family_name:
+          type: string
+        authorization_code:
+          type: string
+          description: Apple authorization code; exchanged for a refresh token that is revoked on account deletion
+        totp_code:
+          type: string
+          maxLength: 32
+
+    OAuthLinkRequest:
+      type: object
+      required: [link_ticket, email]
+      properties:
+        link_ticket:
+          type: string
+          description: From `OAUTH_LINK_CHOICE_REQUIRED` error details (valid 15 minutes)
+        email:
+          type: string
+          format: email
+          description: Email of the existing account
+
+    OAuthLinkVerifyRequest:
+      type: object
+      required: [link_ticket, email, code]
+      properties:
+        link_ticket: { type: string }
+        email: { type: string, format: email }
+        code: { type: string, maxLength: 32 }
+        totp_code: { type: string, maxLength: 32 }
+
+    OAuthLinkCreateRequest:
+      type: object
+      required: [link_ticket]
+      properties:
+        link_ticket: { type: string }
+        totp_code: { type: string, maxLength: 32 }
+
+    AccountDeactivateRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Code from `/v1/auth/account/deactivate/request`; omit to use a step-up grant
+          maxLength: 32
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ResetPasswordRequest:
+      type: object
+      required: [email, code, password]
+      properties:
+        email: { type: string, format: email }
+        code: { type: string }
+        password: { type: string, format: password }
+
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, format: password }
+        new_password: { type: string, format: password }
+
+    VerifyEmailRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email: { type: string, format: email }
+        code: { type: string }
+
+    SendNotificationRequest:
+      type: object
+      required: [user_uuid]
+      properties:
+        user_uuid: { type: string, format: uuid }
+        channel: { type: string }
+        title: { type: string }
+        body: { type: string }
+        template_code: { type: string }
+        vars:
+          type: object
+          additionalProperties: { type: string }
+
+    StatusPayload:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer, format: int64 }
+
+    Passkey:
+      type: object
+      required: [uuid, device_type, backed_up, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: [string, "null"] }
+        device_type: { type: string }
+        backed_up: { type: boolean }
+        transports: { type: [string, "null"] }
+        last_used_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    PasskeyList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Passkey" }
+        total: { type: integer, format: int64 }
+
+    PatchPasskeyRequest:
+      type: object
+      properties:
+        name: { type: [string, "null"] }
+
+    EnvelopePasskey:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Passkey" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePasskeyList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PasskeyList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    GitHubIntegrationSettings:
+      type: object
+      required: [enabled, register_enabled, app_id, client_id, client_secret_configured, private_key_configured]
+      properties:
+        enabled: { type: boolean }
+        register_enabled: { type: boolean }
+        app_id: { type: string }
+        client_id: { type: string }
+        client_secret_configured: { type: boolean }
+        private_key_configured: { type: boolean }
+
+    PatchGitHubIntegrationSettingsRequest:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        register_enabled: { type: boolean }
+        app_id: { type: string }
+        client_id: { type: string }
+        client_secret: { type: string }
+        private_key: { type: string }
+
+    EnvelopeGitHubIntegrationSettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/GitHubIntegrationSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    SystemMemoryStats:
+      type: object
+      required: [alloc_bytes, total_alloc_bytes, sys_bytes, heap_alloc_bytes, heap_sys_bytes, heap_idle_bytes, heap_inuse_bytes, num_gc]
+      properties:
+        alloc_bytes: { type: integer, format: int64 }
+        total_alloc_bytes: { type: integer, format: int64 }
+        sys_bytes: { type: integer, format: int64 }
+        heap_alloc_bytes: { type: integer, format: int64 }
+        heap_sys_bytes: { type: integer, format: int64 }
+        heap_idle_bytes: { type: integer, format: int64 }
+        heap_inuse_bytes: { type: integer, format: int64 }
+        num_gc: { type: integer }
+
+    SystemRuntimeInfo:
+      type: object
+      required: [go_version, num_cpu, num_goroutine, compiler, arch, os, memory, uptime_seconds, server_time]
+      properties:
+        go_version: { type: string }
+        num_cpu: { type: integer }
+        num_goroutine: { type: integer }
+        compiler: { type: string }
+        arch: { type: string }
+        os: { type: string }
+        memory: { $ref: "#/components/schemas/SystemMemoryStats" }
+        uptime_seconds: { type: number }
+        server_time: { type: string, format: date-time }
+
+    ServiceHealthInfo:
+      type: object
+      required: [status, latency_ms]
+      properties:
+        status: { type: string, enum: [healthy, degraded, down, disabled] }
+        latency_ms: { type: number }
+        message: { type: string }
+
+    DatabasePoolStats:
+      type: object
+      required: [total_conns, idle_conns, acquired_conns, max_conns]
+      properties:
+        total_conns: { type: integer }
+        idle_conns: { type: integer }
+        acquired_conns: { type: integer }
+        max_conns: { type: integer }
+
+    DatabaseHealthInfo:
+      type: object
+      required: [status, latency_ms]
+      properties:
+        status: { type: string, enum: [healthy, degraded, down, disabled] }
+        latency_ms: { type: number }
+        message: { type: string }
+        pool: { $ref: "#/components/schemas/DatabasePoolStats" }
+
+    StorageHealthInfo:
+      type: object
+      required: [status, latency_ms, driver]
+      properties:
+        status: { type: string, enum: [healthy, degraded, down, disabled] }
+        latency_ms: { type: number }
+        message: { type: string }
+        driver: { type: string }
+
+    SystemServicesHealth:
+      type: object
+      required: [database, redis, storage, meilisearch]
+      properties:
+        database: { $ref: "#/components/schemas/DatabaseHealthInfo" }
+        redis: { $ref: "#/components/schemas/ServiceHealthInfo" }
+        storage: { $ref: "#/components/schemas/StorageHealthInfo" }
+        meilisearch: { $ref: "#/components/schemas/ServiceHealthInfo" }
+
+    SystemEnvironmentInfo:
+      type: object
+      required: [app_name, env, log_level, centrifugo_enabled, vapid_enabled, search_enabled]
+      properties:
+        app_name: { type: string }
+        env: { type: string }
+        log_level: { type: string }
+        centrifugo_enabled: { type: boolean }
+        vapid_enabled: { type: boolean }
+        search_enabled: { type: boolean }
+
+    SystemInfo:
+      type: object
+      required: [status, runtime, services, environment]
+      properties:
+        status: { type: string, enum: [healthy, degraded, down] }
+        runtime: { $ref: "#/components/schemas/SystemRuntimeInfo" }
+        services: { $ref: "#/components/schemas/SystemServicesHealth" }
+        environment: { $ref: "#/components/schemas/SystemEnvironmentInfo" }
+
+    EnvelopeSystemInfo:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemInfo" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    AppSettings:
+      type: object
+      required: [company_name, tagline, primary_color, address, phone, email, website, footer_text, paper_size]
+      properties:
+        company_name: { type: string }
+        tagline: { type: string }
+        primary_color: { type: string }
+        address: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        website: { type: string }
+        footer_text: { type: string }
+        paper_size: { type: string }
+        logo_url:
+          type: string
+          description: Same-origin API path to stream the logo; omitted when no logo is set.
+
+    PatchAppSettingsRequest:
+      type: object
+      properties:
+        company_name: { type: string }
+        tagline: { type: string }
+        primary_color: { type: string }
+        address: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        website: { type: string }
+        footer_text: { type: string }
+        paper_size: { type: string }
+
+    EnvelopeAppSettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/AppSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    AuthSettingsDefaultRole:
+      type: object
+      required: [uuid, name, slug]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+
+    AuthSettings:
+      type: object
+      required:
+        - registration_enabled
+        - password_login_enabled
+        - password_register_enabled
+        - passkey_login_enabled
+      properties:
+        registration_enabled: { type: boolean }
+        default_role:
+          oneOf:
+            - $ref: "#/components/schemas/AuthSettingsDefaultRole"
+            - type: "null"
+        password_login_enabled: { type: boolean }
+        password_register_enabled: { type: boolean }
+        passkey_login_enabled: { type: boolean }
+
+    PatchAuthSettingsRequest:
+      type: object
+      properties:
+        registration_enabled: { type: boolean }
+        default_role_uuid: { type: [string, "null"], format: uuid }
+        clear_default_role: { type: boolean }
+        password_login_enabled: { type: boolean }
+        password_register_enabled: { type: boolean }
+        passkey_login_enabled: { type: boolean }
+
+    EnvelopeAuthSettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/AuthSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    OAuthProviderSettings:
+      type: object
+      required: [provider, login_enabled, register_enabled, client_id, client_secret_configured]
+      properties:
+        provider: { type: string, enum: [google, facebook, apple] }
+        login_enabled: { type: boolean }
+        register_enabled: { type: boolean }
+        client_id: { type: string }
+        client_secret_configured: { type: boolean }
+        team_id:
+          type: string
+          description: Apple only. Apple Developer Team ID of the signing key.
+        key_id:
+          type: string
+          description: Apple only. Key ID of the uploaded .p8 signing key.
+        private_key_configured:
+          type: boolean
+          description: Apple only. True when a .p8 signing key is stored (encrypted). The key is never returned.
+        private_key_source:
+          type: string
+          enum: [db, env, none]
+          description: >-
+            Apple only. Signing key in use at runtime: the uploaded key (db),
+            the AUTH_APPLE_* env fallback (env) or none. With a key, the web
+            client_secret is generated automatically.
+
+    PatchOAuthProviderSettingsRequest:
+      type: object
+      properties:
+        login_enabled: { type: boolean }
+        register_enabled: { type: boolean }
+        client_id: { type: string }
+        client_secret:
+          type: string
+          description: >-
+            Write-only. For Apple it is optional when a signing key is
+            configured (the secret is then generated from the key).
+        team_id:
+          type: string
+          pattern: "^([A-Za-z0-9]{10})?$"
+          description: Apple only. 10-character Team ID (stored upper-case).
+        key_id:
+          type: string
+          pattern: "^([A-Za-z0-9]{10})?$"
+          description: Apple only. 10-character Key ID (the KEYID in AuthKey_KEYID.p8).
+        private_key:
+          type: string
+          writeOnly: true
+          description: >-
+            Apple only. Contents of the .p8 file (PEM, PKCS#8, EC P-256).
+            Requires team_id and key_id (sent or already stored). Stored
+            encrypted; never returned.
+        remove_private_key:
+          type: boolean
+          description: Apple only. Deletes the stored signing key (and its key_id). Cannot be combined with private_key.
+
+    EnvelopeOAuthProviderSettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OAuthProviderSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    LinkedIdentity:
+      type: object
+      required: [provider, linked_at]
+      properties:
+        provider: { type: string, example: github }
+        github_login: { type: [string, "null"] }
+        linked_at: { type: string, format: date-time }
+
+    IdentityList:
+      type: object
+      required: [items, total, has_password]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LinkedIdentity" }
+        total: { type: integer, format: int64 }
+        has_password:
+          type: boolean
+          description: False when the user never chose a password (OAuth sign-up)
+
+    EnvelopeLinkedIdentity:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/LinkedIdentity" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    NativeIdentityLinkRequest:
+      type: object
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+          description: Provider id_token from the native SDK
+        nonce:
+          type: string
+          description: Raw nonce passed to the SDK
+        authorization_code:
+          type: string
+          description: Apple authorization code; exchanged for a refresh token
+
+    EnvelopeIdentityList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/IdentityList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    StepUpStatus:
+      type: object
+      required: [valid, methods]
+      properties:
+        valid: { type: boolean }
+        expires_at: { type: [string, "null"], format: date-time }
+        methods:
+          type: array
+          items: { type: string, enum: [password, passkey, totp] }
+
+    StepUpGrant:
+      type: object
+      required: [valid, expires_at, method]
+      properties:
+        valid: { type: boolean }
+        expires_at: { type: string, format: date-time }
+        method: { type: string, enum: [password, passkey, totp] }
+
+    StepUpPolicy:
+      type: object
+      required: [ttl_hours, password_enabled, passkey_enabled, totp_enabled, password_login_totp_required]
+      properties:
+        ttl_hours: { type: integer, minimum: 1, maximum: 168 }
+        password_enabled: { type: boolean }
+        passkey_enabled: { type: boolean }
+        totp_enabled: { type: boolean }
+        password_login_totp_required: { type: boolean }
+
+    StepUpPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, format: password }
+
+    PatchStepUpPolicyRequest:
+      type: object
+      properties:
+        ttl_hours: { type: integer, minimum: 1, maximum: 168 }
+        password_enabled: { type: boolean }
+        passkey_enabled: { type: boolean }
+        totp_enabled: { type: boolean }
+        password_login_totp_required: { type: boolean }
+
+    EnvelopeStepUpStatus:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StepUpStatus" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStepUpGrant:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StepUpGrant" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStepUpPolicy:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StepUpPolicy" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeRegister:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/RegisterResponse" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTokens:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Tokens" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    AuthSession:
+      type: object
+      required: [uuid, current, created_at, expires_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        current: { type: boolean }
+        user_agent: { type: [string, "null"] }
+        ip_address: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        impersonated: { type: boolean }
+
+    SessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthSession"
+
+    EnvelopeSessionList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SessionList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeMe:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Me" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganization:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Organization" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganizationPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganizationMember:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationMember" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganizationMemberPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationMemberPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeImpersonationResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ImpersonationResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    QRLoginCreated:
+      type: object
+      required: [session_id, qr_url, browser_secret, expires_at, expires_in, realtime]
+      properties:
+        session_id: { type: string, description: "43-char base64url id (in the QR)" }
+        qr_url: { type: string, format: uri, examples: ["https://app.example.com/login/qr/Zm9v..."] }
+        browser_secret: { type: string, description: Keep in the tab only }
+        expires_at: { type: string, format: date-time }
+        expires_in: { type: integer, format: int64, examples: [120] }
+        realtime:
+          type: object
+          required: [ws_url, connection_token, subscription_token, channel]
+          properties:
+            ws_url: { type: string }
+            connection_token: { type: string, description: Anonymous Centrifugo connection JWT }
+            subscription_token: { type: string, description: Subscription JWT for `channel` only }
+            channel: { type: string, examples: ["qrlogin:4Hq..."] }
+
+    EnvelopeQRLoginCreated:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/QRLoginCreated" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    QRLoginDetails:
+      type: object
+      required: [session_id, status, client, ip, location, created_at, expires_at]
+      properties:
+        session_id: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        client:
+          type: object
+          required: [browser, browser_version, os, device_type, user_agent]
+          properties:
+            browser: { type: string, examples: [Chrome] }
+            browser_version: { type: string, examples: ["128"] }
+            os: { type: string, examples: [Windows] }
+            device_type: { type: string, enum: [desktop, mobile, tablet] }
+            user_agent: { type: string }
+        ip: { type: string }
+        location:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                country_code: { type: string, examples: [TR] }
+                country: { type: string, description: English name (GeoIP only) }
+                region: { type: string }
+                city: { type: string }
+                source: { type: string, enum: [edge, geoip] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+
+    EnvelopeQRLoginDetails:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/QRLoginDetails" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    QRLoginState:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, scanned, approved, rejected] }
+        exchange_token: { type: string, description: Present when approved }
+
+    EnvelopeQRLoginState:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/QRLoginState" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    QRLoginExchangeRequest:
+      type: object
+      required: [session_id, browser_secret, exchange_token]
+      additionalProperties: false
+      properties:
+        session_id: { type: string }
+        browser_secret: { type: string }
+        exchange_token: { type: string }
+
+    QRLoginExchanged:
+      allOf:
+        - $ref: "#/components/schemas/Tokens"
+        - type: object
+          required: [user]
+          properties:
+            user:
+              type: object
+              required: [uuid, email, name]
+              properties:
+                uuid: { type: string, format: uuid }
+                email: { type: string, format: email }
+                name: { type: string }
+
+    EnvelopeQRLoginExchanged:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/QRLoginExchanged" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStatus:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StatusPayload" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicUser:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicUser" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicUserPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicUserPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePlatformUserDetail:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PlatformUserDetail" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeRealtimeConnectionToken:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/RealtimeConnectionToken" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeRealtimeSubscriptionToken:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/RealtimeSubscriptionToken" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeNotificationPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/NotificationPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    NotificationAction:
+      type: object
+      required: [destination, notification]
+      properties:
+        destination: { type: string }
+        notification:
+          $ref: "#/components/schemas/Notification"
+
+    EnvelopeNotificationAction:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/NotificationAction" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeNotification:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Notification" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeNotificationItems:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Notification"
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePreferences:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/NotificationPreferences" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeResourceMeta:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ResourceMeta" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeUnreadCount:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/UnreadCount" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    HealthzResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          examples: [ok]
+
+    BulkTarget:
+      type: object
+      required: [scope]
+      properties:
+        scope:
+          type: string
+          enum: [ids, query]
+        ids:
+          type: array
+          items: { type: string, format: uuid }
+        query:
+          type: object
+          additionalProperties: { type: string }
+
+    BulkExecuteRequest:
+      type: object
+      required: [action, target]
+      properties:
+        action: { type: string }
+        target: { $ref: "#/components/schemas/BulkTarget" }
+        locale: { type: string, enum: [tr, en] }
+
+    BulkSummary:
+      type: object
+      properties:
+        total: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+
+    BulkJob:
+      type: object
+      required: [uuid, resource, action, status, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        resource: { type: string }
+        action: { type: string }
+        status: { type: string }
+        target: { $ref: "#/components/schemas/BulkTarget" }
+        summary: { $ref: "#/components/schemas/BulkSummary" }
+        error: { type: [string, "null"] }
+        rollback_until: { type: [string, "null"], format: date-time }
+        applied_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    EnvelopeBulkJob:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BulkJob" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBulkSyncResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          properties:
+            sync: { type: boolean }
+            summary: { $ref: "#/components/schemas/BulkSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBulkJobPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/BulkJob" }
+            total: { type: integer }
+            limit: { type: integer }
+            offset: { type: integer }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ReadyzResponse:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          examples: [ready, not_ready]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+          properties:
+            postgres:
+              type: string
+              examples: [ok, down]
+            redis:
+              type: string
+              examples: [ok, down]

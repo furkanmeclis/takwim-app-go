@@ -1,0 +1,14 @@
+{
+  "description": "Platform totals and shortcuts for roles, users, and notifications.",
+  "forbidden_description": "Only platform users can view the overview.",
+  "error_description": "Overview data could not be loaded.",
+  "kpi_roles_total": "Roles",
+  "kpi_users_total": "Users",
+  "kpi_notifications": "Notifications",
+  "quick_links_title": "Quick links",
+  "quick_links_description": "Jump to common platform areas.",
+  "link_roles_description": "Browse and manage roles.",
+  "link_users_description": "Browse and manage platform users.",
+  "link_notifications_description": "Platform notification log.",
+  "link_profile_description": "Account, password, and preferences."
+}

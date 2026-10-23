@@ -1,0 +1,14 @@
+{
+  "description": "Rol, kullanıcı ve bildirim özetleri ile hızlı bağlantılar.",
+  "forbidden_description": "Genel bakışı yalnızca platform kullanıcıları görebilir.",
+  "error_description": "Genel bakış verileri yüklenemedi.",
+  "kpi_roles_total": "Roller",
+  "kpi_users_total": "Kullanıcılar",
+  "kpi_notifications": "Bildirimler",
+  "quick_links_title": "Hızlı bağlantılar",
+  "quick_links_description": "Sık kullanılan platform alanlarına git.",
+  "link_roles_description": "Rolleri görüntüle ve yönet.",
+  "link_users_description": "Platform kullanıcılarını görüntüle ve yönet.",
+  "link_notifications_description": "Platform bildirim kaydı.",
+  "link_profile_description": "Hesap, şifre ve tercihler."
+}

@@ -1,0 +1,128 @@
+name: CI
+
+# Push covers every branch; a pull_request trigger only duplicated those runs
+# and, for PRs opened by the auto-pr job (github-actions bot), produced empty
+# "failure"/"action_required" runs that showed as red X's.
+on:
+  push:
+    branches: ["**"]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - uses: sqlc-dev/setup-sqlc@v5
+        with:
+          sqlc-version: "1.31.1"
+      - name: sqlc generate
+        run: sqlc generate
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          working-directory: backend
+      - name: Test
+        run: go test ./...
+      - name: OpenAPI lint
+        run: npx --yes @redocly/cli@1 lint docs/openapi.yaml
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: i18n
+        working-directory: .
+        run: node scripts/check-i18n.mjs
+
+  # Feature branch pushed and both test jobs green → open (or reuse) a PR into
+  # main and turn on auto-merge. GitHub merges once main's required checks pass.
+  # Opt out per push by putting [no-automerge] in the head commit message.
+  # Token: repo secret AUTO_PR_TOKEN (fine-grained PAT: contents + pull
+  # requests read/write) when set — merges made with it also trigger CI on
+  # main. Otherwise GITHUB_TOKEN, which needs Settings → Actions → General →
+  # "Allow GitHub Actions to create and approve pull requests".
+  auto-pr:
+    needs: [backend, frontend]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref_name != 'main' &&
+      github.ref_name != 'master' &&
+      !contains(github.event.head_commit.message, '[no-automerge]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.AUTO_PR_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: ${{ github.ref_name }}
+      BASE: main
+    steps:
+      - name: Open or reuse pull request
+        id: pr
+        run: |
+          ahead="$(gh api "repos/$GH_REPO/compare/$BASE...$GITHUB_SHA" --jq '.ahead_by')"
+          if [ "$ahead" = "0" ]; then
+            echo "Branch has nothing that is not already in $BASE; skipping."
+            echo "number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          number="$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$number" ]; then
+            title="$(gh api "repos/$GH_REPO/commits/$GITHUB_SHA" --jq '.commit.message | split("\n")[0]')"
+            if ! url="$(gh pr create --base "$BASE" --head "$BRANCH" --title "$title" \
+              --body "Otomatik açıldı: \`$BRANCH\` dalında CI (backend + frontend) başarılı. Zorunlu kontroller geçince auto-merge ile \`$BASE\`'e birleşir." 2>&1)"; then
+              echo "$url"
+              if grep -q "not permitted to create or approve pull requests" <<<"$url"; then
+                echo "::error title=Auto PR disabled::Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or add an AUTO_PR_TOKEN repo secret (fine-grained PAT with Contents + Pull requests: read/write)."
+              fi
+              exit 1
+            fi
+            number="${url##*/}"
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+      - name: Merge
+        if: steps.pr.outputs.number != ''
+        run: |
+          # This job only runs after backend + frontend passed, so merge right away
+          # (no --auto: that needs branch protection). Only merge the commit this
+          # run tested: a later push (or a re-run of an older run) must never
+          # merge an untested branch head.
+          if ! out="$(gh pr merge "${{ steps.pr.outputs.number }}" --merge --match-head-commit "$GITHUB_SHA" 2>&1)"; then
+            echo "$out"
+            echo "::error title=Merge failed::PR could not be merged (head moved, conflict, or merge not permitted for this token)."
+            exit 1
+          fi
+          echo "$out"

@@ -1,0 +1,19 @@
+{
+  "title": "Command palette",
+  "description": "Search pages and records, then jump directly.",
+  "trigger_label": "Search…",
+  "placeholder": "Search pages and records…",
+  "empty": "No results found.",
+  "footer_hint": "Tip: type {{prefix}} {{example}} to scope search",
+  "footer_example": "ada",
+  "footer_open": "open",
+  "footer_close": "close",
+  "group_pages": "Pages",
+  "group_recent": "Recent",
+  "specs_pages": "Pages",
+  "specs_users": "Users",
+  "specs_roles": "Roles",
+  "prefix_pages": "pages",
+  "prefix_users": "users",
+  "prefix_roles": "roles"
+}

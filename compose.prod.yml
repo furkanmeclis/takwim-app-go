@@ -1,0 +1,364 @@
+# Production stack (Dokploy compose or plain `docker compose`).
+#
+# Networks — every app gets its own:
+#   app             Private bridge network created by Compose, named
+#                   ${APP_NETWORK_NAME:-<NAME_PREFIX>-app}. All services join it.
+#   dokploy-network Shared reverse-proxy network (external; Dokploy creates it,
+#                   on a plain Docker host run once: docker network create dokploy-network).
+#                   Only the public services join it: frontend and centrifugo.
+#
+# NAME_PREFIX is required: it makes container, volume and network names unique
+# per app, so several boilerplate apps run side by side on one server.
+# Internal hosts are always qualified as <service>.<app network>: a bare name
+# like `backend` could resolve to another stack's container on dokploy-network.
+name: ${COMPOSE_PROJECT_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-prod}
+
+x-backend-image: &backend-image
+  image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+
+x-frontend-image: &frontend-image
+  image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
+  build:
+    context: ./frontend
+    dockerfile: Dockerfile
+
+x-backend-environment: &backend-environment
+  APP_NAME: ${APP_NAME:-api}
+  APP_ENV: production
+  APP_HTTP_ADDR: :8080
+  DB_HOST: postgres.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}
+  DB_PORT: "5432"
+  DB_USER: ${DB_USER:?DB_USER is required}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+  DB_NAME: ${DB_NAME:?DB_NAME is required}
+  DB_SSLMODE: ${DB_SSLMODE:-disable}
+  REDIS_ADDR: redis.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}:6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-minio}
+  # MinIO is private: browsers get files through API endpoints, never a bucket URL.
+  S3_ENDPOINT: http://minio.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+  S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_USE_PATH_STYLE: "true"
+  CENTRIFUGO_API_URL: http://centrifugo.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}:8000
+  CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+  CENTRIFUGO_TOKEN_HMAC_SECRET: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?CENTRIFUGO_TOKEN_HMAC_SECRET is required}
+  CENTRIFUGO_WS_URL: ${CENTRIFUGO_WS_URL:?CENTRIFUGO_WS_URL is required}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+  AUTH_ADAPTER_SECRET: ${AUTH_ADAPTER_SECRET:?AUTH_ADAPTER_SECRET is required}
+  APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY is required}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+  # Public origin for links the API generates (e-mail links, step-up
+  # origin). Defaults to AUTH_URL.
+  PUBLIC_FRONTEND_URL: ${PUBLIC_FRONTEND_URL:-${AUTH_URL:?AUTH_URL is required}}
+  # Passkey relying-party ID; empty → hostname of PUBLIC_FRONTEND_URL.
+  AUTH_WEBAUTHN_RP_ID: ${AUTH_WEBAUTHN_RP_ID:-}
+  MAIL_FROM: ${MAIL_FROM:-noreply@localhost}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-App}
+  MAIL_DRIVER: ${MAIL_DRIVER:-smtp}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  QUEUE_ENABLED: ${QUEUE_ENABLED:-true}
+  QUEUE_WORKER_INPROCESS: "false"
+  QUEUE_CONCURRENCY: ${QUEUE_CONCURRENCY:-10}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:noreply@example.com}
+  SEARCH_ENABLED: ${SEARCH_ENABLED:-true}
+  SEARCH_DRIVER: ${SEARCH_DRIVER:-meilisearch}
+  MEILI_HOST: http://meilisearch.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}:7700
+  MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+  MEILI_INDEX_PREFIX: ${MEILI_INDEX_PREFIX:-app}
+  # --- Tenancy (organizations). Off = single-scope app. ---
+  TENANCY_ENABLED: ${TENANCY_ENABLED:-false}
+  TENANCY_SELF_SERVE: ${TENANCY_SELF_SERVE:-false}
+  TENANCY_CACHE_TTL: ${TENANCY_CACHE_TTL:-60s}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+  # --- Mobile app (all optional; empty = feature off / defaults) ---
+  AUTH_REVIEW_ACCOUNTS: ${AUTH_REVIEW_ACCOUNTS:-}
+  AUTH_APPLE_NATIVE_CLIENT_IDS: ${AUTH_APPLE_NATIVE_CLIENT_IDS:-}
+  AUTH_GOOGLE_NATIVE_CLIENT_IDS: ${AUTH_GOOGLE_NATIVE_CLIENT_IDS:-}
+  # Sign in with Apple key fallback. Prefer uploading the .p8 in Platform →
+  # Integrations → Apple (stored encrypted in the DB, wins over these).
+  AUTH_APPLE_TEAM_ID: ${AUTH_APPLE_TEAM_ID:-}
+  AUTH_APPLE_KEY_ID: ${AUTH_APPLE_KEY_ID:-}
+  AUTH_APPLE_PRIVATE_KEY: ${AUTH_APPLE_PRIVATE_KEY:-}
+  AUTH_QR_TRUST_GEO_HEADERS: ${AUTH_QR_TRUST_GEO_HEADERS:-false}
+  AUTH_QR_GEOIP_DB: ${AUTH_QR_GEOIP_DB:-}
+  EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+  # --- Error tracking (Sentry protocol, self-hosted). Empty DSN = off. ---
+  # Dokploy env is shared by every service, so the backend DSN has its own name.
+  SENTRY_DSN: ${BACKEND_SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+  # Share of HTTP requests sent as performance transactions (0 = off).
+  SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+
+  redis:
+    image: redis:8-alpine
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-redis
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app
+
+  minio:
+    image: minio/minio:latest
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Private: never attach MinIO to dokploy-network or publish its ports.
+    networks:
+      - app
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mc alias set local "http://minio.$$APP_NETWORK:9000" "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      APP_NETWORK: ${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}
+    restart: "no"
+    networks:
+      - app
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      # Use 127.0.0.1 — BusyBox wget resolves localhost to ::1; Meili listens on IPv4 only.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - app
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-centrifugo
+    restart: unless-stopped
+    command: centrifugo -c config.json
+    environment:
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?CENTRIFUGO_TOKEN_HMAC_SECRET is required}
+      CENTRIFUGO_ALLOWED_ORIGINS: ${CENTRIFUGO_ALLOWED_ORIGINS:?CENTRIFUGO_ALLOWED_ORIGINS is required}
+    volumes:
+      - ./deploy/centrifugo/config.prod.json:/centrifugo/config.json:ro
+    expose:
+      - "8000"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "centrifugo", "healthcheck", "--address=http://localhost:8000"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+      - dokploy-network
+
+  migrate:
+    <<: *backend-image
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-migrate
+    environment:
+      DATABASE_URL: postgres://${DB_USER:?DB_USER is required}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}:5432/${DB_NAME:?DB_NAME is required}?sslmode=${DB_SSLMODE:-disable}
+      APP_ROLE: migrate
+      AUTO_MIGRATE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - app
+
+  backend:
+    <<: *backend-image
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-backend
+    environment:
+      <<: *backend-environment
+      APP_ROLE: server
+      AUTO_MIGRATE: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      centrifugo:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      # /healthz, not /readyz: a Postgres/Redis blip must not mark the API
+      # unhealthy (unhealthy containers are dropped by the proxy).
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+    restart: unless-stopped
+    # App network only: the frontend proxies /api, so the API needs no public
+    # domain, and on dokploy-network its `backend` alias would answer other
+    # stacks' lookups.
+    networks:
+      - app
+
+  worker:
+    <<: *backend-image
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-worker
+    environment:
+      <<: *backend-environment
+      APP_ROLE: worker
+      AUTO_MIGRATE: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      centrifugo:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    stop_grace_period: 35s
+    restart: unless-stopped
+    networks:
+      - app
+
+  frontend:
+    <<: *frontend-image
+    container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-frontend
+    environment:
+      API_URL: http://backend.${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}:8080/v1
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+      AUTH_URL: ${AUTH_URL:?AUTH_URL is required}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      AUTH_ADAPTER_SECRET: ${AUTH_ADAPTER_SECRET:-}
+      NEXT_PUBLIC_BFF_BASE_URL: ${NEXT_PUBLIC_BFF_BASE_URL:-/api}
+      NEXT_PUBLIC_REALTIME_ENABLED: ${NEXT_PUBLIC_REALTIME_ENABLED:-true}
+      NEXT_PUBLIC_CENTRIFUGO_URL: ${NEXT_PUBLIC_CENTRIFUGO_URL:-}
+      NEXT_PUBLIC_DEFAULT_LOCALE: ${NEXT_PUBLIC_DEFAULT_LOCALE:-tr}
+      NEXT_PUBLIC_FALLBACK_LOCALE: ${NEXT_PUBLIC_FALLBACK_LOCALE:-en}
+      # Error tracking, read at runtime by the Next.js server/edge and served
+      # to the browser by /api/client-env (no build arg). Empty = off.
+      SENTRY_DSN: ${FRONTEND_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+    depends_on:
+      backend:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    expose:
+      - "3000"
+    healthcheck:
+      # Real route is /health (not /api/v1/health). Unhealthy containers are
+      # dropped by Traefik → domain returns "404 page not found".
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - app
+      - dokploy-network
+
+volumes:
+  postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-prod-postgres}
+  redis_data:
+    name: ${REDIS_VOLUME_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-prod-redis}
+  minio_data:
+    name: ${MINIO_VOLUME_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-prod-minio}
+  meili_data:
+    name: ${MEILI_VOLUME_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-prod-meilisearch}
+
+networks:
+  # Created by Compose for this app only.
+  app:
+    name: ${APP_NETWORK_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-app}
+    driver: bridge
+  dokploy-network:
+    name: dokploy-network
+    external: true

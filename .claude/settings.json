@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(go test:*)",
+      "Bash(gofmt -l:*)",
+      "Bash(make sqlc)",
+      "Bash(make openapi-lint)",
+      "Bash(make prod-config)",
+      "Bash(sqlc generate)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm format:check)",
+      "Bash(pnpm api:generate)",
+      "Bash(pnpm build)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh run list:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.server)",
+      "Read(./backend/.env)",
+      "Read(./frontend/.env.local)",
+      "Edit(./.env)",
+      "Edit(./.env.server)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-edit.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-edit.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

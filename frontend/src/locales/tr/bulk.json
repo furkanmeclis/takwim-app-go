@@ -1,0 +1,19 @@
+{
+  "select_all_matching": "Eşleşen {{total}} kaydın tümünü seç",
+  "all_matching_selected": "Eşleşen {{total}} kaydın tümü seçildi",
+  "clear_selection": "Seçimi temizle",
+  "confirm_generic": "Bu toplu işlem {{count}} kayda uygulansın mı?",
+  "rollback": "Toplu işlemi geri al",
+  "rollback_until": "Geri alma {{date}} tarihine kadar geçerli",
+  "rollback_success": "Toplu işlem geri alındı",
+  "result.sync": "{{succeeded}} başarılı, {{failed}} hatalı",
+  "job.queued": "Toplu iş kuyruğa alındı",
+  "job.processing": "Toplu işlem yapılıyor…",
+  "job.completed": "Toplu işlem tamamlandı",
+  "job.failed": "Toplu işlem başarısız",
+  "actions.users.disable": "Kullanıcıları devre dışı bırak",
+  "actions.users.enable": "Kullanıcıları etkinleştir",
+  "actions.roles.delete": "Rolleri sil",
+  "confirm.users.disable": "Seçili {{count}} kullanıcı devre dışı bırakılsın mı?",
+  "confirm.roles.delete": "Seçili {{count}} rol silinsin mi?"
+}

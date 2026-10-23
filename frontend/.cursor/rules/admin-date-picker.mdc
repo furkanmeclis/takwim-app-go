@@ -1,0 +1,16 @@
+---
+description: Date fields must use the shared DatePicker
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# DatePicker
+
+For any date input in `frontend/`:
+
+- Use `DatePicker` from `@/components/ui/date-picker` for controlled/filter UI.
+- Use `AppDatePicker` from `@/components/forms` inside react-hook-form forms.
+- Do **not** use native `<input type="date" />`.
+- Do **not** compose `Popover` + `Calendar` ad hoc for date selection — extend `DatePicker` instead.
+- `Calendar` is an internal primitive for `DatePicker` (and rare custom calendar UIs). Prefer `DatePicker` for picking a day.
+- Values are stored as `yyyy-MM-dd`. Calendar labels follow the active app locale (`tr` / `en`) automatically.

@@ -1,0 +1,65 @@
+---
+description: API HTTP conventions — envelope, list pagination, query, meta, OpenAPI
+globs: "**/*.{go,yaml,yml,md}"
+alwaysApply: false
+---
+
+# API conventions
+
+Module: `github.com/furkanmeclis/nextjs-go-boilerplate/backend`. Paths are `/v1/...` (no `/api/v1` prefix). Work under `backend/`.
+
+## Response envelope
+
+All `/v1/*` handlers use `pkg/response` with request id. Do not return raw JSON.
+
+```json
+{ "success": true, "data": {}, "meta": { "request_id": "uuid" } }
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "...",
+    "details": [{ "field": "email", "message": "...", "code": "invalid" }]
+  },
+  "meta": { "request_id": "uuid" }
+}
+```
+
+- Success: `response.JSON(w, r, status, data)`
+- Errors: `Unauthorized` / `Forbidden` / `NotFound` / `Conflict` / `ValidationError` / `Internal`
+- Branch on `error.code`, not message text
+- `GET /healthz` and `GET /readyz` stay **outside** the envelope
+
+## Lists
+
+```json
+{ "success": true, "data": { "items": [], "total": 0, "limit": 20, "offset": 0 }, "meta": { "request_id": "..." } }
+```
+
+- Parse with `pkg/apiquery` (`limit`, `offset`, `q`, `sort`, `include`, `fields`)
+- Default limit 20, max 100; unknown sort → `400 VALIDATION_ERROR`
+- **Forbidden query names:** `page`, `page_size`, `per_page`, `search` (use `q` only)
+
+## Resource meta
+
+Primary list resources expose `GET /v1/{resource}/meta` via `internal/platform/resourcemeta`.
+Register `/meta` **before** `/{uuid}` on `ServeMux`.
+
+## Auth
+
+- Bearer JWT on protected routes
+- Global users — no tenant (`tid`) or workspace (`wid`) claims
+- User fields: `name` / `surname`
+
+## OpenAPI + docs
+
+- Contract: `docs/openapi.yaml` + Scalar at `/docs/`
+- New/changed endpoints → update OpenAPI in the same change
+
+## Do not
+
+- Invent envelope-less `/v1` responses or `page`/`search` pagination
+- Call SMTP/SMS inline from HTTP handlers (use notification enqueue)

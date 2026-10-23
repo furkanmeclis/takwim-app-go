@@ -1,0 +1,19 @@
+{
+  "title": "Komut paleti",
+  "description": "Sayfaları ve kayıtları arayın, doğrudan gidin.",
+  "trigger_label": "Ara…",
+  "placeholder": "Sayfa ve kayıt ara…",
+  "empty": "Sonuç bulunamadı.",
+  "footer_hint": "İpucu: {{prefix}} {{example}} yazarak aramayı daraltın",
+  "footer_example": "ada",
+  "footer_open": "aç",
+  "footer_close": "kapat",
+  "group_pages": "Sayfalar",
+  "group_recent": "Son aramalar",
+  "specs_pages": "Sayfalar",
+  "specs_users": "Kullanıcılar",
+  "specs_roles": "Roller",
+  "prefix_pages": "sayfalar",
+  "prefix_users": "kullanıcılar",
+  "prefix_roles": "roller"
+}

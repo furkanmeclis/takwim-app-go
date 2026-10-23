@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "shadcn": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "cd \"${CLAUDE_PROJECT_DIR:-.}/frontend\" && exec npx -y shadcn@latest mcp"]
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}

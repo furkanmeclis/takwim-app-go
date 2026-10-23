@@ -1,0 +1,19 @@
+{
+  "select_all_matching": "Select all {{total}} matching records",
+  "all_matching_selected": "All {{total}} matching records selected",
+  "clear_selection": "Clear selection",
+  "confirm_generic": "Apply this bulk action to {{count}} records?",
+  "rollback": "Undo bulk action",
+  "rollback_until": "Undo available until {{date}}",
+  "rollback_success": "Bulk action rolled back",
+  "result.sync": "{{succeeded}} succeeded, {{failed}} failed",
+  "job.queued": "Bulk job queued",
+  "job.processing": "Processing bulk job…",
+  "job.completed": "Bulk job completed",
+  "job.failed": "Bulk job failed",
+  "actions.users.disable": "Disable users",
+  "actions.users.enable": "Enable users",
+  "actions.roles.delete": "Delete roles",
+  "confirm.users.disable": "Disable {{count}} selected users?",
+  "confirm.roles.delete": "Delete {{count}} selected roles?"
+}
