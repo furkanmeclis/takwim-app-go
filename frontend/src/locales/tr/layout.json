@@ -50,5 +50,6 @@
   "nav_resources": "Kaynaklar",
   "nav_services": "Hizmetler",
   "nav_customers": "Müşteriler",
-  "nav_reservations": "Rezervasyonlar"
+  "nav_reservations": "Rezervasyonlar",
+  "nav_calendar": "Takvim"
 }

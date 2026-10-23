@@ -533,6 +533,264 @@ func (q *Queries) GetReservationRecord(ctx context.Context, arg GetReservationRe
 	return i, err
 }
 
+const listCalendarBranches = `-- name: ListCalendarBranches :many
+SELECT b.id, b.uuid, b.name, b.working_hours, b.holiday_exceptions,
+       COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone
+FROM branches b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = $1 AND b.deleted_at IS NULL AND b.is_active
+  AND ($2::bigint[] IS NULL OR b.id = ANY($2::bigint[]))
+  AND ($3::uuid IS NULL OR b.uuid = $3)
+ORDER BY b.name, b.id
+`
+
+type ListCalendarBranchesParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	BranchIds      []int64     `json:"branch_ids"`
+	BranchUuid     pgtype.UUID `json:"branch_uuid"`
+}
+
+type ListCalendarBranchesRow struct {
+	ID                int64     `json:"id"`
+	Uuid              uuid.UUID `json:"uuid"`
+	Name              string    `json:"name"`
+	WorkingHours      []byte    `json:"working_hours"`
+	HolidayExceptions []byte    `json:"holiday_exceptions"`
+	Timezone          string    `json:"timezone"`
+}
+
+// Branches of the calendar (TEC-901): one branch, or every branch of the
+// caller's scope (branch_ids NULL = all).
+func (q *Queries) ListCalendarBranches(ctx context.Context, arg ListCalendarBranchesParams) ([]ListCalendarBranchesRow, error) {
+	rows, err := q.db.Query(ctx, listCalendarBranches, arg.OrganizationID, arg.BranchIds, arg.BranchUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarBranchesRow{}
+	for rows.Next() {
+		var i ListCalendarBranchesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.Name,
+			&i.WorkingHours,
+			&i.HolidayExceptions,
+			&i.Timezone,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCalendarLines = `-- name: ListCalendarLines :many
+SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.ends_at,
+       l.buffer_before_minutes, l.buffer_after_minutes,
+       st.uuid AS staff_uuid,
+       r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
+       r.source, r.version,
+       b.uuid AS branch_uuid,
+       c.first_name AS customer_first_name, c.last_name AS customer_last_name
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+LEFT JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+WHERE l.organization_id = $1
+  AND r.branch_id = ANY($2::bigint[])
+  AND l.starts_at < $3 AND l.ends_at > $4
+  AND ($5::boolean OR r.status NOT IN ('cancelled', 'rejected'))
+  AND ($6::bigint IS NULL OR r.created_by = $6 OR l.staff_id = $7)
+ORDER BY l.starts_at, r.number, l.line_index
+`
+
+type ListCalendarLinesParams struct {
+	OrganizationID   int64              `json:"organization_id"`
+	BranchIds        []int64            `json:"branch_ids"`
+	Until            pgtype.Timestamptz `json:"until"`
+	Since            pgtype.Timestamptz `json:"since"`
+	IncludeCancelled bool               `json:"include_cancelled"`
+	OwnUserID        pgtype.Int8        `json:"own_user_id"`
+	OwnStaffID       pgtype.Int8        `json:"own_staff_id"`
+}
+
+type ListCalendarLinesRow struct {
+	LineIndex           int32              `json:"line_index"`
+	ServiceName         string             `json:"service_name"`
+	StaffName           pgtype.Text        `json:"staff_name"`
+	Resources           []byte             `json:"resources"`
+	StartsAt            pgtype.Timestamptz `json:"starts_at"`
+	EndsAt              pgtype.Timestamptz `json:"ends_at"`
+	BufferBeforeMinutes int32              `json:"buffer_before_minutes"`
+	BufferAfterMinutes  int32              `json:"buffer_after_minutes"`
+	StaffUuid           pgtype.UUID        `json:"staff_uuid"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	Number              int64              `json:"number"`
+	Status              string             `json:"status"`
+	ApprovalStatus      string             `json:"approval_status"`
+	ConfirmationStatus  string             `json:"confirmation_status"`
+	PaymentStatus       string             `json:"payment_status"`
+	Source              string             `json:"source"`
+	Version             int32              `json:"version"`
+	BranchUuid          uuid.UUID          `json:"branch_uuid"`
+	CustomerFirstName   string             `json:"customer_first_name"`
+	CustomerLastName    string             `json:"customer_last_name"`
+}
+
+// Lines overlapping [since, until) of the calendar's branches, with their
+// visit. Cancelled and rejected visits only when asked; an own calendar
+// member sees what it created or serves.
+func (q *Queries) ListCalendarLines(ctx context.Context, arg ListCalendarLinesParams) ([]ListCalendarLinesRow, error) {
+	rows, err := q.db.Query(ctx, listCalendarLines,
+		arg.OrganizationID,
+		arg.BranchIds,
+		arg.Until,
+		arg.Since,
+		arg.IncludeCancelled,
+		arg.OwnUserID,
+		arg.OwnStaffID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarLinesRow{}
+	for rows.Next() {
+		var i ListCalendarLinesRow
+		if err := rows.Scan(
+			&i.LineIndex,
+			&i.ServiceName,
+			&i.StaffName,
+			&i.Resources,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.BufferBeforeMinutes,
+			&i.BufferAfterMinutes,
+			&i.StaffUuid,
+			&i.Uuid,
+			&i.Number,
+			&i.Status,
+			&i.ApprovalStatus,
+			&i.ConfirmationStatus,
+			&i.PaymentStatus,
+			&i.Source,
+			&i.Version,
+			&i.BranchUuid,
+			&i.CustomerFirstName,
+			&i.CustomerLastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCalendarResources = `-- name: ListCalendarResources :many
+SELECT id, uuid, name, kind, working_hours
+FROM resources
+WHERE organization_id = $1 AND branch_id = $2
+  AND deleted_at IS NULL AND is_active
+ORDER BY sort_order, name, id
+`
+
+type ListCalendarResourcesParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	BranchID       int64 `json:"branch_id"`
+}
+
+type ListCalendarResourcesRow struct {
+	ID           int64     `json:"id"`
+	Uuid         uuid.UUID `json:"uuid"`
+	Name         string    `json:"name"`
+	Kind         string    `json:"kind"`
+	WorkingHours []byte    `json:"working_hours"`
+}
+
+// Active resources of a branch (own hours NULL = branch hours).
+func (q *Queries) ListCalendarResources(ctx context.Context, arg ListCalendarResourcesParams) ([]ListCalendarResourcesRow, error) {
+	rows, err := q.db.Query(ctx, listCalendarResources, arg.OrganizationID, arg.BranchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarResourcesRow{}
+	for rows.Next() {
+		var i ListCalendarResourcesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.Name,
+			&i.Kind,
+			&i.WorkingHours,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCalendarStaff = `-- name: ListCalendarStaff :many
+SELECT s.id, s.uuid, s.name, s.color, sb.shifts
+FROM staff s
+JOIN staff_branches sb ON sb.organization_id = s.organization_id AND sb.staff_id = s.id
+WHERE s.organization_id = $1 AND sb.branch_id = $2
+  AND s.deleted_at IS NULL AND s.is_active
+ORDER BY s.name, s.id
+`
+
+type ListCalendarStaffParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	BranchID       int64 `json:"branch_id"`
+}
+
+type ListCalendarStaffRow struct {
+	ID     int64     `json:"id"`
+	Uuid   uuid.UUID `json:"uuid"`
+	Name   string    `json:"name"`
+	Color  string    `json:"color"`
+	Shifts []byte    `json:"shifts"`
+}
+
+// Active people working in a branch, with their shifts there.
+func (q *Queries) ListCalendarStaff(ctx context.Context, arg ListCalendarStaffParams) ([]ListCalendarStaffRow, error) {
+	rows, err := q.db.Query(ctx, listCalendarStaff, arg.OrganizationID, arg.BranchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarStaffRow{}
+	for rows.Next() {
+		var i ListCalendarStaffRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.Name,
+			&i.Color,
+			&i.Shifts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReservationBranchFacets = `-- name: ListReservationBranchFacets :many
 SELECT b.uuid AS value, b.name AS label, count(*) AS count
 FROM reservations r

@@ -254,6 +254,29 @@ func shifts(raw []byte) (engine.WeeklyShifts, error) {
 	return out, nil
 }
 
+// ParseWeekly reads stored weekly hours (branch or resource).
+func ParseWeekly(raw []byte) (engine.Weekly, error) {
+	return weekly(raw)
+}
+
+// ParseShifts reads the stored weekly shifts of a person in a branch.
+func ParseShifts(raw []byte) (engine.WeeklyShifts, error) {
+	return shifts(raw)
+}
+
+// ParseExceptions reads the stored special days of a branch, by date.
+func ParseExceptions(raw []byte) (map[string]engine.Hours, error) {
+	var holidays []holiday
+	if err := json.Unmarshal(raw, &holidays); err != nil {
+		return nil, err
+	}
+	out := make(map[string]engine.Hours, len(holidays))
+	for _, h := range holidays {
+		out[h.Date] = engine.Hours{Closed: h.Closed, Open: h.Open, Close: h.Close}
+	}
+	return out, nil
+}
+
 func ts(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
@@ -348,13 +371,9 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 	if err != nil {
 		return nil, fmt.Errorf("branch hours: %w", err)
 	}
-	var holidays []holiday
-	if err := json.Unmarshal(branch.HolidayExceptions, &holidays); err != nil {
+	exceptions, err := ParseExceptions(branch.HolidayExceptions)
+	if err != nil {
 		return nil, fmt.Errorf("branch special days: %w", err)
-	}
-	exceptions := make(map[string]engine.Hours, len(holidays))
-	for _, h := range holidays {
-		exceptions[h.Date] = engine.Hours{Closed: h.Closed, Open: h.Open, Close: h.Close}
 	}
 	req.Open = engine.OpenIntervals(loc, first, last, hours, exceptions)
 

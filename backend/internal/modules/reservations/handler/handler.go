@@ -56,6 +56,40 @@ func caller(w http.ResponseWriter, r *http.Request, full string) (availabilityus
 	return availabilityusecase.Caller{}, true
 }
 
+// Calendar serves GET /v1/tenant/reservations/calendar (TEC-901):
+// ?from=&to= local dates (at most a week), by=staff|resource|branch,
+// branch= (required unless by=branch), include_cancelled=true.
+func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	c, ok := caller(w, r, rbac.PermTenantReservationsRead)
+	if !ok {
+		return
+	}
+	values := r.URL.Query()
+	f := model.CalendarFilter{
+		By: values.Get("by"), From: values.Get("from"), To: values.Get("to"),
+		IncludeCancelled: values.Get("include_cancelled") == "true",
+	}
+	if raw := values.Get("branch"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			response.ValidationError(w, r, []response.Detail{{Field: "branch", Message: "branch must be a uuid", Code: "invalid"}})
+			return
+		}
+		f.BranchUUID = &id
+	}
+	out, err := h.svc.Calendar(r.Context(), scope.ID, f, c)
+	if errors.Is(err, availabilityusecase.ErrNotFound) {
+		response.ValidationError(w, r, []response.Detail{{Field: "branch", Message: "branch not found", Code: "not_found"}})
+		return
+	}
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // Meta serves GET /v1/tenant/reservations/meta.
 func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, Meta())

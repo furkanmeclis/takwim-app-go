@@ -1,6 +1,7 @@
 import {
   Armchair,
   CalendarCheck,
+  CalendarDays,
   ConciergeBell,
   Gauge,
   History,
@@ -284,6 +285,17 @@ export function tenantNav(slug: string): NavCatalog {
         icon: Store,
         defaultOpen: true,
         items: [
+          {
+            id: "calendar",
+            titleKey: "layout.nav_calendar",
+            href: routes.tenant.calendar(slug),
+            icon: CalendarDays,
+            anyPermission: [
+              permissions.tenant.reservations.read,
+              permissions.tenant.reservations.own,
+            ],
+            module: "calendar",
+          },
           {
             id: "reservations",
             titleKey: "layout.nav_reservations",

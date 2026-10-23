@@ -234,3 +234,73 @@ type Facets struct {
 	Branch []Facet `json:"branch"`
 	Staff  []Facet `json:"staff"`
 }
+
+// Calendar views (TEC-901): the columns of a branch calendar.
+const (
+	CalendarByStaff    = "staff"
+	CalendarByResource = "resource"
+	CalendarByBranch   = "branch"
+	// CalendarUnassigned is the column of lines without a person / resource.
+	CalendarUnassigned = "unassigned"
+)
+
+// CalendarFilter asks for the calendar of local dates From..To.
+type CalendarFilter struct {
+	By               string
+	BranchUUID       *uuid.UUID
+	From, To         string
+	IncludeCancelled bool
+}
+
+// Interval is a range of instants.
+type Interval struct {
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+}
+
+// CalendarColumn is one column: a person, a resource, a branch or the
+// unassigned lines. Work is when the column can take visits (shifts minus
+// breaks, resource or branch hours); Off is leave or closures.
+type CalendarColumn struct {
+	Key          string     `json:"key"`
+	Name         string     `json:"name"`
+	Kind         string     `json:"kind"`
+	ResourceKind *string    `json:"resource_kind"`
+	Color        *string    `json:"color"`
+	Work         []Interval `json:"work"`
+	Off          []Interval `json:"off"`
+}
+
+// CalendarItem is one line of a visit placed in its columns.
+type CalendarItem struct {
+	ReservationUUID     uuid.UUID `json:"reservation_uuid"`
+	Number              int64     `json:"number"`
+	LineIndex           int       `json:"line_index"`
+	Columns             []string  `json:"columns"`
+	BranchUUID          uuid.UUID `json:"branch_uuid"`
+	ServiceName         string    `json:"service_name"`
+	StaffName           *string   `json:"staff_name"`
+	CustomerName        string    `json:"customer_name"`
+	StartsAt            time.Time `json:"starts_at"`
+	EndsAt              time.Time `json:"ends_at"`
+	BufferBeforeMinutes int       `json:"buffer_before_minutes"`
+	BufferAfterMinutes  int       `json:"buffer_after_minutes"`
+	Status              string    `json:"status"`
+	ApprovalStatus      string    `json:"approval_status"`
+	ConfirmationStatus  string    `json:"confirmation_status"`
+	PaymentStatus       string    `json:"payment_status"`
+	Source              string    `json:"source"`
+	Version             int       `json:"version"`
+}
+
+// Calendar is the answer of the calendar view.
+type Calendar struct {
+	By       string           `json:"by"`
+	Branch   *Ref             `json:"branch"`
+	Timezone string           `json:"timezone"`
+	From     string           `json:"from"`
+	To       string           `json:"to"`
+	Open     []Interval       `json:"open"`
+	Columns  []CalendarColumn `json:"columns"`
+	Items    []CalendarItem   `json:"items"`
+}

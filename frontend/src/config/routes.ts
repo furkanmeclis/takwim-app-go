@@ -82,6 +82,7 @@ export const routes = {
       edit: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/customers/${uuid}/edit`,
     },
+    calendar: (slug: string) => `/t/${encodeURIComponent(slug)}/calendar`,
     reservations: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/reservations`,
       create: (slug: string) =>

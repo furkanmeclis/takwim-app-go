@@ -11,6 +11,7 @@ import { reservationsKeys } from "@/features/reservations/hooks/query-keys";
 import { reservationsService } from "@/features/reservations/services/reservations.service";
 import type {
   AvailabilitySearchRequest,
+  CalendarParams,
   ListReservationsParams,
   ReservationAction,
   ReservationActionRequest,
@@ -46,6 +47,16 @@ export function useReservationsFacets() {
     queryKey: reservationsKeys.facets(slug),
     queryFn: () => reservationsService.facets(slug),
     staleTime: 60_000,
+  });
+}
+
+export function useReservationCalendar(params: CalendarParams | null) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.calendar(slug, params ?? {}),
+    queryFn: () => reservationsService.calendar(slug, params!),
+    enabled: Boolean(params),
+    placeholderData: keepPreviousData,
   });
 }
 

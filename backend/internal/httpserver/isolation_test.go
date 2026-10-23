@@ -513,6 +513,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/customers":        {"?q=" + orgB.ids["customerPhone"][3:], "?tag=" + orgB.marker},
 		"GET /v1/tenant/reservations": {"?q=" + orgB.ids["customerPhone"][3:], "?branch=" + orgB.ids["branch"],
 			"?staff=" + orgB.ids["staff"], "?customer_uuid=" + orgB.ids["customer"]},
+		"GET /v1/tenant/reservations/calendar": {"?from=2030-01-07&by=branch", "?from=2030-01-07&branch=" + orgB.ids["branch"],
+			"?from=2030-01-07&by=resource&branch=" + orgB.ids["branch"], "?from=2030-01-07&by=branch&branch=" + orgB.ids["branch"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
