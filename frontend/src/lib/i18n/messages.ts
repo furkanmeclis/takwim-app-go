@@ -18,6 +18,7 @@ import enIntegrations from "@/locales/en/integrations.json";
 import enLogs from "@/locales/en/logs.json";
 import enLayout from "@/locales/en/layout.json";
 import enNotifications from "@/locales/en/notifications.json";
+import enOrganizations from "@/locales/en/organizations.json";
 import enPermissions from "@/locales/en/permissions.json";
 import enRoles from "@/locales/en/roles.json";
 import enSearch from "@/locales/en/search.json";
@@ -46,6 +47,7 @@ import trIntegrations from "@/locales/tr/integrations.json";
 import trLogs from "@/locales/tr/logs.json";
 import trLayout from "@/locales/tr/layout.json";
 import trNotifications from "@/locales/tr/notifications.json";
+import trOrganizations from "@/locales/tr/organizations.json";
 import trPermissions from "@/locales/tr/permissions.json";
 import trRoles from "@/locales/tr/roles.json";
 import trSearch from "@/locales/tr/search.json";
@@ -71,6 +73,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     branding: trBranding,
     bulk: trBulk,
     entity: trEntity,
+    organizations: trOrganizations,
     permissions: trPermissions,
     realtime: trRealtime,
     cms: trCms,
@@ -101,6 +104,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     branding: enBranding,
     bulk: enBulk,
     entity: enEntity,
+    organizations: enOrganizations,
     permissions: enPermissions,
     realtime: enRealtime,
     cms: enCms,

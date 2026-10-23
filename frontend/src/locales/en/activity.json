@@ -29,6 +29,7 @@
   "resources.platform.roles": "Roles",
   "resources.platform.notifications": "Notifications",
   "resources.platform.activity": "Activity",
+  "resources.platform.organizations": "Businesses",
   "resources.platform.settings": "Settings",
   "resources.platform.access": "Access settings",
   "resources.platform.auth.settings": "Auth settings",

@@ -29,6 +29,7 @@
   "resources.platform.roles": "Roller",
   "resources.platform.notifications": "Bildirimler",
   "resources.platform.activity": "Etkinlik",
+  "resources.platform.organizations": "İşletmeler",
   "resources.platform.settings": "Ayarlar",
   "resources.platform.access": "Erişim ayarları",
   "resources.platform.auth.settings": "Auth ayarları",

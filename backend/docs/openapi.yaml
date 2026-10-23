@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: App API
+  title: Takwim API
   version: 0.1.0
-  summary: Boilerplate HTTP API — auth, RBAC, users, roles, notifications, realtime
+  summary: Takwim HTTP API — auth, RBAC, users, roles, notifications, realtime
   description: |
-    Starter HTTP API for the Next.js + Go boilerplate.
+    Takwim HTTP API (built on the Next.js + Go boilerplate).
 
     **In scope:** authentication, global RBAC, platform users/roles, notifications,
     Web Push (VAPID), passkeys, and Centrifugo realtime tokens.

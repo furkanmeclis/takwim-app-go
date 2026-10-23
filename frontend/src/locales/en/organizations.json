@@ -1,0 +1,8 @@
+{
+  "uuid": "UUID",
+  "name": "Name",
+  "slug": "Slug",
+  "status": "Status",
+  "access_ends_at": "Access ends",
+  "created_at": "Created"
+}

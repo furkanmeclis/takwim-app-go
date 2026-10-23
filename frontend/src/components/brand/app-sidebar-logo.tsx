@@ -1,27 +1,29 @@
+"use client";
+
 import { brand } from "@/config/brand";
 import { cn } from "@/lib/utils";
+import { useLocale } from "@/providers/locale-provider";
 
-import { AppMark } from "./app-mark";
+import { TakwimIconSvg } from "./brand-svg";
 
 type AppSidebarLogoProps = {
   className?: string;
 };
 
-/** Sidebar header lockup — icon tile + product name. */
+/** Sidebar header lockup — app icon tile + product name and tagline. */
 export function AppSidebarLogo({ className }: AppSidebarLogoProps) {
+  const { t } = useLocale();
   return (
     <>
-      <span
-        className={cn(
-          "bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg",
-          className,
-        )}
-      >
-        <AppMark className="size-4" />
-      </span>
+      <TakwimIconSvg
+        title={brand.name}
+        className={cn("aspect-square size-8! rounded-lg", className)}
+      />
       <span className="grid flex-1 text-left text-sm leading-tight">
         <span className="truncate font-medium">{brand.productName}</span>
-        <span className="truncate text-xs opacity-70">{brand.name}</span>
+        <span className="truncate text-xs opacity-70">
+          {t("common.app_tagline")}
+        </span>
       </span>
     </>
   );
