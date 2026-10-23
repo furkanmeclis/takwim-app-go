@@ -4,34 +4,22 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/slug"
 )
 
 // maxSlugLen is the column limit of branches.slug.
 const maxSlugLen = 64
 
-var turkishFold = strings.NewReplacer(
-	"ç", "c", "Ç", "c", "ğ", "g", "Ğ", "g", "ı", "i", "I", "i", "İ", "i",
-	"ö", "o", "Ö", "o", "ş", "s", "Ş", "s", "ü", "u", "Ü", "u",
-)
-
-// Slugify turns a branch name into a URL slug: Turkish letters folded to
-// ASCII, everything else outside [a-z0-9] collapsed to single dashes.
+// Slugify turns a branch name into a URL slug (slug.FromName: Turkish
+// letters folded to ASCII, other characters collapsed to dashes) capped at
+// the column length. A name without letters or digits gives "".
 func Slugify(v string) string {
-	v = strings.ToLower(turkishFold.Replace(v))
-	var b strings.Builder
-	dash := false
-	for _, r := range v {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			dash = false
-			continue
-		}
-		if !dash && b.Len() > 0 {
-			b.WriteByte('-')
-			dash = true
-		}
+	if !strings.ContainsFunc(v, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
+		return ""
 	}
-	out := strings.TrimRight(b.String(), "-")
+	out := slug.FromName(v)
 	if len(out) > maxSlugLen {
 		out = strings.TrimRight(out[:maxSlugLen], "-")
 	}

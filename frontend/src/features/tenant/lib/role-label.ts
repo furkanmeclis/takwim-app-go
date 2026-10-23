@@ -2,12 +2,9 @@
 const TEMPLATE_ROLE_KEYS: Record<string, string> = {
   owner: "tenant.roles.owner",
   admin: "tenant.roles.admin",
-  member: "tenant.roles.member",
-  merkez_yoneticisi: "tenant.roles.merkez_yoneticisi",
   sube_yoneticisi: "tenant.roles.sube_yoneticisi",
-  rezervasyon_satis: "tenant.roles.rezervasyon_satis",
-  muhasebe: "tenant.roles.muhasebe",
-  teslim_iade: "tenant.roles.teslim_iade",
+  resepsiyon: "tenant.roles.resepsiyon",
+  member: "tenant.roles.member",
 };
 
 /**

@@ -11,6 +11,7 @@ import (
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -57,7 +58,7 @@ func TestTenantAccessMultiRoleAndGuards(t *testing.T) {
 	if _, err := svc.AddMember(ctx, org.UUID, admin.Uuid, "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.AddMember(ctx, org.UUID, carol.Uuid, "rezervasyon_satis"); err != nil {
+	if _, err := svc.AddMember(ctx, org.UUID, carol.Uuid, "resepsiyon"); err != nil {
 		t.Fatal(err)
 	}
 	ownerScope, err := svc.Resolve(ctx, org.Slug, owner.ID)
@@ -76,20 +77,25 @@ func TestTenantAccessMultiRoleAndGuards(t *testing.T) {
 	for _, r := range roles {
 		roleUUID[r.Key] = r.UUID
 	}
-	for _, key := range []string{"owner", "admin", "member", "merkez_yoneticisi", "sube_yoneticisi", "rezervasyon_satis", "muhasebe", "teslim_iade"} {
+	for _, key := range []string{"owner", "admin", "sube_yoneticisi", "resepsiyon", "member"} {
 		if roleUUID[key] == uuid.Nil {
 			t.Fatalf("template role %s missing from %v", key, roleUUID)
 		}
 	}
+	for _, gone := range []string{"merkez_yoneticisi", "rezervasyon_satis", "muhasebe", "teslim_iade"} {
+		if roleUUID[gone] != uuid.Nil {
+			t.Fatalf("reference app role %s is still a template", gone)
+		}
+	}
 
-	// Multi-role: rezervasyon_satis + muhasebe = union of both.
+	// Multi-role: resepsiyon + sube_yoneticisi = union of both.
 	carolScope, _ := svc.Resolve(ctx, org.Slug, carol.ID)
-	if carolScope.Has("tenant.payment.refund") {
-		t.Fatal("rezervasyon_satis alone must not refund")
+	if carolScope.Has("tenant.earnings.read") || carolScope.Has("tenant.finance.read") {
+		t.Fatal("resepsiyon alone must not see earnings or finance")
 	}
 	before := len(inv.ids)
 	m, err := svc.PatchTenantMember(ctx, ownerScope, carol.Uuid, orgmodel.PatchTenantMemberInput{
-		RoleUUIDs: &[]uuid.UUID{roleUUID["rezervasyon_satis"], roleUUID["muhasebe"]},
+		RoleUUIDs: &[]uuid.UUID{roleUUID["resepsiyon"], roleUUID["sube_yoneticisi"]},
 	})
 	if err != nil {
 		t.Fatalf("patch roles: %v", err)
@@ -104,12 +110,12 @@ func TestTenantAccessMultiRoleAndGuards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"tenant.payment.refund", "tenant.discount.apply", "tenant.report.export"} {
+	for _, p := range []string{"tenant.earnings.read", "tenant.discount.apply", "tenant.report.export", "tenant.customers.write"} {
 		if !carolScope.Has(p) {
 			t.Fatalf("union missing %s: %v", p, carolScope.Permissions)
 		}
 	}
-	if !slices.Contains(carolScope.MemberRoles, "muhasebe") || carolScope.MemberRole != "muhasebe" {
+	if !slices.Contains(carolScope.MemberRoles, "resepsiyon") || carolScope.MemberRole != "sube_yoneticisi" {
 		t.Fatalf("roles = %v primary %q", carolScope.MemberRoles, carolScope.MemberRole)
 	}
 	if !carolScope.AllBranches() {
@@ -152,10 +158,15 @@ func TestTenantAccessMultiRoleAndGuards(t *testing.T) {
 	}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("admin grants owner err = %v", err)
 	}
+	roleAdminName, rolePerms := "Rol Yöneticisi", []string{"tenant.roles.read", "tenant.roles.write"}
+	roleAdmin, err := svc.CreateTenantRole(ctx, ownerScope, orgmodel.TenantRoleInput{Name: &roleAdminName, Permissions: &rolePerms})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.PatchTenantMember(ctx, adminScope, carol.Uuid, orgmodel.PatchTenantMemberInput{
-		RoleUUIDs: &[]uuid.UUID{roleUUID["merkez_yoneticisi"]},
+		RoleUUIDs: &[]uuid.UUID{roleAdmin.UUID},
 	}); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("admin grants merkez_yoneticisi (has tenant.roles.write) err = %v", err)
+		t.Fatalf("admin grants a role with tenant.roles.write err = %v", err)
 	}
 	// A branch-restricted caller cannot manage an all-branch member.
 	if _, err := svc.PatchTenantMember(ctx, carolScope, admin.Uuid, orgmodel.PatchTenantMemberInput{
@@ -191,7 +202,7 @@ func TestTenantAccessMultiRoleAndGuards(t *testing.T) {
 	if _, err := svc.CreateTenantRole(ctx, ownerScope, orgmodel.TenantRoleInput{Name: &name, Permissions: &badPerms}); !errors.As(err, &ve) {
 		t.Fatalf("platform permission err = %v", err)
 	}
-	if err := svc.DeleteTenantRole(ctx, ownerScope, roleUUID["muhasebe"]); !errors.Is(err, ErrRoleReadOnly) {
+	if err := svc.DeleteTenantRole(ctx, ownerScope, roleUUID["resepsiyon"]); !errors.Is(err, ErrRoleReadOnly) {
 		t.Fatalf("delete template err = %v", err)
 	}
 	if _, err := svc.PatchTenantMember(ctx, ownerScope, carol.Uuid, orgmodel.PatchTenantMemberInput{
@@ -222,6 +233,37 @@ func TestTenantAccessMultiRoleAndGuards(t *testing.T) {
 	}
 	if err := svc.DeleteTenantRole(ctx, ownerScope, custom.UUID); err != nil {
 		t.Fatalf("delete unused role: %v", err)
+	}
+
+	// A07: a staff member (Çalışan) reaches only its own earnings,
+	// reservations and schedule; reception reaches no earnings; a branch
+	// manager reaches every record of its branches.
+	carolScope, _ = svc.Resolve(ctx, org.Slug, carol.ID)
+	for _, pair := range [][2]string{
+		{rbac.PermTenantEarningsRead, rbac.PermTenantEarningsOwn},
+		{rbac.PermTenantReservationsWrite, rbac.PermTenantReservationsOwn},
+		{rbac.PermTenantSchedulesRead, rbac.PermTenantSchedulesOwn},
+	} {
+		if got := carolScope.Reach(pair[0], pair[1]); got != orgctx.ReachOwn {
+			t.Fatalf("staff reach %s = %v, want own", pair[0], got)
+		}
+	}
+	if carolScope.Has(rbac.PermTenantFinanceRead) || carolScope.Has(rbac.PermTenantMembersRead) {
+		t.Fatalf("staff permissions = %v", carolScope.Permissions)
+	}
+	for key, want := range map[string]orgctx.Reach{
+		rbac.TenantRoleResepsiyon:     orgctx.ReachNone,
+		rbac.TenantRoleSubeYoneticisi: orgctx.ReachAll,
+	} {
+		if _, err := svc.PatchTenantMember(ctx, ownerScope, carol.Uuid, orgmodel.PatchTenantMemberInput{
+			RoleUUIDs: &[]uuid.UUID{roleUUID[key]},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		scope, _ := svc.Resolve(ctx, org.Slug, carol.ID)
+		if got := scope.Reach(rbac.PermTenantEarningsRead, rbac.PermTenantEarningsOwn); got != want {
+			t.Fatalf("%s earnings reach = %v, want %v", key, got, want)
+		}
 	}
 
 	// Removing a member works and the membership is gone.

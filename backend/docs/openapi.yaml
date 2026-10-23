@@ -3927,7 +3927,7 @@ paths:
       tags: [Tenant]
       operationId: getTenantIntegrationsMeta
       summary: Connectable providers
-      description: "`tenant.integrations.manage`. Providers with their credential fields and modes."
+      description: "`tenant.integrations.read`. Providers with their credential fields and modes."
       security:
         - bearerAuth: []
       parameters:
@@ -3946,7 +3946,7 @@ paths:
       tags: [Tenant]
       operationId: getTenantIntegrations
       summary: List integration accounts
-      description: "`tenant.integrations.manage`. Credentials are never returned (masked hints only)."
+      description: "`tenant.integrations.read`. Credentials are never returned (masked hints only)."
       security:
         - bearerAuth: []
       parameters:
@@ -4011,7 +4011,7 @@ paths:
       tags: [Tenant]
       operationId: getTenantIntegration
       summary: Integration account
-      description: "`tenant.integrations.manage`."
+      description: "`tenant.integrations.read`."
       security:
         - bearerAuth: []
       parameters:
@@ -4111,7 +4111,7 @@ paths:
       operationId: getTenantIntegrationJobs
       summary: Integration jobs of an account
       description: |
-        `tenant.integrations.manage`. Outbound calls and inbound notifications (idempotency key, attempts,
+        `tenant.integrations.read`. Outbound calls and inbound notifications (idempotency key, attempts,
         deliveries, status). Live list resource `tenant.integration_jobs`.
       security:
         - bearerAuth: []
@@ -4143,7 +4143,7 @@ paths:
       operationId: getTenantIntegrationJob
       summary: An integration job with its attempts
       description: |
-        `tenant.integrations.manage`. Every provider call (submit / check_status) with its outcome, a short
+        `tenant.integrations.read`. Every provider call (submit / check_status) with its outcome, a short
         request / response summary (references only: no secrets, codes or full numbers), the error and
         timings.
       security:
@@ -4196,7 +4196,7 @@ paths:
       operationId: listTenantIntegrationJobs
       summary: Integration jobs of the organization
       description: |
-        `tenant.integrations.manage`. Jobs of every account (and account-less jobs). The work list of jobs
+        `tenant.integrations.read`. Jobs of every account (and account-less jobs). The work list of jobs
         that need a person is `?status=failed,needs_verification`.
       security:
         - bearerAuth: []

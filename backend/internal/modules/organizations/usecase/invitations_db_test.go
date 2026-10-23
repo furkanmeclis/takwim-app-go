@@ -149,7 +149,7 @@ func TestInvitationsLifecycle(t *testing.T) {
 	// Create: e-mail sent with the raw token, only the hash is stored.
 	staffEmail := "Personel-" + suffix + "@Example.test"
 	created, err := mgmt.CreateInvitation(ctx, ownerScope, actor, orgmodel.CreateInvitationInput{
-		Email: staffEmail, RoleUUIDs: []uuid.UUID{roleUUID["rezervasyon_satis"], roleUUID["muhasebe"]},
+		Email: staffEmail, RoleUUIDs: []uuid.UUID{roleUUID["resepsiyon"], roleUUID["sube_yoneticisi"]},
 		BranchScope: orgctx.BranchScopeSelected, BranchUUIDs: []uuid.UUID{merkez},
 	})
 	if err != nil {
@@ -212,7 +212,7 @@ func TestInvitationsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invitee is not a member: %v", err)
 	}
-	if staffScope.AllBranches() || len(staffScope.BranchIDs) != 1 || !staffScope.Has("tenant.payment.refund") {
+	if staffScope.AllBranches() || len(staffScope.BranchIDs) != 1 || !staffScope.Has("tenant.finance.read") {
 		t.Fatalf("invitee scope = %+v", staffScope)
 	}
 	// Single use.
@@ -263,14 +263,14 @@ func TestInvitationsLifecycle(t *testing.T) {
 
 	// Revoke; re-invite revokes the previous open invitation.
 	deskInv, err := mgmt.CreateInvitation(ctx, ownerScope, actor, orgmodel.CreateInvitationInput{
-		Email: desk.Email, RoleUUIDs: []uuid.UUID{roleUUID["teslim_iade"]},
+		Email: desk.Email, RoleUUIDs: []uuid.UUID{roleUUID["member"]},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	firstDeskToken := notifier.lastToken(t)
 	deskInv2, err := mgmt.CreateInvitation(ctx, ownerScope, actor, orgmodel.CreateInvitationInput{
-		Email: desk.Email, RoleUUIDs: []uuid.UUID{roleUUID["rezervasyon_satis"]},
+		Email: desk.Email, RoleUUIDs: []uuid.UUID{roleUUID["resepsiyon"]},
 	})
 	if err != nil {
 		t.Fatalf("re-invite: %v", err)
@@ -307,10 +307,15 @@ func TestInvitationsLifecycle(t *testing.T) {
 	}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("admin invites owner err = %v", err)
 	}
+	roleAdminName, rolePerms := "Rol Yöneticisi", []string{"tenant.roles.read", "tenant.roles.write"}
+	roleAdmin, err := svc.CreateTenantRole(ctx, ownerScope, orgmodel.TenantRoleInput{Name: &roleAdminName, Permissions: &rolePerms})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := mgmt.CreateInvitation(ctx, adminScope, actor, orgmodel.CreateInvitationInput{
-		Email: "y-" + suffix + "@example.test", RoleUUIDs: []uuid.UUID{roleUUID["merkez_yoneticisi"]},
+		Email: "y-" + suffix + "@example.test", RoleUUIDs: []uuid.UUID{roleAdmin.UUID},
 	}); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("admin invites merkez_yoneticisi err = %v", err)
+		t.Fatalf("admin invites a role with tenant.roles.write err = %v", err)
 	}
 	if _, err := mgmt.CreateInvitation(ctx, staffScope, actor, orgmodel.CreateInvitationInput{
 		Email: "z-" + suffix + "@example.test", RoleUUIDs: []uuid.UUID{roleUUID["member"]},
@@ -368,13 +373,13 @@ func TestInvitationsLifecycle(t *testing.T) {
 
 	// Platform member operations: add with roles + branches, patch, last owner.
 	idesMember, err := svc.PlatformAddMember(ctx, ides.UUID, orgmodel.PlatformMemberInput{
-		UserUUID: desk.Uuid, RoleUUIDs: &[]uuid.UUID{roleUUID["teslim_iade"]},
+		UserUUID: desk.Uuid, RoleUUIDs: &[]uuid.UUID{roleUUID["resepsiyon"]},
 		BranchScope: ptr(orgctx.BranchScopeSelected), BranchUUIDs: &[]uuid.UUID{idesBranches[0].UUID},
 	})
 	if err != nil {
 		t.Fatalf("platform add member: %v", err)
 	}
-	if idesMember.BranchScope != orgctx.BranchScopeSelected || len(idesMember.Branches) != 1 || idesMember.Roles[0].Key != "teslim_iade" {
+	if idesMember.BranchScope != orgctx.BranchScopeSelected || len(idesMember.Branches) != 1 || idesMember.Roles[0].Key != "resepsiyon" {
 		t.Fatalf("platform member = %+v", idesMember)
 	}
 	if _, err := svc.PlatformAddMember(ctx, ides.UUID, orgmodel.PlatformMemberInput{UserUUID: desk.Uuid, RoleKey: "member"}); !errors.Is(err, ErrConflict) {

@@ -68,28 +68,40 @@ const (
 	PermTenantBranchesBulkActivate        = "tenant.branches.bulk.activate"
 	PermTenantBranchesBulkDeactivate      = "tenant.branches.bulk.deactivate"
 	PermTenantIntegrationsManage          = "tenant.integrations.manage"
+	PermTenantIntegrationsRead            = "tenant.integrations.read"
+	// Takwim modules (TEC-889). A ".own" slug limits the action to the
+	// member's own records; the full slug covers every record inside the
+	// member's branch scope (orgctx.Scope.Reach).
+	PermTenantReservationsRead  = "tenant.reservations.read"
+	PermTenantReservationsWrite = "tenant.reservations.write"
+	PermTenantReservationsOwn   = "tenant.reservations.own"
+	PermTenantSchedulesRead     = "tenant.schedules.read"
+	PermTenantSchedulesWrite    = "tenant.schedules.write"
+	PermTenantSchedulesOwn      = "tenant.schedules.own"
+	PermTenantCustomersRead     = "tenant.customers.read"
+	PermTenantCustomersWrite    = "tenant.customers.write"
+	PermTenantFinanceRead       = "tenant.finance.read"
+	PermTenantFinanceWrite      = "tenant.finance.write"
+	PermTenantEarningsRead      = "tenant.earnings.read"
+	PermTenantEarningsOwn       = "tenant.earnings.own"
 	// Sensitive actions of later tenant modules (TEC-689), separate from the
 	// resource read/write slugs so roles can grant them one by one.
 	PermTenantPriceOverride    = "tenant.price.override"
 	PermTenantDiscountApply    = "tenant.discount.apply"
 	PermTenantPaymentCollect   = "tenant.payment.collect"
 	PermTenantPaymentRefund    = "tenant.payment.refund"
-	PermTenantDamageApprove    = "tenant.damage.approve"
-	PermTenantSignatureWaive   = "tenant.signature.waive"
 	PermTenantDocumentDownload = "tenant.document.download"
 	PermTenantReportExport     = "tenant.report.export"
 )
 
-// Tenant template role keys seeded by migrations 000030 and 000032.
+// Tenant template role keys (migration 000042): İşletme sahibi, Yönetici,
+// Şube yöneticisi, Resepsiyon and Çalışan.
 const (
-	TenantRoleOwner            = "owner"
-	TenantRoleAdmin            = "admin"
-	TenantRoleMember           = "member"
-	TenantRoleMerkezYoneticisi = "merkez_yoneticisi"
-	TenantRoleSubeYoneticisi   = "sube_yoneticisi"
-	TenantRoleRezervasyonSatis = "rezervasyon_satis"
-	TenantRoleMuhasebe         = "muhasebe"
-	TenantRoleTeslimIade       = "teslim_iade"
+	TenantRoleOwner          = "owner"
+	TenantRoleAdmin          = "admin"
+	TenantRoleSubeYoneticisi = "sube_yoneticisi"
+	TenantRoleResepsiyon     = "resepsiyon"
+	TenantRoleMember         = "member"
 )
 
 // IsSystemRole reports whether slug is a protected system role.

@@ -312,7 +312,7 @@ export function tenantNav(slug: string): NavCatalog {
             titleKey: "layout.nav_tenant_settings_integrations",
             href: routes.tenant.settings.integrations(slug),
             icon: PlugZap,
-            permission: permissions.tenant.integrations.manage,
+            permission: permissions.tenant.integrations.read,
           },
           {
             id: "settings-plan",

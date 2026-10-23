@@ -71,7 +71,7 @@ A member's `branch_scope` is `all` or `selected` (TEC-689, migration 000032); `o
 
 Branches example: `branchusecase.Service.getBranch`, `ListFilter.BranchIDs`, `adapters.Search` (`BranchScoped`).
 
-Permissions for sensitive actions are separate slugs, granted to roles one by one: `tenant.price.override`, `tenant.discount.apply`, `tenant.payment.collect`, `tenant.payment.refund`, `tenant.damage.approve`, `tenant.signature.waive`, `tenant.document.download`, `tenant.report.export`. When a new resource adds slugs, also grant them to the matching Rentopia template roles (`merkez_yoneticisi` everything; `sube_yoneticisi` read/write of branch-bound resources; `rezervasyon_satis`, `muhasebe`, `teslim_iade` as fits) in the same migration.
+Permissions for sensitive actions are separate slugs, granted to roles one by one: `tenant.price.override`, `tenant.discount.apply`, `tenant.payment.collect`, `tenant.payment.refund`, `tenant.document.download`, `tenant.report.export`. When a new resource adds slugs, also grant them to the matching template roles in the same migration (`owner` and `admin` everything except `admin` lacks `tenant.roles.write`; `sube_yoneticisi` read/write of branch-bound resources; `resepsiyon` front-desk work; `member` only `.own` slugs). A resource staff see only partially gets a `.own` slug next to `.read` and filters with `scope.Reach(full, own)` (see `backend/docs/auth.md`).
 
 ## 4. Engines with organization scope
 
