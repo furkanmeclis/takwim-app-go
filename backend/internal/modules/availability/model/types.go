@@ -67,6 +67,11 @@ type SlotLine struct {
 	EndsAt      time.Time     `json:"ends_at"`
 	Staff       *Ref          `json:"staff"`
 	Resources   []ResourceRef `json:"resources"`
+	// The plan behind the line, for the hold writer (not serialized).
+	StaffID     int64     `json:"-"`
+	ResourceIDs []int64   `json:"-"`
+	HeldFrom    time.Time `json:"-"`
+	HeldUntil   time.Time `json:"-"`
 }
 
 // Slot is one bookable start.
@@ -74,6 +79,8 @@ type Slot struct {
 	StartsAt time.Time  `json:"starts_at"`
 	EndsAt   time.Time  `json:"ends_at"`
 	Lines    []SlotLine `json:"lines"`
+	// BranchID is the planned branch, for the hold writer (not serialized).
+	BranchID int64 `json:"-"`
 }
 
 // Day is the answer for one local date.
@@ -95,4 +102,64 @@ type Result struct {
 	StepMinutes   int        `json:"step_minutes"`
 	Lines         []LineInfo `json:"lines"`
 	Days          []Day      `json:"days"`
+}
+
+// Hold kinds, reasons and statuses (capacity_holds).
+const (
+	KindHold    = "hold"
+	KindBooking = "booking"
+
+	ReasonApproval = "approval"
+	ReasonPayment  = "payment"
+	ReasonCheckout = "checkout"
+
+	StatusActive   = "active"
+	StatusReleased = "released"
+	StatusExpired  = "expired"
+)
+
+// HoldInput is the POST /v1/tenant/availability/holds body: the search of
+// one visit, its start and why it is held. Minutes overrides the hold time
+// of the reason (business settings, else the defaults).
+type HoldInput struct {
+	BranchUUID uuid.UUID   `json:"branch_uuid"`
+	Lines      []LineInput `json:"lines"`
+	Channel    string      `json:"channel"`
+	StartsAt   *time.Time  `json:"starts_at"`
+	Reason     string      `json:"reason"`
+	Minutes    *int        `json:"minutes"`
+}
+
+// ExtendInput is the POST /v1/tenant/availability/holds/{uuid}/extend body.
+type ExtendInput struct {
+	Minutes int `json:"minutes"`
+}
+
+// Allocation is what one line of a commitment holds.
+type Allocation struct {
+	LineIndex int          `json:"line_index"`
+	StartsAt  time.Time    `json:"starts_at"`
+	EndsAt    time.Time    `json:"ends_at"`
+	Staff     *Ref         `json:"staff"`
+	Resource  *ResourceRef `json:"resource"`
+}
+
+// Hold is a capacity commitment: a timed hold or a confirmed booking.
+type Hold struct {
+	UUID    uuid.UUID `json:"uuid"`
+	Kind    string    `json:"kind"`
+	Reason  *string   `json:"reason"`
+	Status  string    `json:"status"`
+	Channel string    `json:"channel"`
+	Branch  Ref       `json:"branch"`
+	// StartsAt / EndsAt are the customer's time of the whole visit.
+	StartsAt      time.Time    `json:"starts_at"`
+	EndsAt        time.Time    `json:"ends_at"`
+	ExpiresAt     *time.Time   `json:"expires_at"`
+	RefType       *string      `json:"ref_type"`
+	RefUUID       *uuid.UUID   `json:"ref_uuid"`
+	ReleasedAt    *time.Time   `json:"released_at"`
+	ReleaseReason *string      `json:"release_reason"`
+	Allocations   []Allocation `json:"allocations"`
+	CreatedAt     time.Time    `json:"created_at"`
 }

@@ -27,10 +27,18 @@ func RegisterRoutes(
 	if resolver == nil {
 		return
 	}
-	mux.Handle("POST /v1/tenant/availability/search", middleware.Chain(http.HandlerFunc(h.Search),
-		middleware.Authenticate(tokens, loader),
-		middleware.RequireOrganization(resolver),
-		middleware.RequireModule(sector.ModuleReservations),
-		middleware.RequireAnyTenantPermission(rbac.PermTenantReservationsRead, rbac.PermTenantReservationsOwn),
-	))
+	route := func(pattern string, fn http.HandlerFunc, full, own string) {
+		mux.Handle(pattern, middleware.Chain(fn,
+			middleware.Authenticate(tokens, loader),
+			middleware.RequireOrganization(resolver),
+			middleware.RequireModule(sector.ModuleReservations),
+			middleware.RequireAnyTenantPermission(full, own),
+		))
+	}
+	read, write, own := rbac.PermTenantReservationsRead, rbac.PermTenantReservationsWrite, rbac.PermTenantReservationsOwn
+	route("POST /v1/tenant/availability/search", h.Search, read, own)
+	route("POST /v1/tenant/availability/holds", h.CreateHold, write, own)
+	route("GET /v1/tenant/availability/holds/{uuid}", h.GetHold, read, own)
+	route("POST /v1/tenant/availability/holds/{uuid}/extend", h.ExtendHold, write, own)
+	route("DELETE /v1/tenant/availability/holds/{uuid}", h.ReleaseHold, write, own)
 }

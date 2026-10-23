@@ -12,6 +12,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/config"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/logging"
+	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	branchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/adapters"
 	branchrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/repository"
 	branchusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/usecase"
@@ -234,6 +235,7 @@ func main() {
 			}
 			return err
 		}, integrationKit.Runner.RunDue).
+		WithCapacityExpiry(availabilityusecase.NewHolds(pool, queries, nil).ExpireDue).
 		WithSearch(
 			searchIndexer.ProcessUpsert,
 			searchIndexer.ProcessDelete,
@@ -255,6 +257,10 @@ func main() {
 	}
 	if err := queue.RegisterIntegrationSweepSchedule(scheduler); err != nil {
 		log.Error("integration_sweep_scheduler_failed", "error", err)
+		exit(1)
+	}
+	if err := queue.RegisterCapacityExpirySchedule(scheduler); err != nil {
+		log.Error("capacity_expiry_scheduler_failed", "error", err)
 		exit(1)
 	}
 	go func() {

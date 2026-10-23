@@ -182,7 +182,7 @@ func TestAvailabilityOverHTTP(t *testing.T) {
 	svc.SetBusySource(busy)
 	mux := http.NewServeMux()
 	organizations.RegisterTenantRoutes(mux, orghandler.New(orgSvc, rec), tokens, loader, orgSvc)
-	availability.RegisterRoutes(mux, availabilityhandler.New(svc), tokens, loader, orgSvc)
+	availability.RegisterRoutes(mux, availabilityhandler.New(svc, nil), tokens, loader, orgSvc)
 
 	send := func(user db.User, method, path string, body any) result {
 		t.Helper()

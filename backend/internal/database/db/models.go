@@ -132,6 +132,37 @@ type BulkJob struct {
 	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
+type CapacityAllocation struct {
+	ID             int64                            `json:"id"`
+	OrganizationID int64                            `json:"organization_id"`
+	HoldID         int64                            `json:"hold_id"`
+	LineIndex      int32                            `json:"line_index"`
+	StaffID        pgtype.Int8                      `json:"staff_id"`
+	ResourceID     pgtype.Int8                      `json:"resource_id"`
+	Period         pgtype.Range[pgtype.Timestamptz] `json:"period"`
+}
+
+type CapacityHold struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	Kind           string             `json:"kind"`
+	Reason         pgtype.Text        `json:"reason"`
+	Status         string             `json:"status"`
+	Channel        string             `json:"channel"`
+	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	RefType        pgtype.Text        `json:"ref_type"`
+	RefUuid        pgtype.UUID        `json:"ref_uuid"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	ReleasedAt     pgtype.Timestamptz `json:"released_at"`
+	ReleaseReason  pgtype.Text        `json:"release_reason"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Customer struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`
