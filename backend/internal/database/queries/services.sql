@@ -41,13 +41,14 @@ ORDER BY c.sort_order ASC, c.name ASC, c.id ASC;
 -- name: CreateService :one
 INSERT INTO services (
     organization_id, category_id, name, description, duration_minutes, buffer_before_minutes,
-    buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order
+    buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order,
+    group_capacity
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.narg(category_id), sqlc.arg(name), sqlc.arg(description),
     sqlc.arg(duration_minutes), sqlc.arg(buffer_before_minutes), sqlc.arg(buffer_after_minutes), sqlc.arg(price),
     sqlc.arg(payment_mode), sqlc.arg(staff_mode), sqlc.arg(resource_kinds), sqlc.arg(show_online),
-    sqlc.arg(is_active), sqlc.arg(sort_order)
+    sqlc.arg(is_active), sqlc.arg(sort_order), sqlc.narg(group_capacity)
 )
 RETURNING *;
 
@@ -58,7 +59,7 @@ SET category_id = sqlc.narg(category_id), name = sqlc.arg(name), description = s
     buffer_after_minutes = sqlc.arg(buffer_after_minutes), price = sqlc.arg(price),
     payment_mode = sqlc.arg(payment_mode), staff_mode = sqlc.arg(staff_mode),
     resource_kinds = sqlc.arg(resource_kinds), show_online = sqlc.arg(show_online),
-    is_active = sqlc.arg(is_active), sort_order = sqlc.arg(sort_order)
+    is_active = sqlc.arg(is_active), sort_order = sqlc.arg(sort_order), group_capacity = sqlc.narg(group_capacity)
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL
 RETURNING *;
 

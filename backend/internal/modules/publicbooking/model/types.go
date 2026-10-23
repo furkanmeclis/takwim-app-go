@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	availability "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/model"
+	reservations "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
@@ -206,6 +207,8 @@ type SlotLine struct {
 	StartsAt    time.Time `json:"starts_at"`
 	EndsAt      time.Time `json:"ends_at"`
 	Staff       *Ref      `json:"staff"`
+	// SeatsLeft: free seats of a group class session (null otherwise).
+	SeatsLeft *int `json:"seats_left"`
 }
 
 // Slot is one bookable start.
@@ -229,6 +232,8 @@ type LineInfo struct {
 	DurationMinutes int       `json:"duration_minutes"`
 	StaffMode       string    `json:"staff_mode"`
 	Staff           []Ref     `json:"staff"`
+	// GroupCapacity: seats of a group class session (null otherwise).
+	GroupCapacity *int `json:"group_capacity"`
 }
 
 // Availability is the answer of POST …/availability.
@@ -295,6 +300,8 @@ type BookingInput struct {
 	CustomerNote  string         `json:"customer_note"`
 	CustomFields  map[string]any `json:"custom_fields"`
 	Website       string         `json:"website"`
+	// Vehicle: the car of a car wash booking (optional).
+	Vehicle *reservations.Vehicle `json:"vehicle"`
 }
 
 // Line is one service of a booked visit.
@@ -317,21 +324,22 @@ type StaffName struct {
 // Reservation is the customer's view of a booking. AccessToken is only in
 // the answer of the booking itself; the status route needs it.
 type Reservation struct {
-	UUID               uuid.UUID   `json:"uuid"`
-	Number             int64       `json:"number"`
-	Status             string      `json:"status"`
-	ApprovalStatus     string      `json:"approval_status"`
-	ConfirmationStatus string      `json:"confirmation_status"`
-	PaymentStatus      string      `json:"payment_status"`
-	Branch             Ref         `json:"branch"`
-	Timezone           string      `json:"timezone"`
-	StartsAt           time.Time   `json:"starts_at"`
-	EndsAt             time.Time   `json:"ends_at"`
-	TotalPrice         money.Money `json:"total_price"`
-	Currency           string      `json:"currency"`
-	CustomerNote       string      `json:"customer_note"`
-	PartySize          *int        `json:"party_size"`
-	Zone               string      `json:"zone"`
+	UUID               uuid.UUID             `json:"uuid"`
+	Number             int64                 `json:"number"`
+	Status             string                `json:"status"`
+	ApprovalStatus     string                `json:"approval_status"`
+	ConfirmationStatus string                `json:"confirmation_status"`
+	PaymentStatus      string                `json:"payment_status"`
+	Branch             Ref                   `json:"branch"`
+	Timezone           string                `json:"timezone"`
+	StartsAt           time.Time             `json:"starts_at"`
+	EndsAt             time.Time             `json:"ends_at"`
+	TotalPrice         money.Money           `json:"total_price"`
+	Currency           string                `json:"currency"`
+	CustomerNote       string                `json:"customer_note"`
+	PartySize          *int                  `json:"party_size"`
+	Zone               string                `json:"zone"`
+	Vehicle            *reservations.Vehicle `json:"vehicle"`
 	// ExpiresAt: a request waiting for the business or for online payment
 	// lets its time go at this instant.
 	ExpiresAt    *time.Time `json:"expires_at"`

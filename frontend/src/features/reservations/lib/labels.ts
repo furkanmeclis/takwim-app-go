@@ -5,6 +5,8 @@ import {
   PAYMENT,
   SOURCE,
   STATUS,
+  VEHICLE_TYPE_KEYS,
+  type VehicleType,
 } from "@/features/reservations/constants";
 
 type Translate = (key: string) => string;
@@ -43,4 +45,15 @@ export const partyLabel = (
   if (v.party_size == null) return v.zone ?? "";
   const guests = t("reservations.party_count", { count: v.party_size });
   return v.zone ? `${guests} · ${v.zone}` : guests;
+};
+
+/** "SUV · 34 ABC 123" for a car wash booking; "" without a vehicle. */
+export const vehicleLabel = (
+  t: Translate,
+  v: { vehicle?: { type: string; plate: string } | null },
+) => {
+  if (!v.vehicle) return "";
+  const key = VEHICLE_TYPE_KEYS[v.vehicle.type as VehicleType];
+  const kind = key ? t(key) : v.vehicle.type;
+  return v.vehicle.plate ? `${kind} · ${v.vehicle.plate}` : kind;
 };

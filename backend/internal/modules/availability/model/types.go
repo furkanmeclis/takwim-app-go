@@ -69,6 +69,9 @@ type LineInfo struct {
 	// Staff are the people who may perform the line in the branch (the
 	// picked person only when one was given).
 	Staff []Ref `json:"staff"`
+	// GroupCapacity is the seats of a session of a group class (gym);
+	// null for an individual service.
+	GroupCapacity *int `json:"group_capacity"`
 }
 
 // SlotLine is who and what serves one line of a slot.
@@ -78,11 +81,19 @@ type SlotLine struct {
 	EndsAt      time.Time     `json:"ends_at"`
 	Staff       *Ref          `json:"staff"`
 	Resources   []ResourceRef `json:"resources"`
+	// SeatsLeft is, for a group class, the free seats of the session
+	// before this booking; null for an individual service.
+	SeatsLeft *int `json:"seats_left"`
 	// The plan behind the line, for the hold writer (not serialized).
 	StaffID     int64     `json:"-"`
 	ResourceIDs []int64   `json:"-"`
 	HeldFrom    time.Time `json:"-"`
 	HeldUntil   time.Time `json:"-"`
+	// Group class: the service, the seats of the session and the seats
+	// this booking takes.
+	SessionServiceID int64 `json:"-"`
+	SessionSeats     int   `json:"-"`
+	Seats            int   `json:"-"`
 }
 
 // Slot is one bookable start.

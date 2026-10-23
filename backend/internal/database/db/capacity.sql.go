@@ -17,7 +17,7 @@ UPDATE capacity_holds
 SET kind = 'booking', expires_at = NULL,
     ref_type = COALESCE($1, ref_type), ref_uuid = COALESCE($2, ref_uuid)
 WHERE organization_id = $3 AND id = $4 AND status = 'active' AND kind = 'hold'
-RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at
+RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at, session_service_id, seats, session_seats
 `
 
 type ConfirmCapacityHoldParams struct {
@@ -54,6 +54,9 @@ func (q *Queries) ConfirmCapacityHold(ctx context.Context, arg ConfirmCapacityHo
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 	)
 	return i, err
 }
@@ -91,28 +94,32 @@ func (q *Queries) CreateCapacityAllocation(ctx context.Context, arg CreateCapaci
 
 const createCapacityHold = `-- name: CreateCapacityHold :one
 INSERT INTO capacity_holds (
-    organization_id, branch_id, kind, reason, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by
+    organization_id, branch_id, kind, reason, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by,
+    session_service_id, seats, session_seats
 )
 VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
-    $11
+    $11, $12, $13, $14
 )
-RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at
+RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at, session_service_id, seats, session_seats
 `
 
 type CreateCapacityHoldParams struct {
-	OrganizationID int64              `json:"organization_id"`
-	BranchID       int64              `json:"branch_id"`
-	Kind           string             `json:"kind"`
-	Reason         pgtype.Text        `json:"reason"`
-	Channel        string             `json:"channel"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	RefType        pgtype.Text        `json:"ref_type"`
-	RefUuid        pgtype.UUID        `json:"ref_uuid"`
-	CreatedBy      pgtype.Int8        `json:"created_by"`
+	OrganizationID   int64              `json:"organization_id"`
+	BranchID         int64              `json:"branch_id"`
+	Kind             string             `json:"kind"`
+	Reason           pgtype.Text        `json:"reason"`
+	Channel          string             `json:"channel"`
+	StartsAt         pgtype.Timestamptz `json:"starts_at"`
+	EndsAt           pgtype.Timestamptz `json:"ends_at"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	RefType          pgtype.Text        `json:"ref_type"`
+	RefUuid          pgtype.UUID        `json:"ref_uuid"`
+	CreatedBy        pgtype.Int8        `json:"created_by"`
+	SessionServiceID pgtype.Int8        `json:"session_service_id"`
+	Seats            pgtype.Int4        `json:"seats"`
+	SessionSeats     pgtype.Int4        `json:"session_seats"`
 }
 
 func (q *Queries) CreateCapacityHold(ctx context.Context, arg CreateCapacityHoldParams) (CapacityHold, error) {
@@ -128,6 +135,9 @@ func (q *Queries) CreateCapacityHold(ctx context.Context, arg CreateCapacityHold
 		arg.RefType,
 		arg.RefUuid,
 		arg.CreatedBy,
+		arg.SessionServiceID,
+		arg.Seats,
+		arg.SessionSeats,
 	)
 	var i CapacityHold
 	err := row.Scan(
@@ -149,6 +159,9 @@ func (q *Queries) CreateCapacityHold(ctx context.Context, arg CreateCapacityHold
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 	)
 	return i, err
 }
@@ -204,7 +217,7 @@ func (q *Queries) ExpireDueCapacityHolds(ctx context.Context, arg ExpireDueCapac
 const extendCapacityHold = `-- name: ExtendCapacityHold :one
 UPDATE capacity_holds SET expires_at = $1
 WHERE organization_id = $2 AND id = $3 AND status = 'active' AND kind = 'hold'
-RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at
+RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at, session_service_id, seats, session_seats
 `
 
 type ExtendCapacityHoldParams struct {
@@ -235,12 +248,15 @@ func (q *Queries) ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHold
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 	)
 	return i, err
 }
 
 const getCapacityHold = `-- name: GetCapacityHold :one
-SELECT h.id, h.uuid, h.organization_id, h.branch_id, h.kind, h.reason, h.status, h.channel, h.starts_at, h.ends_at, h.expires_at, h.ref_type, h.ref_uuid, h.created_by, h.released_at, h.release_reason, h.created_at, h.updated_at, b.uuid AS branch_uuid, b.name AS branch_name
+SELECT h.id, h.uuid, h.organization_id, h.branch_id, h.kind, h.reason, h.status, h.channel, h.starts_at, h.ends_at, h.expires_at, h.ref_type, h.ref_uuid, h.created_by, h.released_at, h.release_reason, h.created_at, h.updated_at, h.session_service_id, h.seats, h.session_seats, b.uuid AS branch_uuid, b.name AS branch_name
 FROM capacity_holds h
 JOIN branches b ON b.organization_id = h.organization_id AND b.id = h.branch_id
 WHERE h.organization_id = $1 AND h.uuid = $2
@@ -252,26 +268,29 @@ type GetCapacityHoldParams struct {
 }
 
 type GetCapacityHoldRow struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	BranchID       int64              `json:"branch_id"`
-	Kind           string             `json:"kind"`
-	Reason         pgtype.Text        `json:"reason"`
-	Status         string             `json:"status"`
-	Channel        string             `json:"channel"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	RefType        pgtype.Text        `json:"ref_type"`
-	RefUuid        pgtype.UUID        `json:"ref_uuid"`
-	CreatedBy      pgtype.Int8        `json:"created_by"`
-	ReleasedAt     pgtype.Timestamptz `json:"released_at"`
-	ReleaseReason  pgtype.Text        `json:"release_reason"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	BranchUuid     uuid.UUID          `json:"branch_uuid"`
-	BranchName     string             `json:"branch_name"`
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	BranchID         int64              `json:"branch_id"`
+	Kind             string             `json:"kind"`
+	Reason           pgtype.Text        `json:"reason"`
+	Status           string             `json:"status"`
+	Channel          string             `json:"channel"`
+	StartsAt         pgtype.Timestamptz `json:"starts_at"`
+	EndsAt           pgtype.Timestamptz `json:"ends_at"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	RefType          pgtype.Text        `json:"ref_type"`
+	RefUuid          pgtype.UUID        `json:"ref_uuid"`
+	CreatedBy        pgtype.Int8        `json:"created_by"`
+	ReleasedAt       pgtype.Timestamptz `json:"released_at"`
+	ReleaseReason    pgtype.Text        `json:"release_reason"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	SessionServiceID pgtype.Int8        `json:"session_service_id"`
+	Seats            pgtype.Int4        `json:"seats"`
+	SessionSeats     pgtype.Int4        `json:"session_seats"`
+	BranchUuid       uuid.UUID          `json:"branch_uuid"`
+	BranchName       string             `json:"branch_name"`
 }
 
 func (q *Queries) GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams) (GetCapacityHoldRow, error) {
@@ -296,6 +315,9 @@ func (q *Queries) GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 		&i.BranchUuid,
 		&i.BranchName,
 	)
@@ -303,7 +325,7 @@ func (q *Queries) GetCapacityHold(ctx context.Context, arg GetCapacityHoldParams
 }
 
 const getCapacityHoldByIDForUpdate = `-- name: GetCapacityHoldByIDForUpdate :one
-SELECT id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at FROM capacity_holds
+SELECT id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at, session_service_id, seats, session_seats FROM capacity_holds
 WHERE organization_id = $1 AND id = $2
 FOR UPDATE
 `
@@ -335,6 +357,9 @@ func (q *Queries) GetCapacityHoldByIDForUpdate(ctx context.Context, arg GetCapac
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 	)
 	return i, err
 }
@@ -517,6 +542,81 @@ func (q *Queries) ListDueCapacityHoldOrganizations(ctx context.Context, now pgty
 	return items, nil
 }
 
+const listGroupSessionHolds = `-- name: ListGroupSessionHolds :many
+SELECT h.id, h.session_service_id::BIGINT AS service_id, h.starts_at, h.seats::INT AS seats,
+       COALESCE((SELECT array_agg(a.staff_id ORDER BY a.id) FROM capacity_allocations a
+                 WHERE a.organization_id = h.organization_id AND a.hold_id = h.id AND a.staff_id IS NOT NULL),
+                '{}')::BIGINT[] AS staff_ids,
+       COALESCE((SELECT array_agg(a.resource_id ORDER BY a.id) FROM capacity_allocations a
+                 WHERE a.organization_id = h.organization_id AND a.hold_id = h.id AND a.resource_id IS NOT NULL),
+                '{}')::BIGINT[] AS resource_ids
+FROM capacity_holds h
+WHERE h.organization_id = $1 AND h.branch_id = $2
+  AND h.session_service_id = ANY($3::BIGINT[])
+  AND h.status = 'active' AND (h.expires_at IS NULL OR h.expires_at > $4)
+  AND h.id <> $5
+  AND h.starts_at >= $6 AND h.starts_at < $7
+ORDER BY h.starts_at, h.id
+`
+
+type ListGroupSessionHoldsParams struct {
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	ServiceIds     []int64            `json:"service_ids"`
+	Now            pgtype.Timestamptz `json:"now"`
+	ExcludeHoldID  int64              `json:"exclude_hold_id"`
+	Since          pgtype.Timestamptz `json:"since"`
+	Until          pgtype.Timestamptz `json:"until"`
+}
+
+type ListGroupSessionHoldsRow struct {
+	ID          int64              `json:"id"`
+	ServiceID   int64              `json:"service_id"`
+	StartsAt    pgtype.Timestamptz `json:"starts_at"`
+	Seats       int32              `json:"seats"`
+	StaffIds    []int64            `json:"staff_ids"`
+	ResourceIds []int64            `json:"resource_ids"`
+}
+
+// TEC-904: the bookings of group sessions of the given services in a
+// branch starting in [since, until): active holds that have not lapsed and
+// confirmed bookings, with the seats each takes and what it holds (the
+// session's trainer and area). exclude_hold_id leaves one out (0 = none).
+func (q *Queries) ListGroupSessionHolds(ctx context.Context, arg ListGroupSessionHoldsParams) ([]ListGroupSessionHoldsRow, error) {
+	rows, err := q.db.Query(ctx, listGroupSessionHolds,
+		arg.OrganizationID,
+		arg.BranchID,
+		arg.ServiceIds,
+		arg.Now,
+		arg.ExcludeHoldID,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGroupSessionHoldsRow{}
+	for rows.Next() {
+		var i ListGroupSessionHoldsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ServiceID,
+			&i.StartsAt,
+			&i.Seats,
+			&i.StaffIds,
+			&i.ResourceIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockCapacity = `-- name: LockCapacity :exec
 
 SELECT pg_advisory_xact_lock(hashtextextended('capacity:' || $1::BIGINT::TEXT, 0))
@@ -535,7 +635,7 @@ const releaseCapacityHold = `-- name: ReleaseCapacityHold :one
 UPDATE capacity_holds
 SET status = 'released', released_at = $1, release_reason = $2
 WHERE organization_id = $3 AND id = $4 AND status = 'active'
-RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at
+RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at, session_service_id, seats, session_seats
 `
 
 type ReleaseCapacityHoldParams struct {
@@ -572,6 +672,9 @@ func (q *Queries) ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHo
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 	)
 	return i, err
 }
@@ -579,7 +682,7 @@ func (q *Queries) ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHo
 const renewCapacityHold = `-- name: RenewCapacityHold :one
 UPDATE capacity_holds SET reason = $1, expires_at = $2
 WHERE organization_id = $3 AND id = $4 AND status = 'active' AND kind = 'hold'
-RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at
+RETURNING id, uuid, organization_id, branch_id, kind, reason, status, channel, starts_at, ends_at, expires_at, ref_type, ref_uuid, created_by, released_at, release_reason, created_at, updated_at, session_service_id, seats, session_seats
 `
 
 type RenewCapacityHoldParams struct {
@@ -616,6 +719,9 @@ func (q *Queries) RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldPa
 		&i.ReleaseReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SessionServiceID,
+		&i.Seats,
+		&i.SessionSeats,
 	)
 	return i, err
 }

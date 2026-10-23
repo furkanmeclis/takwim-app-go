@@ -81,15 +81,16 @@ func (q *Queries) CountUncategorizedServices(ctx context.Context, organizationID
 const createService = `-- name: CreateService :one
 INSERT INTO services (
     organization_id, category_id, name, description, duration_minutes, buffer_before_minutes,
-    buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order
+    buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order,
+    group_capacity
 )
 VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10, $11, $12,
-    $13, $14
+    $13, $14, $15
 )
-RETURNING id, uuid, organization_id, category_id, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_uuid, image_key, image_content_type, image_size_bytes, created_at, updated_at, deleted_at
+RETURNING id, uuid, organization_id, category_id, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_uuid, image_key, image_content_type, image_size_bytes, created_at, updated_at, deleted_at, group_capacity
 `
 
 type CreateServiceParams struct {
@@ -107,6 +108,7 @@ type CreateServiceParams struct {
 	ShowOnline          bool           `json:"show_online"`
 	IsActive            bool           `json:"is_active"`
 	SortOrder           int32          `json:"sort_order"`
+	GroupCapacity       pgtype.Int4    `json:"group_capacity"`
 }
 
 func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (Service, error) {
@@ -125,6 +127,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		arg.ShowOnline,
 		arg.IsActive,
 		arg.SortOrder,
+		arg.GroupCapacity,
 	)
 	var i Service
 	err := row.Scan(
@@ -151,6 +154,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.GroupCapacity,
 	)
 	return i, err
 }
@@ -229,7 +233,7 @@ func (q *Queries) DeleteServiceStaffExcept(ctx context.Context, arg DeleteServic
 
 const getService = `-- name: GetService :one
 SELECT
-    s.id, s.uuid, s.organization_id, s.category_id, s.name, s.description, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes, s.price, s.payment_mode, s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.sort_order, s.image_uuid, s.image_key, s.image_content_type, s.image_size_bytes, s.created_at, s.updated_at, s.deleted_at,
+    s.id, s.uuid, s.organization_id, s.category_id, s.name, s.description, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes, s.price, s.payment_mode, s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.sort_order, s.image_uuid, s.image_key, s.image_content_type, s.image_size_bytes, s.created_at, s.updated_at, s.deleted_at, s.group_capacity,
     c.uuid AS category_uuid, c.name AS category_name
 FROM services s
 LEFT JOIN service_categories c ON c.id = s.category_id AND c.organization_id = s.organization_id AND c.deleted_at IS NULL
@@ -267,6 +271,7 @@ type GetServiceRow struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	GroupCapacity       pgtype.Int4        `json:"group_capacity"`
 	CategoryUuid        pgtype.UUID        `json:"category_uuid"`
 	CategoryName        pgtype.Text        `json:"category_name"`
 }
@@ -298,6 +303,7 @@ func (q *Queries) GetService(ctx context.Context, arg GetServiceParams) (GetServ
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.GroupCapacity,
 		&i.CategoryUuid,
 		&i.CategoryName,
 	)
@@ -305,7 +311,7 @@ func (q *Queries) GetService(ctx context.Context, arg GetServiceParams) (GetServ
 }
 
 const getServiceByName = `-- name: GetServiceByName :one
-SELECT id, uuid, organization_id, category_id, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_uuid, image_key, image_content_type, image_size_bytes, created_at, updated_at, deleted_at FROM services
+SELECT id, uuid, organization_id, category_id, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_uuid, image_key, image_content_type, image_size_bytes, created_at, updated_at, deleted_at, group_capacity FROM services
 WHERE organization_id = $1 AND lower(name) = lower($2::text) AND deleted_at IS NULL
 `
 
@@ -341,6 +347,7 @@ func (q *Queries) GetServiceByName(ctx context.Context, arg GetServiceByNamePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.GroupCapacity,
 	)
 	return i, err
 }
@@ -901,7 +908,7 @@ func (q *Queries) ListServiceUUIDs(ctx context.Context, arg ListServiceUUIDsPara
 
 const listServices = `-- name: ListServices :many
 SELECT
-    s.id, s.uuid, s.organization_id, s.category_id, s.name, s.description, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes, s.price, s.payment_mode, s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.sort_order, s.image_uuid, s.image_key, s.image_content_type, s.image_size_bytes, s.created_at, s.updated_at, s.deleted_at,
+    s.id, s.uuid, s.organization_id, s.category_id, s.name, s.description, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes, s.price, s.payment_mode, s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.sort_order, s.image_uuid, s.image_key, s.image_content_type, s.image_size_bytes, s.created_at, s.updated_at, s.deleted_at, s.group_capacity,
     c.uuid AS category_uuid, c.name AS category_name
 FROM services s
 LEFT JOIN service_categories c ON c.id = s.category_id AND c.organization_id = s.organization_id AND c.deleted_at IS NULL
@@ -984,6 +991,7 @@ type ListServicesRow struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	GroupCapacity       pgtype.Int4        `json:"group_capacity"`
 	CategoryUuid        pgtype.UUID        `json:"category_uuid"`
 	CategoryName        pgtype.Text        `json:"category_name"`
 }
@@ -1034,6 +1042,7 @@ func (q *Queries) ListServices(ctx context.Context, arg ListServicesParams) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.GroupCapacity,
 			&i.CategoryUuid,
 			&i.CategoryName,
 		); err != nil {
@@ -1049,7 +1058,7 @@ func (q *Queries) ListServices(ctx context.Context, arg ListServicesParams) ([]L
 
 const listServicesForExport = `-- name: ListServicesForExport :many
 SELECT
-    s.id, s.uuid, s.organization_id, s.category_id, s.name, s.description, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes, s.price, s.payment_mode, s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.sort_order, s.image_uuid, s.image_key, s.image_content_type, s.image_size_bytes, s.created_at, s.updated_at, s.deleted_at,
+    s.id, s.uuid, s.organization_id, s.category_id, s.name, s.description, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes, s.price, s.payment_mode, s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.sort_order, s.image_uuid, s.image_key, s.image_content_type, s.image_size_bytes, s.created_at, s.updated_at, s.deleted_at, s.group_capacity,
     c.uuid AS category_uuid, c.name AS category_name
 FROM services s
 LEFT JOIN service_categories c ON c.id = s.category_id AND c.organization_id = s.organization_id AND c.deleted_at IS NULL
@@ -1114,6 +1123,7 @@ type ListServicesForExportRow struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	GroupCapacity       pgtype.Int4        `json:"group_capacity"`
 	CategoryUuid        pgtype.UUID        `json:"category_uuid"`
 	CategoryName        pgtype.Text        `json:"category_name"`
 }
@@ -1161,6 +1171,7 @@ func (q *Queries) ListServicesForExport(ctx context.Context, arg ListServicesFor
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.GroupCapacity,
 			&i.CategoryUuid,
 			&i.CategoryName,
 		); err != nil {
@@ -1309,9 +1320,9 @@ SET category_id = $1, name = $2, description = $3,
     buffer_after_minutes = $6, price = $7,
     payment_mode = $8, staff_mode = $9,
     resource_kinds = $10, show_online = $11,
-    is_active = $12, sort_order = $13
-WHERE organization_id = $14 AND id = $15 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, category_id, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_uuid, image_key, image_content_type, image_size_bytes, created_at, updated_at, deleted_at
+    is_active = $12, sort_order = $13, group_capacity = $14
+WHERE organization_id = $15 AND id = $16 AND deleted_at IS NULL
+RETURNING id, uuid, organization_id, category_id, name, description, duration_minutes, buffer_before_minutes, buffer_after_minutes, price, payment_mode, staff_mode, resource_kinds, show_online, is_active, sort_order, image_uuid, image_key, image_content_type, image_size_bytes, created_at, updated_at, deleted_at, group_capacity
 `
 
 type UpdateServiceParams struct {
@@ -1328,6 +1339,7 @@ type UpdateServiceParams struct {
 	ShowOnline          bool           `json:"show_online"`
 	IsActive            bool           `json:"is_active"`
 	SortOrder           int32          `json:"sort_order"`
+	GroupCapacity       pgtype.Int4    `json:"group_capacity"`
 	OrganizationID      int64          `json:"organization_id"`
 	ID                  int64          `json:"id"`
 }
@@ -1347,6 +1359,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		arg.ShowOnline,
 		arg.IsActive,
 		arg.SortOrder,
+		arg.GroupCapacity,
 		arg.OrganizationID,
 		arg.ID,
 	)
@@ -1375,6 +1388,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.GroupCapacity,
 	)
 	return i, err
 }

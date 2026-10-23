@@ -8,8 +8,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -209,6 +212,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 		in.CustomFields = map[string]any{}
 	}
 	in.Zone = strings.TrimSpace(in.Zone)
+	vehicleType, plate := checkVehicle(ve, in.Vehicle)
 	customFields, err := json.Marshal(in.CustomFields)
 	if err != nil {
 		ve.add("custom_fields", "invalid", "custom fields must be an object")
@@ -268,7 +272,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 			StartsAt: ts(created.Slot.StartsAt), EndsAt: ts(created.Slot.EndsAt), TotalPrice: total.Numeric(),
 			Currency: currency, CustomFields: customFields, CustomerNote: in.CustomerNote, InternalNote: in.InternalNote,
 			CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
-			PartySize: pgParty(in.PartySize), Zone: in.Zone,
+			PartySize: pgParty(in.PartySize), Zone: in.Zone, VehicleType: vehicleType, VehiclePlate: plate,
 		})
 		if err != nil {
 			return err
@@ -469,7 +473,7 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 		StartsAt: row.StartsAt.Time.UTC(), EndsAt: row.EndsAt.Time.UTC(),
 		TotalPrice: money.FromNumericOrZero(row.TotalPrice), Currency: row.Currency, CustomFields: map[string]any{},
 		CustomerNote: row.CustomerNote, InternalNote: row.InternalNote, Version: int(row.Version),
-		PartySize: partyOf(row.PartySize), Zone: row.Zone,
+		PartySize: partyOf(row.PartySize), Zone: row.Zone, Vehicle: vehicleOf(row.VehicleType, row.VehiclePlate),
 		Lines: []model.Line{}, Events: []model.Event{},
 		CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(),
 	}
@@ -552,4 +556,32 @@ func pgParty(v *int) pgtype.Int4 {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: int32(*v), Valid: true}
+}
+
+// checkVehicle validates the vehicle of a car wash booking: a known type
+// and an optional plate (letters, digits and spaces), stored upper case
+// with single spaces.
+func checkVehicle(ve *ValidationError, v *model.Vehicle) (pgtype.Text, string) {
+	if v == nil {
+		return pgtype.Text{}, ""
+	}
+	if !slices.Contains(model.VehicleTypes, v.Type) {
+		ve.add("vehicle.type", "invalid", "vehicle type must be one of "+strings.Join(model.VehicleTypes, ", "))
+	}
+	plate := strings.Join(strings.Fields(strings.ToUpper(v.Plate)), " ")
+	switch {
+	case utf8.RuneCountInString(plate) > model.MaxPlateLength:
+		ve.add("vehicle.plate", "too_long", "plate is too long")
+	case strings.IndexFunc(plate, func(r rune) bool { return r != ' ' && !unicode.IsLetter(r) && !unicode.IsDigit(r) }) >= 0:
+		ve.add("vehicle.plate", "invalid", "plate may hold letters, digits and spaces")
+	}
+	return pgtype.Text{String: v.Type, Valid: true}, plate
+}
+
+// vehicleOf reads a stored vehicle (nil when none was given).
+func vehicleOf(kind pgtype.Text, plate string) *model.Vehicle {
+	if !kind.Valid {
+		return nil
+	}
+	return &model.Vehicle{Type: kind.String, Plate: plate}
 }

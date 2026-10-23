@@ -478,6 +478,11 @@ type Querier interface {
 	ListDueRunnerJobs(ctx context.Context, limitCount int32) ([]ListDueRunnerJobsRow, error)
 	ListEnabledLogPurgeRules(ctx context.Context) ([]LogPurgeRule, error)
 	ListExportJobsForActor(ctx context.Context, arg ListExportJobsForActorParams) ([]ExportJob, error)
+	// TEC-904: the bookings of group sessions of the given services in a
+	// branch starting in [since, until): active holds that have not lapsed and
+	// confirmed bookings, with the seats each takes and what it holds (the
+	// session's trainer and area). exclude_hold_id leaves one out (0 = none).
+	ListGroupSessionHolds(ctx context.Context, arg ListGroupSessionHoldsParams) ([]ListGroupSessionHoldsRow, error)
 	ListImportChangesForJob(ctx context.Context, jobID int64) ([]ImportChange, error)
 	ListImportJobsForActor(ctx context.Context, arg ListImportJobsForActorParams) ([]ImportJob, error)
 	ListIntegrationAccounts(ctx context.Context, arg ListIntegrationAccountsParams) ([]ListIntegrationAccountsRow, error)

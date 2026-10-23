@@ -88,14 +88,17 @@ type Service struct {
 	PaymentMode         string       `json:"payment_mode"`
 	StaffMode           string       `json:"staff_mode"`
 	ResourceKinds       []string     `json:"resource_kinds"`
-	ShowOnline          bool         `json:"show_online"`
-	IsActive            bool         `json:"is_active"`
-	SortOrder           int32        `json:"sort_order"`
-	ImageURL            *string      `json:"image_url"`
-	Offers              []Offer      `json:"offers"`
-	Staff               []StaffLink  `json:"staff,omitempty"`
-	CreatedAt           time.Time    `json:"created_at"`
-	UpdatedAt           time.Time    `json:"updated_at"`
+	// GroupCapacity makes the service a group class (gym, TEC-904): each
+	// start is one session with this many seats. Null = individual.
+	GroupCapacity *int32      `json:"group_capacity"`
+	ShowOnline    bool        `json:"show_online"`
+	IsActive      bool        `json:"is_active"`
+	SortOrder     int32       `json:"sort_order"`
+	ImageURL      *string     `json:"image_url"`
+	Offers        []Offer     `json:"offers"`
+	Staff         []StaffLink `json:"staff,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
 }
 
 // OptionalUUID distinguishes an absent uuid field from null.
@@ -118,6 +121,26 @@ func (o *OptionalUUID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// OptionalInt distinguishes an absent number field from null.
+type OptionalInt struct {
+	Set   bool
+	Value *int32
+}
+
+func (o *OptionalInt) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	if string(b) == "null" {
+		o.Value = nil
+		return nil
+	}
+	var v int32
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	o.Value = &v
+	return nil
+}
+
 // Input is the create / patch body. Absent fields keep their value on patch
 // and take their defaults on create. BranchUUIDs (create only) adds offers
 // at catalog price in those branches.
@@ -132,6 +155,7 @@ type Input struct {
 	PaymentMode         *string      `json:"payment_mode"`
 	StaffMode           *string      `json:"staff_mode"`
 	ResourceKinds       *[]string    `json:"resource_kinds"`
+	GroupCapacity       OptionalInt  `json:"group_capacity"`
 	ShowOnline          *bool        `json:"show_online"`
 	IsActive            *bool        `json:"is_active"`
 	SortOrder           *int32       `json:"sort_order"`

@@ -140,27 +140,31 @@ type CapacityAllocation struct {
 	StaffID        pgtype.Int8                      `json:"staff_id"`
 	ResourceID     pgtype.Int8                      `json:"resource_id"`
 	Period         pgtype.Range[pgtype.Timestamptz] `json:"period"`
+	SessionKey     pgtype.Text                      `json:"session_key"`
 }
 
 type CapacityHold struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	BranchID       int64              `json:"branch_id"`
-	Kind           string             `json:"kind"`
-	Reason         pgtype.Text        `json:"reason"`
-	Status         string             `json:"status"`
-	Channel        string             `json:"channel"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	RefType        pgtype.Text        `json:"ref_type"`
-	RefUuid        pgtype.UUID        `json:"ref_uuid"`
-	CreatedBy      pgtype.Int8        `json:"created_by"`
-	ReleasedAt     pgtype.Timestamptz `json:"released_at"`
-	ReleaseReason  pgtype.Text        `json:"release_reason"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	BranchID         int64              `json:"branch_id"`
+	Kind             string             `json:"kind"`
+	Reason           pgtype.Text        `json:"reason"`
+	Status           string             `json:"status"`
+	Channel          string             `json:"channel"`
+	StartsAt         pgtype.Timestamptz `json:"starts_at"`
+	EndsAt           pgtype.Timestamptz `json:"ends_at"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	RefType          pgtype.Text        `json:"ref_type"`
+	RefUuid          pgtype.UUID        `json:"ref_uuid"`
+	CreatedBy        pgtype.Int8        `json:"created_by"`
+	ReleasedAt       pgtype.Timestamptz `json:"released_at"`
+	ReleaseReason    pgtype.Text        `json:"release_reason"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	SessionServiceID pgtype.Int8        `json:"session_service_id"`
+	Seats            pgtype.Int4        `json:"seats"`
+	SessionSeats     pgtype.Int4        `json:"session_seats"`
 }
 
 type CashAccount struct {
@@ -822,6 +826,8 @@ type Reservation struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	PartySize          pgtype.Int4        `json:"party_size"`
 	Zone               string             `json:"zone"`
+	VehicleType        pgtype.Text        `json:"vehicle_type"`
+	VehiclePlate       string             `json:"vehicle_plate"`
 }
 
 type ReservationEvent struct {
@@ -933,6 +939,7 @@ type Service struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	GroupCapacity       pgtype.Int4        `json:"group_capacity"`
 }
 
 type ServiceBranch struct {

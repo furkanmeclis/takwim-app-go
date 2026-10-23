@@ -28,8 +28,9 @@ Every table carries `organization_id` with composite foreign keys, so a row neve
 - **Business level catalog**: every reader sees every service. Branches differ only through their offers.
 - **Offers**: a branch manager with `tenant.services.offer` sets price, duration and availability for the branches of their scope; offers in other branches are left as they are (`offers[].editable` tells the panel which rows it may change). A branch outside the scope is `offers.N.branch_uuid` `not_found`.
 - **Effective values**: a null override means the catalog value; `effective_price` / `effective_duration_minutes` are what the branch charges and books. Staff overrides work the same way on top of the service.
-- **Staff mode**: `required` (a staff member is picked), `optional`, `none`. The default follows the sector (`none` for restaurants, otherwise `required`).
-- **Resource kinds**: the kinds a booking needs, one of each (a haircut needs a `chair`).
+- **Staff mode**: `required` (a staff member is picked), `optional`, `none`. The default follows the sector (`sector.capacity.staff`: `none` for restaurants, `optional` for gyms and car washes, otherwise `required`).
+- **Resource kinds**: the kinds a booking needs, one of each (a haircut needs a `chair`). Where every booking of the sector needs a resource the default is its first kind (a `table` for restaurants, a `bay` for car washes).
+- **Group class** (TEC-904): `group_capacity` (2–1000, null = individual) makes the service a group class; every start in a branch is one session with that many seats ([availability.md](./availability.md)). The panel shows the field in sectors with group sessions (gym) and on services that already have it.
 - **Payment mode**: `on_site`, `online` or `both`.
 - **Categories**: deleting a category keeps its services; they become uncategorized.
 - **Import**: a row matches a service by name (case-insensitive) and updates it, otherwise creates one; `category` names a category and creates it when missing; `branch_codes` add offers to new services.

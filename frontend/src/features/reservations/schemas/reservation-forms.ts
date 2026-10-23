@@ -4,7 +4,10 @@ import {
   MAX_LINES,
   MAX_NOTE,
   MAX_PARTY_SIZE,
+  MAX_PLATE,
   MIN_PARTY_SIZE,
+  VEHICLE_TYPES,
+  type VehicleType,
 } from "@/features/reservations/constants";
 
 type Translate = (key: string) => string;
@@ -65,6 +68,13 @@ export function createBookingSchema(
     party_size: partySizeField(t, party),
     /** ANY_ZONE = any area of the branch. */
     zone: z.string(),
+    /** Car wash: NO_VEHICLE or a vehicle type, and the plate. */
+    vehicle_type: z.string(),
+    vehicle_plate: z
+      .string()
+      .trim()
+      .max(MAX_PLATE, t("reservations.validation.plate"))
+      .regex(/^[\p{L}\p{N} ]*$/u, t("reservations.validation.plate")),
     date: z.string().min(1, t("reservations.validation.date_required")),
     /** ISO instant of the picked slot. */
     starts_at: z.string().min(1, t("reservations.validation.slot_required")),
@@ -97,6 +107,15 @@ export const ANY_STAFF = "any";
 
 /** Select value for "any area" of the branch. */
 export const ANY_ZONE = "any";
+
+/** Select value for "no vehicle given" (car wash). */
+export const NO_VEHICLE = "none";
+
+/** The vehicle for the API (undefined when no type was picked). */
+export function toVehicle(type: string, plate: string) {
+  if (!VEHICLE_TYPES.includes(type as VehicleType)) return undefined;
+  return { type: type as VehicleType, plate: plate.trim() };
+}
 
 /** Typed guests for the API (undefined when empty or not a valid count). */
 export function toPartySize(value: string) {

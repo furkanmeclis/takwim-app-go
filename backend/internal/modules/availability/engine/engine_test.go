@@ -609,3 +609,55 @@ func TestPartySeating(t *testing.T) {
 		t.Fatalf("busy two-seat table: got %v", ids)
 	}
 }
+
+// TestGroupSessions (TEC-904): a group class seats several bookings in one
+// session. A new session needs a free trainer and area; a running session
+// is joined on its own trainer and area while seats are left, and is not
+// offered once full. A party larger than the free seats is refused.
+func TestGroupSessions(t *testing.T) {
+	req := func(party int, sessions ...Session) Request {
+		r := base()
+		r.Open = []Interval{iv("09:00", "11:00")}
+		r.Step = time.Hour
+		r.Lines[0] = Line{Key: "pilates", Duration: time.Hour, StaffMode: StaffRequired, Staff: []int64{1}, ResourceKinds: []string{"area"}, Seats: 3}
+		// The 09:00 session holds the trainer and the studio already.
+		r.Staff[0].Busy = []Interval{iv("09:00", "10:00")}
+		r.Resources = []Resource{{ID: 7, Kind: "area", Open: []Interval{iv("09:00", "11:00")}, Busy: []Interval{iv("09:00", "10:00")}}}
+		r.PartySize = party
+		r.Sessions = sessions
+		return r
+	}
+	running := Session{Key: "pilates", Start: clock("09:00"), StaffID: 1, ResourceIDs: []int64{7}, Taken: 1}
+	d := only(t, req(0, running))
+	if got := starts(d); got != "09:00 10:00" {
+		t.Fatalf("starts = %q, want the running session and a new one", got)
+	}
+	joined := d.Slots[0].Lines[0]
+	if joined.StaffID != 1 || !reflect.DeepEqual(joined.ResourceIDs, []int64{7}) || joined.SeatsLeft != 2 {
+		t.Fatalf("joined = %+v", joined)
+	}
+	if fresh := d.Slots[1].Lines[0]; fresh.SeatsLeft != 3 {
+		t.Fatalf("new session seats left = %d, want 3", fresh.SeatsLeft)
+	}
+	full := running
+	full.Taken = 3
+	if got := starts(only(t, req(0, full))); got != "10:00" {
+		t.Fatalf("starts with a full session = %q, want 10:00", got)
+	}
+	if got := starts(only(t, req(2, running))); got != "09:00 10:00" {
+		t.Fatalf("party of 2 = %q", got)
+	}
+	if got := starts(only(t, req(3, running))); got != "10:00" {
+		t.Fatalf("party of 3 with two seats left = %q, want only the new session", got)
+	}
+	if got := starts(only(t, req(4))); got != "" {
+		t.Fatalf("party of 4 in a class of 3 = %q, want none", got)
+	}
+	// Without the session record the busy trainer blocks 09:00 as usual.
+	if got := starts(only(t, req(0))); got != "10:00" {
+		t.Fatalf("starts without the session = %q", got)
+	}
+	if _, ok := Check(req(0, running), clock("09:00")); !ok {
+		t.Fatal("check of the running session failed")
+	}
+}

@@ -91,6 +91,20 @@ type CreateInput struct {
 	// (restaurant); the resources must seat the party.
 	PartySize *int   `json:"party_size"`
 	Zone      string `json:"zone"`
+	// Vehicle is the car of a car wash booking (optional).
+	Vehicle *Vehicle `json:"vehicle"`
+}
+
+// Vehicle types of a car wash booking.
+var VehicleTypes = []string{"car", "suv", "van", "motorcycle", "other"}
+
+// MaxPlateLength limits a licence plate (stored upper case, single spaces).
+const MaxPlateLength = 16
+
+// Vehicle is the car of a car wash booking: its type and licence plate.
+type Vehicle struct {
+	Type  string `json:"type"`
+	Plate string `json:"plate"`
 }
 
 // Ref names a related record.
@@ -153,6 +167,7 @@ type Reservation struct {
 	InternalNote       string         `json:"internal_note"`
 	PartySize          *int           `json:"party_size"`
 	Zone               string         `json:"zone"`
+	Vehicle            *Vehicle       `json:"vehicle"`
 	Version            int            `json:"version"`
 	CancelReason       *string        `json:"cancel_reason"`
 	// HoldExpiresAt is when a waiting request lets its capacity go.
@@ -245,6 +260,7 @@ type ListItem struct {
 	Currency           string      `json:"currency"`
 	PartySize          *int        `json:"party_size"`
 	Zone               string      `json:"zone"`
+	Vehicle            *Vehicle    `json:"vehicle"`
 	Version            int         `json:"version"`
 	CreatedAt          time.Time   `json:"created_at"`
 }

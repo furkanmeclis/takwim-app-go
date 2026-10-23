@@ -8582,6 +8582,8 @@ export interface components {
          * @description A service of the business catalog (TEC-894). `buffer_*` minutes are
          *     held around a booking; `resource_kinds` are the kinds a booking needs
          *     (one of each). `image_url` is the API-owned public cover URL.
+         *     `group_capacity` makes the service a group class (TEC-904): every
+         *     start is one session with that many seats, null = individual.
          */
         TenantService: {
             /** Format: uuid */
@@ -8600,6 +8602,8 @@ export interface components {
             /** @enum {string} */
             staff_mode: "required" | "optional" | "none";
             resource_kinds: ("chair" | "table" | "area" | "room" | "device" | "bay")[];
+            /** @description Seats of a group class session; null = individual. */
+            group_capacity: number | null;
             show_online: boolean;
             is_active: boolean;
             sort_order: number;
@@ -8630,7 +8634,10 @@ export interface components {
             payment_mode: "on_site" | "online" | "both";
             /** @enum {string} */
             staff_mode?: "required" | "optional" | "none";
+            /** @description Default follows the sector (a table for restaurants, a wash bay for car washes, none otherwise). */
             resource_kinds?: ("chair" | "table" | "area" | "room" | "device" | "bay")[];
+            /** @description Seats of a group class session (gym); null = individual. */
+            group_capacity?: number | null;
             /** @default true */
             show_online: boolean;
             /** @default true */
@@ -8652,6 +8659,8 @@ export interface components {
             /** @enum {string} */
             staff_mode?: "required" | "optional" | "none";
             resource_kinds?: ("chair" | "table" | "area" | "room" | "device" | "bay")[];
+            /** @description Seats of a group class session; null makes the service individual. */
+            group_capacity?: number | null;
             show_online?: boolean;
             is_active?: boolean;
             sort_order?: number;
@@ -10514,6 +10523,8 @@ export interface components {
                 ends_at: string;
                 staff: components["schemas"]["TenantAvailabilityRef"] | null;
                 resources: components["schemas"]["TenantAvailabilityResourceRef"][];
+                /** @description Group class - free seats of the session before this booking (a running session is joined on its trainer and area). Null for an individual service. */
+                seats_left: number | null;
             }[];
         };
         TenantAvailability: {
@@ -10539,6 +10550,8 @@ export interface components {
                 staff_mode: "required" | "optional" | "none";
                 resource_kinds: string[];
                 staff: components["schemas"]["TenantAvailabilityRef"][];
+                /** @description Seats of a group class session (a group class is booked on its own, else lines.N.service_uuid group_alone); null = individual. */
+                group_capacity: number | null;
             }[];
             days: {
                 /** Format: date */
@@ -10659,6 +10672,16 @@ export interface components {
             };
             customer_note?: string;
             internal_note?: string;
+            vehicle?: components["schemas"]["ReservationVehicle"] | null;
+        };
+        /**
+         * @description The vehicle of a car wash booking (TEC-904). The plate is stored
+         *     upper case with single spaces; letters, digits and spaces only.
+         */
+        ReservationVehicle: {
+            /** @enum {string} */
+            type: "car" | "suv" | "van" | "motorcycle" | "other";
+            plate: string;
         };
         TenantReservationRescheduleRequest: {
             /** @description New number of people; omitted or null keeps the booked party. */
@@ -10696,10 +10719,11 @@ export interface components {
         /** @enum {string} */
         TenantReservationSource: "panel" | "online" | "embed";
         TenantReservationListItem: {
-            /** @description Number of people (restaurant). */
+            /** @description Number of people (restaurant) or seats of a group class. */
             party_size: number | null;
             /** @description Area asked for; empty = any. */
             zone: string;
+            vehicle: components["schemas"]["ReservationVehicle"] | null;
             /** Format: uuid */
             uuid: string;
             /** Format: int64 */
@@ -10833,10 +10857,11 @@ export interface components {
             items: components["schemas"]["TenantReservationAgendaItem"][];
         };
         TenantReservation: {
-            /** @description Number of people (restaurant). */
+            /** @description Number of people (restaurant) or seats of a group class. */
             party_size: number | null;
             /** @description Area asked for; empty = any. */
             zone: string;
+            vehicle: components["schemas"]["ReservationVehicle"] | null;
             /** Format: uuid */
             uuid: string;
             /** Format: int64 */
@@ -11240,6 +11265,8 @@ export interface components {
             /** Format: date-time */
             ends_at: string;
             staff: components["schemas"]["PublicRef"] | null;
+            /** @description Free seats of a group class session; null for an individual service. */
+            seats_left: number | null;
         };
         PublicAvailability: {
             branch: components["schemas"]["PublicRef"];
@@ -11257,6 +11284,8 @@ export interface components {
                 /** @enum {string} */
                 staff_mode: "required" | "optional" | "none";
                 staff: components["schemas"]["PublicRef"][];
+                /** @description Seats of a group class session; null = individual. */
+                group_capacity: number | null;
             }[];
             days: {
                 /** Format: date */
@@ -11336,12 +11365,15 @@ export interface components {
             };
             /** @description Honeypot: hidden from people, must stay empty. */
             website?: string;
+            /** @description The vehicle of a car wash booking (optional). */
+            vehicle?: components["schemas"]["ReservationVehicle"] | null;
         };
         PublicReservation: {
-            /** @description Number of people (restaurant). */
+            /** @description Number of people (restaurant) or seats of a group class. */
             party_size: number | null;
             /** @description Area asked for; empty = any. */
             zone: string;
+            vehicle: components["schemas"]["ReservationVehicle"] | null;
             /** Format: uuid */
             uuid: string;
             /** Format: int64 */

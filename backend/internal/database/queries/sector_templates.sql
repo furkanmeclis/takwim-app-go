@@ -2,11 +2,12 @@
 
 -- name: CreateTemplateService :one
 INSERT INTO services (
-    organization_id, name, description, duration_minutes, price, payment_mode, staff_mode, resource_kinds, show_online
+    organization_id, name, description, duration_minutes, price, payment_mode, staff_mode, resource_kinds, show_online,
+    group_capacity
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(name), sqlc.arg(description), sqlc.arg(duration_minutes), 0,
-    sqlc.arg(payment_mode), sqlc.arg(staff_mode), sqlc.arg(resource_kinds)::TEXT[], TRUE
+    sqlc.arg(payment_mode), sqlc.arg(staff_mode), sqlc.arg(resource_kinds)::TEXT[], TRUE, sqlc.narg(group_capacity)
 )
 RETURNING id, uuid;
 

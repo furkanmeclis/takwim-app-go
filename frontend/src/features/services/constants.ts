@@ -14,6 +14,10 @@ export const MIN_DURATION = 5;
 export const MAX_DURATION = 1440;
 export const MAX_BUFFER = 480;
 export const MAX_SORT_ORDER = 100000;
+
+/** Seats of a group class session (gym). */
+export const MIN_GROUP_CAPACITY = 2;
+export const MAX_GROUP_CAPACITY = 1000;
 export const MAX_SERVICE_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export const PAYMENT_MODE_LABEL_KEYS: Record<PaymentMode, string> = {

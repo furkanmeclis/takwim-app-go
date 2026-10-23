@@ -47,6 +47,7 @@ import {
 import {
   cancelReasonLabel,
   partyLabel,
+  vehicleLabel,
   sourceLabel,
   statusLabel,
 } from "@/features/reservations/lib/labels";
@@ -235,6 +236,15 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
                             key: "party",
                             label: t("reservations.columns.party"),
                             value: partyLabel(t, reservation),
+                          },
+                        ]
+                      : []),
+                    ...(reservation.vehicle
+                      ? [
+                          {
+                            key: "vehicle",
+                            label: t("reservations.columns.vehicle"),
+                            value: vehicleLabel(t, reservation),
                           },
                         ]
                       : []),

@@ -3,8 +3,10 @@ import { z } from "zod";
 import {
   MAX_BUFFER,
   MAX_DURATION,
+  MAX_GROUP_CAPACITY,
   MAX_SORT_ORDER,
   MIN_DURATION,
+  MIN_GROUP_CAPACITY,
   PAYMENT_MODES,
   STAFF_MODES,
   UNCATEGORIZED,
@@ -103,6 +105,13 @@ export function createServiceFormSchema(t: Translate) {
     payment_mode: z.enum(PAYMENT_MODES as [string, ...string[]]),
     staff_mode: z.enum(STAFF_MODES as [string, ...string[]]),
     resource_kinds: z.array(z.string()),
+    // Empty = an individual service; a number makes it a group class.
+    group_capacity: optionalIntField(
+      t,
+      MIN_GROUP_CAPACITY,
+      MAX_GROUP_CAPACITY,
+      "services.validation.group_capacity",
+    ),
     branch_uuids: z.array(z.string()),
     sort_order: intField(
       t,
@@ -121,7 +130,11 @@ export type ServiceFormValues = z.infer<
 
 export function serviceFormDefaults(
   service?: Service,
-  defaults?: { staffMode?: StaffMode; branchUuids?: string[] },
+  defaults?: {
+    staffMode?: StaffMode;
+    resourceKinds?: string[];
+    branchUuids?: string[];
+  },
 ): ServiceFormValues {
   return {
     category_uuid: service?.category?.uuid ?? UNCATEGORIZED,
@@ -133,7 +146,9 @@ export function serviceFormDefaults(
     price: service?.price ?? "",
     payment_mode: service?.payment_mode ?? "on_site",
     staff_mode: service?.staff_mode ?? defaults?.staffMode ?? "required",
-    resource_kinds: service?.resource_kinds ?? [],
+    resource_kinds: service?.resource_kinds ?? defaults?.resourceKinds ?? [],
+    group_capacity:
+      service?.group_capacity != null ? String(service.group_capacity) : "",
     branch_uuids: defaults?.branchUuids ?? [],
     sort_order: String(service?.sort_order ?? 0),
     show_online: service?.show_online ?? true,
@@ -158,6 +173,7 @@ export function serviceFormToRequest(
     staff_mode: values.staff_mode as StaffMode,
     resource_kinds:
       values.resource_kinds as ServiceCreateRequest["resource_kinds"],
+    group_capacity: nullableInt(values.group_capacity),
     sort_order: Number(values.sort_order),
     show_online: values.show_online,
     is_active: values.is_active,

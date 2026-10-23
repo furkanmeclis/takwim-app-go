@@ -11,7 +11,7 @@ WHERE b.organization_id = sqlc.arg(organization_id) AND b.uuid = sqlc.arg(uuid) 
 -- name: GetAvailabilityService :one
 -- A live service with its offer in the branch (sb.* NULL = not offered).
 SELECT s.id, s.uuid, s.name, s.duration_minutes, s.buffer_before_minutes, s.buffer_after_minutes,
-       s.staff_mode, s.resource_kinds, s.show_online, s.is_active,
+       s.staff_mode, s.resource_kinds, s.show_online, s.is_active, s.group_capacity,
        sb.id AS offer_id, sb.duration_minutes AS offer_duration_minutes, sb.is_active AS offer_is_active
 FROM services s
 LEFT JOIN service_branches sb

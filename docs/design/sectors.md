@@ -34,15 +34,20 @@ Modules: reservations, calendar, customers, services, packages, products, staff,
 - Sector words come from `useSector().term("staff" | "resource" | "booking")` (`sectors.terms.<code>`), never hard-coded.
 - The tenant home shows the sector card: highlights, booking flow, capacity and the other modules.
 
-## Starter templates (TEC-903)
+## Starter templates (TEC-903, TEC-904)
 
-`internal/modules/sectortemplates` seeds a starter catalog into the default branch when a business is created (`branches` `OnCreated` hook, same transaction), so a new business can take bookings before it sets anything up.
+`internal/modules/sectortemplates` seeds a starter catalog into the default branch when a business is created (`branches` `OnCreated` hook, same transaction), so a new business can take bookings before it sets anything up. A template only seeds what is generic to the sector; every record is ordinary data the owner edits or deletes.
 
 - **Restaurant**: service "Masa rezervasyonu" (90 minutes, no staff, needs a `table`, paid at the business, price 0) and seven tables: Salon Masa 1–2 (1–2 guests), Masa 3–4 (2–4, combinable), Masa 5 (4–6); Bahçe Masa 6–7 (2–4, combinable). The panel booking form then asks for the number of guests and an area, picks the only service and lets the engine choose the table ([availability.md](./availability.md)).
-- **Hairdresser and every other sector**: nothing is seeded. Their booking flow already comes from the sector definition, and each salon's services and prices are its own; a generic list would only be deleted.
+- **Gym**: an area "Stüdyo" (capacity 12) and the group class "Grup dersi" (60 minutes, 12 seats per session, trainer optional, needs an `area`, paid at the business, price 0). Bookings of one start share the session's trainer and studio until the seats run out ([availability.md](./availability.md), [capacity-holds.md](./capacity-holds.md)); an individual session is an ordinary service with a required trainer.
+- **Car wash**: two wash bays ("Yıkama alanı 1–2"). No services: the wash menu and prices are the business's own; a new service asks for a `bay` and takes a person when one is free by default. The panel booking form asks for the vehicle (type and plate).
+- **Clinic**: two examination rooms ("Muayene odası 1–2"). No appointment types: they and the specialists are the clinic's own; an appointment type takes a room when it lists `room`. No health record fields exist anywhere (requirements §5).
+- **Hairdresser and beauty salon**: nothing is seeded. Their booking flow already comes from the sector definition, and each salon's services, prices, chairs, rooms and devices are its own; a generic list would only be deleted.
 - Changing the sector later seeds nothing; the owner edits services and resources as usual.
 
 ## Open items
 
 - Module screens arrive with their issues and tag their nav items with `module`.
 - Changing the sector of a business with data (resources, classes) needs a migration plan; for now the platform can change it freely.
+- Package rights (paket hakkı) of the gym, clinic and beauty flows come with multi-session packages (TEC-920).
+- A class timetable (recurring sessions with a fixed trainer and area, the classes module) comes with TEC-970; the booking page steps for the vehicle and group class seats with TEC-971.
