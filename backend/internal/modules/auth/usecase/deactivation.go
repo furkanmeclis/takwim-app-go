@@ -86,6 +86,7 @@ func (u *AuthUseCase) DeactivateAccount(ctx context.Context, userUUID uuid.UUID,
 	}
 	u.revokeAppleTokens(ctx, user.ID)
 	u.indexUserSearch(ctx, user.UUID.String())
+	u.userUpdated(ctx, user.UUID.String())
 	if u.notifier != nil {
 		uid := user.ID
 		email := user.Email

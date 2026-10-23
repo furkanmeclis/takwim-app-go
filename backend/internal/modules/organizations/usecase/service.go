@@ -49,6 +49,30 @@ type Repository interface {
 	ResolveOrganizationScopeBySlug(ctx context.Context, slug string, userID int64) (db.ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, id uuid.UUID, userID int64) (db.ResolveOrganizationScopeByUUIDRow, error)
 	ListTenantRolePermissionSlugsByRoleID(ctx context.Context, roleID int64) ([]string, error)
+	AccessRepository
+}
+
+// AccessRepository is the persistence of multi-role memberships, branch
+// scope and organization-specific roles (tenant_access.sql).
+type AccessRepository interface {
+	ListMemberPermissionSlugs(ctx context.Context, orgID, memberID int64) ([]string, error)
+	ListMemberRoles(ctx context.Context, q *db.Queries, orgID int64, memberIDs []int64) ([]db.ListMemberRolesRow, error)
+	ListMemberBranchIDs(ctx context.Context, orgID, memberID int64) ([]int64, error)
+	ListMemberBranches(ctx context.Context, orgID int64, memberIDs []int64) ([]db.ListMemberBranchesRow, error)
+	ListBranchIDsByUUIDs(ctx context.Context, orgID int64, ids []uuid.UUID) ([]db.ListBranchIDsByUUIDsRow, error)
+	ReplaceMemberRoles(ctx context.Context, q *db.Queries, orgID, memberID int64, roleIDs []int64, primaryRoleID int64) error
+	ReplaceMemberBranches(ctx context.Context, q *db.Queries, orgID, memberID int64, scope string, branchIDs []int64) error
+	ListTenantMembers(ctx context.Context, params db.ListTenantMembersParams) ([]db.ListTenantMembersRow, int64, error)
+	GetTenantMember(ctx context.Context, orgID int64, userUUID uuid.UUID) (db.ListTenantMembersRow, error)
+	ListTenantRoles(ctx context.Context, orgID int64) ([]repository.TenantRoleRow, error)
+	GetTenantRoleByUUID(ctx context.Context, q *db.Queries, orgID int64, id uuid.UUID) (repository.TenantRoleRow, error)
+	ListRolePermissionSlugs(ctx context.Context, roleIDs []int64) (map[int64][]string, error)
+	ListTenantPermissions(ctx context.Context) ([]db.ListTenantPermissionsRow, error)
+	TenantRoleSlugTaken(ctx context.Context, orgID int64, slug string) (bool, error)
+	CreateTenantRole(ctx context.Context, q *db.Queries, orgID int64, name, slug, description string) (int64, uuid.UUID, error)
+	UpdateTenantRole(ctx context.Context, q *db.Queries, orgID int64, id uuid.UUID, name, description string) (int64, error)
+	DeleteTenantRole(ctx context.Context, q *db.Queries, orgID int64, id uuid.UUID) error
+	SetRolePermissions(ctx context.Context, q *db.Queries, roleID int64, slugs []string) error
 }
 
 type Service struct {
@@ -287,14 +311,18 @@ func (s *Service) ChangeMemberRole(ctx context.Context, orgUUID, userUUID uuid.U
 		if err != nil {
 			return mapRepoNotFound(err, ErrRoleNotFound)
 		}
-		if current.RoleKey == orgctx.RoleOwner && role.Slug != orgctx.RoleOwner {
+		isOwner, err := s.memberHoldsOwner(ctx, q, org.ID, current.ID)
+		if err != nil {
+			return err
+		}
+		if isOwner && (role.Slug != orgctx.RoleOwner || role.OrganizationID.Valid) {
 			if err := s.guardLastOwner(ctx, q, org.ID); err != nil {
 				return err
 			}
 		}
-		return s.repo.UpdateOrganizationMemberRole(ctx, q, db.UpdateOrganizationMemberRoleParams{
-			OrganizationID: org.ID, UserID: user.ID, RoleID: role.ID,
-		})
+		// The platform API manages a single role: it replaces every role
+		// the member holds.
+		return s.repo.ReplaceMemberRoles(ctx, q, org.ID, current.ID, []int64{role.ID}, role.ID)
 	})
 	if err != nil {
 		return orgmodel.Member{}, err
@@ -316,7 +344,11 @@ func (s *Service) RemoveMember(ctx context.Context, orgUUID, userUUID uuid.UUID)
 		if err != nil {
 			return mapRepoNotFound(err, ErrMemberNotFound)
 		}
-		if current.RoleKey == orgctx.RoleOwner {
+		isOwner, err := s.memberHoldsOwner(ctx, q, org.ID, current.ID)
+		if err != nil {
+			return err
+		}
+		if isOwner {
 			if err := s.guardLastOwner(ctx, q, org.ID); err != nil {
 				return err
 			}
@@ -345,7 +377,7 @@ func (s *Service) ListForUser(ctx context.Context, userID int64) ([]authmodel.Me
 	}
 	out := make([]authmodel.MeOrganization, 0, len(rows))
 	for _, row := range rows {
-		perms, err := s.repo.ListTenantRolePermissionSlugsByRoleID(ctx, row.RoleID)
+		perms, err := s.repo.ListMemberPermissionSlugs(ctx, row.OrganizationID, row.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -366,16 +398,17 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 		return orgctx.Scope{}, orgctx.ErrOrganizationNotFound
 	}
 	var (
-		rowID     int64
-		rowUUID   uuid.UUID
-		rowSlug   string
-		rowName   string
-		rowStatus string
-		startsAt  pgtype.Timestamptz
-		endsAt    pgtype.Timestamptz
-		roleID    int64
-		roleKey   string
-		err       error
+		rowID       int64
+		rowUUID     uuid.UUID
+		rowSlug     string
+		rowName     string
+		rowStatus   string
+		startsAt    pgtype.Timestamptz
+		endsAt      pgtype.Timestamptz
+		roleKey     string
+		memberID    int64
+		branchScope string
+		err         error
 	)
 	if id, parseErr := uuid.Parse(ref); parseErr == nil {
 		row, err := s.repo.ResolveOrganizationScopeByUUID(ctx, id, userID)
@@ -383,14 +416,16 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 			return s.resolveMissingOrError(ctx, id, "", err)
 		}
 		rowID, rowUUID, rowSlug, rowName, rowStatus = row.ID, row.Uuid, row.Slug, row.Name, row.Status
-		startsAt, endsAt, roleID, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleID, row.RoleKey
+		startsAt, endsAt, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleKey
+		memberID, branchScope = row.MemberID, row.BranchScope
 	} else {
 		row, err := s.repo.ResolveOrganizationScopeBySlug(ctx, strings.ToLower(ref), userID)
 		if err != nil {
 			return s.resolveMissingOrError(ctx, uuid.Nil, strings.ToLower(ref), err)
 		}
 		rowID, rowUUID, rowSlug, rowName, rowStatus = row.ID, row.Uuid, row.Slug, row.Name, row.Status
-		startsAt, endsAt, roleID, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleID, row.RoleKey
+		startsAt, endsAt, roleKey = row.AccessStartsAt, row.AccessEndsAt, row.RoleKey
+		memberID, branchScope = row.MemberID, row.BranchScope
 	}
 	if rowStatus == orgctx.StatusSuspended {
 		return orgctx.Scope{}, orgctx.ErrSuspended
@@ -407,15 +442,61 @@ func (s *Service) Resolve(ctx context.Context, orgRef string, userID int64) (org
 			return orgctx.Scope{}, orgctx.ErrAccessExpired
 		}
 	}
-	perms, err := s.repo.ListTenantRolePermissionSlugsByRoleID(ctx, roleID)
+	perms, err := s.repo.ListMemberPermissionSlugs(ctx, rowID, memberID)
 	if err != nil {
 		return orgctx.Scope{}, err
+	}
+	roles, err := s.repo.ListMemberRoles(ctx, nil, rowID, []int64{memberID})
+	if err != nil {
+		return orgctx.Scope{}, err
+	}
+	roleKeys := make([]string, 0, len(roles))
+	for _, r := range roles {
+		roleKeys = append(roleKeys, r.Slug)
+	}
+	var branchIDs []int64
+	if branchScope == orgctx.BranchScopeSelected {
+		// Non-nil (possibly empty): the member sees only these branches.
+		if branchIDs, err = s.repo.ListMemberBranchIDs(ctx, rowID, memberID); err != nil {
+			return orgctx.Scope{}, err
+		}
+		if branchIDs == nil {
+			branchIDs = []int64{}
+		}
 	}
 	return orgctx.Scope{
 		ID: rowID, UUID: rowUUID, Slug: rowSlug, Name: rowName, Status: rowStatus,
 		AccessStartsAt: startsAt.Time.UTC(), AccessEndsAt: accessEnds,
-		MemberRole: roleKey, Permissions: perms,
+		MemberRole: roleKey, MemberRoles: roleKeys, Permissions: perms, BranchIDs: branchIDs,
 	}, nil
+}
+
+// ResolveMember implements orgctx.JobScopeLoader: the current scope of a
+// member, used by worker jobs to run with the requester's permissions and
+// branch scope.
+func (s *Service) ResolveMember(ctx context.Context, organizationID, userID int64) (orgctx.Scope, error) {
+	org, err := s.repo.GetOrganizationByID(ctx, organizationID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return orgctx.Scope{}, orgctx.ErrOrganizationNotFound
+		}
+		return orgctx.Scope{}, err
+	}
+	return s.Resolve(ctx, org.Uuid.String(), userID)
+}
+
+// memberHoldsOwner reports whether the member holds the template owner role.
+func (s *Service) memberHoldsOwner(ctx context.Context, q *db.Queries, orgID, memberID int64) (bool, error) {
+	roles, err := s.repo.ListMemberRoles(ctx, q, orgID, []int64{memberID})
+	if err != nil {
+		return false, err
+	}
+	for _, r := range roles {
+		if r.IsTemplate && r.Slug == orgctx.RoleOwner {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *Service) resolveMissingOrError(ctx context.Context, id uuid.UUID, slug string, err error) (orgctx.Scope, error) {

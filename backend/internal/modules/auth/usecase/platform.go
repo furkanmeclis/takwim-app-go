@@ -12,6 +12,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/password"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	searchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/slug"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/realtime"
@@ -121,6 +122,7 @@ func (u *AuthUseCase) CreatePlatformUser(ctx context.Context, in model.CreatePla
 	}
 	out := model.ToPublicUser(user, isSA)
 	u.indexUserSearch(ctx, user.UUID.String())
+	u.publishResource(ctx, ResourceUsers, resourceevents.ActionCreated, user.UUID.String())
 	return out, nil
 }
 
@@ -292,6 +294,7 @@ func (u *AuthUseCase) PatchPlatformUser(
 	}
 	out := model.ToPublicUser(updated, hasSuperAdmin)
 	u.indexUserSearch(ctx, userUUID.String())
+	u.publishResource(ctx, ResourceUsers, resourceevents.ActionUpdated, userUUID.String())
 	return out, nil
 }
 
@@ -378,6 +381,7 @@ func (u *AuthUseCase) CreatePlatformRole(ctx context.Context, in model.CreateRol
 	}
 	out := model.RoleDetail{RoleSummary: role, PermissionSlugs: perms}
 	u.indexRoleSearch(ctx, role.UUID.String())
+	u.publishResource(ctx, ResourceRoles, resourceevents.ActionCreated, role.UUID.String())
 	return out, nil
 }
 
@@ -422,6 +426,7 @@ func (u *AuthUseCase) PatchPlatformRole(ctx context.Context, roleUUID uuid.UUID,
 	}
 	out := model.RoleDetail{RoleSummary: updated, PermissionSlugs: perms}
 	u.indexRoleSearch(ctx, roleUUID.String())
+	u.publishResource(ctx, ResourceRoles, resourceevents.ActionUpdated, roleUUID.String())
 	return out, nil
 }
 
@@ -441,6 +446,7 @@ func (u *AuthUseCase) DeletePlatformRole(ctx context.Context, roleUUID uuid.UUID
 		return err
 	}
 	u.deleteRoleSearch(ctx, roleUUID.String())
+	u.publishResource(ctx, ResourceRoles, resourceevents.ActionDeleted, roleUUID.String())
 	return nil
 }
 
@@ -456,6 +462,9 @@ func (u *AuthUseCase) CanSubscribeChannel(
 	isSuperAdmin bool,
 	channel string,
 ) (bool, error) {
+	if handled, allowed, err := realtime.RunChannelRules(ctx, u.channelRules, userUUID, isSuperAdmin, channel); handled {
+		return allowed, err
+	}
 	if channel == realtime.ChannelSystemNotifications {
 		return isSuperAdmin, nil
 	}

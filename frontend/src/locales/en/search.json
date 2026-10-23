@@ -15,5 +15,7 @@
   "specs_roles": "Roles",
   "prefix_pages": "pages",
   "prefix_users": "users",
-  "prefix_roles": "roles"
+  "prefix_roles": "roles",
+  "specs_branches": "Branches",
+  "prefix_branches": "branch"
 }

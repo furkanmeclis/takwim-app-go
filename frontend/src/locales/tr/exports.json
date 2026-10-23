@@ -52,5 +52,19 @@
   "status.failed": "Başarısız",
   "toast.queued": "Dışa aktarma kuyruğa alındı. Hazır olunca bildirim alacaksınız.",
   "toast.failed": "Dışa aktarma başlatılamadı. Yetkinizi ve filtreleri kontrol edin.",
-  "toast.download_failed": "Dosya indirilemedi."
+  "toast.download_failed": "Dosya indirilemedi.",
+  "resources.tenant.branches": "Şubeler",
+  "toast.preparing": "Dosya hazırlanıyor…",
+  "toast.ready": "Dosya hazır, indiriliyor.",
+  "resources.tenant.segments": "Segmentler",
+  "resources.tenant.rental_groups": "Kiralama grupları",
+  "resources.tenant.rental_products": "Ürünler",
+  "tenant_download.title": "Dışa aktarmayı indir",
+  "tenant_download.description": "Bildirimdeki bağlantı dosyayı bu organizasyon üzerinden indirir.",
+  "tenant_download.not_ready": "Dışa aktarma henüz hazır değil veya başarısız oldu; dosya indirilemez.",
+  "tenant_download.state_idle": "Dosya hazır.",
+  "tenant_download.state_downloading": "Dosya indiriliyor…",
+  "tenant_download.state_done": "İndirme başladı. Dosyayı tekrar indirebilirsiniz.",
+  "tenant_download.state_failed": "Dosya indirilemedi. Tekrar deneyin.",
+  "tenant_download.again": "Tekrar indir"
 }

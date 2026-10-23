@@ -111,6 +111,8 @@ type AuthUseCase struct {
 	tokens        *jwt.Manager
 	now           func() time.Time
 	notifier      Notifier
+	events        resourceEventsPublisher
+	channelRules  []channelRule
 	log           *slog.Logger
 	realtime      RealtimeHints
 	searchIndexer SearchIndexer
@@ -231,6 +233,7 @@ func (u *AuthUseCase) Register(ctx context.Context, in model.RegisterInput) (mod
 	if err := u.assignDefaultRole(ctx, user.ID); err != nil {
 		return model.User{}, err
 	}
+	u.userCreated(ctx, user.UUID.String())
 	u.notifyWelcome(ctx, user)
 	return user, nil
 }
@@ -314,6 +317,7 @@ func (u *AuthUseCase) createPasswordlessUser(ctx context.Context, email, name, s
 	if err := u.assignDefaultRole(ctx, user.ID); err != nil {
 		return model.User{}, err
 	}
+	u.userCreated(ctx, user.UUID.String())
 	u.notifyWelcome(ctx, user)
 	return user, nil
 }

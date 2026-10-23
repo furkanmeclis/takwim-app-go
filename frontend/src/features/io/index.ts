@@ -8,3 +8,4 @@ export { ExportMenu } from "@/features/io/components/export-menu";
 export { ImportButton } from "@/features/io/components/import-button";
 export { ImportWizard } from "@/features/io/components/import-wizard";
 export { ResourceIOToolbar } from "@/features/io/components/resource-io-toolbar";
+export { TenantExportDownloadPage } from "@/features/io/components/tenant-export-download-page";

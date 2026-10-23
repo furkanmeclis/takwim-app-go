@@ -32,5 +32,10 @@
   "picker.no_access_link": "Ne yapabilirim?",
   "no_access.title": "Henüz erişiminiz yok",
   "no_access.body": "Hesabınız hazır ancak henüz hiçbir işletmenin üyesi değilsiniz. Bir işletme sahibi sizi davet ettiğinde burada görünecek.",
-  "no_access.check_again": "Tekrar kontrol et"
+  "no_access.check_again": "Tekrar kontrol et",
+  "roles.merkez_yoneticisi": "Merkez Yöneticisi",
+  "roles.sube_yoneticisi": "Şube Yöneticisi",
+  "roles.rezervasyon_satis": "Rezervasyon / Satış",
+  "roles.muhasebe": "Muhasebe",
+  "roles.teslim_iade": "Teslim / İade"
 }

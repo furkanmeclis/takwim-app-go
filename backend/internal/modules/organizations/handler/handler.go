@@ -11,6 +11,7 @@ import (
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourcemeta"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
@@ -20,10 +21,18 @@ import (
 type Handler struct {
 	svc      *orgusecase.Service
 	activity *activity.Recorder
+	events   resourceevents.Publisher
 }
 
 func New(svc *orgusecase.Service, rec *activity.Recorder) *Handler {
 	return &Handler{svc: svc, activity: rec}
+}
+
+// SetResourceEvents makes member and role changes refresh the open member
+// and role lists of the organization (tenant.members / tenant.roles on
+// org:{org_uuid}:resource:*). nil disables it.
+func (h *Handler) SetResourceEvents(pub resourceevents.Publisher) {
+	h.events = pub
 }
 
 func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +217,7 @@ func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.record(r, "organizations.member_added", &orgID, map[string]any{"user_uuid": userID.String(), "role": member.Role.Key})
+	h.publishPlatformMember(r, orgID, resourceevents.ActionCreated, userID)
 	response.JSON(w, r, http.StatusCreated, member)
 }
 
@@ -228,6 +238,7 @@ func (h *Handler) PatchMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.record(r, "organizations.member_role_updated", &orgID, map[string]any{"user_uuid": userID.String(), "role": member.Role.Key})
+	h.publishPlatformMember(r, orgID, resourceevents.ActionUpdated, userID)
 	response.JSON(w, r, http.StatusOK, member)
 }
 
@@ -241,6 +252,7 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.record(r, "organizations.member_removed", &orgID, map[string]any{"user_uuid": userID.String()})
+	h.publishPlatformMember(r, orgID, resourceevents.ActionDeleted, userID)
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "removed"})
 }
 

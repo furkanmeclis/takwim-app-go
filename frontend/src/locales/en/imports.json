@@ -93,5 +93,15 @@
   "toast.confirm_failed": "Import could not be confirmed.",
   "toast.confirmed": "Import confirmed and queued.",
   "toast.rollback_success": "Import rolled back successfully.",
-  "toast.auto_mapped": "{{count}} column(s) auto-matched."
+  "toast.auto_mapped": "{{count}} column(s) auto-matched.",
+  "resources.tenant.branches": "Branches",
+  "diff.summary": "Dry run: {{creates}} new records, {{updates}} updates.",
+  "diff.create": "New",
+  "diff.update": "Update",
+  "diff.no_changes": "No changes",
+  "diff.catalog": "Catalog match",
+  "diff.empty": "No rows to show",
+  "diff.columns.row": "Row",
+  "diff.columns.op": "Operation",
+  "diff.columns.changes": "Fields to change"
 }

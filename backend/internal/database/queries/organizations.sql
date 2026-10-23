@@ -192,15 +192,19 @@ DELETE FROM organization_members
 WHERE organization_id = $1 AND user_id = $2;
 
 -- name: CountOrganizationOwners :one
-SELECT COUNT(*)::bigint
+-- Members holding the template owner role (any of their roles).
+SELECT COUNT(DISTINCT om.id)::bigint
 FROM organization_members om
-INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
+INNER JOIN organization_member_roles omr
+    ON omr.organization_id = om.organization_id AND omr.member_id = om.id
+INNER JOIN roles r
+    ON r.id = omr.role_id AND r.scope = 'tenant' AND r.organization_id IS NULL AND r.slug = 'owner'
 INNER JOIN users u ON u.id = om.user_id AND u.deleted_at IS NULL
-WHERE om.organization_id = $1 AND r.slug = 'owner';
+WHERE om.organization_id = $1;
 
 -- name: ResolveOrganizationScopeByUUID :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       om.role_id, r.slug AS role_key
+       om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)
 INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
@@ -208,7 +212,7 @@ WHERE o.uuid = sqlc.arg(uuid) AND o.deleted_at IS NULL;
 
 -- name: ResolveOrganizationScopeBySlug :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       om.role_id, r.slug AS role_key
+       om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = sqlc.arg(user_id)
 INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
@@ -233,3 +237,8 @@ INNER JOIN roles r ON r.id = oi.role_id AND r.scope = 'tenant'
 WHERE oi.organization_id = $1
 ORDER BY oi.created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
+
+-- name: ListLiveOrganizationIDs :many
+SELECT id FROM organizations
+WHERE deleted_at IS NULL
+ORDER BY id ASC;

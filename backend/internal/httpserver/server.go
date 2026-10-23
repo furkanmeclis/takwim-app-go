@@ -27,6 +27,11 @@ import (
 	authsettingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/authsettings"
 	authsettingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/authsettings/handler"
 	authsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/authsettings/usecase"
+	branchesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches"
+	branchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/adapters"
+	branchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/handler"
+	branchrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/repository"
+	branchusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/branches/usecase"
 	bulkmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk"
 	bulkhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/handler"
 	bulkusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/usecase"
@@ -53,6 +58,10 @@ import (
 	orghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/handler"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	orgsettingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings"
+	orgsettingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/handler"
+	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
+	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
 	searchmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search"
 	searchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/handler"
@@ -79,6 +88,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx/orgcache"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/outbox"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ratelimit"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
 	searchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/stepup"
@@ -179,12 +189,21 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	searchReg := searchengine.NewRegistry(
 		searchadapters.NewUsers(deps.Queries),
 		searchadapters.NewRoles(deps.Queries),
+		branchadapters.NewSearch(deps.Queries),
 	)
 	searchClient := searchengine.NewClient(cfg.Search, log)
 	searchIndexer := searchengine.NewIndexer(searchClient, searchReg, deps.Queue, log)
 	s.searchClient = searchClient
 	s.searchIndexer = searchIndexer
 	uc.SetSearchIndexer(searchIndexer)
+
+	// Live DataTables: resource-change events on "resource:{name}" channels;
+	// subscriptions need the read permission each module registers.
+	resourceEvents := resourceevents.New(deps.Realtime, log)
+	liveResources := resourceevents.NewRegistry()
+	authmodule.RegisterLiveResources(liveResources)
+	uc.SetResourceEvents(resourceEvents)
+	uc.AddChannelRules(liveResources.ChannelRule())
 
 	rtIssuer, err := realtime.NewTokenIssuer(cfg.Centrifugo)
 	if err != nil {
@@ -253,9 +272,17 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 
 	// Organizations (tenant core). Platform management is always mounted;
 	// the /v1/tenant/* shell only with TENANCY_ENABLED.
-	orgSvc := orgusecase.New(orgrepository.NewPostgres(deps.DB, deps.Queries), nil)
+	// Tenant resources (organization-scoped). OrganizationHooks seed the
+	// default branch of every new organization.
+	branchSvc := branchusecase.New(branchrepository.NewPostgres(deps.Queries), searchIndexer)
+	orgSvc := orgusecase.New(
+		orgrepository.NewPostgres(deps.DB, deps.Queries),
+		branchusecase.NewOrganizationHooks(searchIndexer),
+	)
 	uc.SetOrganizationsLister(orgSvc)
-	organizationsmodule.RegisterRoutes(mux, orghandler.New(orgSvc, activityRec), tokens, loader)
+	orgH := orghandler.New(orgSvc, activityRec)
+	orgH.SetResourceEvents(resourceEvents)
+	organizationsmodule.RegisterRoutes(mux, orgH, tokens, loader)
 	var tenantResolver orgctx.Resolver
 	if cfg.Tenancy.Enabled {
 		orgCache := orgcache.New(orgSvc, deps.Redis, cfg.Tenancy.CacheTTL, cfg.App.Env)
@@ -263,6 +290,19 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		tenantResolver = orgCache
 	}
 	tenantmodule.RegisterRoutes(mux, tokens, loader, tenantResolver)
+	organizationsmodule.RegisterTenantRoutes(mux, orgH, tokens, loader, tenantResolver)
+	orgsettingsmodule.RegisterRoutes(mux, orgsettingshandler.New(
+		orgsettingsusecase.New(orgsettingsrepository.NewPostgres(deps.DB, deps.Queries)), activityRec,
+	), tokens, loader, tenantResolver)
+
+	// Live lists of tenant resources: org:{org_uuid}:resource:{name}, open to
+	// members whose tenant role grants the resource's read permission.
+	tenantLive := resourceevents.NewRegistry()
+	branchesmodule.RegisterLiveResources(tenantLive)
+	organizationsmodule.RegisterLiveResources(tenantLive)
+	resourceEvents.AddResolver(tenantmodule.ChannelResolver(tenantmodule.QueriesLookup(deps.Queries)))
+	uc.AddChannelRules(tenantmodule.ChannelRule(tenantLive, tenantResolver))
+
 	realtime.RegisterRoutes(mux, realtime.NewHandler(rtIssuer, uc), tokens, loader)
 
 	qrGeo, err := qrlogin.NewLocator(cfg.Auth.QRGeoIPDB, cfg.Auth.QRTrustGeoHeaders)
@@ -280,6 +320,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	nh := notifhandler.New(notifSvc)
 	nh.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	notifmodule.RegisterRoutes(mux, nh, tokens, loader)
+	notifmodule.RegisterTenantRoutes(mux, nh, tokens, loader, tenantResolver)
 	notifmodule.RegisterEventHandlers(eventBus, notifSvc, log)
 
 	ioReg := ioengine.NewRegistry(
@@ -287,15 +328,24 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		ioadapters.NewRoles(deps.Queries),
 		ioadapters.NewNotifications(deps.Queries),
 		ioadapters.NewActivity(deps.Queries),
+		branchadapters.NewIO(branchSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, deps.Queue, notifSvc, activityRec, log)
 	importSvc := importusecase.New(deps.Queries, deps.Storage, ioReg, deps.Queue, notifSvc, activityRec, log)
 	bulkReg := bulkengine.NewRegistry(
 		bulkadapters.NewUsers(deps.Queries),
 		bulkadapters.NewRoles(deps.Queries),
+		branchadapters.NewBulk(branchSvc),
 	)
 	bulkSvc := bulkusecase.New(deps.Queries, bulkReg, deps.Queue, notifSvc, activityRec, cfg.Bulk, log)
+	// Tenant jobs run with the requester's current membership (permissions
+	// and branch scope).
+	exportSvc.SetJobScopeLoader(orgSvc)
+	importSvc.SetJobScopeLoader(orgSvc)
+	bulkSvc.SetJobScopeLoader(orgSvc)
 	logsSvc := logsusecase.New(deps.Queries)
+	importSvc.SetResourceEvents(resourceEvents)
+	bulkSvc.SetResourceEvents(resourceEvents)
 	if s.worker != nil {
 		s.worker.WithExport(exportSvc.ProcessExport).
 			WithImport(importSvc.ProcessImport).
@@ -310,9 +360,25 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 			)
 		}
 	}
-	exportmodule.RegisterRoutes(mux, exporthandler.New(exportSvc), tokens, loader, stepUpSvc)
-	importmodule.RegisterRoutes(mux, importhandler.New(importSvc), tokens, loader)
-	bulkmodule.RegisterRoutes(mux, bulkhandler.New(bulkSvc), tokens, loader)
+	exportH := exporthandler.New(exportSvc)
+	importH := importhandler.New(importSvc)
+	bulkH := bulkhandler.New(bulkSvc)
+	exportmodule.RegisterRoutes(mux, exportH, tokens, loader, stepUpSvc)
+	importmodule.RegisterRoutes(mux, importH, tokens, loader)
+	bulkmodule.RegisterRoutes(mux, bulkH, tokens, loader)
+	// Organization-scoped engine job routes and tenant resources (mounted
+	// only with TENANCY_ENABLED: a nil resolver mounts nothing).
+	exportmodule.RegisterTenantRoutes(mux, exportH, tokens, loader, tenantResolver)
+	importmodule.RegisterTenantRoutes(mux, importH, tokens, loader, tenantResolver)
+	bulkmodule.RegisterTenantRoutes(mux, bulkH, tokens, loader, tenantResolver)
+	branchH := branchhandler.New(branchSvc, activityRec)
+	branchH.SetResourceEvents(resourceEvents)
+	branchesmodule.RegisterRoutes(mux, branchH, branchesmodule.EngineHandlers{
+		Export: exportH.TenantExport(branchesmodule.Resource, branchesmodule.ExportQueryKeys...),
+		Import: importH.TenantUpload(branchesmodule.Resource),
+		Sample: importH.TenantSample(branchesmodule.Resource),
+		Bulk:   bulkH.TenantExecute(branchesmodule.Resource),
+	}, tokens, loader, tenantResolver)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),
 		deps.Storage,
@@ -325,7 +391,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	activitymodule.RegisterRoutes(mux, activityhandler.New(activityusecase.New(deps.Queries)), tokens, loader)
 	logsmodule.RegisterRoutes(mux, logshandler.New(logsSvc), tokens, loader)
 	searchSvc := searchusecase.New(searchClient, searchReg, log)
-	searchmodule.RegisterRoutes(mux, searchhandler.New(searchSvc), tokens, loader)
+	searchH := searchhandler.New(searchSvc)
+	searchmodule.RegisterRoutes(mux, searchH, tokens, loader)
+	searchmodule.RegisterTenantRoutes(mux, searchH, tokens, loader, tenantResolver)
 	storagemodule.RegisterRoutes(
 		mux,
 		storagehandler.New(storageusecase.New(deps.Storage, deps.Queries, log)),

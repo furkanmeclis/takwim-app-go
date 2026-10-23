@@ -1,9 +1,12 @@
 import type { ImportFormat, ImportJob } from "@/features/io/types";
 import {
-  platformDownloadRequest,
-  platformFormRequest,
-} from "@/lib/api/platform-form-request";
-import { platformRequest } from "@/lib/api/platform-request";
+  PLATFORM_SCOPE,
+  scopedDownloadFile,
+  scopedFormRequest,
+  scopedJobPath,
+  scopedRequest,
+  type ApiScope,
+} from "@/lib/api/scoped-request";
 
 export type ListJobsResult = {
   items: ImportJob[];
@@ -12,17 +15,33 @@ export type ListJobsResult = {
   offset: number;
 };
 
+/**
+ * Import API. `scope` picks the shell: platform jobs under
+ * `/v1/platform/imports`, organization jobs under `/v1/tenant/imports`.
+ */
 export const importsService = {
-  async upload(path: string, file: File, format: ImportFormat, locale: string) {
+  async upload(
+    path: string,
+    file: File,
+    format: ImportFormat,
+    locale: string,
+    scope: ApiScope = PLATFORM_SCOPE,
+  ) {
     const form = new FormData();
     form.append("file", file);
     form.append("format", format);
     form.append("locale", locale);
-    return platformFormRequest<ImportJob>("POST", path, form);
+    return scopedFormRequest<ImportJob>(scope, "POST", path, form);
   },
 
-  async downloadSample(path: string, format: ImportFormat, locale: string) {
-    return platformDownloadRequest(path, { format, locale });
+  async downloadSample(
+    path: string,
+    format: ImportFormat,
+    locale: string,
+    scope: ApiScope = PLATFORM_SCOPE,
+  ) {
+    const { blob } = await scopedDownloadFile(scope, path, { format, locale });
+    return blob;
   },
 
   async updateMapping(
@@ -31,42 +50,54 @@ export const importsService = {
       mapping: Record<string, string>;
       defaults?: Record<string, string>;
     },
+    scope: ApiScope = PLATFORM_SCOPE,
   ) {
-    return platformRequest<ImportJob>(
+    return scopedRequest<ImportJob>(
+      scope,
       "PATCH",
-      `/v1/platform/imports/${uuid}/mapping`,
+      `${scopedJobPath(scope, "imports")}/${uuid}/mapping`,
       { body },
     );
   },
 
-  async preview(uuid: string) {
-    return platformRequest<ImportJob>(
+  async preview(uuid: string, scope: ApiScope = PLATFORM_SCOPE) {
+    return scopedRequest<ImportJob>(
+      scope,
       "POST",
-      `/v1/platform/imports/${uuid}/preview`,
+      `${scopedJobPath(scope, "imports")}/${uuid}/preview`,
     );
   },
 
-  async confirm(uuid: string) {
-    return platformRequest<ImportJob>(
+  async confirm(uuid: string, scope: ApiScope = PLATFORM_SCOPE) {
+    return scopedRequest<ImportJob>(
+      scope,
       "POST",
-      `/v1/platform/imports/${uuid}/confirm`,
+      `${scopedJobPath(scope, "imports")}/${uuid}/confirm`,
     );
   },
 
-  async rollback(uuid: string) {
-    return platformRequest<ImportJob>(
+  async rollback(uuid: string, scope: ApiScope = PLATFORM_SCOPE) {
+    return scopedRequest<ImportJob>(
+      scope,
       "POST",
-      `/v1/platform/imports/${uuid}/rollback`,
+      `${scopedJobPath(scope, "imports")}/${uuid}/rollback`,
     );
   },
 
   async list(params: { limit?: number; offset?: number }) {
-    return platformRequest<ListJobsResult>("GET", "/v1/platform/imports", {
-      query: params,
-    });
+    return scopedRequest<ListJobsResult>(
+      PLATFORM_SCOPE,
+      "GET",
+      "/v1/platform/imports",
+      { query: params },
+    );
   },
 
-  async get(uuid: string) {
-    return platformRequest<ImportJob>("GET", `/v1/platform/imports/${uuid}`);
+  async get(uuid: string, scope: ApiScope = PLATFORM_SCOPE) {
+    return scopedRequest<ImportJob>(
+      scope,
+      "GET",
+      `${scopedJobPath(scope, "imports")}/${uuid}`,
+    );
   },
 };

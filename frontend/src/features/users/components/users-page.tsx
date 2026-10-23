@@ -55,6 +55,7 @@ export function UsersPage() {
   const listState = useServerListState({
     initialSort: "-created_at",
     initialPageSize: 20,
+    realtime: { resource: "platform.users" },
   });
 
   const [passwordTarget, setPasswordTarget] = useState<PublicUser | null>(null);
@@ -192,6 +193,7 @@ export function UsersPage() {
         isLoading={listQuery.isLoading}
         isError={listQuery.isError}
         onRetry={() => void listQuery.refetch()}
+        realtime={listState.realtimeFor(listQuery.refetch)}
         emptyTitle={t("users.empty_title")}
         emptyDescription={t("users.empty_description")}
         pageCount={pageCount}

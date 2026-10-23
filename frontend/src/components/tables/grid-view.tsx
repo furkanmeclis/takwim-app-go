@@ -20,6 +20,8 @@ type GridViewProps<TData> = {
   /** Tighter single-column cards for phone layouts */
   mobile?: boolean;
   onRowClick?: (row: TData) => void;
+  /** Row ids being removed by a live update (faded out before refetch). */
+  fadingRowIds?: ReadonlySet<string>;
 };
 
 function isUtilityColumn(id: string) {
@@ -33,8 +35,10 @@ function CardShell({
   onToggleSelect,
   selectable,
   onClick,
+  fading,
 }: {
   selected: boolean;
+  fading?: boolean;
   mobile?: boolean;
   children: ReactNode;
   selectable?: boolean;
@@ -49,7 +53,10 @@ function CardShell({
         selected && "border-primary/50 bg-primary/5 shadow-md",
         mobile ? "p-4" : "p-4",
         onClick && "cursor-pointer",
+        fading &&
+          "pointer-events-none opacity-0 transition-opacity duration-300",
       )}
+      aria-hidden={fading || undefined}
       onClick={onClick}
     >
       {selectable ? (
@@ -72,11 +79,13 @@ function DefaultCard<TData>({
   table,
   mobile,
   onRowClick,
+  fading,
 }: {
   row: Row<TData>;
   table: Table<TData>;
   mobile?: boolean;
   onRowClick?: (row: TData) => void;
+  fading?: boolean;
 }) {
   const { t } = useLocale();
   const cells = row
@@ -103,6 +112,7 @@ function DefaultCard<TData>({
     <CardShell
       selected={row.getIsSelected()}
       mobile={mobile}
+      fading={fading}
       selectable={Boolean(table.options.enableRowSelection)}
       onToggleSelect={(checked) => row.toggleSelected(checked)}
       onClick={
@@ -180,6 +190,7 @@ export function GridView<TData>({
   renderGridItem,
   mobile,
   onRowClick,
+  fadingRowIds,
 }: GridViewProps<TData>) {
   const rows = table.getRowModel().rows;
 
@@ -197,6 +208,7 @@ export function GridView<TData>({
               key={row.id}
               selected={row.getIsSelected()}
               mobile={mobile}
+              fading={fadingRowIds?.has(row.id)}
               selectable={Boolean(table.options.enableRowSelection)}
               onToggleSelect={(checked) => row.toggleSelected(checked)}
               onClick={
@@ -222,6 +234,7 @@ export function GridView<TData>({
             table={table}
             mobile={mobile}
             onRowClick={onRowClick}
+            fading={fadingRowIds?.has(row.id)}
           />
         );
       })}

@@ -6,6 +6,7 @@ export { PermissionMatrixView } from "./permission-matrix-view";
 export {
   groupPermissions,
   permissionGroupKey,
+  tenantPermissionGroupKey,
   PERMISSION_GROUP_ORDER,
   type Permission,
   type PermissionGroup,

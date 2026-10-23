@@ -6,6 +6,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/middleware"
 	bulkhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/bulk/handler"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/jwt"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 )
 
@@ -35,5 +36,29 @@ func RegisterRoutes(
 	))
 	mux.Handle("POST /v1/platform/roles/bulk", middleware.Chain(
 		http.HandlerFunc(h.ExecuteRoles), authn, require(rbac.PermPlatformRolesRead),
+	))
+}
+
+// RegisterTenantRoutes mounts the organization-scoped bulk job routes.
+// Resource bulk routes (POST /v1/tenant/<resource>/bulk) are mounted by the
+// resource module. A nil resolver mounts nothing.
+func RegisterTenantRoutes(
+	mux *http.ServeMux,
+	h *bulkhandler.Handler,
+	tokens *jwt.Manager,
+	loader middleware.IdentityLoader,
+	resolver orgctx.Resolver,
+) {
+	if resolver == nil {
+		return
+	}
+	authn := middleware.Authenticate(tokens, loader)
+	org := middleware.RequireOrganization(resolver)
+
+	mux.Handle("GET /v1/tenant/bulk/{uuid}", middleware.Chain(
+		http.HandlerFunc(h.TenantGet), authn, org,
+	))
+	mux.Handle("POST /v1/tenant/bulk/{uuid}/rollback", middleware.Chain(
+		http.HandlerFunc(h.TenantRollback), authn, org,
 	))
 }

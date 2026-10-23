@@ -61,6 +61,8 @@ handler → usecase → repository interface → sqlc/pgx → PostgreSQL
 
 Cross-module signals go through `internal/platform/events` (in-process, fail-soft). Handlers never call SMTP or SMS; they enqueue via the notification service (`app:notification:deliver` on the `notifications` queue).
 
+Notifications of an organization (tenant export / import / bulk jobs) carry `EnqueueInput.OrganizationID` (`notifications.organization_id`). The inbox is scoped by shell: `/v1/tenant/notifications*` (with `X-Organization`) shows that organization's rows plus un-stamped ones, `/v1/notifications*` only un-stamped ones; live cards are filtered the same way by `organization_uuid`. A finished tenant export links to `/t/{slug}/exports/{uuid}/download`, a tenant page that downloads through `/v1/tenant/exports/{uuid}/download` (a link cannot carry the organization header).
+
 Audit: `activity.Recorder.Record` (fail-soft). Application logs: `internal/modules/logs`.
 
 ## Platform engines

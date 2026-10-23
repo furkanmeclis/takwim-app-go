@@ -7,6 +7,8 @@ import type {
   BulkResource,
   BulkTarget,
 } from "@/features/bulk-engine/types";
+import { useApiScope } from "@/features/tenant/hooks/use-api-scope";
+import { scopeKey } from "@/lib/api/scoped-request";
 import { useLocale } from "@/providers/locale-provider";
 import { toast } from "sonner";
 
@@ -26,14 +28,19 @@ type ExecuteInput = {
 export function useBulkMutation() {
   const { locale, t } = useLocale();
   const queryClient = useQueryClient();
+  const scope = useApiScope();
 
   return useMutation({
     mutationFn: async ({ resource, action, target }: ExecuteInput) => {
-      return bulkService.execute(resource, {
-        action,
-        target,
-        locale,
-      });
+      return bulkService.execute(
+        resource,
+        {
+          action,
+          target,
+          locale,
+        },
+        scope,
+      );
     },
     onSuccess: (data, variables) => {
       if (isSyncResult(data)) {
@@ -47,7 +54,9 @@ export function useBulkMutation() {
         return;
       }
       toast.info(t("bulk.job.queued"));
-      void queryClient.invalidateQueries({ queryKey: ["bulk-jobs"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["bulk-jobs", scopeKey(scope)],
+      });
       variables.onComplete?.();
     },
     onError: () => {
@@ -59,12 +68,15 @@ export function useBulkMutation() {
 export function useBulkRollbackMutation() {
   const { t } = useLocale();
   const queryClient = useQueryClient();
+  const scope = useApiScope();
 
   return useMutation({
-    mutationFn: (uuid: string) => bulkService.rollback(uuid),
+    mutationFn: (uuid: string) => bulkService.rollback(uuid, scope),
     onSuccess: () => {
       toast.success(t("bulk.rollback_success"));
-      void queryClient.invalidateQueries({ queryKey: ["bulk-jobs"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["bulk-jobs", scopeKey(scope)],
+      });
     },
     onError: () => {
       toast.error(t("common.error_generic"));

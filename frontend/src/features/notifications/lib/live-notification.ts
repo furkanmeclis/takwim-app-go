@@ -12,6 +12,8 @@ export type LiveNotification = {
   action_url?: string;
   signed_action_url?: string;
   template_code?: string;
+  /** Organization of a tenant job notification; absent for personal ones. */
+  organization_uuid?: string;
 };
 
 function asString(value: unknown) {
@@ -36,7 +38,24 @@ function fromRecord(record: Record<string, unknown>): LiveNotification | null {
     action_url: asString(record.action_url),
     signed_action_url: asString(record.signed_action_url),
     template_code: asString(record.template_code),
+    organization_uuid:
+      asString(record.organization_uuid) ??
+      asString(asRecord(record.payload)?.organization_uuid),
   };
+}
+
+/**
+ * Whether a live notification belongs on the current shell: personal
+ * (un-stamped) ones everywhere, an organization's only inside that
+ * organization's panel (`currentOrganizationUuid`), never in the platform
+ * shell. Mirrors the inbox scope of `/v1/tenant/notifications`.
+ */
+export function isLiveNotificationInScope(
+  notification: Pick<LiveNotification, "organization_uuid">,
+  currentOrganizationUuid: string | null | undefined,
+) {
+  if (!notification.organization_uuid) return true;
+  return notification.organization_uuid === currentOrganizationUuid;
 }
 
 export function liveNotificationFromMessage(

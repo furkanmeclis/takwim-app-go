@@ -4,6 +4,11 @@ export { AppPassword } from "./app-password";
 export { AppTextarea } from "./app-textarea";
 export { AppSelect } from "./app-select";
 export { AppCombobox, type ComboboxOption } from "./app-combobox";
+export {
+  AppMultiCombobox,
+  MultiCombobox,
+  type MultiComboboxOption,
+} from "./app-multi-combobox";
 export { AppCheckbox } from "./app-checkbox";
 export { AppSwitch } from "./app-switch";
 export { AppDatePicker } from "./app-date-picker";

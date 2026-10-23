@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -157,7 +158,12 @@ type fakeRepo struct {
 	memberships   map[int64]map[int64]string
 	roleIDs       map[string]int64
 	perms         map[string][]string
+	extraRoles    map[int64][]string
+	branches      map[int64][]int64
 }
+
+// fakeMemberID derives a stable member id from organization and user.
+func fakeMemberID(orgID, userID int64) int64 { return orgID*1000 + userID }
 
 func newFakeRepo(now time.Time) *fakeRepo {
 	return &fakeRepo{
@@ -165,6 +171,7 @@ func newFakeRepo(now time.Time) *fakeRepo {
 		orgBySlug: map[string]int64{}, existingSlugs: map[string]bool{}, users: map[int64]db.User{},
 		userByUUID: map[uuid.UUID]int64{}, memberships: map[int64]map[int64]string{},
 		roleIDs: map[string]int64{"owner": 1, "admin": 2, "member": 3}, perms: map[string][]string{},
+		extraRoles: map[int64][]string{}, branches: map[int64][]int64{},
 	}
 }
 
@@ -304,7 +311,7 @@ func (f *fakeRepo) GetOrganizationMember(_ context.Context, _ *db.Queries, orgID
 	if !ok {
 		return db.GetOrganizationMemberRow{}, repository.ErrNotFound
 	}
-	return db.GetOrganizationMemberRow{OrganizationID: orgID, UserID: userID, RoleKey: role, RoleName: role}, nil
+	return db.GetOrganizationMemberRow{ID: fakeMemberID(orgID, userID), OrganizationID: orgID, UserID: userID, RoleKey: role, RoleName: role}, nil
 }
 
 func (f *fakeRepo) ListOrganizationMembers(context.Context, db.ListOrganizationMembersByOrgParams) ([]db.ListOrganizationMembersByOrgRow, int64, error) {
@@ -369,10 +376,14 @@ func (f *fakeRepo) resolveRow(oid, userID int64) (db.ResolveOrganizationScopeByS
 	if !ok {
 		return db.ResolveOrganizationScopeBySlugRow{}, repository.ErrNotFound
 	}
+	scope := orgctx.BranchScopeAll
+	if _, ok := f.branches[fakeMemberID(oid, userID)]; ok {
+		scope = orgctx.BranchScopeSelected
+	}
 	return db.ResolveOrganizationScopeBySlugRow{
 		ID: org.ID, Uuid: org.Uuid, Slug: org.Slug, Name: org.Name, Status: org.Status,
 		AccessStartsAt: org.AccessStartsAt, AccessEndsAt: org.AccessEndsAt,
-		RoleID: f.roleIDs[role], RoleKey: role,
+		RoleID: f.roleIDs[role], RoleKey: role, MemberID: fakeMemberID(oid, userID), BranchScope: scope,
 	}, nil
 }
 
@@ -391,6 +402,116 @@ type fakeInvalidator struct {
 
 func (f *fakeInvalidator) InvalidateOrganization(_ context.Context, id int64) error {
 	f.ids = append(f.ids, id)
+	return nil
+}
+
+func (f *fakeRepo) memberRoleKeys(memberID int64) []string {
+	orgID, userID := memberID/1000, memberID%1000
+	role, ok := f.memberships[orgID][userID]
+	if !ok {
+		return nil
+	}
+	return append([]string{role}, f.extraRoles[memberID]...)
+}
+
+func (f *fakeRepo) ListMemberPermissionSlugs(_ context.Context, _ int64, memberID int64) ([]string, error) {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, role := range f.memberRoleKeys(memberID) {
+		for _, p := range f.perms[role] {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListMemberRoles(_ context.Context, _ *db.Queries, _ int64, memberIDs []int64) ([]db.ListMemberRolesRow, error) {
+	out := []db.ListMemberRolesRow{}
+	for _, id := range memberIDs {
+		for _, role := range f.memberRoleKeys(id) {
+			out = append(out, db.ListMemberRolesRow{MemberID: id, ID: f.roleIDs[role], Slug: role, Name: role, IsTemplate: true})
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListMemberBranchIDs(_ context.Context, _ int64, memberID int64) ([]int64, error) {
+	return append([]int64{}, f.branches[memberID]...), nil
+}
+
+func (f *fakeRepo) ListMemberBranches(context.Context, int64, []int64) ([]db.ListMemberBranchesRow, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) ListBranchIDsByUUIDs(context.Context, int64, []uuid.UUID) ([]db.ListBranchIDsByUUIDsRow, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) ReplaceMemberRoles(_ context.Context, _ *db.Queries, orgID, memberID int64, roleIDs []int64, primaryRoleID int64) error {
+	userID := memberID % 1000
+	extra := []string{}
+	for key, id := range f.roleIDs {
+		if id == primaryRoleID {
+			f.memberships[orgID][userID] = key
+		} else if slices.Contains(roleIDs, id) {
+			extra = append(extra, key)
+		}
+	}
+	f.extraRoles[memberID] = extra
+	return nil
+}
+
+func (f *fakeRepo) ReplaceMemberBranches(_ context.Context, _ *db.Queries, _ int64, memberID int64, scope string, branchIDs []int64) error {
+	if scope == orgctx.BranchScopeAll {
+		delete(f.branches, memberID)
+		return nil
+	}
+	f.branches[memberID] = append([]int64{}, branchIDs...)
+	return nil
+}
+
+func (f *fakeRepo) ListTenantMembers(context.Context, db.ListTenantMembersParams) ([]db.ListTenantMembersRow, int64, error) {
+	return nil, 0, nil
+}
+
+func (f *fakeRepo) GetTenantMember(context.Context, int64, uuid.UUID) (db.ListTenantMembersRow, error) {
+	return db.ListTenantMembersRow{}, repository.ErrNotFound
+}
+
+func (f *fakeRepo) ListTenantRoles(context.Context, int64) ([]repository.TenantRoleRow, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) GetTenantRoleByUUID(context.Context, *db.Queries, int64, uuid.UUID) (repository.TenantRoleRow, error) {
+	return repository.TenantRoleRow{}, repository.ErrNotFound
+}
+
+func (f *fakeRepo) ListRolePermissionSlugs(context.Context, []int64) (map[int64][]string, error) {
+	return map[int64][]string{}, nil
+}
+
+func (f *fakeRepo) ListTenantPermissions(context.Context) ([]db.ListTenantPermissionsRow, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) TenantRoleSlugTaken(context.Context, int64, string) (bool, error) {
+	return false, nil
+}
+
+func (f *fakeRepo) CreateTenantRole(context.Context, *db.Queries, int64, string, string, string) (int64, uuid.UUID, error) {
+	return 0, uuid.Nil, nil
+}
+
+func (f *fakeRepo) UpdateTenantRole(context.Context, *db.Queries, int64, uuid.UUID, string, string) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeRepo) DeleteTenantRole(context.Context, *db.Queries, int64, uuid.UUID) error { return nil }
+
+func (f *fakeRepo) SetRolePermissions(context.Context, *db.Queries, int64, []string) error {
 	return nil
 }
 

@@ -49,12 +49,26 @@ export type ImportJob = {
   created_at: string;
 };
 
+/** One field an import row would change (dry-run diff adapters). */
+export type ImportFieldChange = { field: string; from: string; to: string };
+
+export type ImportPreviewRow = {
+  index: number;
+  data: Record<string, unknown>;
+  /** Dry-run diff adapters only: what the row would do. */
+  op?: "create" | "update";
+  changes?: ImportFieldChange[];
+};
+
 export type ImportPreviewSummary = {
   total: number;
   valid: number;
   invalid: number;
-  rows?: { index: number; data: Record<string, unknown> }[];
-  errors?: { index: number; field?: string; error: string }[];
+  /** Dry-run diff adapters only. */
+  creates?: number;
+  updates?: number;
+  rows?: ImportPreviewRow[] | null;
+  errors?: { index: number; field?: string; error: string }[] | null;
 };
 
 export type AppSettings = {
@@ -80,17 +94,23 @@ export type ActivityEvent = {
   created_at: string;
 };
 
+/**
+ * Export / import resources. `tenant.*` resources are organization-scoped and
+ * go through `/v1/tenant/*` with the tenant `ApiScope` (see `useApiScope`).
+ */
 export type IoResource =
   | "platform.users"
   | "platform.roles"
   | "platform.notifications"
-  | "platform.activity";
+  | "platform.activity"
+  | "tenant.branches";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
   "platform.users": "/v1/platform/users/export",
   "platform.roles": "/v1/platform/roles/export",
   "platform.notifications": "/v1/platform/notifications/export",
   "platform.activity": "/v1/platform/activity/export",
+  "tenant.branches": "/v1/tenant/branches/export",
 };
 
 export const IMPORT_PATHS: Partial<
@@ -103,6 +123,10 @@ export const IMPORT_PATHS: Partial<
   "platform.roles": {
     upload: "/v1/platform/roles/import",
     sample: "/v1/platform/roles/import/sample",
+  },
+  "tenant.branches": {
+    upload: "/v1/tenant/branches/import",
+    sample: "/v1/tenant/branches/import/sample",
   },
 };
 
@@ -123,4 +147,20 @@ export const IMPORT_SCHEMA: Partial<
     { key: "description", labelKey: "roles.fields.description" },
     { key: "permission_slugs", labelKey: "roles.fields.permissions" },
   ],
+  "tenant.branches": [
+    { key: "code", labelKey: "branches.fields.code", required: true },
+    { key: "name", labelKey: "branches.fields.name", required: true },
+    { key: "city", labelKey: "branches.fields.city" },
+    { key: "district", labelKey: "branches.fields.district" },
+    { key: "address", labelKey: "branches.fields.address" },
+    { key: "phone", labelKey: "branches.fields.phone" },
+    { key: "email", labelKey: "branches.fields.email" },
+    { key: "latitude", labelKey: "branches.fields.latitude" },
+    { key: "longitude", labelKey: "branches.fields.longitude" },
+    { key: "prep_minutes", labelKey: "branches.fields.prep_minutes" },
+    { key: "is_active", labelKey: "branches.fields.is_active" },
+  ],
+  // İdes fleet XLSX: plaka, şasi, marka, model, tip / kasko kodu, model yılı,
+  // renk, vites, yakıt, şube, mülkiyet, km. type_code before type_name so a
+  // "Tip/Kasko Kodu" header maps to the code.
 };

@@ -3,6 +3,7 @@ import type { AppLocale } from "@/config/i18n";
 import enAccess from "@/locales/en/access.json";
 import enActivity from "@/locales/en/activity.json";
 import enAuth from "@/locales/en/auth.json";
+import enBranches from "@/locales/en/branches.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
 import enChart from "@/locales/en/chart.json";
@@ -28,10 +29,14 @@ import enStepup from "@/locales/en/stepup.json";
 import enStorage from "@/locales/en/storage.json";
 import enTable from "@/locales/en/table.json";
 import enTenant from "@/locales/en/tenant.json";
+import enTenantMembers from "@/locales/en/tenant_members.json";
+import enTenantRoles from "@/locales/en/tenant_roles.json";
+import enTenantSettings from "@/locales/en/tenant_settings.json";
 import enUsers from "@/locales/en/users.json";
 import trAccess from "@/locales/tr/access.json";
 import trActivity from "@/locales/tr/activity.json";
 import trAuth from "@/locales/tr/auth.json";
+import trBranches from "@/locales/tr/branches.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
 import trChart from "@/locales/tr/chart.json";
@@ -57,6 +62,9 @@ import trStepup from "@/locales/tr/stepup.json";
 import trStorage from "@/locales/tr/storage.json";
 import trTable from "@/locales/tr/table.json";
 import trTenant from "@/locales/tr/tenant.json";
+import trTenantMembers from "@/locales/tr/tenant_members.json";
+import trTenantRoles from "@/locales/tr/tenant_roles.json";
+import trTenantSettings from "@/locales/tr/tenant_settings.json";
 import trUsers from "@/locales/tr/users.json";
 
 export type MessageDictionary = Record<string, string>;
@@ -92,6 +100,10 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     integrations: trIntegrations,
     stepup: trStepup,
     tenant: trTenant,
+    branches: trBranches,
+    tenant_members: trTenantMembers,
+    tenant_roles: trTenantRoles,
+    tenant_settings: trTenantSettings,
   },
   en: {
     common: enCommon,
@@ -123,6 +135,10 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     integrations: enIntegrations,
     stepup: enStepup,
     tenant: enTenant,
+    branches: enBranches,
+    tenant_members: enTenantMembers,
+    tenant_roles: enTenantRoles,
+    tenant_settings: enTenantSettings,
   },
 };
 export function loadMessages(locale: AppLocale) {

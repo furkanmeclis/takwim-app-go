@@ -28,6 +28,14 @@ type BulkActionMenuProps = {
   scope: SelectionScope;
   selectedCount: number;
   onComplete?: () => void;
+  /**
+   * Collects the params of a parameterised action (for example a dialog
+   * asking the new status). Resolve `null` to cancel, `undefined` for an
+   * action without params.
+   */
+  resolveParams?: (
+    action: BulkActionDef,
+  ) => Promise<Record<string, string> | null | undefined>;
 };
 
 export function BulkActionMenu({
@@ -36,6 +44,7 @@ export function BulkActionMenu({
   scope,
   selectedCount,
   onComplete,
+  resolveParams,
 }: BulkActionMenuProps) {
   const { t } = useLocale();
   const { can } = usePermission();
@@ -60,11 +69,15 @@ export function BulkActionMenu({
   };
 
   const runAction = async (action: BulkActionDef) => {
+    const params = resolveParams ? await resolveParams(action) : undefined;
+    if (params === null) return;
     if (action.confirm_key || action.destructive) {
       const ok = await confirmAction(action);
       if (!ok) return;
     }
-    const target = buildBulkTarget(scope);
+    const target = params
+      ? { ...buildBulkTarget(scope), params }
+      : buildBulkTarget(scope);
     await bulkMutation.mutateAsync({
       resource,
       action: action.id,

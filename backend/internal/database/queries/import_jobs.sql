@@ -1,6 +1,6 @@
 -- name: CreateImportJob :one
-INSERT INTO import_jobs (resource, actor_id, format, locale, status, file_key)
-VALUES ($1, $2, $3, $4, 'uploaded', $5)
+INSERT INTO import_jobs (resource, actor_id, format, locale, status, file_key, organization_id)
+VALUES ($1, $2, $3, $4, 'uploaded', $5, sqlc.narg(organization_id))
 RETURNING *;
 
 -- name: UpdateImportJobFileKey :one
@@ -66,20 +66,21 @@ RETURNING *;
 
 -- name: ListImportJobsForActor :many
 SELECT * FROM import_jobs
-WHERE actor_id = $1
+WHERE actor_id = $1 AND organization_id IS NULL
 ORDER BY created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountImportJobsForActor :one
-SELECT COUNT(*)::bigint FROM import_jobs WHERE actor_id = $1;
+SELECT COUNT(*)::bigint FROM import_jobs WHERE actor_id = $1 AND organization_id IS NULL;
 
 -- name: ListAllImportJobs :many
 SELECT * FROM import_jobs
+WHERE organization_id IS NULL
 ORDER BY created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountAllImportJobs :one
-SELECT COUNT(*)::bigint FROM import_jobs;
+SELECT COUNT(*)::bigint FROM import_jobs WHERE organization_id IS NULL;
 
 -- name: InsertImportChange :one
 INSERT INTO import_changes (job_id, entity_type, entity_uuid, op, previous_json)

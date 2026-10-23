@@ -46,6 +46,9 @@ type Notification struct {
 	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
 	User            *NotificationUser `json:"user,omitempty"`
+	// OrganizationUUID is set on notifications of an organization (tenant
+	// engine jobs); nil for platform and personal notifications.
+	OrganizationUUID *uuid.UUID `json:"organization_uuid,omitempty"`
 }
 
 // NotificationUser is the target user on a platform notification row.
@@ -78,21 +81,25 @@ type Preferences struct {
 
 // EnqueueInput creates one or more queued notifications.
 type EnqueueInput struct {
-	TenantID     *int64
-	WorkspaceID  *int64
-	UserID       *int64
-	UserUUID     *uuid.UUID
-	Channels     []string
-	Priority     string
-	Title        string
-	Body         string
-	Payload      map[string]any
-	ActionURL    *string
-	Recipient    *string
-	TemplateCode string
-	TemplateVars map[string]string
-	SourceEvent  string
-	Language     string
+	TenantID    *int64
+	WorkspaceID *int64
+	// OrganizationID stamps the notification with an organization: it then
+	// shows only in that organization's panel (and never in the platform
+	// shell). Tenant engine jobs pass the job's organization.
+	OrganizationID *int64
+	UserID         *int64
+	UserUUID       *uuid.UUID
+	Channels       []string
+	Priority       string
+	Title          string
+	Body           string
+	Payload        map[string]any
+	ActionURL      *string
+	Recipient      *string
+	TemplateCode   string
+	TemplateVars   map[string]string
+	SourceEvent    string
+	Language       string
 	// SecurityEmail bypasses email preference (password reset / verification).
 	SecurityEmail bool
 }

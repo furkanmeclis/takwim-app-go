@@ -1,4 +1,8 @@
-import { platformRequest } from "@/lib/api/platform-request";
+import {
+  PLATFORM_SCOPE,
+  scopedRequest,
+  type ApiScope,
+} from "@/lib/api/scoped-request";
 
 import type {
   RemoteSearchSpec,
@@ -14,17 +18,35 @@ type SearchHitsResponse = {
   items: SearchHit[];
 };
 
-export async function fetchSearchSpecs(): Promise<SearchSpecsResponse> {
-  return platformRequest<SearchSpecsResponse>("GET", "/v1/search/specs");
+/**
+ * Inside an organization the palette searches `/v1/tenant/search` (records of
+ * that organization only); elsewhere the platform `/v1/search`.
+ */
+function searchBase(scope: ApiScope) {
+  return scope.kind === "tenant" ? "/v1/tenant/search" : "/v1/search";
+}
+
+export async function fetchSearchSpecs(
+  scope: ApiScope = PLATFORM_SCOPE,
+): Promise<SearchSpecsResponse> {
+  return scopedRequest<SearchSpecsResponse>(
+    scope,
+    "GET",
+    `${searchBase(scope)}/specs`,
+  );
 }
 
 export async function fetchSearchHits(
   q: string,
   spec?: string,
   limit = 20,
+  scope: ApiScope = PLATFORM_SCOPE,
 ): Promise<SearchHit[]> {
-  const data = await platformRequest<SearchHitsResponse>("GET", "/v1/search", {
-    query: { q, spec, limit },
-  });
+  const data = await scopedRequest<SearchHitsResponse>(
+    scope,
+    "GET",
+    searchBase(scope),
+    { query: { q, spec, limit } },
+  );
   return data.items ?? [];
 }

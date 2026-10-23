@@ -1,5 +1,7 @@
 import type { components } from "@/generated/api";
 import { apiClient, unwrap } from "@/lib/api";
+import type { ApiScope } from "@/lib/api/scoped-request";
+import { tenantRequest } from "@/lib/api/tenant-request";
 import type { ServerListParams } from "@/components/entity";
 
 export type Notification = components["schemas"]["Notification"];
@@ -58,7 +60,31 @@ export const notificationsService = {
     );
   },
 
-  async listInbox(params: ListInboxNotificationsParams) {
+  /**
+   * Personal inbox of the current shell. Inside `/t/{slug}` the tenant route
+   * lists that organization's notifications plus personal ones; the platform
+   * / account shell lists personal (un-stamped) notifications only.
+   */
+  async listInbox(scope: ApiScope, params: ListInboxNotificationsParams) {
+    if (scope.kind === "tenant") {
+      return tenantRequest<NotificationListResult>(
+        scope.slug,
+        "GET",
+        "/v1/tenant/notifications",
+        {
+          query: {
+            limit: params.limit,
+            offset: params.offset,
+            sort: params.sort,
+            q: params.q,
+            status: params.status,
+            channel: params.channel,
+            unread:
+              params.unread === undefined ? undefined : String(params.unread),
+          },
+        },
+      );
+    }
     return unwrap<NotificationListResult>(
       await apiClient.GET("/v1/notifications", {
         params: {
@@ -80,7 +106,14 @@ export const notificationsService = {
     return unwrap<ResourceMeta>(await apiClient.GET("/v1/notifications/meta"));
   },
 
-  async unreadCount() {
+  async unreadCount(scope: ApiScope) {
+    if (scope.kind === "tenant") {
+      return tenantRequest<UnreadCount>(
+        scope.slug,
+        "GET",
+        "/v1/tenant/notifications/unread-count",
+      );
+    }
     return unwrap<UnreadCount>(
       await apiClient.GET("/v1/notifications/unread-count"),
     );
@@ -102,7 +135,14 @@ export const notificationsService = {
     );
   },
 
-  async markAllRead() {
+  async markAllRead(scope: ApiScope) {
+    if (scope.kind === "tenant") {
+      return tenantRequest<{ status: string }>(
+        scope.slug,
+        "POST",
+        "/v1/tenant/notifications/read-all",
+      );
+    }
     return unwrap<{ status: string }>(
       await apiClient.POST("/v1/notifications/read-all"),
     );

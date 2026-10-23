@@ -56,6 +56,34 @@ const (
 	PermTenantMembersWrite                = "tenant.members.write"
 	PermTenantRolesRead                   = "tenant.roles.read"
 	PermTenantRolesWrite                  = "tenant.roles.write"
+	PermTenantBranchesRead                = "tenant.branches.read"
+	PermTenantBranchesWrite               = "tenant.branches.write"
+	PermTenantBranchesExport              = "tenant.branches.export"
+	PermTenantBranchesImport              = "tenant.branches.import"
+	PermTenantBranchesBulkActivate        = "tenant.branches.bulk.activate"
+	PermTenantBranchesBulkDeactivate      = "tenant.branches.bulk.deactivate"
+	// Sensitive actions of later tenant modules (TEC-689), separate from the
+	// resource read/write slugs so roles can grant them one by one.
+	PermTenantPriceOverride    = "tenant.price.override"
+	PermTenantDiscountApply    = "tenant.discount.apply"
+	PermTenantPaymentCollect   = "tenant.payment.collect"
+	PermTenantPaymentRefund    = "tenant.payment.refund"
+	PermTenantDamageApprove    = "tenant.damage.approve"
+	PermTenantSignatureWaive   = "tenant.signature.waive"
+	PermTenantDocumentDownload = "tenant.document.download"
+	PermTenantReportExport     = "tenant.report.export"
+)
+
+// Tenant template role keys seeded by migrations 000030 and 000032.
+const (
+	TenantRoleOwner            = "owner"
+	TenantRoleAdmin            = "admin"
+	TenantRoleMember           = "member"
+	TenantRoleMerkezYoneticisi = "merkez_yoneticisi"
+	TenantRoleSubeYoneticisi   = "sube_yoneticisi"
+	TenantRoleRezervasyonSatis = "rezervasyon_satis"
+	TenantRoleMuhasebe         = "muhasebe"
+	TenantRoleTeslimIade       = "teslim_iade"
 )
 
 // IsSystemRole reports whether slug is a protected system role.

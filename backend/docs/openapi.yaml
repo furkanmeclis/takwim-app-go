@@ -1844,8 +1844,15 @@ paths:
       operationId: postRealtimeSubscriptionToken
       summary: Issue Centrifugo subscription JWT
       description: |
-        Body `{ channel }`. Allowlist `user:{own_uuid}`, member `workspace:{uuid}`,
-        and `conversation:{uuid}` (authenticated session; HTTP inbox ACL is the hard boundary).
+        Body `{ channel }`. Allowlist `user:{own_uuid}`, `system.notifications`
+        (super admin) and `resource:{name}` for live lists: the caller needs the
+        read permission the resource registered (e.g. `platform.users.read`);
+        unregistered resources are refused. Resource channels carry
+        `{ type: "resource.changed", resource, action: created|updated|deleted|bulk,
+        uuids, truncated?, at }` after mutations and bulk / import jobs.
+        Tenant resources use `org:{org_uuid}:resource:{name}` (e.g.
+        `tenant.branches`): the caller must be a member of that organization
+        whose tenant role grants the resource's read permission.
       security:
         - bearerAuth: []
       requestBody:
@@ -2610,7 +2617,10 @@ paths:
       tags: [Notifications]
       operationId: getNotifications
       summary: List own inbox
-      description: Requires `notifications.read`. Supports `limit`,`offset`,`q`,`sort`,`status`,`channel`,`unread`.
+      description: >-
+        Requires `notifications.read`. Supports `limit`,`offset`,`q`,`sort`,`status`,`channel`,`unread`.
+        Platform / account shell inbox: only notifications without an organization
+        (organization notifications appear in `GET /v1/tenant/notifications`).
       security:
         - bearerAuth: []
       parameters:
@@ -2665,6 +2675,7 @@ paths:
       tags: [Notifications]
       operationId: getNotificationsUnreadCount
       summary: Unread in-app count
+      description: Counts notifications without an organization only (platform / account shell).
       security:
         - bearerAuth: []
       responses:
@@ -2684,6 +2695,7 @@ paths:
       tags: [Notifications]
       operationId: postNotificationsReadAll
       summary: Mark all in-app as read
+      description: Marks notifications without an organization only (platform / account shell).
       security:
         - bearerAuth: []
       responses:
@@ -3133,6 +3145,1226 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/tenant/members/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantMembersMeta
+      summary: Members list metadata
+      description: Table contract of `GET /v1/tenant/members` (`tenant.members.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/members:
+    get:
+      tags: [Tenant]
+      operationId: getTenantMembers
+      summary: List members of the organization
+      description: |
+        Members of the `X-Organization` organization with all their roles and
+        their branch access (`tenant.members.read`). `q` searches name,
+        surname and email. Invitations are managed separately.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `email`, `branch_scope`, `last_login_at`, `created_at`; prefix `-` for descending. Default `created_at`."
+          schema: { type: string, example: "name" }
+        - name: role
+          in: query
+          description: Tenant role uuid; comma-separate or repeat for several (any of them)
+          schema: { type: string }
+        - name: branch_scope
+          in: query
+          schema: { type: string, enum: [all, selected] }
+      responses:
+        "200":
+          description: Member page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantMemberPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/members/{userUuid}:
+    parameters:
+      - name: userUuid
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Tenant]
+      operationId: getTenantMember
+      summary: Get a member
+      description: "`tenant.members.read`. A user who is not a member answers `404`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantMember"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantMember
+      summary: Change a member's roles and branch access
+      description: |
+        `tenant.members.write`. `role_uuids` replaces every role of the member
+        (at least one; template or organization roles). `branch_scope`
+        `selected` needs `branch_uuids` (at least one live branch of the
+        organization); `all` clears the selection. The change invalidates the
+        cached organization scope immediately.
+
+        Guards (`403 FORBIDDEN`): only owners grant or revoke `owner`; a
+        non-owner can only grant roles whose permissions it holds itself; a
+        branch-restricted caller can only manage members inside its own
+        branches and cannot grant `all`. Demoting the last owner answers
+        `409 LAST_ORGANIZATION_OWNER`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantMemberPatchRequest"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantMember"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantMember
+      summary: Remove a member from the organization
+      description: "`tenant.members.write`. Only owners remove an owner; the last owner cannot be removed (`409 LAST_ORGANIZATION_OWNER`)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/roles/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantRolesMeta
+      summary: Tenant roles list metadata
+      description: Table contract of `GET /v1/tenant/roles` (`tenant.roles.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/roles/permissions:
+    get:
+      tags: [Tenant]
+      operationId: getTenantRolePermissions
+      summary: Assignable tenant permissions
+      description: Every `tenant.*` permission a role can hold (`tenant.roles.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantPermissionList"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/roles:
+    get:
+      tags: [Tenant]
+      operationId: getTenantRoles
+      summary: List tenant roles
+      description: |
+        Template roles (shared by every organization, read-only) followed by
+        the organization's own roles, with permissions and member counts
+        (`tenant.roles.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: is_template
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Role page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantRolePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantRole
+      summary: Create an organization role
+      description: |
+        `tenant.roles.write`. `key` defaults to the slugified name and must be
+        unique among template and organization roles (`409 CONFLICT` with a
+        `key` detail). Non-owners can only grant permissions they hold.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantRoleRequest"
+      responses:
+        "201":
+          description: Created role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantRole"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/roles/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantRole
+      summary: Get a tenant role
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantRole"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantRole
+      summary: Update an organization role
+      description: "`tenant.roles.write`. Template roles answer `403`; `key` is immutable."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantRoleRequest"
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantRole"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantRole
+      summary: Delete an organization role
+      description: "`tenant.roles.write`. Template roles answer `403`; a role members still hold answers `409 CONFLICT`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/settings:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSettings
+      summary: Current organization settings
+      description: |
+        The highest stored version (`tenant.settings.read`). Before the first
+        save the response is version `0` with defaults. `ready_for_online_sales`
+        is false while any of `missing` (reservation approval mode, staff
+        review window, payment hold and quote validity) is unset.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationSettingsVersion"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantSettings
+      summary: Save organization settings (new version)
+      description: |
+        `tenant.settings.write` (no step-up). Validates and stores the full
+        document as version `current + 1`; stored versions never change.
+        Validation errors use the document's dot paths
+        (`company.tax_number`, `reservation.payment_hold_minutes`, …): the tax
+        number must be a checksum-valid VKN (10 digits) or TCKN (11 digits).
+        With `base_version`, a save on top of a newer version answers
+        `409 CONFLICT` (detail `base_version`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationSettingsSaveRequest"
+      responses:
+        "200":
+          description: Stored version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationSettingsVersion"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/settings/versions/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSettingsVersionsMeta
+      summary: Settings version history metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/settings/versions:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSettingsVersions
+      summary: Settings version history
+      description: Stored versions, newest first by default (`tenant.settings.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: sort
+          in: query
+          description: "`version` or `-version` (default)."
+          schema: { type: string, example: "-version" }
+      responses:
+        "200":
+          description: Version page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationSettingsVersionPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/settings/versions/{version}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSettingsVersion
+      summary: Get one settings version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: version
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationSettingsVersion"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/branches/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranchesMeta
+      summary: Branches list metadata
+      description: Table contract of `GET /v1/tenant/branches` (`tenant.branches.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/branches/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranchesFacets
+      summary: Branches faceted filter options
+      description: Distinct values (with row counts) for the faceted `city` filter.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/branches:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranches
+      summary: List branches of the organization
+      description: |
+        Branches of the `X-Organization` organization (`tenant.branches.read`).
+        `q` searches code, name, city, district, phone and email. A member with
+        `branch_scope` = `selected` only sees (and exports, bulk-edits and
+        finds in search) its own branches; any other branch answers `404`, and
+        creating a branch answers `403`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `code`, `name`, `city`, `prep_minutes`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default `-created_at`."
+          schema: { type: string, example: "-created_at" }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: city
+          in: query
+          description: "Exact city; comma-separate or repeat for several (see `/v1/tenant/branches/facets`)"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Branch page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantBranch
+      summary: Create a branch
+      description: |
+        `tenant.branches.write`. `code` is upper-cased and must be unique among
+        the organization's branches (`409 CONFLICT` with a `code` detail).
+        Omitted `working_hours` default to weekdays 09:00–18:00, Saturday
+        09:00–14:00, Sunday closed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BranchCreateRequest"
+      responses:
+        "201":
+          description: Created branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranch"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/branches/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantBranchesExport
+      summary: Export branches
+      description: |
+        Queues an export of the organization's branches (`tenant.branches.export`).
+        `query` honours `q`, `city` and `is_active`. Poll
+        `GET /v1/tenant/exports/{uuid}` and download from `download_url`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/branches/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantBranchesImport
+      summary: Upload a branches import file
+      description: |
+        Creates an import job (`tenant.branches.import`). Rows create new
+        branches or update the branch with the same `code`. Continue with
+        `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/branches/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranchesImportSample
+      summary: Download a branches import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/branches/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantBranchesBulk
+      summary: Run a bulk action on branches
+      description: |
+        Actions `activate` (`tenant.branches.bulk.activate`) and `deactivate`
+        (`tenant.branches.bulk.deactivate`), both reversible. Targets are
+        resolved inside the organization only; `scope=query` honours `q`,
+        `city` and `is_active`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/branches/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranch
+      summary: Get a branch
+      description: A uuid of another organization answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranch"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantBranch
+      summary: Update a branch
+      description: "`tenant.branches.write`. Omitted fields are unchanged; `latitude` / `longitude` accept `null`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BranchPatchRequest"
+      responses:
+        "200":
+          description: Updated branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranch"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantBranch
+      summary: Delete a branch (soft)
+      description: "`tenant.branches.write`. The code becomes free for a new branch."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/branches/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranchActivity
+      summary: Activity of a branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/branches/{uuid}/service-points:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBranchServicePoints
+      summary: List service points of a branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Service points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeServicePointList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantBranchServicePoint
+      summary: Add a service point to a branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePointCreateRequest"
+      responses:
+        "201":
+          description: Created service point
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeServicePoint"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/branches/{uuid}/service-points/{pointUuid}:
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantBranchServicePoint
+      summary: Update a service point
+      description: A point of another branch answers `404`. `working_hours = null` follows the branch hours.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/PointUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePointPatchRequest"
+      responses:
+        "200":
+          description: Updated service point
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeServicePoint"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantBranchServicePoint
+      summary: Delete a service point
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/PointUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/notifications:
+    get:
+      tags: [Tenant]
+      operationId: getTenantNotifications
+      summary: List own inbox in the organization panel
+      description: >-
+        Requires `notifications.read` and membership of the `X-Organization`
+        organization. Lists the caller's notifications of that organization
+        (tenant export / import / bulk jobs) plus the ones without an
+        organization; other organizations' notifications never appear. Same
+        query parameters as `GET /v1/notifications`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Sort"
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: channel
+          in: query
+          schema: { type: string }
+        - name: unread
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Page of notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeNotificationPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/notifications/unread-count:
+    get:
+      tags: [Tenant]
+      operationId: getTenantNotificationsUnreadCount
+      summary: Unread in-app count in the organization panel
+      description: Same scope as `GET /v1/tenant/notifications`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeUnreadCount"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/notifications/read-all:
+    post:
+      tags: [Tenant]
+      operationId: postTenantNotificationsReadAll
+      summary: Mark all in-app as read in the organization panel
+      description: >-
+        Same scope as `GET /v1/tenant/notifications`: other organizations'
+        notifications stay unread.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/exports/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantExportJob
+      summary: Get an export job of the organization
+      description: Only the caller's jobs in the `X-Organization` organization are visible.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Export job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/exports/{uuid}/download:
+    get:
+      tags: [Tenant]
+      operationId: getTenantExportDownload
+      summary: Download a completed export of the organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Export file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/imports/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantImportJob
+      summary: Get an import job of the organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/imports/{uuid}/mapping:
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantImportMapping
+      summary: Save the column mapping of an import
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportMappingRequest"
+      responses:
+        "200":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/imports/{uuid}/preview:
+    post:
+      tags: [Tenant]
+      operationId: postTenantImportPreview
+      summary: Dry-run an import
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Import job with preview summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/imports/{uuid}/confirm:
+    post:
+      tags: [Tenant]
+      operationId: postTenantImportConfirm
+      summary: Apply a previewed import
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "202":
+          description: Import queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/imports/{uuid}/rollback:
+    post:
+      tags: [Tenant]
+      operationId: postTenantImportRollback
+      summary: Roll back an applied import
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Rolled back job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/bulk/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantBulkJob
+      summary: Get a bulk job of the organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Bulk job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/bulk/{uuid}/rollback:
+    post:
+      tags: [Tenant]
+      operationId: postTenantBulkJobRollback
+      summary: Roll back a bulk job of the organization
+      description: Needs the tenant permission of the job's action.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Rolled back job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/search/specs:
+    get:
+      tags: [Tenant, Search]
+      operationId: getTenantSearchSpecs
+      summary: Searchable record specs of the organization
+      description: Tenant specs (`scope=tenant`) the caller may search in this organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Specs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSearchSpecs"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/search:
+    get:
+      tags: [Tenant, Search]
+      operationId: getTenantSearch
+      summary: Search the organization's records (Cmd+K)
+      description: Hits are filtered by `organization_id` in the index; Meilisearch is never exposed to the browser.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: spec
+          in: query
+          schema: { type: string, example: branches }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Hits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSearchHits"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3168,6 +4400,14 @@ components:
       in: path
       required: true
       description: User UUID
+      schema:
+        type: string
+        format: uuid
+    PointUUID:
+      name: pointUuid
+      in: path
+      required: true
+      description: Service point UUID
       schema:
         type: string
         format: uuid
@@ -3251,6 +4491,369 @@ components:
 
   schemas:
 
+    DayHours:
+      type: object
+      required: [closed, open, close]
+      properties:
+        closed: { type: boolean }
+        open: { type: string, description: "HH:MM (24h); empty when closed", example: "09:00" }
+        close: { type: string, description: "HH:MM (24h), after open; empty when closed", example: "18:00" }
+
+    WeeklyHours:
+      type: object
+      description: Weekly schedule, Monday first.
+      required: [mon, tue, wed, thu, fri, sat, sun]
+      properties:
+        mon: { $ref: "#/components/schemas/DayHours" }
+        tue: { $ref: "#/components/schemas/DayHours" }
+        wed: { $ref: "#/components/schemas/DayHours" }
+        thu: { $ref: "#/components/schemas/DayHours" }
+        fri: { $ref: "#/components/schemas/DayHours" }
+        sat: { $ref: "#/components/schemas/DayHours" }
+        sun: { $ref: "#/components/schemas/DayHours" }
+
+    HolidayException:
+      type: object
+      description: Overrides the weekly schedule on one date.
+      required: [date, closed, open, close, note]
+      properties:
+        date: { type: string, format: date, example: "2026-01-01" }
+        closed: { type: boolean }
+        open: { type: string, example: "" }
+        close: { type: string, example: "" }
+        note: { type: string, example: Yılbaşı }
+
+    Branch:
+      type: object
+      required:
+        - uuid
+        - code
+        - name
+        - address
+        - city
+        - district
+        - latitude
+        - longitude
+        - phone
+        - email
+        - working_hours
+        - holiday_exceptions
+        - prep_minutes
+        - is_active
+        - service_points_count
+        - created_at
+        - updated_at
+      properties:
+        uuid: { type: string, format: uuid }
+        code: { type: string, example: MRK }
+        name: { type: string, example: Merkez }
+        address: { type: string }
+        city: { type: string, example: İstanbul }
+        district: { type: string, example: Kadıköy }
+        latitude: { type: [number, "null"], format: double }
+        longitude: { type: [number, "null"], format: double }
+        phone: { type: string }
+        email: { type: string }
+        working_hours: { $ref: "#/components/schemas/WeeklyHours" }
+        holiday_exceptions:
+          type: array
+          items: { $ref: "#/components/schemas/HolidayException" }
+        prep_minutes: { type: integer, description: Vehicle preparation time in minutes, example: 60 }
+        is_active: { type: boolean }
+        service_points_count: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    BranchPatchRequest:
+      type: object
+      additionalProperties: false
+      properties: &branchWriteProperties
+        code: { type: string, maxLength: 32, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$" }
+        name: { type: string, maxLength: 255 }
+        address: { type: string, maxLength: 1000 }
+        city: { type: string, maxLength: 128 }
+        district: { type: string, maxLength: 128 }
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+        phone: { type: string, maxLength: 32 }
+        email: { type: string, maxLength: 255 }
+        working_hours: { $ref: "#/components/schemas/WeeklyHours" }
+        holiday_exceptions:
+          type: array
+          maxItems: 366
+          items: { $ref: "#/components/schemas/HolidayException" }
+        prep_minutes: { type: integer, minimum: 0, maximum: 10080 }
+        is_active: { type: boolean }
+
+    BranchCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties: *branchWriteProperties
+
+    BranchPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Branch" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    Facet:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        count: { type: integer, format: int64 }
+
+    BranchFacets:
+      type: object
+      required: [city]
+      properties:
+        city:
+          type: array
+          items: { $ref: "#/components/schemas/Facet" }
+
+    ServicePoint:
+      type: object
+      required: [uuid, branch_uuid, type, name, description, extra_fee, working_hours, online_selectable, is_active, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        branch_uuid: { type: string, format: uuid }
+        type: { type: string, enum: [office, airport, address_zone, hotel] }
+        name: { type: string }
+        description: { type: string, description: "Street address, or the zone description of an address_zone point" }
+        extra_fee: { type: string, description: Decimal with two fraction digits, example: "150.00" }
+        working_hours:
+          description: "`null` = the branch working hours apply"
+          oneOf:
+            - $ref: "#/components/schemas/WeeklyHours"
+            - type: "null"
+        online_selectable: { type: boolean }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ServicePointPatchRequest:
+      type: object
+      additionalProperties: false
+      properties: &servicePointWriteProperties
+        type: { type: string, enum: [office, airport, address_zone, hotel] }
+        name: { type: string, maxLength: 255 }
+        description: { type: string, maxLength: 2000 }
+        extra_fee:
+          description: Non-negative amount, at most 2 decimals (number or decimal string)
+          oneOf:
+            - type: number
+              minimum: 0
+            - type: string
+              pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$"
+        working_hours:
+          oneOf:
+            - $ref: "#/components/schemas/WeeklyHours"
+            - type: "null"
+        online_selectable: { type: boolean }
+        is_active: { type: boolean }
+
+    ServicePointCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [type, name]
+      properties: *servicePointWriteProperties
+
+    ServicePointList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ServicePoint" }
+
+    BranchActivityActor:
+      type: object
+      required: [uuid, name, surname, email]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
+
+    BranchActivityEntry:
+      type: object
+      required: [uuid, action, payload, actor, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        action: { type: string, example: branches.updated }
+        payload: { type: object, additionalProperties: true }
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/BranchActivityActor"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    BranchActivityPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BranchActivityEntry" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    ExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format: { type: string, enum: [pdf, xlsx, csv, json] }
+        query:
+          type: object
+          description: List filters of the resource (for branches `q`, `city`, `is_active`)
+          additionalProperties: { type: string }
+        locale: { type: string, enum: [tr, en], default: tr }
+
+    ExportJob:
+      type: object
+      required: [uuid, resource, format, status, row_count, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        resource: { type: string, example: tenant.branches }
+        format: { type: string, enum: [pdf, xlsx, csv, json] }
+        status: { type: string, enum: [queued, processing, completed, failed] }
+        row_count: { type: integer }
+        error: { type: [string, "null"] }
+        download_url: { type: [string, "null"], example: /v1/tenant/exports/00000000-0000-0000-0000-000000000000/download }
+        created_at: { type: string, format: date-time }
+
+    ImportUploadForm:
+      type: object
+      required: [file]
+      properties:
+        file: { type: string, format: binary }
+        format: { type: string, enum: [json, xlsx, csv, tsv], default: csv }
+        locale: { type: string, enum: [tr, en], default: tr }
+
+    ImportMappingRequest:
+      type: object
+      required: [mapping]
+      properties:
+        mapping:
+          type: object
+          description: Source column → field key
+          additionalProperties: { type: string }
+        defaults:
+          type: object
+          additionalProperties: { type: string }
+
+    ImportPreviewSummary:
+      type: object
+      required: [total, valid, invalid]
+      properties:
+        total: { type: integer }
+        valid: { type: integer }
+        invalid: { type: integer }
+        rows:
+          type: [array, "null"]
+          items:
+            type: object
+            required: [index, data]
+            properties:
+              index: { type: integer }
+              data: { type: object, additionalProperties: true }
+        errors:
+          type: [array, "null"]
+          items:
+            type: object
+            required: [index, error]
+            properties:
+              index: { type: integer }
+              field: { type: string }
+              error: { type: string }
+
+    ImportJob:
+      type: object
+      required: [uuid, resource, format, status, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        resource: { type: string, example: tenant.branches }
+        format: { type: string, enum: [json, xlsx, csv, tsv] }
+        status: { type: string, enum: [uploaded, mapped, previewed, queued, applying, applied, failed, rolled_back] }
+        mapping: { type: object, additionalProperties: { type: string } }
+        defaults: { type: object, additionalProperties: { type: string } }
+        preview_summary: { $ref: "#/components/schemas/ImportPreviewSummary" }
+        error: { type: [string, "null"] }
+        rollback_until: { type: [string, "null"], format: date-time }
+        applied_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    EnvelopeBranch:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Branch" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBranchPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BranchPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBranchFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BranchFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeServicePoint:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ServicePoint" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeServicePointList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ServicePointList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeBranchActivityPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/BranchActivityPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeExportJob:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ExportJob" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeImportJob:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ImportJob" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     TenantOrganization:
       type: object
       required: [uuid, slug, name, status, access_ends_at]
@@ -3264,19 +4867,364 @@ components:
           format: date-time
           description: End of the access window; `null` = no end
 
+    TenantRoleRef:
+      type: object
+      required: [uuid, key, name, is_template]
+      properties:
+        uuid: { type: string, format: uuid }
+        key: { type: string, example: sube_yoneticisi }
+        name: { type: string, example: Şube Yöneticisi }
+        is_template: { type: boolean }
+
+    BranchRef:
+      type: object
+      required: [uuid, code, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        code: { type: string, example: MRK }
+        name: { type: string, example: Merkez }
+
+    TenantMemberUser:
+      type: object
+      required: [uuid, email, name, surname, status]
+      properties:
+        uuid: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        surname: { type: string }
+        status: { type: string }
+
+    TenantMember:
+      type: object
+      required: [user, roles, branch_scope, branches, last_login_at, created_at, updated_at]
+      properties:
+        user: { $ref: "#/components/schemas/TenantMemberUser" }
+        roles:
+          type: array
+          description: Every role of the member; permissions are their union
+          items: { $ref: "#/components/schemas/TenantRoleRef" }
+        branch_scope:
+          type: string
+          enum: [all, selected]
+          description: "`all` = every branch; `selected` = only `branches`"
+        branches:
+          type: array
+          description: Granted branches (empty unless `branch_scope` is `selected`)
+          items: { $ref: "#/components/schemas/BranchRef" }
+        last_login_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantMemberPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantMember" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantMemberPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        role_uuids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        branch_scope: { type: string, enum: [all, selected] }
+        branch_uuids:
+          type: array
+          description: Required with `branch_scope` = `selected`
+          items: { type: string, format: uuid }
+
+    TenantRole:
+      type: object
+      required: [uuid, key, name, description, is_template, member_count, permissions, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        key: { type: string, example: gece_vardiyasi }
+        name: { type: string }
+        description: { type: string }
+        is_template:
+          type: boolean
+          description: Template roles are shared by every organization and read-only
+        member_count: { type: integer, format: int64 }
+        permissions:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantRolePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantRole" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantRoleRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          description: "Create only: `^[a-z][a-z0-9_]{1,63}$`; defaults to the slugified name"
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        permissions:
+          type: array
+          items: { type: string, example: tenant.branches.read }
+
+    TenantPermission:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string, example: tenant.payment.refund }
+        name: { type: string, example: Refund payments }
+
+    TenantPermissionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantPermission" }
+
+    OrganizationCompanySettings:
+      type: object
+      required: [legal_name, tax_number, tax_office, address, phone, email]
+      properties:
+        legal_name: { type: string, maxLength: 255 }
+        tax_number:
+          type: string
+          description: Checksum-valid VKN (10 digits) or TCKN (11 digits); empty = not set
+          example: "4540536920"
+        tax_office: { type: string, maxLength: 128 }
+        address: { type: string, maxLength: 1000 }
+        phone: { type: string }
+        email: { type: string }
+
+    OrganizationReservationSettings:
+      type: object
+      required: [approval_mode, staff_review_window_minutes, payment_hold_minutes, quote_validity_minutes]
+      properties:
+        approval_mode:
+          type: string
+          enum: ["", auto, staff]
+          description: "`auto` confirms on payment, `staff` waits for an employee; empty = not configured"
+        staff_review_window_minutes: { type: [integer, "null"], minimum: 1, maximum: 10080 }
+        payment_hold_minutes: { type: [integer, "null"], minimum: 1, maximum: 10080 }
+        quote_validity_minutes: { type: [integer, "null"], minimum: 1, maximum: 43200 }
+
+    OrganizationPaymentSettings:
+      type: object
+      required: [prepayment_rule, prepayment_value, full_payment_allowed]
+      properties:
+        prepayment_rule: { type: string, enum: [none, fixed, percent] }
+        prepayment_value:
+          type: string
+          description: Decimal amount (`fixed`) or percentage (`percent`); empty for `none`
+          example: "500.00"
+        full_payment_allowed: { type: boolean }
+
+    OrganizationPolicySettings:
+      type: object
+      required: [cancellation, no_show, early_return, extension, late_return_grace_minutes, extra_hour_fee, fuel, mileage]
+      properties:
+        cancellation: { type: string }
+        no_show: { type: string }
+        early_return: { type: string }
+        extension: { type: string }
+        late_return_grace_minutes: { type: [integer, "null"], minimum: 0, maximum: 1440 }
+        extra_hour_fee: { type: string, description: "Decimal amount; empty = not charged", example: "150.00" }
+        fuel: { type: string }
+        mileage: { type: string }
+
+    OrganizationSalesChannel:
+      type: object
+      required: [code, is_active]
+      properties:
+        code: { type: string, enum: [web, widget, api, branch, yolcu360, obilet] }
+        is_active: { type: boolean }
+
+    OrganizationInvoiceItemMapping:
+      type: object
+      required: [item_type, account_code, vat_rate, description]
+      properties:
+        item_type:
+          type: string
+          enum: [rental, extra_service, insurance, delivery, fuel, mileage, late_return, damage, deposit]
+        account_code: { type: string }
+        vat_rate: { type: string, description: "Percentage; empty = use the default VAT rate" }
+        description: { type: string }
+
+    OrganizationTaxSettings:
+      type: object
+      required: [default_vat_rate, invoice_item_mappings]
+      properties:
+        default_vat_rate:
+          type: string
+          description: Percentage; no legal rate is built in, so it stays empty until set
+        invoice_item_mappings:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationInvoiceItemMapping" }
+
+    OrganizationSettings:
+      type: object
+      required: [company, reservation, payment, policies, sales_channels, tax]
+      properties:
+        company: { $ref: "#/components/schemas/OrganizationCompanySettings" }
+        reservation: { $ref: "#/components/schemas/OrganizationReservationSettings" }
+        payment: { $ref: "#/components/schemas/OrganizationPaymentSettings" }
+        policies: { $ref: "#/components/schemas/OrganizationPolicySettings" }
+        sales_channels:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationSalesChannel" }
+        tax: { $ref: "#/components/schemas/OrganizationTaxSettings" }
+
+    OrganizationSettingsActor:
+      type: object
+      required: [uuid, name, surname, email]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        surname: { type: string }
+        email: { type: string }
+
+    OrganizationSettingsVersion:
+      type: object
+      required: [version, settings, ready_for_online_sales, missing, created_at, created_by]
+      properties:
+        version: { type: integer, description: "0 = nothing saved yet (defaults)" }
+        settings: { $ref: "#/components/schemas/OrganizationSettings" }
+        ready_for_online_sales: { type: boolean }
+        missing:
+          type: array
+          description: Dot paths of the settings still required before online sales
+          items: { type: string, example: reservation.payment_hold_minutes }
+        created_at: { type: [string, "null"], format: date-time }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/OrganizationSettingsActor"
+            - type: "null"
+
+    OrganizationSettingsVersionSummary:
+      type: object
+      required: [version, ready_for_online_sales, created_at, created_by]
+      properties:
+        version: { type: integer }
+        ready_for_online_sales: { type: boolean }
+        created_at: { type: string, format: date-time }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/OrganizationSettingsActor"
+            - type: "null"
+
+    OrganizationSettingsVersionPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationSettingsVersionSummary" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    OrganizationSettingsSaveRequest:
+      type: object
+      required: [settings]
+      additionalProperties: false
+      properties:
+        settings: { $ref: "#/components/schemas/OrganizationSettings" }
+        base_version:
+          type: [integer, "null"]
+          description: Current version the edit started from; a newer stored version answers `409`
+
+    EnvelopeTenantMember:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantMember" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantMemberPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantMemberPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantRole:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantRole" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantRolePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantRolePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantPermissionList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantPermissionList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganizationSettingsVersion:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationSettingsVersion" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeOrganizationSettingsVersionPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationSettingsVersionPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     TenantContext:
       type: object
-      required: [organization, role, permissions]
+      required: [organization, role, roles, permissions, branch_scope]
       properties:
         organization: { $ref: "#/components/schemas/TenantOrganization" }
         role:
           type: string
-          description: Caller's tenant role key in this organization (`owner`, `admin`, `member` or a custom key)
+          description: Caller's primary tenant role key in this organization (`owner`, `admin`, `member`, a Rentopia template or a custom key)
           example: owner
+        roles:
+          type: array
+          description: Every tenant role key of the caller in this organization
+          items: { type: string }
         permissions:
           type: array
-          description: "`tenant.*` permission slugs granted in this organization only"
+          description: "`tenant.*` permission slugs granted in this organization only: the union over `roles`"
           items: { type: string }
+        branch_scope:
+          type: string
+          enum: [all, selected]
+          description: "`selected`: branch-bound data (branches and later reservations, vehicles, …) is limited to the caller's branches; other branches answer `404`"
 
     EnvelopeTenantContext:
       type: object
@@ -3300,13 +5248,17 @@ components:
         filterable_fields:
           type: array
           items: { type: string }
+        scope:
+          type: [string, "null"]
+          enum: [tenant, null]
+          description: "`tenant` specs hold organization records and are served by `/v1/tenant/search` only"
 
     SearchHit:
       type: object
       required: [spec, id, title, href]
       properties:
         spec: { type: string }
-        id: { type: string, format: uuid }
+        id: { type: string, description: "Record uuid; tenant hits use `<organization id>_<uuid>`" }
         title: { type: string }
         subtitle: { type: [string, "null"] }
         href: { type: string }
@@ -3976,6 +5928,13 @@ components:
         updated_at: { type: string, format: date-time }
         user:
           $ref: "#/components/schemas/NotificationUser"
+        organization_uuid:
+          type: string
+          format: uuid
+          description: >-
+            Organization of the notification (tenant engine jobs). Absent for
+            platform and personal notifications. A tenant export's
+            `action_url` is the tenant page `/t/{slug}/exports/{uuid}/download`.
 
     NotificationUser:
       type: object

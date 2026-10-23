@@ -1,6 +1,6 @@
 "use client";
 
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, get, useFormContext } from "react-hook-form";
 
 import {
   Field,
@@ -31,7 +31,7 @@ export function AppSwitch({
     control,
     formState: { errors },
   } = useFormContext();
-  const error = errors[name]?.message as string | undefined;
+  const error = get(errors, name)?.message as string | undefined;
 
   return (
     <Field

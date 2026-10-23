@@ -14,6 +14,7 @@ export { TenantOverviewPage } from "./components/tenant-overview-page";
 export { OrganizationPickerPage } from "./components/organization-picker-page";
 export { NoAccessPage } from "./components/no-access-page";
 export { tenantRoleLabel } from "./lib/role-label";
+export { tenantLiveList, tenantResourceChannel } from "./lib/live";
 export {
   tenantKeys,
   tenantService,

@@ -10,6 +10,9 @@ export type NotificationAction = {
 
 const EXPORT_DOWNLOAD =
   /^\/v1\/platform\/exports\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/download\/?$/i;
+/** Tenant export download page: `/t/{slug}/exports/{uuid}/download`. */
+const TENANT_EXPORT_DOWNLOAD =
+  /^\/t\/([^/?#]+)\/exports\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/download\/?$/i;
 const PLATFORM_API_ITEM =
   /^\/v1\/platform\/([a-z0-9-]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/.*)?$/i;
 
@@ -30,11 +33,38 @@ function platformRouteFor(resource: string, uuid: string): string | null {
   }
 }
 
+/**
+ * Organization slug + export job of a tenant export download link, or null.
+ * The download goes through `/v1/tenant/exports/{uuid}/download` with the
+ * slug as `X-Organization`.
+ */
+export function tenantExportDownload(
+  href: string,
+): { slug: string; uuid: string } | null {
+  const match = TENANT_EXPORT_DOWNLOAD.exec(href);
+  if (!match?.[1] || !match[2]) return null;
+  try {
+    return { slug: decodeURIComponent(match[1]), uuid: match[2] };
+  } catch {
+    return null;
+  }
+}
+
 /** Primary + optional companion actions for a notification `action_url`. */
 export function notificationActions(
   actionUrl?: string | null,
 ): NotificationAction[] {
   if (!actionUrl) return [];
+
+  if (tenantExportDownload(actionUrl)) {
+    return [
+      {
+        kind: "download",
+        href: actionUrl,
+        labelKey: "notifications.actions.download",
+      },
+    ];
+  }
 
   const download = EXPORT_DOWNLOAD.exec(actionUrl);
   if (download?.[1]) {

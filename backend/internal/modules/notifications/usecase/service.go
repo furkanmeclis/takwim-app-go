@@ -36,7 +36,7 @@ type Querier interface {
 	GetNotificationByID(ctx context.Context, id int64) (db.Notification, error)
 	ListNotificationsForUser(ctx context.Context, arg db.ListNotificationsForUserParams) ([]db.Notification, error)
 	CountNotificationsForUser(ctx context.Context, arg db.CountNotificationsForUserParams) (int64, error)
-	CountUnreadInappForUser(ctx context.Context, userID pgtype.Int8) (int64, error)
+	CountUnreadInappForUser(ctx context.Context, arg db.CountUnreadInappForUserParams) (int64, error)
 	ListPlatformNotifications(ctx context.Context, arg db.ListPlatformNotificationsParams) ([]db.Notification, error)
 	CountPlatformNotifications(ctx context.Context, arg db.CountPlatformNotificationsParams) (int64, error)
 	MarkNotificationProcessing(ctx context.Context, id int64) (db.Notification, error)
@@ -44,13 +44,14 @@ type Querier interface {
 	MarkNotificationSent(ctx context.Context, arg db.MarkNotificationSentParams) (db.Notification, error)
 	MarkNotificationFailed(ctx context.Context, arg db.MarkNotificationFailedParams) (db.Notification, error)
 	MarkNotificationRead(ctx context.Context, arg db.MarkNotificationReadParams) (db.Notification, error)
-	MarkAllNotificationsReadForUser(ctx context.Context, userID pgtype.Int8) (int64, error)
+	MarkAllNotificationsReadForUser(ctx context.Context, arg db.MarkAllNotificationsReadForUserParams) (int64, error)
 	InsertNotificationHistory(ctx context.Context, arg db.InsertNotificationHistoryParams) (db.NotificationHistory, error)
 	GetTemplateByCodeChannelLang(ctx context.Context, arg db.GetTemplateByCodeChannelLangParams) (db.NotificationTemplate, error)
 	GetNotificationPreferences(ctx context.Context, userID int64) (db.NotificationPreference, error)
 	UpsertNotificationPreferences(ctx context.Context, arg db.UpsertNotificationPreferencesParams) (db.NotificationPreference, error)
 	GetUserByID(ctx context.Context, id int64) (db.User, error)
 	GetUserByUUID(ctx context.Context, id uuid.UUID) (db.User, error)
+	GetOrganizationByID(ctx context.Context, id int64) (db.Organization, error)
 }
 
 // Enqueuer schedules background delivery tasks.
@@ -127,6 +128,11 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 		}
 	}
 
+	payloadIn, err := s.stampOrganization(ctx, in.OrganizationID, in.Payload)
+	if err != nil {
+		return nil, err
+	}
+
 	var out []model.Notification
 	for _, ch := range in.Channels {
 		ch = strings.TrimSpace(ch)
@@ -156,7 +162,7 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 				title = in.TemplateCode
 			}
 		}
-		payload, err := json.Marshal(withPushVars(ch, in.Payload, in.TemplateVars))
+		payload, err := json.Marshal(withPushVars(ch, payloadIn, in.TemplateVars))
 		if err != nil {
 			payload = []byte("{}")
 		}
@@ -167,19 +173,20 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 			}
 		}
 		row, err := s.q.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:       int8Ptr(in.UserID),
-			Channel:      ch,
-			Status:       model.StatusQueued,
-			Priority:     priority,
-			Title:        title,
-			Body:         body,
-			Payload:      payload,
-			ActionUrl:    textPtr(in.ActionURL),
-			Recipient:    recipient,
-			TemplateCode: pgtype.Text{String: in.TemplateCode, Valid: in.TemplateCode != ""},
-			SourceEvent:  pgtype.Text{String: in.SourceEvent, Valid: in.SourceEvent != ""},
-			ScheduledAt:  pgtype.Timestamptz{},
-			MaxAttempts:  5,
+			UserID:         int8Ptr(in.UserID),
+			Channel:        ch,
+			Status:         model.StatusQueued,
+			Priority:       priority,
+			Title:          title,
+			Body:           body,
+			Payload:        payload,
+			ActionUrl:      textPtr(in.ActionURL),
+			Recipient:      recipient,
+			TemplateCode:   pgtype.Text{String: in.TemplateCode, Valid: in.TemplateCode != ""},
+			SourceEvent:    pgtype.Text{String: in.SourceEvent, Valid: in.SourceEvent != ""},
+			ScheduledAt:    pgtype.Timestamptz{},
+			MaxAttempts:    5,
+			OrganizationID: int8Ptr(in.OrganizationID),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("create notification: %w", err)
@@ -323,26 +330,30 @@ func (s *Service) ReclaimStuck(ctx context.Context, staleMinutes int32) (int, er
 	return n, nil
 }
 
-// ListInbox returns the caller's notifications page.
-func (s *Service) ListInbox(ctx context.Context, userID int64, q apiquery.Query, status, channel string, unread *bool) (apiquery.Page[model.Notification], error) {
+// ListInbox returns the caller's notifications page. organizationID is the
+// shell the inbox is opened in: nil (platform / account shell) lists only
+// un-stamped notifications, an organization lists its own notifications plus
+// the un-stamped ones. Another organization's rows never appear.
+func (s *Service) ListInbox(ctx context.Context, userID int64, organizationID *int64, q apiquery.Query, status, channel string, unread *bool) (apiquery.Page[model.Notification], error) {
 	if err := apiquery.ValidateSort(q.Sort, apiquery.NotificationsSort); err != nil {
 		return apiquery.Page[model.Notification]{}, err
 	}
 	params := db.ListNotificationsForUserParams{
-		UserID:      pgtype.Int8{Int64: userID, Valid: true},
-		Status:      optionalText(status),
-		Channel:     optionalText(channel),
-		Unread:      optionalBool(unread),
-		Q:           optionalText(q.Q),
-		LimitCount:  q.Limit,
-		OffsetCount: q.Offset,
+		UserID:         pgtype.Int8{Int64: userID, Valid: true},
+		OrganizationID: int8Ptr(organizationID),
+		Status:         optionalText(status),
+		Channel:        optionalText(channel),
+		Unread:         optionalBool(unread),
+		Q:              optionalText(q.Q),
+		LimitCount:     q.Limit,
+		OffsetCount:    q.Offset,
 	}
 	rows, err := s.q.ListNotificationsForUser(ctx, params)
 	if err != nil {
 		return apiquery.Page[model.Notification]{}, err
 	}
 	total, err := s.q.CountNotificationsForUser(ctx, db.CountNotificationsForUserParams{
-		UserID: params.UserID, Status: params.Status, Channel: params.Channel,
+		UserID: params.UserID, OrganizationID: params.OrganizationID, Status: params.Status, Channel: params.Channel,
 		Unread: params.Unread, Q: params.Q,
 	})
 	if err != nil {
@@ -355,9 +366,12 @@ func (s *Service) ListInbox(ctx context.Context, userID int64, q apiquery.Query,
 	return apiquery.NewPage(items, total, q.Limit, q.Offset), nil
 }
 
-// UnreadCount returns unread in-app count.
-func (s *Service) UnreadCount(ctx context.Context, userID int64) (int64, error) {
-	return s.q.CountUnreadInappForUser(ctx, pgtype.Int8{Int64: userID, Valid: true})
+// UnreadCount returns the unread in-app count of the inbox scope (see
+// ListInbox for organizationID).
+func (s *Service) UnreadCount(ctx context.Context, userID int64, organizationID *int64) (int64, error) {
+	return s.q.CountUnreadInappForUser(ctx, db.CountUnreadInappForUserParams{
+		UserID: pgtype.Int8{Int64: userID, Valid: true}, OrganizationID: int8Ptr(organizationID),
+	})
 }
 
 // GetOwned returns a notification owned by userID.
@@ -420,10 +434,37 @@ func (s *Service) RedeemAction(ctx context.Context, userID int64, id uuid.UUID, 
 	return s.project(row), dest, nil
 }
 
-// MarkAllRead marks all unread in-app as read.
-func (s *Service) MarkAllRead(ctx context.Context, userID int64) error {
-	_, err := s.q.MarkAllNotificationsReadForUser(ctx, pgtype.Int8{Int64: userID, Valid: true})
+// MarkAllRead marks every unread in-app notification of the inbox scope read
+// (see ListInbox for organizationID); other organizations' rows stay unread.
+func (s *Service) MarkAllRead(ctx context.Context, userID int64, organizationID *int64) error {
+	_, err := s.q.MarkAllNotificationsReadForUser(ctx, db.MarkAllNotificationsReadForUserParams{
+		UserID: pgtype.Int8{Int64: userID, Valid: true}, OrganizationID: int8Ptr(organizationID),
+	})
 	return err
+}
+
+// PayloadOrganizationUUID is the payload key that carries the organization of
+// a stamped notification to clients (inbox rows and realtime pushes), so the
+// tenant shell can tell its own live notifications from another
+// organization's.
+const PayloadOrganizationUUID = "organization_uuid"
+
+// stampOrganization copies payload and adds the organization uuid of a
+// tenant notification. A nil organizationID returns payload unchanged.
+func (s *Service) stampOrganization(ctx context.Context, organizationID *int64, payload map[string]any) (map[string]any, error) {
+	if organizationID == nil {
+		return payload, nil
+	}
+	org, err := s.q.GetOrganizationByID(ctx, *organizationID)
+	if err != nil {
+		return nil, fmt.Errorf("notification organization: %w", err)
+	}
+	out := make(map[string]any, len(payload)+1)
+	for k, v := range payload {
+		out[k] = v
+	}
+	out[PayloadOrganizationUUID] = org.Uuid.String()
+	return out, nil
 }
 
 // GetPreferences returns preferences with defaults.
@@ -540,6 +581,13 @@ func (s *Service) project(row db.Notification) model.Notification {
 		CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
 	}
 	_ = json.Unmarshal(row.Payload, &n.Payload)
+	if row.OrganizationID.Valid {
+		if raw, ok := n.Payload[PayloadOrganizationUUID].(string); ok {
+			if id, err := uuid.Parse(raw); err == nil {
+				n.OrganizationUUID = &id
+			}
+		}
+	}
 	if row.ActionUrl.Valid {
 		dest := row.ActionUrl.String
 		n.ActionURL = &dest

@@ -8,6 +8,7 @@ import {
   ScrollText,
   Settings2,
   Shield,
+  Store,
   Upload,
   Users,
   type LucideIcon,
@@ -29,6 +30,7 @@ const ICONS: Record<string, LucideIcon> = {
   settings: Settings2,
   home: LayoutDashboard,
   github: githubNavIcon,
+  branches: Store,
 };
 
 export function resolveSearchIcon(name?: string): LucideIcon {

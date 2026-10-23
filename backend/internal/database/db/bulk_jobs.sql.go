@@ -13,7 +13,7 @@ import (
 )
 
 const countAllBulkJobs = `-- name: CountAllBulkJobs :one
-SELECT COUNT(*)::bigint FROM bulk_jobs
+SELECT COUNT(*)::bigint FROM bulk_jobs WHERE organization_id IS NULL
 `
 
 func (q *Queries) CountAllBulkJobs(ctx context.Context) (int64, error) {
@@ -24,7 +24,7 @@ func (q *Queries) CountAllBulkJobs(ctx context.Context) (int64, error) {
 }
 
 const countBulkJobsForActor = `-- name: CountBulkJobsForActor :one
-SELECT COUNT(*)::bigint FROM bulk_jobs WHERE actor_id = $1
+SELECT COUNT(*)::bigint FROM bulk_jobs WHERE actor_id = $1 AND organization_id IS NULL
 `
 
 func (q *Queries) CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error) {
@@ -35,18 +35,19 @@ func (q *Queries) CountBulkJobsForActor(ctx context.Context, actorID int64) (int
 }
 
 const createBulkJob = `-- name: CreateBulkJob :one
-INSERT INTO bulk_jobs (resource, action, actor_id, locale, status, target_json)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO bulk_jobs (resource, action, actor_id, locale, status, target_json, organization_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, uuid, resource, action, actor_id, locale, status, target_json, result_json, error, rollback_until, applied_at, created_at, updated_at, organization_id
 `
 
 type CreateBulkJobParams struct {
-	Resource   string `json:"resource"`
-	Action     string `json:"action"`
-	ActorID    int64  `json:"actor_id"`
-	Locale     string `json:"locale"`
-	Status     string `json:"status"`
-	TargetJson []byte `json:"target_json"`
+	Resource       string      `json:"resource"`
+	Action         string      `json:"action"`
+	ActorID        int64       `json:"actor_id"`
+	Locale         string      `json:"locale"`
+	Status         string      `json:"status"`
+	TargetJson     []byte      `json:"target_json"`
+	OrganizationID pgtype.Int8 `json:"organization_id"`
 }
 
 func (q *Queries) CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error) {
@@ -57,6 +58,7 @@ func (q *Queries) CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (B
 		arg.Locale,
 		arg.Status,
 		arg.TargetJson,
+		arg.OrganizationID,
 	)
 	var i BulkJob
 	err := row.Scan(
@@ -171,6 +173,7 @@ func (q *Queries) InsertBulkChange(ctx context.Context, arg InsertBulkChangePara
 
 const listAllBulkJobs = `-- name: ListAllBulkJobs :many
 SELECT id, uuid, resource, action, actor_id, locale, status, target_json, result_json, error, rollback_until, applied_at, created_at, updated_at, organization_id FROM bulk_jobs
+WHERE organization_id IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $1
 `
@@ -253,7 +256,7 @@ func (q *Queries) ListBulkChangesForJob(ctx context.Context, jobID int64) ([]Bul
 
 const listBulkJobsForActor = `-- name: ListBulkJobsForActor :many
 SELECT id, uuid, resource, action, actor_id, locale, status, target_json, result_json, error, rollback_until, applied_at, created_at, updated_at, organization_id FROM bulk_jobs
-WHERE actor_id = $1
+WHERE actor_id = $1 AND organization_id IS NULL
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $2
 `

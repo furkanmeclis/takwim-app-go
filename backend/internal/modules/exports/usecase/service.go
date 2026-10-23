@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
@@ -15,6 +16,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/i18n"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/queue"
 	"github.com/google/uuid"
@@ -48,6 +50,16 @@ type Service struct {
 	activity *activity.Recorder
 	log      *slog.Logger
 	syncMode bool
+	// scopes re-resolves the requester's membership for tenant jobs
+	// (permissions and branch scope); see orgctx.WithJobScope.
+	scopes orgctx.JobScopeLoader
+}
+
+// SetJobScopeLoader makes tenant jobs run with the requester's current
+// organization scope (branch scope included) instead of the bare
+// organization id.
+func (s *Service) SetJobScopeLoader(l orgctx.JobScopeLoader) {
+	s.scopes = l
 }
 
 // New creates an export service.
@@ -95,6 +107,10 @@ func (s *Service) RequestExport(
 		return ExportJobView{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
 	_ = adapter
+	orgID, err := orgctx.EngineScope(ctx, resource)
+	if err != nil {
+		return ExportJobView{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
 	if format != ioengine.ExportPDF && format != ioengine.ExportXLSX && format != ioengine.ExportCSV && format != ioengine.ExportJSON {
 		return ExportJobView{}, fmt.Errorf("%w: invalid format", ErrInvalidRequest)
 	}
@@ -103,6 +119,7 @@ func (s *Service) RequestExport(
 	row, err := s.q.CreateExportJob(ctx, db.CreateExportJobParams{
 		Resource: resource, ActorID: actorID, Format: string(format),
 		QueryJson: qb, Locale: locale, ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+		OrganizationID: orgID,
 	})
 	if err != nil {
 		return ExportJobView{}, err
@@ -135,6 +152,15 @@ func (s *Service) ProcessExport(ctx context.Context, jobID int64) error {
 	job, err := s.q.MarkExportJobProcessing(ctx, jobID)
 	if err != nil {
 		return err
+	}
+	if job.OrganizationID.Valid {
+		// Tenant job: adapters read the organization (and the requester's
+		// branch scope) from the context.
+		scoped, err := orgctx.WithJobScope(ctx, s.scopes, job.OrganizationID.Int64, job.ActorID)
+		if err != nil {
+			return s.fail(ctx, jobID, err.Error())
+		}
+		ctx = scoped
 	}
 	adapter, err := s.registry.Get(job.Resource)
 	if err != nil {
@@ -177,13 +203,14 @@ func (s *Service) ProcessExport(ctx context.Context, jobID int64) error {
 		return err
 	}
 	if s.notifier != nil {
-		dl := fmt.Sprintf("/v1/platform/exports/%s/download", job.Uuid.String())
+		dl := s.downloadLink(ctx, job)
 		uid := job.ActorID
 		loc := i18n.Normalize(job.Locale)
 		_, _ = s.notifier.Enqueue(ctx, notifmodel.EnqueueInput{
 			UserID: &uid, Channels: []string{notifmodel.ChannelInapp},
-			TemplateCode: "exports.ready", Language: job.Locale,
-			ActionURL: &dl,
+			OrganizationID: jobOrganization(job.OrganizationID),
+			TemplateCode:   "exports.ready", Language: job.Locale,
+			ActionURL: dl,
 			TemplateVars: map[string]string{
 				"resource": i18n.ResourceLabel(loc, job.Resource),
 				"format":   i18n.ExportFormatLabel(loc, job.Format),
@@ -195,6 +222,41 @@ func (s *Service) ProcessExport(ctx context.Context, jobID int64) error {
 	return nil
 }
 
+// downloadLink is the action link of the "export ready" notification.
+// Platform exports download straight from the API. Tenant downloads need the
+// X-Organization header, which a link cannot carry, so they point at the
+// tenant shell page /t/{slug}/exports/{uuid}/download: it downloads the file
+// through /v1/tenant/exports/{uuid}/download with the organization of the URL
+// and works the same from the inbox, a live card or a push notification.
+func (s *Service) downloadLink(ctx context.Context, job db.ExportJob) *string {
+	if !job.OrganizationID.Valid {
+		u := fmt.Sprintf("/v1/platform/exports/%s/download", job.Uuid.String())
+		return &u
+	}
+	org, err := s.q.GetOrganizationByID(ctx, job.OrganizationID.Int64)
+	if err != nil {
+		s.log.Warn("export_notification_organization_failed", "error", err)
+		return nil
+	}
+	u := TenantDownloadPath(org.Slug, job.Uuid)
+	return &u
+}
+
+// TenantDownloadPath is the tenant shell page that downloads a finished
+// export of an organization.
+func TenantDownloadPath(orgSlug string, jobUUID uuid.UUID) string {
+	return "/t/" + url.PathEscape(orgSlug) + "/exports/" + jobUUID.String() + "/download"
+}
+
+// jobOrganization stamps job notifications with the job's organization.
+func jobOrganization(id pgtype.Int8) *int64 {
+	if !id.Valid {
+		return nil
+	}
+	v := id.Int64
+	return &v
+}
+
 func (s *Service) fail(ctx context.Context, jobID int64, msg string) error {
 	_, _ = s.q.MarkExportJobFailed(ctx, db.MarkExportJobFailedParams{ID: jobID, Error: pgtype.Text{String: msg, Valid: true}})
 	return errors.New(msg)
@@ -203,7 +265,7 @@ func (s *Service) fail(ctx context.Context, jobID int64, msg string) error {
 // GetJob returns a job if actor may access it.
 func (s *Service) GetJob(ctx context.Context, jobUUID uuid.UUID, actorID int64, admin bool) (ExportJobView, error) {
 	row, err := s.q.GetExportJobByUUID(ctx, jobUUID)
-	if err != nil {
+	if err != nil || !orgctx.SameEngineScope(ctx, row.OrganizationID) {
 		return ExportJobView{}, ErrNotFound
 	}
 	if !admin && row.ActorID != actorID {
@@ -239,7 +301,7 @@ func (s *Service) ListJobs(ctx context.Context, actorID int64, admin bool, limit
 // Download opens export file stream.
 func (s *Service) Download(ctx context.Context, jobUUID uuid.UUID, actorID int64, admin bool) (io.ReadCloser, string, string, error) {
 	row, err := s.q.GetExportJobByUUID(ctx, jobUUID)
-	if err != nil {
+	if err != nil || !orgctx.SameEngineScope(ctx, row.OrganizationID) {
 		return nil, "", "", ErrNotFound
 	}
 	if !admin && row.ActorID != actorID {
@@ -264,7 +326,11 @@ func mapExportJob(row db.ExportJob) ExportJobView {
 	}
 	var dl *string
 	if row.Status == "completed" {
-		u := fmt.Sprintf("/v1/platform/exports/%s/download", row.Uuid.String())
+		prefix := "/v1/platform/exports/"
+		if row.OrganizationID.Valid {
+			prefix = "/v1/tenant/exports/"
+		}
+		u := prefix + row.Uuid.String() + "/download"
 		dl = &u
 	}
 	return ExportJobView{
