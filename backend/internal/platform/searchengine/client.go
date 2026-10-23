@@ -71,10 +71,17 @@ func (c *Client) EnsureIndex(ctx context.Context, spec Spec) error {
 	if len(searchable) == 0 {
 		searchable = []string{"title", "subtitle", "keywords"}
 	}
+	filterable := append([]string{"spec"}, spec.Filterable...)
+	if spec.Scope == ScopeTenant {
+		filterable = append(filterable, "organization_id")
+		if spec.BranchScoped {
+			filterable = append(filterable, "branch_ids")
+		}
+	}
 	settings := &meilisearch.Settings{
 		SearchableAttributes: searchable,
 		DisplayedAttributes:  []string{"id", "spec", "title", "subtitle", "keywords", "href", "icon"},
-		FilterableAttributes: append([]string{"spec"}, spec.Filterable...),
+		FilterableAttributes: filterable,
 	}
 	task, err = c.client.Index(uid).UpdateSettingsWithContext(ctx, settings)
 	if err != nil {
@@ -120,8 +127,35 @@ func (c *Client) DeleteDocument(ctx context.Context, spec, id string) error {
 
 // Search queries one or more spec indexes.
 func (c *Client) Search(ctx context.Context, specs []string, q string, limit int) ([]Hit, error) {
+	return c.SearchFiltered(ctx, specs, q, limit, "")
+}
+
+// SearchOrganization queries tenant spec indexes for one organization only.
+func (c *Client) SearchOrganization(ctx context.Context, specs []string, q string, limit int, organizationID int64) ([]Hit, error) {
+	if organizationID <= 0 {
+		return nil, fmt.Errorf("searchengine: organization id is required")
+	}
+	return c.SearchFiltered(ctx, specs, q, limit, fmt.Sprintf("organization_id = %d", organizationID))
+}
+
+// SearchFiltered queries one or more spec indexes with an optional
+// Meilisearch filter expression (trusted, server-built).
+func (c *Client) SearchFiltered(ctx context.Context, specs []string, q string, limit int, filter string) ([]Hit, error) {
+	filters := make([]string, len(specs))
+	for i := range filters {
+		filters[i] = filter
+	}
+	return c.SearchPerSpec(ctx, specs, filters, q, limit)
+}
+
+// SearchPerSpec queries spec indexes with one trusted filter per spec
+// (filters[i] applies to specs[i]; empty = no filter).
+func (c *Client) SearchPerSpec(ctx context.Context, specs, filters []string, q string, limit int) ([]Hit, error) {
 	if !c.Enabled() {
 		return nil, nil
+	}
+	if len(filters) != len(specs) {
+		return nil, fmt.Errorf("searchengine: %d filters for %d specs", len(filters), len(specs))
 	}
 	if limit <= 0 {
 		limit = 20
@@ -130,21 +164,25 @@ func (c *Client) Search(ctx context.Context, specs []string, q string, limit int
 		limit = 50
 	}
 	q = strings.TrimSpace(q)
-	if q == "" {
+	if q == "" || len(specs) == 0 {
 		return nil, nil
 	}
 
 	if len(specs) == 1 {
-		return c.searchOne(ctx, specs[0], q, limit)
+		return c.searchOne(ctx, specs[0], q, limit, filters[0])
 	}
 
 	queries := make([]*meilisearch.SearchRequest, 0, len(specs))
-	for _, spec := range specs {
-		queries = append(queries, &meilisearch.SearchRequest{
+	for i, spec := range specs {
+		req := &meilisearch.SearchRequest{
 			IndexUID: c.indexUID(spec),
 			Query:    q,
 			Limit:    int64(limit),
-		})
+		}
+		if filters[i] != "" {
+			req.Filter = filters[i]
+		}
+		queries = append(queries, req)
 	}
 	resp, err := c.client.MultiSearchWithContext(ctx, &meilisearch.MultiSearchRequest{Queries: queries})
 	if err != nil {
@@ -164,10 +202,12 @@ func (c *Client) Search(ctx context.Context, specs []string, q string, limit int
 	return out, nil
 }
 
-func (c *Client) searchOne(ctx context.Context, spec, q string, limit int) ([]Hit, error) {
-	resp, err := c.client.Index(c.indexUID(spec)).SearchWithContext(ctx, q, &meilisearch.SearchRequest{
-		Limit: int64(limit),
-	})
+func (c *Client) searchOne(ctx context.Context, spec, q string, limit int, filter string) ([]Hit, error) {
+	req := &meilisearch.SearchRequest{Limit: int64(limit)}
+	if filter != "" {
+		req.Filter = filter
+	}
+	resp, err := c.client.Index(c.indexUID(spec)).SearchWithContext(ctx, q, req)
 	if err != nil {
 		return nil, fmt.Errorf("searchengine: search %q: %w", spec, err)
 	}

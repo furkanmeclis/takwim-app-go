@@ -52,12 +52,19 @@ type Scope struct {
 	Status         string
 	AccessStartsAt time.Time
 	AccessEndsAt   *time.Time
-	// MemberRole is the tenant role key of the caller in this organization
-	// (owner, admin, member or a custom role key).
+	// MemberRole is the primary tenant role key of the caller in this
+	// organization (owner, admin, member, a Rentopia template or a custom
+	// role key). Kept for display; permissions come from MemberRoles.
 	MemberRole string
-	// Permissions are the tenant.* slugs granted by MemberRole in this
-	// organization only.
+	// MemberRoles are the keys of every role the caller holds here.
+	MemberRoles []string
+	// Permissions are the tenant.* slugs granted by the union of
+	// MemberRoles in this organization only.
 	Permissions []string
+	// BranchIDs are the branches the caller may access. nil means every
+	// branch of the organization (branch_scope 'all'); a non-nil slice,
+	// possibly empty, limits branch-bound data to those ids. See branch.go.
+	BranchIDs []int64
 }
 
 // Has reports whether the scope grants a tenant permission slug.
@@ -105,6 +112,28 @@ func WithScope(ctx context.Context, s Scope) context.Context {
 func From(ctx context.Context) (Scope, bool) {
 	s, ok := ctx.Value(ctxKey{}).(Scope)
 	return s, ok
+}
+
+// OrganizationID returns the organization a context is scoped to: the
+// request scope set by RequireOrganization, or the organization a background
+// job carries (WithOrganizationID). Engines (io, bulk, search, activity) use
+// it to stamp and filter organization_id; platform contexts return false.
+func OrganizationID(ctx context.Context) (int64, bool) {
+	s, ok := From(ctx)
+	if !ok || s.ID <= 0 {
+		return 0, false
+	}
+	return s.ID, true
+}
+
+// WithOrganizationID scopes a background context (worker job) to an
+// organization. A request scope already on the context is kept when it names
+// the same organization; otherwise a minimal scope carrying only the id is set.
+func WithOrganizationID(ctx context.Context, organizationID int64) context.Context {
+	if s, ok := From(ctx); ok && s.ID == organizationID {
+		return ctx
+	}
+	return WithScope(ctx, Scope{ID: organizationID})
 }
 
 // Must returns the scope or panics (handlers behind RequireOrganization).

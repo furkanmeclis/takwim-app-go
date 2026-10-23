@@ -114,6 +114,18 @@ Sensitive mutations can require a fresh password or passkey confirmation even wh
 - Redis keys should use `app:<env>:…` if you add caching.
 - Realtime channels: prefer `user:{user_uuid}`. Issue tokens only through `/v1/realtime/*`.
 
+## Live lists (resource events)
+
+Package: `internal/platform/resourceevents`. A DataTable can follow changes made by other users without polling.
+
+1. Backend: after a successful mutation call `Publisher.Publish(ctx, resource, action, uuids...)` (`created` / `updated` / `deleted`). Use the engine slug (`platform.users`). It is async and fail-soft, and a no-op when Centrifugo is off. Bulk and import jobs already publish one `bulk` event with the affected uuids (capped at 200, `truncated` beyond that).
+2. Register the resource and its read permission: `liveResources.Register("platform.<name>", rbac.Perm…Read)` (see `authmodule.RegisterLiveResources`). Clients may subscribe to `resource:{name}` only with that permission; unregistered resources are refused.
+3. Frontend: `useServerListState({ realtime: { resource: "platform.<name>" } })` and pass `realtime={listState.realtimeFor(listQuery.refetch)}` to `EntityTable` / `DataTable`. Rows must use the uuid as `getRowId`.
+
+On an event (debounced 400 ms) the table refetches silently when a visible row changed, fades deleted rows out first, and shows an "N new records – Refresh" banner instead of moving a user who is off page 1 or scrolled down. After a dropped connection it refetches once. With `NEXT_PUBLIC_REALTIME_ENABLED=false` nothing subscribes.
+
+Scoped channels (a host app that partitions data per account): `Broadcaster.AddResolver` returns another channel for chosen resources, `AuthUseCase.AddChannelRules` authorizes it, and the page passes `realtime: { resource, channel }`.
+
 ## What not to copy from old products
 
 This starter was carved out of earlier apps. Do **not** bring back:

@@ -32,5 +32,12 @@
   "page_ready_description": "Platform and CMS shells are ready.",
   "collapse_sidebar": "Collapse sidebar",
   "expand_sidebar": "Expand sidebar",
-  "nav_item_info": "Details"
+  "nav_item_info": "Details",
+  "section_operations": "Operations",
+  "nav_branches": "Branches",
+  "nav_catalog": "Vehicle catalog",
+  "section_tenant_settings": "Settings",
+  "nav_tenant_settings_general": "General",
+  "nav_tenant_settings_members": "Members",
+  "nav_tenant_settings_roles": "Roles"
 }

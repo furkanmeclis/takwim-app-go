@@ -42,6 +42,7 @@ export function RolesPage() {
 
   const listState = useServerListState({
     initialPageSize: 20,
+    realtime: { resource: "platform.roles" },
   });
 
   const listParams = useMemo(
@@ -171,6 +172,7 @@ export function RolesPage() {
         isLoading={listQuery.isLoading}
         isError={listQuery.isError}
         onRetry={() => void listQuery.refetch()}
+        realtime={listState.realtimeFor(listQuery.refetch)}
         emptyTitle={t("roles.empty_title")}
         emptyDescription={t("roles.empty_description")}
         pageCount={pageCount}

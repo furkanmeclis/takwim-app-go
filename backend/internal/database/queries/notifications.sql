@@ -2,11 +2,11 @@
 INSERT INTO notifications (
     user_id, channel, status, priority,
     title, body, payload, action_url, recipient, template_code, source_event,
-    scheduled_at, max_attempts
+    scheduled_at, max_attempts, organization_id
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9, $10, $11,
-    $12, $13
+    $12, $13, sqlc.narg(organization_id)
 )
 RETURNING *;
 
@@ -19,6 +19,9 @@ SELECT * FROM notifications WHERE id = $1;
 -- name: ListNotificationsForUser :many
 SELECT * FROM notifications
 WHERE user_id = sqlc.arg(user_id)
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = sqlc.narg(organization_id)::bigint)
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (sqlc.narg(channel)::text IS NULL OR channel = sqlc.narg(channel))
   AND (
@@ -39,6 +42,9 @@ LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 -- name: CountNotificationsForUser :one
 SELECT COUNT(*)::bigint FROM notifications
 WHERE user_id = sqlc.arg(user_id)
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = sqlc.narg(organization_id)::bigint)
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
   AND (sqlc.narg(channel)::text IS NULL OR channel = sqlc.narg(channel))
   AND (
@@ -56,7 +62,10 @@ WHERE user_id = sqlc.arg(user_id)
 
 -- name: CountUnreadInappForUser :one
 SELECT COUNT(*)::bigint FROM notifications
-WHERE user_id = $1
+WHERE user_id = sqlc.arg(user_id)
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = sqlc.narg(organization_id)::bigint)
   AND channel = 'inapp'
   AND read_at IS NULL
   AND status NOT IN ('cancelled', 'failed');
@@ -150,7 +159,10 @@ RETURNING *;
 UPDATE notifications
 SET status = 'read',
     read_at = COALESCE(read_at, NOW())
-WHERE user_id = $1
+WHERE user_id = sqlc.arg(user_id)
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = sqlc.narg(organization_id)::bigint)
   AND channel = 'inapp'
   AND read_at IS NULL;
 

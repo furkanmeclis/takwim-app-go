@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 
 import { notificationsKeys } from "@/features/notifications/hooks/query-keys";
+import { useApiScope } from "@/features/tenant/hooks/use-api-scope";
 import {
   notificationsService,
   type Notification,
@@ -101,12 +102,14 @@ export function useMarkNotificationRead(options?: { silent?: boolean }) {
   });
 }
 
+/** Marks the current shell's inbox read (another organization's stays unread). */
 export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
   const { t } = useLocale();
+  const scope = useApiScope();
 
   return useAppMutation({
-    mutationFn: () => notificationsService.markAllRead(),
+    mutationFn: () => notificationsService.markAllRead(scope),
     onSuccess: () => {
       invalidateInbox(queryClient);
       appToast.success(t("notifications.toast.marked_all_read"));

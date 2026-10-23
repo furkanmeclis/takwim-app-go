@@ -36,6 +36,35 @@ export const routes = {
   tenant: {
     root: (slug: string) => `/t/${encodeURIComponent(slug)}`,
     home: (slug: string) => `/t/${encodeURIComponent(slug)}`,
+    branches: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/branches`,
+      create: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/branches/create`,
+      detail: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/branches/${uuid}`,
+      edit: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/branches/${uuid}/edit`,
+    },
+    exports: {
+      /**
+       * Downloads a finished export of the organization (the action link of
+       * the "export ready" notification; the API needs `X-Organization`).
+       */
+      download: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/exports/${uuid}/download`,
+    },
+    settings: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings`,
+      members: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/settings/members`,
+      roles: {
+        root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/roles`,
+        create: (slug: string) =>
+          `/t/${encodeURIComponent(slug)}/settings/roles/create`,
+        detail: (slug: string, uuid: string) =>
+          `/t/${encodeURIComponent(slug)}/settings/roles/${uuid}`,
+      },
+    },
   },
   platform: {
     root: "/platform",

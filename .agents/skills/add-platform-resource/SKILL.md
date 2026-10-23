@@ -81,6 +81,7 @@ Dates: `.agents/skills/admin-date-picker`.
 | Cmd+K / Meilisearch | `.agents/skills/search-engine` |
 | GitHub / OAuth secrets | `.agents/skills/github-integration` |
 | Audit row | `activity.Recorder.Record` in the use case (fail-soft) |
+| Live list | Publish `resourceevents` after mutations, register `resource → read permission`, then `useServerListState({ realtime: { resource } })` + `realtime={listState.realtimeFor(refetch)}` (docs/EXTENDING.md "Live lists") |
 
 ## 8. Do not
 

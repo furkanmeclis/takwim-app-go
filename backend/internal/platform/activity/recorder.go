@@ -9,6 +9,7 @@ import (
 	"net/netip"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -52,14 +53,21 @@ func (r *Recorder) Record(ctx context.Context, actorID *int64, action, resource 
 			ua = pgtype.Text{String: rreq.UserAgent(), Valid: true}
 		}
 	}
+	// Tenant requests and organization-scoped jobs stamp the organization so
+	// the event shows up in that organization's activity only.
+	var orgID pgtype.Int8
+	if id, ok := orgctx.OrganizationID(ctx); ok {
+		orgID = pgtype.Int8{Int64: id, Valid: true}
+	}
 	_, err = r.q.InsertActivityEvent(ctx, db.InsertActivityEventParams{
-		ActorUserID:  pgtypeInt8(actorID),
-		Action:       action,
-		Resource:     resource,
-		ResourceUuid: ru,
-		Payload:      body,
-		IpAddress:    ip,
-		UserAgent:    ua,
+		OrganizationID: orgID,
+		ActorUserID:    pgtypeInt8(actorID),
+		Action:         action,
+		Resource:       resource,
+		ResourceUuid:   ru,
+		Payload:        body,
+		IpAddress:      ip,
+		UserAgent:      ua,
 	})
 	if err != nil {
 		r.log.Warn("activity_record_failed", "action", action, "error", err)

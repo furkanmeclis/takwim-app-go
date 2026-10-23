@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useFormContext } from "react-hook-form";
+import { get, useFormContext } from "react-hook-form";
 
 import { FormFieldShell } from "@/components/forms/form-field";
 import {
@@ -43,7 +43,7 @@ export function AppInput({
     register,
     formState: { errors },
   } = useFormContext();
-  const error = errors[name]?.message as string | undefined;
+  const error = get(errors, name)?.message as string | undefined;
   const hasAddon = Boolean(StartIcon || EndIcon || endAction);
 
   return (

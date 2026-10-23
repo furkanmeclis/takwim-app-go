@@ -75,18 +75,46 @@ type RowResult struct {
 	Previous   map[string]any `json:"previous,omitempty"`
 }
 
-// PreviewSummary aggregates a dry-run.
+// PreviewSummary aggregates a dry-run. Creates / Updates are only counted
+// for adapters that implement RowPreviewer.
 type PreviewSummary struct {
 	Total   int          `json:"total"`
 	Valid   int          `json:"valid"`
 	Invalid int          `json:"invalid"`
+	Creates int          `json:"creates,omitempty"`
+	Updates int          `json:"updates,omitempty"`
 	Rows    []RowPreview `json:"rows"`
 	Errors  []RowError   `json:"errors"`
 }
 
+// RowPreview is one previewed row. Op and Changes (the dry-run diff) are set
+// for adapters that implement RowPreviewer.
 type RowPreview struct {
-	Index int            `json:"index"`
-	Data  map[string]any `json:"data"`
+	Index   int            `json:"index"`
+	Data    map[string]any `json:"data"`
+	Op      string         `json:"op,omitempty"`
+	Changes []FieldChange  `json:"changes,omitempty"`
+}
+
+// FieldChange is one field an import row would change.
+type FieldChange struct {
+	Field string `json:"field"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+// RowDiff is the dry-run result of one import row. A non-empty Error marks
+// the row invalid.
+type RowDiff struct {
+	Op      string
+	Changes []FieldChange
+	Error   string
+}
+
+// RowPreviewer is implemented by adapters that can dry-run an import row
+// (validate it and list what it would create or change) without writing.
+type RowPreviewer interface {
+	PreviewRow(ctx context.Context, row map[string]any, defaults map[string]any) (RowDiff, error)
 }
 
 type RowError struct {
@@ -110,7 +138,15 @@ type Letterhead struct {
 	LogoMIME     string
 }
 
-// ResourceAdapter connects ioengine to a list resource.
+// SampleProvider is implemented by adapters that ship their own import
+// sample rows (tenant resources living outside the adapters package).
+type SampleProvider interface {
+	SampleRows() []map[string]any
+}
+
+// ResourceAdapter connects ioengine to a list resource. Adapters of tenant
+// resources ("tenant.*") read the organization with orgctx.OrganizationID:
+// the export / import use cases set it from the request scope or the job row.
 type ResourceAdapter interface {
 	Resource() string
 	ExportColumns() []Column

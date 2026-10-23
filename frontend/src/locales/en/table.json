@@ -52,5 +52,10 @@
   "cell_saved": "Cell saved",
   "faceted_empty": "No results",
   "faceted_selected": "{{count}} selected",
-  "bulk": "Bulk"
+  "bulk": "Bulk",
+  "live_new_record": "{{count}} new record",
+  "live_new_records": "{{count}} new records",
+  "live_changed": "List updated",
+  "live_refresh": "Refresh",
+  "live_dismiss": "Dismiss"
 }

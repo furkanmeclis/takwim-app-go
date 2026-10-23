@@ -9,6 +9,7 @@ import (
 	"context"
 	"net/netip"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -43,20 +44,42 @@ func (q *Queries) CountActivityEvents(ctx context.Context, arg CountActivityEven
 	return column_1, err
 }
 
+const countOrganizationResourceActivity = `-- name: CountOrganizationResourceActivity :one
+SELECT COUNT(*)::bigint
+FROM activity_events
+WHERE organization_id = $1
+  AND resource = $2
+  AND resource_uuid = $3
+`
+
+type CountOrganizationResourceActivityParams struct {
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+	Resource       string      `json:"resource"`
+	ResourceUuid   pgtype.UUID `json:"resource_uuid"`
+}
+
+func (q *Queries) CountOrganizationResourceActivity(ctx context.Context, arg CountOrganizationResourceActivityParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countOrganizationResourceActivity, arg.OrganizationID, arg.Resource, arg.ResourceUuid)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const insertActivityEvent = `-- name: InsertActivityEvent :one
-INSERT INTO activity_events (actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO activity_events (actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, organization_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, uuid, actor_user_id, action, resource, resource_uuid, payload, ip_address, user_agent, created_at, organization_id
 `
 
 type InsertActivityEventParams struct {
-	ActorUserID  pgtype.Int8 `json:"actor_user_id"`
-	Action       string      `json:"action"`
-	Resource     string      `json:"resource"`
-	ResourceUuid pgtype.UUID `json:"resource_uuid"`
-	Payload      []byte      `json:"payload"`
-	IpAddress    *netip.Addr `json:"ip_address"`
-	UserAgent    pgtype.Text `json:"user_agent"`
+	ActorUserID    pgtype.Int8 `json:"actor_user_id"`
+	Action         string      `json:"action"`
+	Resource       string      `json:"resource"`
+	ResourceUuid   pgtype.UUID `json:"resource_uuid"`
+	Payload        []byte      `json:"payload"`
+	IpAddress      *netip.Addr `json:"ip_address"`
+	UserAgent      pgtype.Text `json:"user_agent"`
+	OrganizationID pgtype.Int8 `json:"organization_id"`
 }
 
 func (q *Queries) InsertActivityEvent(ctx context.Context, arg InsertActivityEventParams) (ActivityEvent, error) {
@@ -68,6 +91,7 @@ func (q *Queries) InsertActivityEvent(ctx context.Context, arg InsertActivityEve
 		arg.Payload,
 		arg.IpAddress,
 		arg.UserAgent,
+		arg.OrganizationID,
 	)
 	var i ActivityEvent
 	err := row.Scan(
@@ -137,6 +161,77 @@ func (q *Queries) ListActivityEvents(ctx context.Context, arg ListActivityEvents
 			&i.UserAgent,
 			&i.CreatedAt,
 			&i.OrganizationID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrganizationResourceActivity = `-- name: ListOrganizationResourceActivity :many
+SELECT
+    e.uuid, e.action, e.resource, e.resource_uuid, e.payload, e.created_at,
+    u.uuid AS actor_uuid, u.name AS actor_name, u.surname AS actor_surname, u.email AS actor_email
+FROM activity_events e
+LEFT JOIN users u ON u.id = e.actor_user_id
+WHERE e.organization_id = $1
+  AND e.resource = $2
+  AND e.resource_uuid = $3
+ORDER BY e.created_at DESC, e.id DESC
+LIMIT $5 OFFSET $4
+`
+
+type ListOrganizationResourceActivityParams struct {
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+	Resource       string      `json:"resource"`
+	ResourceUuid   pgtype.UUID `json:"resource_uuid"`
+	OffsetCount    int32       `json:"offset_count"`
+	LimitCount     int32       `json:"limit_count"`
+}
+
+type ListOrganizationResourceActivityRow struct {
+	Uuid         uuid.UUID          `json:"uuid"`
+	Action       string             `json:"action"`
+	Resource     string             `json:"resource"`
+	ResourceUuid pgtype.UUID        `json:"resource_uuid"`
+	Payload      []byte             `json:"payload"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ActorUuid    pgtype.UUID        `json:"actor_uuid"`
+	ActorName    pgtype.Text        `json:"actor_name"`
+	ActorSurname pgtype.Text        `json:"actor_surname"`
+	ActorEmail   pgtype.Text        `json:"actor_email"`
+}
+
+func (q *Queries) ListOrganizationResourceActivity(ctx context.Context, arg ListOrganizationResourceActivityParams) ([]ListOrganizationResourceActivityRow, error) {
+	rows, err := q.db.Query(ctx, listOrganizationResourceActivity,
+		arg.OrganizationID,
+		arg.Resource,
+		arg.ResourceUuid,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganizationResourceActivityRow{}
+	for rows.Next() {
+		var i ListOrganizationResourceActivityRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Action,
+			&i.Resource,
+			&i.ResourceUuid,
+			&i.Payload,
+			&i.CreatedAt,
+			&i.ActorUuid,
+			&i.ActorName,
+			&i.ActorSurname,
+			&i.ActorEmail,
 		); err != nil {
 			return nil, err
 		}

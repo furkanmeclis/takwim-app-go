@@ -14,6 +14,7 @@ import type {
 import type { ReactNode } from "react";
 
 import type { DataTableBulkAction } from "@/components/tables/bulk-actions";
+import type { DataTableRealtime } from "@/components/tables/use-live-rows";
 
 /** Density affects row/cell padding */
 export type TableDensity = "compact" | "comfortable" | "spacious";
@@ -218,6 +219,13 @@ export type DataTableProps<TData> = {
    * (checkboxes, action buttons, links, inline editors).
    */
   onRowClick?: (row: TData) => void;
+  /**
+   * Opt-in live updates over Centrifugo (`resource.changed` events): silent
+   * refetch when visible rows change, fade-out of deleted rows, and a
+   * "N new records" banner instead of moving a user who is off page 1.
+   * Rows must use the resource uuid as row id (`getRowId`).
+   */
+  realtime?: DataTableRealtime;
   className?: string;
 };
 

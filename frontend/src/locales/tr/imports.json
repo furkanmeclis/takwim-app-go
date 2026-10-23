@@ -93,5 +93,15 @@
   "toast.confirm_failed": "İçe aktarma onaylanamadı.",
   "toast.confirmed": "İçe aktarma onaylandı ve kuyruğa alındı.",
   "toast.rollback_success": "İçe aktarma başarıyla geri alındı.",
-  "toast.auto_mapped": "{{count}} kolon otomatik eşleştirildi."
+  "toast.auto_mapped": "{{count}} kolon otomatik eşleştirildi.",
+  "resources.tenant.branches": "Şubeler",
+  "diff.summary": "Kuru çalıştırma: {{creates}} yeni kayıt, {{updates}} güncelleme.",
+  "diff.create": "Yeni",
+  "diff.update": "Güncelleme",
+  "diff.no_changes": "Değişiklik yok",
+  "diff.catalog": "Katalog eşleşmesi",
+  "diff.empty": "Gösterilecek satır yok",
+  "diff.columns.row": "Satır",
+  "diff.columns.op": "İşlem",
+  "diff.columns.changes": "Değişecek alanlar"
 }

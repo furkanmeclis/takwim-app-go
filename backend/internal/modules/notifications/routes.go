@@ -6,6 +6,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/middleware"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/handler"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/jwt"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 )
 
@@ -78,5 +79,35 @@ func RegisterRoutes(
 	))
 	mux.Handle("GET /v1/platform/notifications", middleware.Chain(
 		http.HandlerFunc(h.ListPlatform), authn, requirePerm(rbac.PermPlatformNotificationsRead),
+	))
+}
+
+// RegisterTenantRoutes mounts the inbox of the tenant shell: the same
+// handlers as /v1/notifications, scoped to the X-Organization of the request
+// (that organization's notifications plus un-stamped ones). Reading or marking
+// one notification by uuid stays on /v1/notifications/{uuid}: it is owned by
+// the caller whatever its organization. A nil resolver mounts nothing.
+func RegisterTenantRoutes(
+	mux *http.ServeMux,
+	h *handler.Handler,
+	tokens *jwt.Manager,
+	loader middleware.IdentityLoader,
+	resolver orgctx.Resolver,
+) {
+	if resolver == nil {
+		return
+	}
+	authn := middleware.Authenticate(tokens, loader)
+	org := middleware.RequireOrganization(resolver)
+	read := middleware.RequirePermission(rbac.PermNotificationsRead)
+
+	mux.Handle("GET /v1/tenant/notifications", middleware.Chain(
+		http.HandlerFunc(h.List), authn, org, read,
+	))
+	mux.Handle("GET /v1/tenant/notifications/unread-count", middleware.Chain(
+		http.HandlerFunc(h.UnreadCount), authn, org, read,
+	))
+	mux.Handle("POST /v1/tenant/notifications/read-all", middleware.Chain(
+		http.HandlerFunc(h.MarkAllRead), authn, org, read,
 	))
 }

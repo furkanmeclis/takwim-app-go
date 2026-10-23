@@ -4,6 +4,14 @@ import { Star } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { StorageAccessBadge } from "@/features/storage/components/storage-access-badge";
 import {
   StorageContextMenu,
@@ -15,6 +23,13 @@ import type { StorageObject } from "@/features/storage/types";
 import { cn } from "@/lib/utils";
 import { datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
+
+// Keep the explorer's own sizing over the shadcn cell defaults (fixed
+// height, no wrapping, checkbox nudge).
+const headClass =
+  "text-muted-foreground h-auto px-3 py-2 text-start font-medium whitespace-normal";
+const cellClass =
+  "px-3 py-2 whitespace-normal [&:has([role=checkbox])]:pr-3 [&>[role=checkbox]]:translate-y-0";
 
 export function StorageFileList({
   items,
@@ -48,29 +63,23 @@ export function StorageFileList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead className="bg-muted/40 text-muted-foreground border-b">
-          <tr>
-            <th className="w-10 px-3 py-2" />
-            <th className="px-3 py-2 text-start font-medium">
-              {t("storage.col_name")}
-            </th>
-            <th className="px-3 py-2 text-start font-medium">
-              {t("storage.col_type")}
-            </th>
-            <th className="px-3 py-2 text-start font-medium">
-              {t("storage.col_size")}
-            </th>
-            <th className="px-3 py-2 text-start font-medium">
+    <div className="overflow-hidden rounded-lg border">
+      <Table className="min-w-[720px]">
+        <TableHeader className="bg-muted/40 text-muted-foreground border-b">
+          <TableRow className="transition-none hover:bg-transparent">
+            <TableHead className={cn(headClass, "w-10")} />
+            <TableHead className={headClass}>{t("storage.col_name")}</TableHead>
+            <TableHead className={headClass}>{t("storage.col_type")}</TableHead>
+            <TableHead className={headClass}>{t("storage.col_size")}</TableHead>
+            <TableHead className={headClass}>
               {t("storage.col_modified")}
-            </th>
-            <th className="px-3 py-2 text-start font-medium">
+            </TableHead>
+            <TableHead className={headClass}>
               {t("storage.col_access")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items.map((item) => {
             const checked = selected.has(item.key);
             return (
@@ -81,14 +90,14 @@ export function StorageFileList({
                 trash={trash}
                 onAction={onAction}
               >
-                <tr
+                <TableRow
                   className={cn(
-                    "hover:bg-muted/40 border-b last:border-b-0",
+                    "hover:bg-muted/40 border-b transition-none last:border-b-0",
                     checked && "bg-accent/40",
                   )}
                   onDoubleClick={() => onOpen(item)}
                 >
-                  <td className="px-3 py-2">
+                  <TableCell className={cellClass}>
                     <Checkbox
                       checked={checked}
                       onCheckedChange={(value) =>
@@ -96,8 +105,8 @@ export function StorageFileList({
                       }
                       aria-label={item.name}
                     />
-                  </td>
-                  <td className="px-3 py-2">
+                  </TableCell>
+                  <TableCell className={cellClass}>
                     <button
                       type="button"
                       className="flex max-w-md items-center gap-2 text-start"
@@ -113,27 +122,27 @@ export function StorageFileList({
                         <Star className="size-3.5 fill-amber-400 text-amber-400" />
                       ) : null}
                     </button>
-                  </td>
-                  <td className="text-muted-foreground px-3 py-2">
+                  </TableCell>
+                  <TableCell className={cn(cellClass, "text-muted-foreground")}>
                     {t(
                       `storage.kind_${item.file_kind}` as "storage.kind_unknown",
                     )}
-                  </td>
-                  <td className="text-muted-foreground px-3 py-2">
+                  </TableCell>
+                  <TableCell className={cn(cellClass, "text-muted-foreground")}>
                     {item.kind === "folder" ? "—" : formatBytes(item.size)}
-                  </td>
-                  <td className="text-muted-foreground px-3 py-2">
+                  </TableCell>
+                  <TableCell className={cn(cellClass, "text-muted-foreground")}>
                     {datetime(item.updated_at, "dd.MM.yyyy HH:mm", locale)}
-                  </td>
-                  <td className="px-3 py-2">
+                  </TableCell>
+                  <TableCell className={cellClass}>
                     <StorageAccessBadge access={item.access} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               </StorageContextMenu>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

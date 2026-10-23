@@ -1,6 +1,6 @@
 "use client";
 
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, get, useFormContext } from "react-hook-form";
 
 import { FormFieldShell } from "@/components/forms/form-field";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -27,7 +27,7 @@ export function AppDatePicker({
     control,
     formState: { errors },
   } = useFormContext();
-  const error = errors[name]?.message as string | undefined;
+  const error = get(errors, name)?.message as string | undefined;
 
   return (
     <FormFieldShell

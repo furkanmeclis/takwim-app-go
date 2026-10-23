@@ -15,5 +15,8 @@
   "actions.users.enable": "Kullanıcıları etkinleştir",
   "actions.roles.delete": "Rolleri sil",
   "confirm.users.disable": "Seçili {{count}} kullanıcı devre dışı bırakılsın mı?",
-  "confirm.roles.delete": "Seçili {{count}} rol silinsin mi?"
+  "confirm.roles.delete": "Seçili {{count}} rol silinsin mi?",
+  "actions.branches.activate": "Şubeleri aktifleştir",
+  "actions.branches.deactivate": "Şubeleri pasifleştir",
+  "confirm.branches.deactivate": "Seçili {{count}} şube pasifleştirilsin mi? Yeni rezervasyonlarda seçilemezler."
 }

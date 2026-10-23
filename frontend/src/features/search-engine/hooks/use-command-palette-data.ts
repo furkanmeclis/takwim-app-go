@@ -18,6 +18,8 @@ import {
   fetchSearchSpecs,
 } from "@/features/search-engine/services/search.service";
 import type { PaletteItem } from "@/features/search-engine/types";
+import { useApiScope } from "@/features/tenant/hooks/use-api-scope";
+import { scopeKey } from "@/lib/api/scoped-request";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
@@ -25,6 +27,7 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
   const { t } = useLocale();
   const { can, canAny } = usePermission();
   const { paletteCatalogs } = useShellNav(variant);
+  const scope = useApiScope();
   const [query, setQuery] = useState("");
   const [activeSpec, setActiveSpec] = useState<string | undefined>();
 
@@ -36,8 +39,8 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
   const access = useMemo(() => ({ can, canAny }), [can, canAny]);
 
   const specsQuery = useQuery({
-    queryKey: ["search", "specs"],
-    queryFn: fetchSearchSpecs,
+    queryKey: ["search", scopeKey(scope), "specs"],
+    queryFn: () => fetchSearchSpecs(scope),
     staleTime: 60_000,
   });
 
@@ -88,8 +91,8 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
   }, [effectiveSpec, pageItems, searchText]);
 
   const remoteQuery = useQuery({
-    queryKey: ["search", "hits", searchText, effectiveSpec],
-    queryFn: () => fetchSearchHits(searchText, effectiveSpec),
+    queryKey: ["search", scopeKey(scope), "hits", searchText, effectiveSpec],
+    queryFn: () => fetchSearchHits(searchText, effectiveSpec, 20, scope),
     enabled: Boolean(searchText) && specsQuery.data?.enabled !== false,
     staleTime: 15_000,
   });

@@ -12,6 +12,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourcemeta"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
@@ -69,6 +70,18 @@ func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, resourcemeta.Notifications())
 }
 
+// inboxOrganization is the organization an inbox request is scoped to: the
+// RequireOrganization scope of /v1/tenant/notifications*, nil on the
+// /v1/notifications* routes of the platform / account shell.
+func inboxOrganization(r *http.Request) *int64 {
+	scope, ok := orgctx.From(r.Context())
+	if !ok || scope.ID <= 0 {
+		return nil
+	}
+	id := scope.ID
+	return &id
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	p := authctx.MustPrincipal(r.Context())
 	if banned := apiquery.ForbiddenParams(r.URL.Query()); len(banned) > 0 {
@@ -91,7 +104,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		unread = &b
 	}
-	page, err := h.svc.ListInbox(r.Context(), p.UserInternal, q, status, channel, unread)
+	page, err := h.svc.ListInbox(r.Context(), p.UserInternal, inboxOrganization(r), q, status, channel, unread)
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -101,7 +114,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) UnreadCount(w http.ResponseWriter, r *http.Request) {
 	p := authctx.MustPrincipal(r.Context())
-	n, err := h.svc.UnreadCount(r.Context(), p.UserInternal)
+	n, err := h.svc.UnreadCount(r.Context(), p.UserInternal, inboxOrganization(r))
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -173,7 +186,7 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 	p := authctx.MustPrincipal(r.Context())
-	if err := h.svc.MarkAllRead(r.Context(), p.UserInternal); err != nil {
+	if err := h.svc.MarkAllRead(r.Context(), p.UserInternal, inboxOrganization(r)); err != nil {
 		writeErr(w, r, err)
 		return
 	}

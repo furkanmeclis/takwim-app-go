@@ -41,7 +41,12 @@ export function AppForm<T extends FieldValues>({
     try {
       await onSubmit(values);
     } catch (error) {
-      if (error instanceof ApiError && error.isValidation) {
+      // Validation errors and conflicts (e.g. a duplicate code) may carry
+      // field details; show them under the matching inputs.
+      if (
+        error instanceof ApiError &&
+        (error.isValidation || error.status === 409)
+      ) {
         const fields = error.fieldErrors();
         Object.entries(fields).forEach(([field, message]) => {
           form.setError(field as never, { type: "server", message });

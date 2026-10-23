@@ -15,33 +15,38 @@ import (
 const countNotificationsForUser = `-- name: CountNotificationsForUser :one
 SELECT COUNT(*)::bigint FROM notifications
 WHERE user_id = $1
-  AND ($2::text IS NULL OR status = $2)
-  AND ($3::text IS NULL OR channel = $3)
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = $2::bigint)
+  AND ($3::text IS NULL OR status = $3)
+  AND ($4::text IS NULL OR channel = $4)
   AND (
-    $4::bool IS NULL
-    OR ($4::bool = TRUE AND read_at IS NULL AND channel = 'inapp')
-    OR ($4::bool = FALSE AND (read_at IS NOT NULL OR channel <> 'inapp'))
+    $5::bool IS NULL
+    OR ($5::bool = TRUE AND read_at IS NULL AND channel = 'inapp')
+    OR ($5::bool = FALSE AND (read_at IS NOT NULL OR channel <> 'inapp'))
   )
   AND (
-    $5::text IS NULL
-    OR title ILIKE '%' || $5 || '%'
-    OR body ILIKE '%' || $5 || '%'
-    OR COALESCE(template_code, '') ILIKE '%' || $5 || '%'
-    OR COALESCE(recipient, '') ILIKE '%' || $5 || '%'
+    $6::text IS NULL
+    OR title ILIKE '%' || $6 || '%'
+    OR body ILIKE '%' || $6 || '%'
+    OR COALESCE(template_code, '') ILIKE '%' || $6 || '%'
+    OR COALESCE(recipient, '') ILIKE '%' || $6 || '%'
   )
 `
 
 type CountNotificationsForUserParams struct {
-	UserID  pgtype.Int8 `json:"user_id"`
-	Status  pgtype.Text `json:"status"`
-	Channel pgtype.Text `json:"channel"`
-	Unread  pgtype.Bool `json:"unread"`
-	Q       pgtype.Text `json:"q"`
+	UserID         pgtype.Int8 `json:"user_id"`
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+	Status         pgtype.Text `json:"status"`
+	Channel        pgtype.Text `json:"channel"`
+	Unread         pgtype.Bool `json:"unread"`
+	Q              pgtype.Text `json:"q"`
 }
 
 func (q *Queries) CountNotificationsForUser(ctx context.Context, arg CountNotificationsForUserParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countNotificationsForUser,
 		arg.UserID,
+		arg.OrganizationID,
 		arg.Status,
 		arg.Channel,
 		arg.Unread,
@@ -86,13 +91,21 @@ func (q *Queries) CountPlatformNotifications(ctx context.Context, arg CountPlatf
 const countUnreadInappForUser = `-- name: CountUnreadInappForUser :one
 SELECT COUNT(*)::bigint FROM notifications
 WHERE user_id = $1
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = $2::bigint)
   AND channel = 'inapp'
   AND read_at IS NULL
   AND status NOT IN ('cancelled', 'failed')
 `
 
-func (q *Queries) CountUnreadInappForUser(ctx context.Context, userID pgtype.Int8) (int64, error) {
-	row := q.db.QueryRow(ctx, countUnreadInappForUser, userID)
+type CountUnreadInappForUserParams struct {
+	UserID         pgtype.Int8 `json:"user_id"`
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+}
+
+func (q *Queries) CountUnreadInappForUser(ctx context.Context, arg CountUnreadInappForUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnreadInappForUser, arg.UserID, arg.OrganizationID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -102,29 +115,30 @@ const createNotification = `-- name: CreateNotification :one
 INSERT INTO notifications (
     user_id, channel, status, priority,
     title, body, payload, action_url, recipient, template_code, source_event,
-    scheduled_at, max_attempts
+    scheduled_at, max_attempts, organization_id
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9, $10, $11,
-    $12, $13
+    $12, $13, $14
 )
 RETURNING id, uuid, user_id, channel, status, priority, title, body, payload, action_url, recipient, template_code, source_event, scheduled_at, sent_at, delivered_at, read_at, failed_at, cancelled_at, attempt_count, max_attempts, last_error, provider, provider_reference, created_at, updated_at, organization_id
 `
 
 type CreateNotificationParams struct {
-	UserID       pgtype.Int8        `json:"user_id"`
-	Channel      string             `json:"channel"`
-	Status       string             `json:"status"`
-	Priority     string             `json:"priority"`
-	Title        string             `json:"title"`
-	Body         string             `json:"body"`
-	Payload      []byte             `json:"payload"`
-	ActionUrl    pgtype.Text        `json:"action_url"`
-	Recipient    pgtype.Text        `json:"recipient"`
-	TemplateCode pgtype.Text        `json:"template_code"`
-	SourceEvent  pgtype.Text        `json:"source_event"`
-	ScheduledAt  pgtype.Timestamptz `json:"scheduled_at"`
-	MaxAttempts  int32              `json:"max_attempts"`
+	UserID         pgtype.Int8        `json:"user_id"`
+	Channel        string             `json:"channel"`
+	Status         string             `json:"status"`
+	Priority       string             `json:"priority"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	Payload        []byte             `json:"payload"`
+	ActionUrl      pgtype.Text        `json:"action_url"`
+	Recipient      pgtype.Text        `json:"recipient"`
+	TemplateCode   pgtype.Text        `json:"template_code"`
+	SourceEvent    pgtype.Text        `json:"source_event"`
+	ScheduledAt    pgtype.Timestamptz `json:"scheduled_at"`
+	MaxAttempts    int32              `json:"max_attempts"`
+	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
@@ -142,6 +156,7 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 		arg.SourceEvent,
 		arg.ScheduledAt,
 		arg.MaxAttempts,
+		arg.OrganizationID,
 	)
 	var i Notification
 	err := row.Scan(
@@ -352,37 +367,42 @@ func (q *Queries) InsertNotificationHistory(ctx context.Context, arg InsertNotif
 const listNotificationsForUser = `-- name: ListNotificationsForUser :many
 SELECT id, uuid, user_id, channel, status, priority, title, body, payload, action_url, recipient, template_code, source_event, scheduled_at, sent_at, delivered_at, read_at, failed_at, cancelled_at, attempt_count, max_attempts, last_error, provider, provider_reference, created_at, updated_at, organization_id FROM notifications
 WHERE user_id = $1
-  AND ($2::text IS NULL OR status = $2)
-  AND ($3::text IS NULL OR channel = $3)
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = $2::bigint)
+  AND ($3::text IS NULL OR status = $3)
+  AND ($4::text IS NULL OR channel = $4)
   AND (
-    $4::bool IS NULL
-    OR ($4::bool = TRUE AND read_at IS NULL AND channel = 'inapp')
-    OR ($4::bool = FALSE AND (read_at IS NOT NULL OR channel <> 'inapp'))
+    $5::bool IS NULL
+    OR ($5::bool = TRUE AND read_at IS NULL AND channel = 'inapp')
+    OR ($5::bool = FALSE AND (read_at IS NOT NULL OR channel <> 'inapp'))
   )
   AND (
-    $5::text IS NULL
-    OR title ILIKE '%' || $5 || '%'
-    OR body ILIKE '%' || $5 || '%'
-    OR COALESCE(template_code, '') ILIKE '%' || $5 || '%'
-    OR COALESCE(recipient, '') ILIKE '%' || $5 || '%'
+    $6::text IS NULL
+    OR title ILIKE '%' || $6 || '%'
+    OR body ILIKE '%' || $6 || '%'
+    OR COALESCE(template_code, '') ILIKE '%' || $6 || '%'
+    OR COALESCE(recipient, '') ILIKE '%' || $6 || '%'
   )
 ORDER BY created_at DESC
-LIMIT $7 OFFSET $6
+LIMIT $8 OFFSET $7
 `
 
 type ListNotificationsForUserParams struct {
-	UserID      pgtype.Int8 `json:"user_id"`
-	Status      pgtype.Text `json:"status"`
-	Channel     pgtype.Text `json:"channel"`
-	Unread      pgtype.Bool `json:"unread"`
-	Q           pgtype.Text `json:"q"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	UserID         pgtype.Int8 `json:"user_id"`
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+	Status         pgtype.Text `json:"status"`
+	Channel        pgtype.Text `json:"channel"`
+	Unread         pgtype.Bool `json:"unread"`
+	Q              pgtype.Text `json:"q"`
+	OffsetCount    int32       `json:"offset_count"`
+	LimitCount     int32       `json:"limit_count"`
 }
 
 func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]Notification, error) {
 	rows, err := q.db.Query(ctx, listNotificationsForUser,
 		arg.UserID,
+		arg.OrganizationID,
 		arg.Status,
 		arg.Channel,
 		arg.Unread,
@@ -653,12 +673,20 @@ UPDATE notifications
 SET status = 'read',
     read_at = COALESCE(read_at, NOW())
 WHERE user_id = $1
+  -- Inbox scope: un-stamped rows always; organization rows only inside
+  -- that organization (NULL organization_id param = platform shell).
+  AND (organization_id IS NULL OR organization_id = $2::bigint)
   AND channel = 'inapp'
   AND read_at IS NULL
 `
 
-func (q *Queries) MarkAllNotificationsReadForUser(ctx context.Context, userID pgtype.Int8) (int64, error) {
-	result, err := q.db.Exec(ctx, markAllNotificationsReadForUser, userID)
+type MarkAllNotificationsReadForUserParams struct {
+	UserID         pgtype.Int8 `json:"user_id"`
+	OrganizationID pgtype.Int8 `json:"organization_id"`
+}
+
+func (q *Queries) MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markAllNotificationsReadForUser, arg.UserID, arg.OrganizationID)
 	if err != nil {
 		return 0, err
 	}

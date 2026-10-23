@@ -15,5 +15,7 @@
   "specs_roles": "Roller",
   "prefix_pages": "sayfalar",
   "prefix_users": "kullanıcılar",
-  "prefix_roles": "roller"
+  "prefix_roles": "roller",
+  "specs_branches": "Şubeler",
+  "prefix_branches": "şube"
 }

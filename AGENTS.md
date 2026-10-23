@@ -11,6 +11,7 @@ Canonical env is the **repo-root** `.env`. Compose files are `compose.local.yml`
 | [boilerplate-first-setup](./.agents/skills/boilerplate-first-setup/SKILL.md) | Clone, `.env`, Docker names, Dokploy, `make local-dev` |
 | [monorepo-playbooks](./.agents/skills/monorepo-playbooks/SKILL.md) | Cross-app work; repo map |
 | [add-platform-resource](./.agents/skills/add-platform-resource/SKILL.md) | New list resource (module → RBAC → OpenAPI → UI → nav) |
+| [add-tenant-resource](./.agents/skills/add-tenant-resource/SKILL.md) | New organization-scoped list resource under `/t/{slug}` (org isolation, engines, full DataTable standard; example: branches) |
 | [nav-engine](./.agents/skills/nav-engine/SKILL.md) | Sidebar catalog, badges, info |
 | [io-engine](./.agents/skills/io-engine/SKILL.md) | Export / import adapters |
 | [bulk-engine](./.agents/skills/bulk-engine/SKILL.md) | Bulk actions, jobs, rollback |

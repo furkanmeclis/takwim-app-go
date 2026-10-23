@@ -29,6 +29,11 @@
       "allow_publish_for_client": false
     },
     {
+      "name": "resource",
+      "allow_subscribe_for_client": false,
+      "allow_publish_for_client": false
+    },
+    {
       "name": "qrlogin",
       "allow_subscribe_for_client": false,
       "allow_publish_for_client": false,

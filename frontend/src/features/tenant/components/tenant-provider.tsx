@@ -28,8 +28,12 @@ export type TenantScope = {
   /** Organization slug from the `/t/{slug}` route. */
   slug: string;
   organization: TenantOrganization | null;
-  /** Tenant role in this organization (`owner`, `admin`, `member`, …). */
+  /** Primary tenant role in this organization (`owner`, `admin`, `member`, …). */
   role: { key: string; name?: string } | null;
+  /** Every tenant role key the member holds here (permissions are their union). */
+  roles: string[];
+  /** `selected`: branch-bound data is limited to the member's branches. */
+  branchScope: "all" | "selected";
   /** `tenant.*` permissions in this organization only. */
   permissions: string[];
   /** The API confirmed the membership for this slug. */
@@ -124,6 +128,8 @@ export function TenantProvider({
           accessEndsAt: data.organization.access_ends_at ?? null,
         },
         role: { key: data.role, name: roleName },
+        roles: data.roles?.length ? data.roles : [data.role],
+        branchScope: data.branch_scope ?? "all",
         permissions: data.permissions ?? EMPTY,
         verified: true,
         optimistic,
@@ -138,6 +144,8 @@ export function TenantProvider({
       slug,
       organization: membership ? fromMembership(membership) : null,
       role: membership ? membership.role : null,
+      roles: membership ? [membership.role.key] : EMPTY,
+      branchScope: "all",
       permissions: membership?.permissions ?? EMPTY,
       verified: false,
       optimistic,
@@ -148,10 +156,7 @@ export function TenantProvider({
     };
   }, [data, error, isLoading, membership, refetch, slug]);
 
-  const roles = useMemo(
-    () => (value.role ? [value.role.key] : EMPTY),
-    [value.role],
-  );
+  const roles = value.roles;
 
   // Organization permissions plus the user's own account-level ones (inbox,
   // session). Platform permissions never apply inside an organization.

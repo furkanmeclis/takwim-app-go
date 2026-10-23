@@ -15,5 +15,8 @@
   "actions.users.enable": "Enable users",
   "actions.roles.delete": "Delete roles",
   "confirm.users.disable": "Disable {{count}} selected users?",
-  "confirm.roles.delete": "Delete {{count}} selected roles?"
+  "confirm.roles.delete": "Delete {{count}} selected roles?",
+  "actions.branches.activate": "Activate branches",
+  "actions.branches.deactivate": "Deactivate branches",
+  "confirm.branches.deactivate": "Deactivate {{count}} selected branches? They cannot be picked for new bookings."
 }

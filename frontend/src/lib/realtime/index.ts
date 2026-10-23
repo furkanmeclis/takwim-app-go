@@ -9,6 +9,11 @@ export {
   type RealtimeEventType,
 } from "./events";
 export { realtimeManager } from "./manager";
+export {
+  parseResourceChanged,
+  type ResourceChangeAction,
+  type ResourceChangedEvent,
+} from "./resource-events";
 export type {
   ConnectionTokenResult,
   RealtimeConnectionState,

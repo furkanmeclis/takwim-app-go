@@ -15,7 +15,7 @@ import (
 const addOrganizationMember = `-- name: AddOrganizationMember :one
 INSERT INTO organization_members (organization_id, user_id, role_id)
 VALUES ($1, $2, $3)
-RETURNING id, organization_id, user_id, role_id, created_at, updated_at
+RETURNING id, organization_id, user_id, role_id, created_at, updated_at, branch_scope
 `
 
 type AddOrganizationMemberParams struct {
@@ -34,6 +34,7 @@ func (q *Queries) AddOrganizationMember(ctx context.Context, arg AddOrganization
 		&i.RoleID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BranchScope,
 	)
 	return i, err
 }
@@ -64,13 +65,17 @@ func (q *Queries) CountOrganizationMembersByOrg(ctx context.Context, arg CountOr
 }
 
 const countOrganizationOwners = `-- name: CountOrganizationOwners :one
-SELECT COUNT(*)::bigint
+SELECT COUNT(DISTINCT om.id)::bigint
 FROM organization_members om
-INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
+INNER JOIN organization_member_roles omr
+    ON omr.organization_id = om.organization_id AND omr.member_id = om.id
+INNER JOIN roles r
+    ON r.id = omr.role_id AND r.scope = 'tenant' AND r.organization_id IS NULL AND r.slug = 'owner'
 INNER JOIN users u ON u.id = om.user_id AND u.deleted_at IS NULL
-WHERE om.organization_id = $1 AND r.slug = 'owner'
+WHERE om.organization_id = $1
 `
 
+// Members holding the template owner role (any of their roles).
 func (q *Queries) CountOrganizationOwners(ctx context.Context, organizationID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, countOrganizationOwners, organizationID)
 	var column_1 int64
@@ -313,7 +318,7 @@ func (q *Queries) GetOrganizationInvitationByUUID(ctx context.Context, argUuid u
 }
 
 const getOrganizationMember = `-- name: GetOrganizationMember :one
-SELECT om.id, om.organization_id, om.user_id, om.role_id, om.created_at, om.updated_at, r.slug AS role_key, r.name AS role_name
+SELECT om.id, om.organization_id, om.user_id, om.role_id, om.created_at, om.updated_at, om.branch_scope, r.slug AS role_key, r.name AS role_name
 FROM organization_members om
 INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
 WHERE om.organization_id = $1 AND om.user_id = $2
@@ -331,6 +336,7 @@ type GetOrganizationMemberRow struct {
 	RoleID         int64              `json:"role_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	BranchScope    string             `json:"branch_scope"`
 	RoleKey        string             `json:"role_key"`
 	RoleName       string             `json:"role_name"`
 }
@@ -345,6 +351,7 @@ func (q *Queries) GetOrganizationMember(ctx context.Context, arg GetOrganization
 		&i.RoleID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BranchScope,
 		&i.RoleKey,
 		&i.RoleName,
 	)
@@ -433,6 +440,32 @@ func (q *Queries) GetTenantRoleByKey(ctx context.Context, arg GetTenantRoleByKey
 		&i.OrganizationID,
 	)
 	return i, err
+}
+
+const listLiveOrganizationIDs = `-- name: ListLiveOrganizationIDs :many
+SELECT id FROM organizations
+WHERE deleted_at IS NULL
+ORDER BY id ASC
+`
+
+func (q *Queries) ListLiveOrganizationIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listLiveOrganizationIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listOrganizationInvitations = `-- name: ListOrganizationInvitations :many
@@ -791,7 +824,7 @@ func (q *Queries) LockOrganizationRow(ctx context.Context, id int64) (Organizati
 
 const resolveOrganizationScopeBySlug = `-- name: ResolveOrganizationScopeBySlug :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       om.role_id, r.slug AS role_key
+       om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $1
 INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
@@ -813,6 +846,8 @@ type ResolveOrganizationScopeBySlugRow struct {
 	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
 	RoleID         int64              `json:"role_id"`
 	RoleKey        string             `json:"role_key"`
+	MemberID       int64              `json:"member_id"`
+	BranchScope    string             `json:"branch_scope"`
 }
 
 func (q *Queries) ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error) {
@@ -828,13 +863,15 @@ func (q *Queries) ResolveOrganizationScopeBySlug(ctx context.Context, arg Resolv
 		&i.AccessEndsAt,
 		&i.RoleID,
 		&i.RoleKey,
+		&i.MemberID,
+		&i.BranchScope,
 	)
 	return i, err
 }
 
 const resolveOrganizationScopeByUUID = `-- name: ResolveOrganizationScopeByUUID :one
 SELECT o.id, o.uuid, o.slug, o.name, o.status, o.access_starts_at, o.access_ends_at,
-       om.role_id, r.slug AS role_key
+       om.role_id, r.slug AS role_key, om.id AS member_id, om.branch_scope
 FROM organizations o
 INNER JOIN organization_members om ON om.organization_id = o.id AND om.user_id = $1
 INNER JOIN roles r ON r.id = om.role_id AND r.scope = 'tenant'
@@ -856,6 +893,8 @@ type ResolveOrganizationScopeByUUIDRow struct {
 	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
 	RoleID         int64              `json:"role_id"`
 	RoleKey        string             `json:"role_key"`
+	MemberID       int64              `json:"member_id"`
+	BranchScope    string             `json:"branch_scope"`
 }
 
 func (q *Queries) ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error) {
@@ -871,6 +910,8 @@ func (q *Queries) ResolveOrganizationScopeByUUID(ctx context.Context, arg Resolv
 		&i.AccessEndsAt,
 		&i.RoleID,
 		&i.RoleKey,
+		&i.MemberID,
+		&i.BranchScope,
 	)
 	return i, err
 }
@@ -1029,7 +1070,7 @@ const updateOrganizationMemberRole = `-- name: UpdateOrganizationMemberRole :one
 UPDATE organization_members
 SET role_id = $3
 WHERE organization_id = $1 AND user_id = $2
-RETURNING id, organization_id, user_id, role_id, created_at, updated_at
+RETURNING id, organization_id, user_id, role_id, created_at, updated_at, branch_scope
 `
 
 type UpdateOrganizationMemberRoleParams struct {
@@ -1048,6 +1089,7 @@ func (q *Queries) UpdateOrganizationMemberRole(ctx context.Context, arg UpdateOr
 		&i.RoleID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BranchScope,
 	)
 	return i, err
 }

@@ -32,5 +32,10 @@
   "picker.no_access_link": "What can I do?",
   "no_access.title": "No access yet",
   "no_access.body": "Your account is ready, but you are not a member of any business yet. Once a business owner invites you, it will show up here.",
-  "no_access.check_again": "Check again"
+  "no_access.check_again": "Check again",
+  "roles.merkez_yoneticisi": "Head office manager",
+  "roles.sube_yoneticisi": "Branch manager",
+  "roles.rezervasyon_satis": "Reservations / Sales",
+  "roles.muhasebe": "Accounting",
+  "roles.teslim_iade": "Hand-over / Return"
 }

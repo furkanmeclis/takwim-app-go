@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
 )
 
@@ -40,6 +41,10 @@ func (s *Service) ListSpecs(ctx context.Context) []searchengine.Spec {
 	}
 	out := make([]searchengine.Spec, 0, len(s.reg.Specs()))
 	for _, spec := range s.reg.Specs() {
+		// Organization-owned records are searched through the tenant shell only.
+		if spec.Scope == searchengine.ScopeTenant {
+			continue
+		}
 		if spec.Permission == "" || p.HasPermission(spec.Permission) {
 			out = append(out, spec)
 		}
@@ -84,4 +89,65 @@ func (s *Service) allowedSpecs(ctx context.Context, requested string) []string {
 		out = append(out, spec.ID)
 	}
 	return out
+}
+
+// ListTenantSpecs returns the tenant specs the caller may search in the
+// current organization (permissions from orgctx.Scope, never platform roles).
+func (s *Service) ListTenantSpecs(ctx context.Context) []searchengine.Spec {
+	if s == nil || s.reg == nil {
+		return nil
+	}
+	scope, ok := orgctx.From(ctx)
+	if !ok {
+		return nil
+	}
+	out := make([]searchengine.Spec, 0)
+	for _, spec := range s.reg.Specs() {
+		if spec.Scope != searchengine.ScopeTenant {
+			continue
+		}
+		if spec.Permission == "" || scope.Has(spec.Permission) {
+			out = append(out, spec)
+		}
+	}
+	return out
+}
+
+// SearchTenant queries tenant specs, filtered to the current organization.
+func (s *Service) SearchTenant(ctx context.Context, q, spec string, limit int) []searchengine.Hit {
+	if !s.Enabled() {
+		return nil
+	}
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return nil
+	}
+	orgID, ok := orgctx.OrganizationID(ctx)
+	if !ok {
+		return nil
+	}
+	requested := strings.TrimSpace(spec)
+	branchIDs := orgctx.BranchScope(ctx)
+	specs := make([]string, 0)
+	filters := make([]string, 0)
+	for _, sp := range s.ListTenantSpecs(ctx) {
+		if requested != "" && sp.ID != requested {
+			continue
+		}
+		filter, ok := searchengine.TenantFilter(sp, orgID, branchIDs)
+		if !ok {
+			continue
+		}
+		specs = append(specs, sp.ID)
+		filters = append(filters, filter)
+	}
+	if len(specs) == 0 {
+		return nil
+	}
+	hits, err := s.client.SearchPerSpec(ctx, specs, filters, q, limit)
+	if err != nil {
+		s.log.Warn("search_tenant_query_failed", "error", err)
+		return nil
+	}
+	return hits
 }

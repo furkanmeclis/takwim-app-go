@@ -16,6 +16,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/i18n"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine/adapters"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/queue"
 	"github.com/google/uuid"
@@ -47,6 +48,17 @@ type Service struct {
 	activity *activity.Recorder
 	log      *slog.Logger
 	syncMode bool
+	events   resourceEvents
+	// scopes re-resolves the requester's membership for tenant jobs
+	// (permissions and branch scope); see orgctx.WithJobScope.
+	scopes orgctx.JobScopeLoader
+}
+
+// SetJobScopeLoader makes tenant jobs run with the requester's current
+// organization scope (branch scope included) instead of the bare
+// organization id.
+func (s *Service) SetJobScopeLoader(l orgctx.JobScopeLoader) {
+	s.scopes = l
 }
 
 func New(
@@ -86,13 +98,17 @@ func (s *Service) Upload(ctx context.Context, actorID int64, resource string, fo
 	if _, err := s.registry.Get(resource); err != nil {
 		return ImportJobView{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
+	orgID, err := orgctx.EngineScope(ctx, resource)
+	if err != nil {
+		return ImportJobView{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return ImportJobView{}, err
 	}
 	row, err := s.q.CreateImportJob(ctx, db.CreateImportJobParams{
 		Resource: resource, ActorID: actorID, Format: string(format), Locale: locale,
-		FileKey: pgtype.Text{},
+		FileKey: pgtype.Text{}, OrganizationID: orgID,
 	})
 	if err != nil {
 		return ImportJobView{}, err
@@ -145,7 +161,11 @@ func (s *Service) Sample(ctx context.Context, resource string, format ioengine.I
 	if len(fields) == 0 {
 		return nil, "", ErrInvalidRequest
 	}
-	return ioengine.EncodeSample(format, locale, fields, adapters.SampleRows(resource))
+	rows := adapters.SampleRows(resource)
+	if sampler, ok := adapter.(ioengine.SampleProvider); ok {
+		rows = sampler.SampleRows()
+	}
+	return ioengine.EncodeSample(format, locale, fields, rows)
 }
 
 // UpdateMapping saves column mapping and defaults.
@@ -214,6 +234,15 @@ func (s *Service) ProcessImport(ctx context.Context, jobID int64) error {
 	if err != nil {
 		return err
 	}
+	if job.OrganizationID.Valid {
+		// Tenant job: adapters read the organization (and the requester's
+		// branch scope) from the context.
+		scoped, err := orgctx.WithJobScope(ctx, s.scopes, job.OrganizationID.Int64, job.ActorID)
+		if err != nil {
+			return s.failImport(ctx, jobID, err.Error())
+		}
+		ctx = scoped
+	}
 	adapter, err := s.registry.Get(job.Resource)
 	if err != nil {
 		return s.failImport(ctx, jobID, err.Error())
@@ -224,6 +253,7 @@ func (s *Service) ProcessImport(ctx context.Context, jobID int64) error {
 	}
 	created, updated, failed := 0, 0, 0
 	var applyErrs []ioengine.RowError
+	var affected []string
 	for i, row := range rows {
 		res, err := adapter.ApplyRow(ctx, row, defaults)
 		if err != nil {
@@ -240,6 +270,9 @@ func (s *Service) ProcessImport(ctx context.Context, jobID int64) error {
 			created++
 		} else {
 			updated++
+		}
+		if len(affected) <= maxEventUUIDs {
+			affected = append(affected, res.EntityUUID)
 		}
 		prev, _ := json.Marshal(res.Previous)
 		_, _ = s.q.InsertImportChange(ctx, db.InsertImportChangeParams{
@@ -259,7 +292,8 @@ func (s *Service) ProcessImport(ctx context.Context, jobID int64) error {
 		loc := i18n.Normalize(job.Locale)
 		_, _ = s.notifier.Enqueue(ctx, notifmodel.EnqueueInput{
 			UserID: &uid, Channels: []string{notifmodel.ChannelInapp},
-			TemplateCode: "imports.applied", Language: job.Locale,
+			OrganizationID: jobOrganization(job.OrganizationID),
+			TemplateCode:   "imports.applied", Language: job.Locale,
 			TemplateVars: map[string]string{
 				"resource": i18n.ResourceLabel(loc, job.Resource),
 				"created":  fmt.Sprintf("%d", created),
@@ -275,6 +309,7 @@ func (s *Service) ProcessImport(ctx context.Context, jobID int64) error {
 			"created": created, "updated": updated, "failed": failed,
 		}, nil)
 	}
+	s.publishBulk(ctx, job.Resource, affected)
 	_ = applied
 	_ = mapping
 	return nil
@@ -300,11 +335,13 @@ func (s *Service) Rollback(ctx context.Context, jobUUID uuid.UUID, actorID int64
 	if err != nil {
 		return ImportJobView{}, err
 	}
+	reverted := make([]string, 0, len(changes))
 	for i := len(changes) - 1; i >= 0; i-- {
 		ch := changes[i]
 		var prev map[string]any
 		_ = json.Unmarshal(ch.PreviousJson, &prev)
 		_ = adapter.RevertRow(ctx, ch.EntityType, ch.EntityUuid.String(), prev)
+		reverted = append(reverted, ch.EntityUuid.String())
 	}
 	row, err := s.q.MarkImportJobRolledBack(ctx, job.ID)
 	if err != nil {
@@ -314,6 +351,7 @@ func (s *Service) Rollback(ctx context.Context, jobUUID uuid.UUID, actorID int64
 		uid := actorID
 		s.activity.Record(ctx, &uid, "import.rolled_back", job.Resource, &job.Uuid, map[string]any{}, nil)
 	}
+	s.publishBulk(ctx, job.Resource, reverted)
 	return mapImportJob(row), nil
 }
 
@@ -342,7 +380,7 @@ func (s *Service) ListJobs(ctx context.Context, actorID int64, admin bool, limit
 
 func (s *Service) GetJob(ctx context.Context, jobUUID uuid.UUID, actorID int64, admin bool) (ImportJobView, error) {
 	row, err := s.q.GetImportJobByUUID(ctx, jobUUID)
-	if err != nil {
+	if err != nil || !orgctx.SameEngineScope(ctx, row.OrganizationID) {
 		return ImportJobView{}, ErrNotFound
 	}
 	if !admin && row.ActorID != actorID {
@@ -352,12 +390,17 @@ func (s *Service) GetJob(ctx context.Context, jobUUID uuid.UUID, actorID int64, 
 }
 
 func (s *Service) buildPreview(ctx context.Context, job db.ImportJob) (ioengine.PreviewSummary, error) {
-	rows, _, _, err := s.loadMappedRows(ctx, job)
+	rows, _, defaults, err := s.loadMappedRows(ctx, job)
 	if err != nil {
 		return ioengine.PreviewSummary{}, err
 	}
 	summary := ioengine.PreviewSummary{Total: len(rows)}
 	previews := make([]ioengine.RowPreview, 0, min(len(rows), 50))
+	if adapter, err := s.registry.Get(job.Resource); err == nil {
+		if previewer, ok := adapter.(ioengine.RowPreviewer); ok {
+			return s.diffPreview(ctx, job, previewer, rows, defaults)
+		}
+	}
 	for i, row := range rows {
 		ok := true
 		for k, v := range row {
@@ -375,6 +418,42 @@ func (s *Service) buildPreview(ctx context.Context, job db.ImportJob) (ioengine.
 		}
 	}
 	summary.Rows = previews
+	return summary, nil
+}
+
+// diffPreview dry-runs every row through the adapter (validation + what it
+// would create or change). Tenant adapters read the organization and branch
+// scope from ctx, like ApplyRow.
+func (s *Service) diffPreview(ctx context.Context, job db.ImportJob, previewer ioengine.RowPreviewer, rows []map[string]any, defaults map[string]any) (ioengine.PreviewSummary, error) {
+	if job.OrganizationID.Valid {
+		scoped, err := orgctx.WithJobScope(ctx, s.scopes, job.OrganizationID.Int64, job.ActorID)
+		if err != nil {
+			return ioengine.PreviewSummary{}, err
+		}
+		ctx = scoped
+	}
+	summary := ioengine.PreviewSummary{Total: len(rows), Rows: []ioengine.RowPreview{}, Errors: []ioengine.RowError{}}
+	for i, row := range rows {
+		diff, err := previewer.PreviewRow(ctx, row, defaults)
+		if err != nil {
+			return ioengine.PreviewSummary{}, err
+		}
+		if diff.Error != "" {
+			summary.Invalid++
+			summary.Errors = append(summary.Errors, ioengine.RowError{Index: i + 1, Error: diff.Error})
+			continue
+		}
+		summary.Valid++
+		switch diff.Op {
+		case "create":
+			summary.Creates++
+		case "update":
+			summary.Updates++
+		}
+		if len(summary.Rows) < 200 {
+			summary.Rows = append(summary.Rows, ioengine.RowPreview{Index: i + 1, Data: row, Op: diff.Op, Changes: diff.Changes})
+		}
+	}
 	return summary, nil
 }
 
@@ -415,13 +494,23 @@ func (s *Service) loadMappedRows(ctx context.Context, job db.ImportJob) ([]map[s
 
 func (s *Service) getOwned(ctx context.Context, jobUUID uuid.UUID, actorID int64) (db.ImportJob, error) {
 	row, err := s.q.GetImportJobByUUID(ctx, jobUUID)
-	if err != nil {
+	if err != nil || !orgctx.SameEngineScope(ctx, row.OrganizationID) {
 		return db.ImportJob{}, ErrNotFound
 	}
 	if row.ActorID != actorID {
 		return db.ImportJob{}, ErrForbidden
 	}
 	return row, nil
+}
+
+// jobOrganization stamps job notifications with the job's organization, so
+// they show only in that organization's panel.
+func jobOrganization(id pgtype.Int8) *int64 {
+	if !id.Valid {
+		return nil
+	}
+	v := id.Int64
+	return &v
 }
 
 func (s *Service) failImport(ctx context.Context, jobID int64, msg string) error {

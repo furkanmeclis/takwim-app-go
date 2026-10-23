@@ -9,7 +9,6 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type pushTestQuerier struct {
@@ -51,7 +50,7 @@ func (m *pushTestQuerier) ListNotificationsForUser(context.Context, db.ListNotif
 func (m *pushTestQuerier) CountNotificationsForUser(context.Context, db.CountNotificationsForUserParams) (int64, error) {
 	return 0, nil
 }
-func (m *pushTestQuerier) CountUnreadInappForUser(context.Context, pgtype.Int8) (int64, error) {
+func (m *pushTestQuerier) CountUnreadInappForUser(context.Context, db.CountUnreadInappForUserParams) (int64, error) {
 	return 0, nil
 }
 func (m *pushTestQuerier) ListPlatformNotifications(context.Context, db.ListPlatformNotificationsParams) ([]db.Notification, error) {
@@ -75,7 +74,7 @@ func (m *pushTestQuerier) MarkNotificationFailed(context.Context, db.MarkNotific
 func (m *pushTestQuerier) MarkNotificationRead(context.Context, db.MarkNotificationReadParams) (db.Notification, error) {
 	return db.Notification{}, nil
 }
-func (m *pushTestQuerier) MarkAllNotificationsReadForUser(context.Context, pgtype.Int8) (int64, error) {
+func (m *pushTestQuerier) MarkAllNotificationsReadForUser(context.Context, db.MarkAllNotificationsReadForUserParams) (int64, error) {
 	return 0, nil
 }
 func (m *pushTestQuerier) InsertNotificationHistory(context.Context, db.InsertNotificationHistoryParams) (db.NotificationHistory, error) {
@@ -92,6 +91,9 @@ func (m *pushTestQuerier) GetUserByID(context.Context, int64) (db.User, error) {
 }
 func (m *pushTestQuerier) GetUserByUUID(context.Context, uuid.UUID) (db.User, error) {
 	return db.User{}, nil
+}
+func (m *pushTestQuerier) GetOrganizationByID(context.Context, int64) (db.Organization, error) {
+	return db.Organization{}, nil
 }
 
 var _ Querier = (*pushTestQuerier)(nil)

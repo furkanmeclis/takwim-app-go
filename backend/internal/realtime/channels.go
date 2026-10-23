@@ -73,3 +73,26 @@ const QRLoginChannelPrefix = "qrlogin:"
 func QRLoginChannel(channelID string) string {
 	return QRLoginChannelPrefix + channelID
 }
+
+// ChannelRule authorizes one family of channels. It returns handled=false
+// for channels it does not recognize so the next rule (or the base
+// authorizer) decides.
+type ChannelRule func(ctx context.Context, userUUID uuid.UUID, isSuperAdmin bool, channel string) (handled, allowed bool, err error)
+
+// RunChannelRules applies rules in order. handled=false means no rule
+// recognized the channel and the caller's own checks decide.
+func RunChannelRules(ctx context.Context, rules []ChannelRule, userUUID uuid.UUID, isSuperAdmin bool, channel string) (handled, allowed bool, err error) {
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		handled, allowed, err := rule(ctx, userUUID, isSuperAdmin, channel)
+		if err != nil {
+			return true, false, err
+		}
+		if handled {
+			return true, allowed, nil
+		}
+	}
+	return false, false, nil
+}

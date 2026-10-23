@@ -52,5 +52,10 @@
   "cell_saved": "Hücre kaydedildi",
   "faceted_empty": "Sonuç yok",
   "faceted_selected": "{{count}} seçili",
-  "bulk": "Toplu"
+  "bulk": "Toplu",
+  "live_new_record": "{{count}} yeni kayıt",
+  "live_new_records": "{{count}} yeni kayıt",
+  "live_changed": "Liste güncellendi",
+  "live_refresh": "Yenile",
+  "live_dismiss": "Kapat"
 }

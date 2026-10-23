@@ -86,6 +86,9 @@ export const RealtimeEvents = {
   ExportCancelled: "exports.cancelled",
   ReportExportCompleted: "reports.export_completed",
   ReportExportFailed: "reports.export_failed",
+
+  // Live lists (resource:{name} channels, see lib/realtime/resource-events)
+  ResourceChanged: "resource.changed",
 } as const;
 
 export type RealtimeEventType =

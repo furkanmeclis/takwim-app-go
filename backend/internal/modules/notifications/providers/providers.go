@@ -92,6 +92,11 @@ func (p RealtimeProvider) Deliver(ctx context.Context, n db.Notification, userUU
 		var extra map[string]any
 		if err := json.Unmarshal(n.Payload, &extra); err == nil && len(extra) > 0 {
 			notification["payload"] = extra
+			// Organization notifications name their organization so the
+			// tenant shell shows only its own (and the platform shell none).
+			if org, ok := extra["organization_uuid"].(string); ok && n.OrganizationID.Valid && org != "" {
+				notification["organization_uuid"] = org
+			}
 		}
 	}
 	payload := map[string]any{

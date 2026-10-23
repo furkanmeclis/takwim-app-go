@@ -39,11 +39,24 @@ export function permissionGroupKey(slug: string): string {
     : prefix || "other";
 }
 
-export function groupPermissions(items: Permission[]): PermissionGroup[] {
+/**
+ * Tenant matrix groups: `tenant.payment.refund` → `tenant_payment`, so each
+ * tenant resource / action family gets its own group.
+ */
+export function tenantPermissionGroupKey(slug: string): string {
+  const [prefix, resource] = slug.split(".");
+  if (prefix !== "tenant" || !resource) return permissionGroupKey(slug);
+  return `tenant_${resource}`;
+}
+
+export function groupPermissions(
+  items: Permission[],
+  groupKey: (slug: string) => string = permissionGroupKey,
+): PermissionGroup[] {
   const map = new Map<string, Permission[]>();
 
   for (const permission of items) {
-    const key = permissionGroupKey(permission.slug);
+    const key = groupKey(permission.slug);
     const bucket = map.get(key) ?? [];
     bucket.push(permission);
     map.set(key, bucket);

@@ -1,6 +1,6 @@
 -- name: CreateBulkJob :one
-INSERT INTO bulk_jobs (resource, action, actor_id, locale, status, target_json)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO bulk_jobs (resource, action, actor_id, locale, status, target_json, organization_id)
+VALUES ($1, $2, $3, $4, $5, $6, sqlc.narg(organization_id))
 RETURNING *;
 
 -- name: GetBulkJobByUUID :one
@@ -39,20 +39,21 @@ RETURNING *;
 
 -- name: ListBulkJobsForActor :many
 SELECT * FROM bulk_jobs
-WHERE actor_id = $1
+WHERE actor_id = $1 AND organization_id IS NULL
 ORDER BY created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountBulkJobsForActor :one
-SELECT COUNT(*)::bigint FROM bulk_jobs WHERE actor_id = $1;
+SELECT COUNT(*)::bigint FROM bulk_jobs WHERE actor_id = $1 AND organization_id IS NULL;
 
 -- name: ListAllBulkJobs :many
 SELECT * FROM bulk_jobs
+WHERE organization_id IS NULL
 ORDER BY created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountAllBulkJobs :one
-SELECT COUNT(*)::bigint FROM bulk_jobs;
+SELECT COUNT(*)::bigint FROM bulk_jobs WHERE organization_id IS NULL;
 
 -- name: InsertBulkChange :one
 INSERT INTO bulk_changes (job_id, entity_type, entity_uuid, op, previous_json)

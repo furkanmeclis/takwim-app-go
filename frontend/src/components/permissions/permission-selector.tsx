@@ -28,6 +28,8 @@ type PermissionSelectorProps = {
   className?: string;
   /** When true, renders sticky summary counter */
   showSummary?: boolean;
+  /** Group key of a slug (default: first segment, see `permissionGroupKey`). */
+  groupBy?: (slug: string) => string;
 };
 
 /**
@@ -40,6 +42,7 @@ export function PermissionSelector({
   disabled,
   className,
   showSummary = true,
+  groupBy,
 }: PermissionSelectorProps) {
   const { t } = useLocale();
   const [query, setQuery] = useState("");
@@ -55,7 +58,10 @@ export function PermissionSelector({
     );
   }, [permissions, query]);
 
-  const groups = useMemo(() => groupPermissions(filtered), [filtered]);
+  const groups = useMemo(
+    () => groupPermissions(filtered, groupBy),
+    [filtered, groupBy],
+  );
   const allGroupKeys = groups.map((g) => g.key);
   const [openGroups, setOpenGroups] = useState<string[]>(allGroupKeys);
 

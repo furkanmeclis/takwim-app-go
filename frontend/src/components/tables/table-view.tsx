@@ -36,13 +36,26 @@ import type {
   DataTableColumnMeta,
   TableDensity,
 } from "@/components/tables/types";
+import {
+  Table as TablePrimitive,
+  TableBody,
+  TableCell as TableCellPrimitive,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+// The checkbox variants keep the density padding on select cells (the shadcn
+// primitive drops the end padding and nudges direct-child checkboxes).
 const densityCell: Record<TableDensity, string> = {
-  compact: "px-2 py-1.5",
-  comfortable: "px-3 py-2.5",
-  spacious: "px-4 py-3.5",
+  compact: "px-2 py-1.5 [&:has([role=checkbox])]:pr-2",
+  comfortable: "px-3 py-2.5 [&:has([role=checkbox])]:pr-3",
+  spacious: "px-4 py-3.5 [&:has([role=checkbox])]:pr-4",
 };
+
+/** Undo shadcn cell defaults this table sizes itself (height, wrapping). */
+const cellReset = "h-auto whitespace-normal [&>[role=checkbox]]:translate-y-0";
 
 type EditingCell = { rowId: string; columnId: string } | null;
 
@@ -64,6 +77,8 @@ type TableViewProps<TData> = {
   onEditingCellChange?: (cell: EditingCell) => void;
   onCellEdit?: (payload: CellEditPayload<TData>) => void;
   onRowClick?: (row: TData) => void;
+  /** Row ids being removed by a live update (faded out before refetch). */
+  fadingRowIds?: ReadonlySet<string>;
 };
 
 export function TableView<TData>({
@@ -79,6 +94,7 @@ export function TableView<TData>({
   onEditingCellChange,
   onCellEdit,
   onRowClick,
+  fadingRowIds,
 }: TableViewProps<TData>) {
   const cellPad = densityCell[density];
   const leafColumns = table.getVisibleLeafColumns();
@@ -101,12 +117,12 @@ export function TableView<TData>({
   };
 
   const tableNode = (
-    <div className="border-border w-full overflow-x-auto rounded-lg border">
+    <div className="border-border w-full overflow-hidden rounded-lg border">
       {/*
         table-auto so the actions column can grow with icon buttons.
         Explicit widths still apply for select/reorder and user-resized cols.
       */}
-      <table className="w-full caption-bottom text-sm">
+      <TablePrimitive>
         <colgroup>
           {leafColumns.map((column) => {
             const sizing = table.getState().columnSizing;
@@ -132,17 +148,18 @@ export function TableView<TData>({
           })}
         </colgroup>
 
-        <thead className="bg-muted/40">
-          <tr className="border-border border-b">
+        <TableHeader className="bg-muted/40">
+          <TableRow className="border-border border-b transition-none hover:bg-transparent">
             {leafHeaders.map((header) => {
               const meta = header.column.columnDef.meta as
                 DataTableColumnMeta | undefined;
               const pinned = header.column.getIsPinned();
               return (
-                <th
+                <TableHead
                   key={header.id}
                   className={cn(
                     "text-muted-foreground relative text-start align-middle font-medium",
+                    cellReset,
                     cellPad,
                     meta?.headerClassName,
                     header.column.id === "actions" && "whitespace-nowrap",
@@ -184,20 +201,21 @@ export function TableView<TData>({
                       )}
                     />
                   ) : null}
-                </th>
+                </TableHead>
               );
             })}
-          </tr>
+          </TableRow>
 
           {showColumnFilters && !reorderMode ? (
-            <tr className="border-border border-b">
+            <TableRow className="border-border border-b transition-none hover:bg-transparent">
               {leafHeaders.map((header) => {
                 const pinned = header.column.getIsPinned();
                 return (
-                  <th
+                  <TableHead
                     key={`filter-${header.id}`}
                     className={cn(
-                      "bg-background align-top font-normal",
+                      "bg-background text-start align-top font-normal",
+                      cellReset,
                       cellPad,
                       pinned === "left" && "bg-background sticky start-0 z-20",
                       pinned === "right" && "bg-background sticky end-0 z-20",
@@ -216,19 +234,19 @@ export function TableView<TData>({
                     <div className="min-w-0">
                       <ColumnFilter column={header.column} />
                     </div>
-                  </th>
+                  </TableHead>
                 );
               })}
-            </tr>
+            </TableRow>
           ) : null}
-        </thead>
+        </TableHeader>
 
-        <tbody>
+        <TableBody>
           {rows.length === 0 && emptyMessage ? (
-            <tr>
-              <td
+            <TableRow className="border-0 transition-none hover:bg-transparent">
+              <TableCellPrimitive
                 colSpan={Math.max(colSpan, 1)}
-                className={cn("text-center", cellPad, "py-12")}
+                className={cn("text-center", cellReset, cellPad, "py-12")}
               >
                 <div className="mx-auto flex max-w-sm flex-col items-center gap-1">
                   <p className="text-foreground text-sm font-medium">
@@ -240,8 +258,8 @@ export function TableView<TData>({
                     </p>
                   ) : null}
                 </div>
-              </td>
-            </tr>
+              </TableCellPrimitive>
+            </TableRow>
           ) : (
             rows.map((row) =>
               reorderMode ? (
@@ -264,12 +282,13 @@ export function TableView<TData>({
                   onEditingCellChange={onEditingCellChange}
                   onCellEdit={onCellEdit}
                   onRowClick={onRowClick}
+                  fading={fadingRowIds?.has(row.id)}
                 />
               ),
             )
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </TablePrimitive>
     </div>
   );
 
@@ -303,6 +322,7 @@ type RowProps<TData> = {
   onEditingCellChange?: (cell: EditingCell) => void;
   onCellEdit?: (payload: CellEditPayload<TData>) => void;
   onRowClick?: (row: TData) => void;
+  fading?: boolean;
 };
 
 function StaticTableRow<TData>({
@@ -314,13 +334,16 @@ function StaticTableRow<TData>({
   onEditingCellChange,
   onCellEdit,
   onRowClick,
+  fading,
 }: RowProps<TData>) {
   return (
-    <tr
+    <TableRow
       className={cn(
-        "border-border hover:bg-muted/30 data-[state=selected]:bg-muted/50 border-b last:border-0",
+        "border-border hover:bg-muted/30 data-[state=selected]:bg-muted/50 border-b transition-opacity duration-300 last:border-0",
         onRowClick && "cursor-pointer",
+        fading && "pointer-events-none opacity-0",
       )}
+      aria-hidden={fading || undefined}
       data-state={row.getIsSelected() ? "selected" : undefined}
       onClick={
         onRowClick
@@ -332,7 +355,7 @@ function StaticTableRow<TData>({
       }
     >
       {row.getVisibleCells().map((cell) => (
-        <TableCell
+        <BodyCell
           key={cell.id}
           cell={cell}
           table={table}
@@ -344,7 +367,7 @@ function StaticTableRow<TData>({
           row={row}
         />
       ))}
-    </tr>
+    </TableRow>
   );
 }
 
@@ -367,11 +390,11 @@ function SortableTableRow<TData>({ row, table, cellPad }: RowProps<TData>) {
   };
 
   return (
-    <tr
+    <TableRow
       ref={setNodeRef}
       style={style}
       className={cn(
-        "border-border bg-background border-b last:border-0",
+        "border-border bg-background border-b transition-none last:border-0",
         isDragging
           ? "bg-muted/40 relative z-20 shadow-sm"
           : "hover:bg-muted/30",
@@ -380,7 +403,7 @@ function SortableTableRow<TData>({ row, table, cellPad }: RowProps<TData>) {
     >
       <RowDragProvider value={{ attributes, listeners, isDragging }}>
         {row.getVisibleCells().map((cell) => (
-          <TableCell
+          <BodyCell
             key={cell.id}
             cell={cell}
             table={table}
@@ -390,11 +413,11 @@ function SortableTableRow<TData>({ row, table, cellPad }: RowProps<TData>) {
           />
         ))}
       </RowDragProvider>
-    </tr>
+    </TableRow>
   );
 }
 
-function TableCell<TData>({
+function BodyCell<TData>({
   cell,
   table,
   cellPad,
@@ -419,9 +442,10 @@ function TableCell<TData>({
     editingCell?.rowId === row.id && editingCell?.columnId === cell.column.id;
 
   return (
-    <td
+    <TableCellPrimitive
       className={cn(
         "align-middle",
+        cellReset,
         cellPad,
         meta?.cellClassName,
         cell.column.id === "actions" && "whitespace-nowrap",
@@ -467,6 +491,6 @@ function TableCell<TData>({
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </EditableCell>
       </div>
-    </td>
+    </TableCellPrimitive>
   );
 }

@@ -1,20 +1,47 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { DataTablePagination } from "@/components/tables/data-table-pagination";
 import { DataTableToolbar } from "@/components/tables/data-table-toolbar";
 import { GridView } from "@/components/tables/grid-view";
+import { LiveUpdatesBanner } from "@/components/tables/live-updates-banner";
 import { createReorderColumnDef } from "@/components/tables/reorder-column";
 import { reorderRowsById } from "@/components/tables/reorder-rows";
 import { TableView } from "@/components/tables/table-view";
 import type { DataTableProps } from "@/components/tables/types";
 import { useDataTable } from "@/components/tables/use-data-table";
+import { useLiveRows } from "@/components/tables/use-live-rows";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocale } from "@/providers/locale-provider";
 import { cn } from "@/lib/utils";
+
+/** Distance (px) from the top after which the user counts as "scrolled". */
+const SCROLLED_PX = 48;
+
+function scrollParent(node: HTMLElement | null): HTMLElement | null {
+  let el = node?.parentElement ?? null;
+  while (el) {
+    const { overflowY } = window.getComputedStyle(el);
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      el.scrollHeight > el.clientHeight
+    ) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
 
 export function DataTable<TData>({
   columns,
@@ -36,6 +63,7 @@ export function DataTable<TData>({
   onCellEdit,
   onExportReady,
   onRowClick,
+  realtime,
   className,
 }: DataTableProps<TData>) {
   const { t } = useLocale();
@@ -96,6 +124,52 @@ export function DataTable<TData>({
 
   const activeEditingCell = reorderMode ? null : editingCell;
 
+  // Live updates (opt-in): see use-live-rows for the refresh rules.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pageIndex = table.getState().pagination.pageIndex;
+  const isScrolled = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    const parent = scrollParent(rootRef.current);
+    const top = parent ? parent.scrollTop : window.scrollY;
+    return top > SCROLLED_PX;
+  }, []);
+  const live = useLiveRows({
+    realtime,
+    rowIds: data.map((row, index) => resolvedGetRowId(row, index)),
+    pageIndex,
+    isScrolled,
+    paused: reorderMode || activeEditingCell !== null,
+    onRowsDeleted: (ids) => {
+      const selection = table.getState().rowSelection;
+      if (!ids.some((id) => selection[id])) return;
+      table.setRowSelection((prev) => {
+        const next = { ...prev };
+        for (const id of ids) delete next[id];
+        return next;
+      });
+    },
+  });
+  // "Refresh" from page N jumps to page 1; refetch once that query is current.
+  const refreshOnFirstPage = useRef(false);
+  const refetchLive = realtime?.refetch;
+  useEffect(() => {
+    if (!refreshOnFirstPage.current || pageIndex !== 0) return;
+    refreshOnFirstPage.current = false;
+    void refetchLive?.();
+  }, [pageIndex, refetchLive]);
+  const applyLiveUpdates = () => {
+    if (pageIndex !== 0) {
+      refreshOnFirstPage.current = true;
+      live.dismiss();
+      table.setPageIndex(0);
+    } else {
+      live.applyPending();
+    }
+    if (isScrolled()) {
+      rootRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  };
+
   const toolbarNode: ReactNode =
     typeof toolbar === "function" ? toolbar(table) : toolbar;
 
@@ -137,7 +211,7 @@ export function DataTable<TData>({
       : null;
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div ref={rootRef} className={cn("space-y-3", className)}>
       <DataTableToolbar
         table={table}
         features={resolvedFeatures}
@@ -179,6 +253,14 @@ export function DataTable<TData>({
         </p>
       ) : null}
 
+      {live.hasPending ? (
+        <LiveUpdatesBanner
+          pending={live.pending}
+          onRefresh={applyLiveUpdates}
+          onDismiss={live.dismiss}
+        />
+      ) : null}
+
       {displayMode === "grid" ? (
         emptyMessage && !hasRows ? (
           <div className="space-y-3">
@@ -193,6 +275,7 @@ export function DataTable<TData>({
             renderGridItem={renderGridItem}
             mobile={forceMobileCards}
             onRowClick={reorderMode ? undefined : onRowClick}
+            fadingRowIds={live.fadingIds}
           />
         )
       ) : (
@@ -220,6 +303,7 @@ export function DataTable<TData>({
           onEditingCellChange={setEditingCell}
           onCellEdit={onCellEdit}
           onRowClick={reorderMode ? undefined : onRowClick}
+          fadingRowIds={live.fadingIds}
         />
       )}
 

@@ -6,6 +6,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/middleware"
 	importhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/handler"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/jwt"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 )
 
@@ -50,5 +51,38 @@ func RegisterRoutes(
 	))
 	mux.Handle("GET /v1/platform/roles/import/sample", middleware.Chain(
 		http.HandlerFunc(h.SampleRoles), authn, require(rbac.PermPlatformRolesImport),
+	))
+}
+
+// RegisterTenantRoutes mounts the organization-scoped import job routes. The
+// use case only finds jobs of the caller in the X-Organization organization.
+// Resource upload / sample routes are mounted by the resource module.
+func RegisterTenantRoutes(
+	mux *http.ServeMux,
+	h *importhandler.Handler,
+	tokens *jwt.Manager,
+	loader middleware.IdentityLoader,
+	resolver orgctx.Resolver,
+) {
+	if resolver == nil {
+		return
+	}
+	authn := middleware.Authenticate(tokens, loader)
+	org := middleware.RequireOrganization(resolver)
+
+	mux.Handle("GET /v1/tenant/imports/{uuid}", middleware.Chain(
+		http.HandlerFunc(h.TenantGet), authn, org,
+	))
+	mux.Handle("PATCH /v1/tenant/imports/{uuid}/mapping", middleware.Chain(
+		http.HandlerFunc(h.UpdateMapping), authn, org,
+	))
+	mux.Handle("POST /v1/tenant/imports/{uuid}/preview", middleware.Chain(
+		http.HandlerFunc(h.Preview), authn, org,
+	))
+	mux.Handle("POST /v1/tenant/imports/{uuid}/confirm", middleware.Chain(
+		http.HandlerFunc(h.Confirm), authn, org,
+	))
+	mux.Handle("POST /v1/tenant/imports/{uuid}/rollback", middleware.Chain(
+		http.HandlerFunc(h.Rollback), authn, org,
 	))
 }

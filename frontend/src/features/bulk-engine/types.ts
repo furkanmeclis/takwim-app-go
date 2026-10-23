@@ -19,6 +19,8 @@ export type BulkTarget = {
   scope: "ids" | "query";
   ids?: string[];
   query?: Record<string, string>;
+  /** Arguments of parameterised actions (e.g. the new vehicle status). */
+  params?: Record<string, string>;
 };
 
 export type BulkSummary = {
@@ -45,11 +47,19 @@ export type BulkExecuteSyncResult = {
   summary: BulkSummary;
 };
 
-export type BulkResource = "platform.users" | "platform.roles";
+export type BulkResource =
+  | "platform.users"
+  | "platform.roles"
+  | "tenant.branches";
 
+/**
+ * Execute route per resource. `tenant.*` resources are organization-scoped:
+ * call them with a tenant `ApiScope` (see `useApiScope`).
+ */
 export const BULK_PATHS: Record<BulkResource, string> = {
   "platform.users": "/v1/platform/users/bulk",
   "platform.roles": "/v1/platform/roles/bulk",
+  "tenant.branches": "/v1/tenant/branches/bulk",
 };
 
 export type SelectionScope =

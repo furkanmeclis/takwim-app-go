@@ -19,6 +19,8 @@ export const realtimeConfig = {
     workspace: (workspaceUuid: string) => `workspace:${workspaceUuid}`,
     conversation: (conversationUuid: string) =>
       `conversation:${conversationUuid}`,
+    /** Live list changes of one resource (`platform.users`, …). */
+    resource: (resource: string) => `resource:${resource}`,
   },
   presenceEnabled: true,
   /** When false, RealtimeProvider stays idle (no connect attempts). */

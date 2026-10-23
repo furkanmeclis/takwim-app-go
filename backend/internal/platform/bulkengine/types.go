@@ -12,11 +12,29 @@ type BulkActionDef struct {
 	ConfirmKey  string `json:"confirm_key,omitempty"`
 }
 
-// BulkTarget selects rows by explicit ids or list query filters.
+// BulkTarget selects rows by explicit ids or list query filters. Params are
+// the action arguments of parameterised actions (for example the new status
+// of a "set status" action); adapters read them with Params(ctx) and validate
+// them in ResolveTargets.
 type BulkTarget struct {
-	Scope string            `json:"scope"` // ids | query
-	IDs   []string          `json:"ids,omitempty"`
-	Query map[string]string `json:"query,omitempty"`
+	Scope  string            `json:"scope"` // ids | query
+	IDs    []string          `json:"ids,omitempty"`
+	Query  map[string]string `json:"query,omitempty"`
+	Params map[string]string `json:"params,omitempty"`
+}
+
+type paramsKey struct{}
+
+// WithParams stores the action params of a bulk job on ctx (set by the bulk
+// service before ApplyItem runs).
+func WithParams(ctx context.Context, params map[string]string) context.Context {
+	return context.WithValue(ctx, paramsKey{}, params)
+}
+
+// Params returns the action params of the running bulk job (nil when none).
+func Params(ctx context.Context) map[string]string {
+	p, _ := ctx.Value(paramsKey{}).(map[string]string)
+	return p
 }
 
 // BulkItemResult is the outcome of applying one bulk item.

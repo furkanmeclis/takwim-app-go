@@ -71,6 +71,13 @@ var trCatalog = map[string]string{
 	"export.format.xlsx":                  "Excel",
 	"export.format.csv":                   "CSV",
 	"export.format.json":                  "JSON",
+	"branches.uuid":                       "UUID", "branches.code": "Kod", "branches.name": "Ad",
+	"branches.city": "İl", "branches.district": "İlçe", "branches.address": "Adres",
+	"branches.phone": "Telefon", "branches.email": "E-posta", "branches.latitude": "Enlem",
+	"branches.longitude": "Boylam", "branches.prep_minutes": "Hazırlık süresi (dk)",
+	"branches.is_active": "Aktif", "branches.created_at": "Oluşturulma",
+	"export.title.tenant.branches": "Şubeler dışa aktarma",
+	"resources.tenant.branches":    "Şubeler",
 }
 
 var enCatalog = map[string]string{
@@ -106,4 +113,11 @@ var enCatalog = map[string]string{
 	"export.format.xlsx":                  "Excel",
 	"export.format.csv":                   "CSV",
 	"export.format.json":                  "JSON",
+	"branches.uuid":                       "UUID", "branches.code": "Code", "branches.name": "Name",
+	"branches.city": "City", "branches.district": "District", "branches.address": "Address",
+	"branches.phone": "Phone", "branches.email": "Email", "branches.latitude": "Latitude",
+	"branches.longitude": "Longitude", "branches.prep_minutes": "Preparation time (min)",
+	"branches.is_active": "Active", "branches.created_at": "Created",
+	"export.title.tenant.branches": "Branches export",
+	"resources.tenant.branches":    "Branches",
 }

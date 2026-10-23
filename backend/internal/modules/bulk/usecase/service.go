@@ -15,6 +15,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/i18n"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/queue"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -71,6 +72,17 @@ type Service struct {
 	cfg      config.BulkConfig
 	log      *slog.Logger
 	syncMode bool
+	events   resourceEvents
+	// scopes re-resolves the requester's membership for tenant jobs
+	// (permissions and branch scope); see orgctx.WithJobScope.
+	scopes orgctx.JobScopeLoader
+}
+
+// SetJobScopeLoader makes tenant jobs run with the requester's current
+// organization scope (branch scope included) instead of the bare
+// organization id.
+func (s *Service) SetJobScopeLoader(l orgctx.JobScopeLoader) {
+	s.scopes = l
 }
 
 func New(
@@ -102,6 +114,10 @@ func (s *Service) Execute(ctx context.Context, actorID int64, in ExecuteInput) (
 	if err != nil {
 		return ExecuteResult{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
+	orgID, err := orgctx.EngineScope(ctx, in.Resource)
+	if err != nil {
+		return ExecuteResult{}, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
 	if in.Target.Scope != "ids" && in.Target.Scope != "query" {
 		return ExecuteResult{}, fmt.Errorf("%w: target scope must be ids or query", ErrInvalidRequest)
 	}
@@ -115,10 +131,11 @@ func (s *Service) Execute(ctx context.Context, actorID int64, in ExecuteInput) (
 	locale := string(i18n.Normalize(in.Locale))
 	targetJSON, _ := json.Marshal(in.Target)
 	if len(targets) <= s.cfg.SyncMax {
-		summary, err := s.applyTargets(ctx, 0, adapter, def, in.Action, targets)
+		summary, affected, err := s.applyTargets(bulkengine.WithParams(ctx, in.Target.Params), 0, adapter, def, in.Action, targets)
 		if err != nil {
 			return ExecuteResult{}, err
 		}
+		s.publishBulk(ctx, in.Resource, affected)
 		if s.activity != nil {
 			uid := actorID
 			s.activity.Record(ctx, &uid, "bulk.completed", in.Resource, nil, map[string]any{
@@ -131,6 +148,7 @@ func (s *Service) Execute(ctx context.Context, actorID int64, in ExecuteInput) (
 	row, err := s.q.CreateBulkJob(ctx, db.CreateBulkJobParams{
 		Resource: in.Resource, Action: in.Action, ActorID: actorID,
 		Locale: string(locale), Status: "queued", TargetJson: targetJSON,
+		OrganizationID: orgID,
 	})
 	if err != nil {
 		return ExecuteResult{}, err
@@ -166,6 +184,15 @@ func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {
 	if err != nil {
 		return err
 	}
+	if job.OrganizationID.Valid {
+		// Tenant job: adapters read the organization (and the requester's
+		// branch scope) from the context.
+		scoped, err := orgctx.WithJobScope(ctx, s.scopes, job.OrganizationID.Int64, job.ActorID)
+		if err != nil {
+			return s.failBulk(ctx, jobID, err.Error())
+		}
+		ctx = scoped
+	}
 	def, adapter, err := s.registry.ActionDef(job.Resource, job.Action)
 	if err != nil {
 		return s.failBulk(ctx, jobID, err.Error())
@@ -178,7 +205,7 @@ func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {
 	if err != nil {
 		return s.failBulk(ctx, jobID, err.Error())
 	}
-	summary, err := s.applyTargets(ctx, jobID, adapter, def, job.Action, targets)
+	summary, affected, err := s.applyTargets(bulkengine.WithParams(ctx, target.Params), jobID, adapter, def, job.Action, targets)
 	if err != nil {
 		return s.failBulk(ctx, jobID, err.Error())
 	}
@@ -200,10 +227,15 @@ func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {
 		uid := job.ActorID
 		loc := i18n.Normalize(job.Locale)
 		channels := []string{notifmodel.ChannelInapp}
-		actionURL := fmt.Sprintf("/platform/bulk/%s", completed.Uuid.String())
+		var actionURL *string
+		if !job.OrganizationID.Valid {
+			u := fmt.Sprintf("/platform/bulk/%s", completed.Uuid.String())
+			actionURL = &u
+		}
 		_, _ = s.notifier.Enqueue(ctx, notifmodel.EnqueueInput{
 			UserID: &uid, Channels: channels,
-			TemplateCode: "bulk.completed", Language: job.Locale,
+			OrganizationID: jobOrganization(job.OrganizationID),
+			TemplateCode:   "bulk.completed", Language: job.Locale,
 			TemplateVars: map[string]string{
 				"resource":  i18n.ResourceLabel(loc, job.Resource),
 				"action":    job.Action,
@@ -211,7 +243,7 @@ func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {
 				"failed":    fmt.Sprintf("%d", summary.Failed),
 			},
 			SourceEvent: "bulk.completed",
-			ActionURL:   &actionURL,
+			ActionURL:   actionURL,
 		})
 	}
 	if s.activity != nil {
@@ -221,6 +253,7 @@ func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {
 			"succeeded": summary.Succeeded, "failed": summary.Failed,
 		}, nil)
 	}
+	s.publishBulk(ctx, job.Resource, affected)
 	return nil
 }
 
@@ -244,13 +277,16 @@ func (s *Service) Rollback(ctx context.Context, jobUUID uuid.UUID, actorID int64
 		return BulkJobView{}, err
 	}
 	failed := 0
+	reverted := make([]string, 0, len(changes))
 	for i := len(changes) - 1; i >= 0; i-- {
 		ch := changes[i]
 		var prev map[string]any
 		_ = json.Unmarshal(ch.PreviousJson, &prev)
 		if err := adapter.RevertItem(ctx, job.Action, ch.EntityUuid.String(), prev); err != nil {
 			failed++
+			continue
 		}
+		reverted = append(reverted, ch.EntityUuid.String())
 	}
 	status := "rolled_back"
 	if failed > 0 {
@@ -268,6 +304,7 @@ func (s *Service) Rollback(ctx context.Context, jobUUID uuid.UUID, actorID int64
 			"failed_rollback": failed,
 		}, nil)
 	}
+	s.publishBulk(ctx, job.Resource, reverted)
 	return mapBulkJob(row), nil
 }
 
@@ -296,7 +333,7 @@ func (s *Service) ListJobs(ctx context.Context, actorID int64, admin bool, limit
 
 func (s *Service) GetJob(ctx context.Context, jobUUID uuid.UUID, actorID int64, admin bool) (BulkJobView, error) {
 	row, err := s.q.GetBulkJobByUUID(ctx, jobUUID)
-	if err != nil {
+	if err != nil || !orgctx.SameEngineScope(ctx, row.OrganizationID) {
 		return BulkJobView{}, ErrNotFound
 	}
 	if !admin && row.ActorID != actorID {
@@ -312,8 +349,10 @@ func (s *Service) applyTargets(
 	def bulkengine.BulkActionDef,
 	action string,
 	targets []string,
-) (bulkengine.BulkSummary, error) {
+) (bulkengine.BulkSummary, []string, error) {
 	summary := bulkengine.BulkSummary{Total: len(targets)}
+	// Affected uuids feed the resource event (capped like the event).
+	affected := make([]string, 0, min(len(targets), maxEventUUIDs+1))
 	for _, entityUUID := range targets {
 		res, err := adapter.ApplyItem(ctx, action, entityUUID)
 		if err != nil {
@@ -325,6 +364,9 @@ func (s *Service) applyTargets(
 			continue
 		}
 		summary.Succeeded++
+		if len(affected) <= maxEventUUIDs {
+			affected = append(affected, entityUUID)
+		}
 		if jobID > 0 && def.Reversible {
 			prev, _ := json.Marshal(res.Previous)
 			_, _ = s.q.InsertBulkChange(ctx, db.InsertBulkChangeParams{
@@ -334,7 +376,17 @@ func (s *Service) applyTargets(
 			})
 		}
 	}
-	return summary, nil
+	return summary, affected, nil
+}
+
+// jobOrganization stamps job notifications with the job's organization, so
+// they show only in that organization's panel.
+func jobOrganization(id pgtype.Int8) *int64 {
+	if !id.Valid {
+		return nil
+	}
+	v := id.Int64
+	return &v
 }
 
 func (s *Service) failBulk(ctx context.Context, jobID int64, msg string) error {
@@ -350,7 +402,8 @@ func (s *Service) failBulk(ctx context.Context, jobID int64, msg string) error {
 		loc := i18n.Normalize(job.Locale)
 		_, _ = s.notifier.Enqueue(ctx, notifmodel.EnqueueInput{
 			UserID: &uid, Channels: []string{notifmodel.ChannelInapp},
-			TemplateCode: "bulk.failed", Language: job.Locale,
+			OrganizationID: jobOrganization(job.OrganizationID),
+			TemplateCode:   "bulk.failed", Language: job.Locale,
 			TemplateVars: map[string]string{
 				"resource": i18n.ResourceLabel(loc, job.Resource),
 				"action":   job.Action,
@@ -370,7 +423,7 @@ func (s *Service) failBulk(ctx context.Context, jobID int64, msg string) error {
 
 func (s *Service) getOwned(ctx context.Context, jobUUID uuid.UUID, actorID int64, admin bool) (db.BulkJob, error) {
 	row, err := s.q.GetBulkJobByUUID(ctx, jobUUID)
-	if err != nil {
+	if err != nil || !orgctx.SameEngineScope(ctx, row.OrganizationID) {
 		return db.BulkJob{}, ErrNotFound
 	}
 	if !admin && row.ActorID != actorID {

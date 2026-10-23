@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { importsService } from "@/features/io/services/imports.service";
+import { useApiScope } from "@/features/tenant/hooks/use-api-scope";
 import {
   applyAutoDefaults,
   apiMappingToUi,
@@ -39,6 +40,7 @@ import {
   type IoResource,
 } from "@/features/io/types";
 import { routes } from "@/config/routes";
+import { ImportDiffTable } from "@/features/io/components/import-diff-table";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 import { cn } from "@/lib/utils";
@@ -117,6 +119,7 @@ export function ImportWizard({
   onComplete,
 }: ImportWizardProps) {
   const { t, locale } = useLocale();
+  const scope = useApiScope();
   const paths = IMPORT_PATHS[resource];
   const schema = useMemo(() => IMPORT_SCHEMA[resource] ?? [], [resource]);
 
@@ -171,6 +174,7 @@ export function ImportWizard({
         paths.sample,
         sampleFormat,
         locale,
+        scope,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -192,6 +196,7 @@ export function ImportWizard({
         file,
         format,
         locale,
+        scope,
       );
       const detected = await readFileHeaders(file, format);
       setHeaders(
@@ -240,10 +245,14 @@ export function ImportWizard({
     if (!job || !validateMapping()) return;
     setPending(true);
     try {
-      const updated = await importsService.updateMapping(job.uuid, {
-        mapping: uiMappingToApi(mapping),
-        defaults,
-      });
+      const updated = await importsService.updateMapping(
+        job.uuid,
+        {
+          mapping: uiMappingToApi(mapping),
+          defaults,
+        },
+        scope,
+      );
       setJob(updated);
       setStep("defaults");
     } catch {
@@ -257,13 +266,17 @@ export function ImportWizard({
     if (!job) return;
     setPending(true);
     try {
-      const updated = await importsService.updateMapping(job.uuid, {
-        mapping: uiMappingToApi(mapping),
-        defaults,
-      });
+      const updated = await importsService.updateMapping(
+        job.uuid,
+        {
+          mapping: uiMappingToApi(mapping),
+          defaults,
+        },
+        scope,
+      );
       setJob(updated);
       setStep("preview");
-      const previewed = await importsService.preview(updated.uuid);
+      const previewed = await importsService.preview(updated.uuid, scope);
       setJob(previewed);
     } catch {
       appToast.error(t("imports.toast.preview_failed"));
@@ -276,7 +289,7 @@ export function ImportWizard({
     if (!job) return;
     setPending(true);
     try {
-      const confirmed = await importsService.confirm(job.uuid);
+      const confirmed = await importsService.confirm(job.uuid, scope);
       setJob(confirmed);
       setStep("done");
       appToast.success(t("imports.toast.confirmed"));
@@ -289,7 +302,13 @@ export function ImportWizard({
   };
 
   const preview = job?.preview_summary;
+  const hasDiff = Boolean(preview?.rows?.some((row) => row.op));
   const mappedCount = countMappedFields(mapping);
+  const diffFieldLabel = (key: string) => {
+    if (key === "catalog") return t("imports.diff.catalog");
+    const field = schema.find((item) => item.key === key);
+    return field ? t(field.labelKey) : key;
+  };
 
   const usedHeaders = useMemo(() => {
     const set = new Set<string>();
@@ -314,7 +333,12 @@ export function ImportWizard({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent
+        className={cn(
+          "max-h-[90vh] overflow-y-auto",
+          step === "preview" && hasDiff ? "sm:max-w-3xl" : "max-w-lg",
+        )}
+      >
         <DialogHeader className="space-y-3">
           <DialogTitle>{t("imports.wizard_title")}</DialogTitle>
           <DialogDescription>
@@ -555,6 +579,9 @@ export function ImportWizard({
                 ) : null}
               </>
             ) : null}
+            {hasDiff ? (
+              <ImportDiffTable preview={preview} fieldLabel={diffFieldLabel} />
+            ) : null}
             <p className="text-muted-foreground text-xs">
               {t("imports.confirm_hint")}
             </p>
@@ -565,11 +592,13 @@ export function ImportWizard({
           <div className="space-y-3 text-sm">
             <p className="font-medium">{t("imports.done_title")}</p>
             <p>{t("imports.done_message")}</p>
-            <Button asChild variant="outline" size="sm">
-              <Link href={routes.platform.imports.root}>
-                {t("imports.view_jobs")}
-              </Link>
-            </Button>
+            {scope.kind === "platform" ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={routes.platform.imports.root}>
+                  {t("imports.view_jobs")}
+                </Link>
+              </Button>
+            ) : null}
           </div>
         ) : null}
 
