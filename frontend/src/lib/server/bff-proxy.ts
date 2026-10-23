@@ -222,6 +222,7 @@ function passthroughHeaders(
     "location",
     "x-request-id",
     "idempotent-replayed",
+    "retry-after",
     "x-content-type-options",
     "content-security-policy",
   ] as const;
@@ -425,6 +426,13 @@ function isTenantPath(segments: string[]) {
   return segments[0] === "tenant";
 }
 
+/** Access token of a public booking's status route (/v1/public/businesses/*). */
+const RESERVATION_TOKEN_HEADER = "X-Reservation-Token";
+
+function isPublicBookingPath(segments: string[]) {
+  return segments[0] === "public" && segments[1] === "businesses";
+}
+
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
@@ -499,6 +507,10 @@ export async function proxyToUpstream(
     if (organization) headers.set(ORGANIZATION_HEADER, organization);
     const branch = request.headers.get(BRANCH_HEADER)?.trim();
     if (branch) headers.set(BRANCH_HEADER, branch);
+  }
+  if (isPublicBookingPath(pathSegments)) {
+    const token = request.headers.get(RESERVATION_TOKEN_HEADER)?.trim();
+    if (token) headers.set(RESERVATION_TOKEN_HEADER, token);
   }
 
   if (accessToken && !isAuthPublicTokenPath(path)) {

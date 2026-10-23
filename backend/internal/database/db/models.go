@@ -580,6 +580,20 @@ type PgExtension struct {
 	Extname string `json:"extname"`
 }
 
+type PublicCheckout struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	HoldID         int64              `json:"hold_id"`
+	Channel        string             `json:"channel"`
+	Lines          []byte             `json:"lines"`
+	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	ReservationID  pgtype.Int8        `json:"reservation_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type PushDevice struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

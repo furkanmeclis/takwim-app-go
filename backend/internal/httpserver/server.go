@@ -78,6 +78,9 @@ import (
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
+	publicbookingmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking"
+	publicbookinghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/handler"
+	publicbookingusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
 	reservationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations"
 	reservationsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/adapters"
@@ -548,6 +551,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Export: exportH.TenantExport(reservationsmodule.Resource, reservationsmodule.ExportQueryKeys...),
 		Bulk:   bulkH.TenantExecute(reservationsmodule.Resource),
 	}, tokens, loader, tenantResolver)
+	// Public booking API (TEC-906): business page, widget and mobile app.
+	publicSvc := publicbookingusecase.New(deps.Queries, orgsettingsSvc, availabilitySvc, capacityHolds, reservationsSvc, fieldCipher)
+	publicSvc.SetIndexer(searchIndexer)
+	publicH := publicbookinghandler.New(publicSvc, deps.Storage, activityRec)
+	publicH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	publicH.SetResourceEvents(resourceEvents)
+	publicbookingmodule.RegisterRoutes(mux, publicH)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),
 		deps.Storage,
