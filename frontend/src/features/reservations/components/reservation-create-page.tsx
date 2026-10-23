@@ -9,7 +9,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 
@@ -38,6 +38,7 @@ import { SlotPicker } from "@/features/reservations/components/slot-picker";
 import { MAX_LINES } from "@/features/reservations/constants";
 import { useCreateReservation } from "@/features/reservations/hooks/use-reservations";
 import { useSlotSearch } from "@/features/reservations/hooks/use-slot-search";
+import { clock, zoned } from "@/features/reservations/lib/calendar-time";
 import { WRITE_ANY } from "@/features/reservations/lib/permissions";
 import { staffOptions } from "@/features/reservations/lib/staff-options";
 import {
@@ -78,22 +79,37 @@ export function ReservationCreatePage() {
   const schema = useMemo(() => createBookingSchema(t), [t]);
   const zone = organization?.timezone ?? undefined;
 
+  // From the calendar: ?branch=&date=&at=HH:MM&staff= (free space clicked).
+  const search = useSearchParams();
+  const preset = useMemo(
+    () => ({
+      branch: search.get("branch") ?? "",
+      date: /^\d{4}-\d{2}-\d{2}$/.test(search.get("date") ?? "")
+        ? search.get("date")!
+        : "",
+      at: /^\d{2}:\d{2}$/.test(search.get("at") ?? "") ? search.get("at")! : "",
+      staff: search.get("staff") ?? "",
+    }),
+    [search],
+  );
+
   const defaultValues = useMemo<BookingFormValues | null>(() => {
     if (!branches.data) return null;
     const items = branches.data.items;
     const branch =
+      items.find((item) => item.uuid === preset.branch)?.uuid ??
       items.find((item) => item.uuid === selectedBranch)?.uuid ??
       (items.length === 1 ? items[0].uuid : "");
     return {
       branch_uuid: branch,
       customer_uuid: "",
-      lines: [EMPTY_LINE],
-      date: dateKeyInZone(new Date(), zone),
+      lines: [{ ...EMPTY_LINE, staff_uuid: preset.staff || ANY_STAFF }],
+      date: preset.date || dateKeyInZone(new Date(), zone),
       starts_at: "",
       customer_note: "",
       internal_note: "",
     };
-  }, [branches.data, selectedBranch, zone]);
+  }, [branches.data, preset, selectedBranch, zone]);
 
   return (
     <EntityPage
@@ -145,6 +161,7 @@ export function ReservationCreatePage() {
           >
             {(form) => (
               <BookingFields
+                preferredTime={preset.at}
                 branchOptions={(branches.data?.items ?? []).map((branch) => ({
                   value: branch.uuid,
                   label: branch.name,
@@ -163,10 +180,13 @@ export function ReservationCreatePage() {
 }
 
 function BookingFields({
+  preferredTime,
   branchOptions,
   isSubmitting,
   onCancel,
 }: {
+  /** "HH:MM" to pick once its slot is offered (calendar click). */
+  preferredTime: string;
   branchOptions: { value: string; label: string }[];
   isSubmitting: boolean;
   onCancel: () => void;
@@ -205,6 +225,19 @@ function BookingFields({
   );
 
   const { query, ready } = useSlotSearch({ branchUuid, lines, date });
+
+  // The time clicked on the calendar, picked once when it is free.
+  const preferred = useRef(preferredTime);
+  const zone = query.data?.timezone;
+  useEffect(() => {
+    if (!preferred.current || !zone || query.isPlaceholderData) return;
+    const slot = query.data?.days[0]?.slots.find(
+      (s) => clock(zoned(s.starts_at, zone).minutes) === preferred.current,
+    );
+    if (!slot) return;
+    preferred.current = "";
+    setValue("starts_at", slot.starts_at, { shouldValidate: true });
+  }, [query.data, query.isPlaceholderData, setValue, zone]);
 
   // Another branch offers other services and people: start the lines over.
   const lastBranch = useRef(branchUuid);

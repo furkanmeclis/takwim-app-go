@@ -50,5 +50,6 @@
   "nav_resources": "Resources",
   "nav_services": "Services",
   "nav_customers": "Customers",
-  "nav_reservations": "Reservations"
+  "nav_reservations": "Reservations",
+  "nav_calendar": "Calendar"
 }

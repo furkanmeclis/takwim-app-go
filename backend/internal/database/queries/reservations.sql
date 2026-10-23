@@ -233,3 +233,55 @@ SET customer_note = sqlc.arg(customer_note), internal_note = sqlc.arg(internal_n
     custom_fields = sqlc.arg(custom_fields), version = version + 1
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
 RETURNING *;
+
+-- name: ListCalendarBranches :many
+-- Branches of the calendar (TEC-901): one branch, or every branch of the
+-- caller's scope (branch_ids NULL = all).
+SELECT b.id, b.uuid, b.name, b.working_hours, b.holiday_exceptions,
+       COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone
+FROM branches b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = sqlc.arg(organization_id) AND b.deleted_at IS NULL AND b.is_active
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR b.id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(branch_uuid)::uuid IS NULL OR b.uuid = sqlc.narg(branch_uuid))
+ORDER BY b.name, b.id;
+
+-- name: ListCalendarStaff :many
+-- Active people working in a branch, with their shifts there.
+SELECT s.id, s.uuid, s.name, s.color, sb.shifts
+FROM staff s
+JOIN staff_branches sb ON sb.organization_id = s.organization_id AND sb.staff_id = s.id
+WHERE s.organization_id = sqlc.arg(organization_id) AND sb.branch_id = sqlc.arg(branch_id)
+  AND s.deleted_at IS NULL AND s.is_active
+ORDER BY s.name, s.id;
+
+-- name: ListCalendarResources :many
+-- Active resources of a branch (own hours NULL = branch hours).
+SELECT id, uuid, name, kind, working_hours
+FROM resources
+WHERE organization_id = sqlc.arg(organization_id) AND branch_id = sqlc.arg(branch_id)
+  AND deleted_at IS NULL AND is_active
+ORDER BY sort_order, name, id;
+
+-- name: ListCalendarLines :many
+-- Lines overlapping [since, until) of the calendar's branches, with their
+-- visit. Cancelled and rejected visits only when asked; an own calendar
+-- member sees what it created or serves.
+SELECT l.line_index, l.service_name, l.staff_name, l.resources, l.starts_at, l.ends_at,
+       l.buffer_before_minutes, l.buffer_after_minutes,
+       st.uuid AS staff_uuid,
+       r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
+       r.source, r.version,
+       b.uuid AS branch_uuid,
+       c.first_name AS customer_first_name, c.last_name AS customer_last_name
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+LEFT JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+WHERE l.organization_id = sqlc.arg(organization_id)
+  AND r.branch_id = ANY(sqlc.arg(branch_ids)::bigint[])
+  AND l.starts_at < sqlc.arg(until) AND l.ends_at > sqlc.arg(since)
+  AND (sqlc.arg(include_cancelled)::boolean OR r.status NOT IN ('cancelled', 'rejected'))
+  AND (sqlc.narg(own_user_id)::bigint IS NULL OR r.created_by = sqlc.narg(own_user_id) OR l.staff_id = sqlc.narg(own_staff_id))
+ORDER BY l.starts_at, r.number, l.line_index;

@@ -67,6 +67,12 @@ Releasing products and session rights on cancel comes with those modules; capaci
 
 Errors: a taken start is `409 starts_at/taken`, a stale version `409 expected_version/stale`, a transition the state does not allow `409 status/invalid_transition`. Reads need `tenant.reservations.read` or `.own`, writes `.write` or `.own`; the module must be on. The list is live (`tenant.reservations` channel) for members with read. Export, bulk actions and search come in a later change.
 
+## Calendar (TEC-901)
+
+`GET /v1/tenant/reservations/calendar?from=&to=&by=&branch=` answers at most a week of local dates. `by=staff` and `by=resource` need a branch: the columns are the active people working there (their shifts inside the opening hours, their leave) or the active resources (their own hours or the branch hours, their closures). `by=branch` (all branches of the caller's scope) has one column per branch with its opening hours. Items are visit lines placed in their columns; a person or resource no longer listed keeps a column while it has visits, and lines without one go to `unassigned`. Cancelled and rejected visits only with `include_cancelled=true`. An own calendar member gets its own column and the lines it created or serves.
+
+The panel calendar (`/t/{slug}/calendar`) shows a day (one column per person / resource / branch) or a week (one column per day, all visits or one column's). Clicking free space opens the booking form with branch, day, person and time filled in (the time is picked once the slot engine offers it). Dragging a visit asks for confirmation and calls reschedule with the visit shifted as a whole; dropped on another person's column, the dragged line goes to that person. The API decides whether the new time is free. The page refetches on the live channel of `tenant.reservations`.
+
 ## Visibility
 
 Every read and write checks the business and the caller's branch scope; a member with only `tenant.reservations.own` sees the reservations it created or serves. Anything else is `ErrNotFound`.

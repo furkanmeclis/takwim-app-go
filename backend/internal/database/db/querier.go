@@ -329,6 +329,17 @@ type Querier interface {
 	// expiry, before the sweep) and confirmed bookings. exclude_hold_id
 	// leaves one commitment out (0 = none), for re-planning it.
 	ListBusyCapacityAllocations(ctx context.Context, arg ListBusyCapacityAllocationsParams) ([]ListBusyCapacityAllocationsRow, error)
+	// Branches of the calendar (TEC-901): one branch, or every branch of the
+	// caller's scope (branch_ids NULL = all).
+	ListCalendarBranches(ctx context.Context, arg ListCalendarBranchesParams) ([]ListCalendarBranchesRow, error)
+	// Lines overlapping [since, until) of the calendar's branches, with their
+	// visit. Cancelled and rejected visits only when asked; an own calendar
+	// member sees what it created or serves.
+	ListCalendarLines(ctx context.Context, arg ListCalendarLinesParams) ([]ListCalendarLinesRow, error)
+	// Active resources of a branch (own hours NULL = branch hours).
+	ListCalendarResources(ctx context.Context, arg ListCalendarResourcesParams) ([]ListCalendarResourcesRow, error)
+	// Active people working in a branch, with their shifts there.
+	ListCalendarStaff(ctx context.Context, arg ListCalendarStaffParams) ([]ListCalendarStaffRow, error)
 	ListCapacityHoldAllocations(ctx context.Context, arg ListCapacityHoldAllocationsParams) ([]ListCapacityHoldAllocationsRow, error)
 	ListCapacityHoldStaffIDs(ctx context.Context, arg ListCapacityHoldStaffIDsParams) ([]int64, error)
 	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)

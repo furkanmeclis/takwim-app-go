@@ -22,6 +22,21 @@ export type ReservationSource = Schemas["TenantReservationSource"];
 export type ReservationEvent = Reservation["events"][number];
 export type ReservationLine = Reservation["lines"][number];
 
+export type ReservationCalendar = Schemas["TenantReservationCalendar"];
+export type CalendarColumn = Schemas["TenantReservationCalendarColumn"];
+export type CalendarItem = Schemas["TenantReservationCalendarItem"];
+export type CalendarInterval = Schemas["TenantReservationInterval"];
+export type CalendarBy = ReservationCalendar["by"];
+
+/** Query of `GET /v1/tenant/reservations/calendar`. */
+export type CalendarParams = {
+  from: string;
+  to: string;
+  by: CalendarBy;
+  branch?: string;
+  include_cancelled?: "true";
+};
+
 export type AvailabilitySearchRequest =
   Schemas["TenantAvailabilitySearchRequest"];
 export type Availability = Schemas["TenantAvailability"];

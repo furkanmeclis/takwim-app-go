@@ -4302,6 +4302,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reservation calendar
+         * @description The calendar of local dates `from`..`to` (at most 7 days). Columns are
+         *     the people (`by=staff`) or resources (`by=resource`) of one branch, or
+         *     the branches of the caller's scope (`by=branch`). Each column carries
+         *     when it works (shifts inside the opening hours, resource or branch
+         *     hours) and its leave or closures; items are the visit lines placed in
+         *     their columns. A person or resource no longer listed keeps a column
+         *     while it has visits; lines without one go to the `unassigned` column.
+         *     Cancelled and rejected visits only with `include_cancelled=true`. A
+         *     member with only `tenant.reservations.own` gets its own column and the
+         *     visits it created or serves.
+         */
+        get: operations["getTenantReservationsCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations": {
         parameters: {
             query?: never;
@@ -8527,6 +8556,65 @@ export interface components {
             branch: components["schemas"]["TenantResourceFacet"][];
             staff: components["schemas"]["TenantResourceFacet"][];
         };
+        TenantReservationInterval: {
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+        };
+        TenantReservationCalendarColumn: {
+            /** @description Staff, resource or branch uuid, or `unassigned`. */
+            key: string;
+            name: string;
+            /** @enum {string} */
+            kind: "staff" | "resource" | "branch" | "unassigned";
+            resource_kind: string | null;
+            /** @description Calendar colour of a person (#RRGGBB). */
+            color: string | null;
+            work: components["schemas"]["TenantReservationInterval"][];
+            /** @description Leave of a person, closures of a resource. */
+            off: components["schemas"]["TenantReservationInterval"][];
+        };
+        TenantReservationCalendarItem: {
+            /** Format: uuid */
+            reservation_uuid: string;
+            /** Format: int64 */
+            number: number;
+            line_index: number;
+            columns: string[];
+            /** Format: uuid */
+            branch_uuid: string;
+            service_name: string;
+            staff_name: string | null;
+            customer_name: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            buffer_before_minutes: number;
+            buffer_after_minutes: number;
+            status: components["schemas"]["TenantReservationStatus"];
+            approval_status: components["schemas"]["TenantReservationApprovalStatus"];
+            confirmation_status: components["schemas"]["TenantReservationConfirmationStatus"];
+            payment_status: components["schemas"]["TenantReservationPaymentStatus"];
+            source: components["schemas"]["TenantReservationSource"];
+            version: number;
+        };
+        TenantReservationCalendar: {
+            /** @enum {string} */
+            by: "staff" | "resource" | "branch";
+            branch: components["schemas"]["TenantAvailabilityRef"] | null;
+            /** @example Europe/Istanbul */
+            timezone: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @description Opening hours of the branch (of every branch for `by=branch`). */
+            open: components["schemas"]["TenantReservationInterval"][];
+            columns: components["schemas"]["TenantReservationCalendarColumn"][];
+            items: components["schemas"]["TenantReservationCalendarItem"][];
+        };
         TenantReservation: {
             /** Format: uuid */
             uuid: string;
@@ -8608,6 +8696,12 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["TenantReservationPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantReservationCalendar: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantReservationCalendar"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeTenantReservationFacets: {
@@ -16609,6 +16703,44 @@ export interface operations {
                 };
             };
             400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantReservationsCalendar: {
+        parameters: {
+            query: {
+                from: string;
+                /** @description Inclusive; default `from`. */
+                to?: string;
+                by?: "staff" | "resource" | "branch";
+                /** @description Branch uuid; required for `by=staff` and `by=resource`. */
+                branch?: string;
+                include_cancelled?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationCalendar"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];

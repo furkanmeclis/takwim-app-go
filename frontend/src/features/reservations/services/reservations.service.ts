@@ -2,10 +2,12 @@ import type { ResourceMeta } from "@/features/io/types";
 import type {
   Availability,
   AvailabilitySearchRequest,
+  CalendarParams,
   ListReservationsParams,
   Reservation,
   ReservationAction,
   ReservationActionRequest,
+  ReservationCalendar,
   ReservationCreateRequest,
   ReservationFacets,
   ReservationNotesRequest,
@@ -31,6 +33,14 @@ export const reservationsService = {
 
   facets(slug: string) {
     return tenantRequest<ReservationFacets>(slug, "GET", `${BASE}/facets`);
+  },
+
+  /** Columns, working hours and visits of a day or a week. */
+  calendar(slug: string, params: CalendarParams) {
+    return tenantRequest<ReservationCalendar>(slug, "GET", `${BASE}/calendar`, {
+      query: params,
+      branch: false,
+    });
   },
 
   get(slug: string, uuid: string) {

@@ -6,6 +6,8 @@ export const reservationsKeys = {
     [...reservationsKeys.lists(slug), params] as const,
   meta: (slug: string) => [...reservationsKeys.all(slug), "meta"] as const,
   facets: (slug: string) => [...reservationsKeys.all(slug), "facets"] as const,
+  calendar: (slug: string, params: Record<string, unknown>) =>
+    [...reservationsKeys.all(slug), "calendar", params] as const,
   detail: (slug: string, uuid: string) =>
     [...reservationsKeys.all(slug), "detail", uuid] as const,
   availability: (slug: string, body: Record<string, unknown>) =>
