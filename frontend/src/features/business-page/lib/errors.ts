@@ -48,3 +48,19 @@ export function reportBookingError(error: unknown, t: Translate) {
   }
   emitApiError(error);
 }
+
+const PAYMENT_ERROR_KEYS: Record<string, string> = {
+  PAYMENT_NOT_AVAILABLE: "business_page.errors.payment_unavailable",
+  PAYMENT_NOT_READY: "business_page.errors.payment_not_ready",
+  PAYMENT_PROVIDER_ERROR: "business_page.errors.payment_provider",
+};
+
+/** Toasts why the payment page did not open (else as a booking error). */
+export function reportPaymentError(error: unknown, t: Translate) {
+  const key = isApiError(error) ? PAYMENT_ERROR_KEYS[error.code] : undefined;
+  if (key) {
+    appToast.error(t(key));
+    return;
+  }
+  reportBookingError(error, t);
+}

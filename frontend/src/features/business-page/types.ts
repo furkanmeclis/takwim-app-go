@@ -16,6 +16,9 @@ export type PublicCheckoutRequest = Schemas["PublicCheckoutRequest"];
 export type PublicCheckout = Schemas["PublicCheckout"];
 export type PublicBookingRequest = Schemas["PublicBookingRequest"];
 export type PublicReservation = Schemas["PublicReservation"];
+export type OnlinePaymentStart = Schemas["OnlinePaymentStart"];
+export type TestPaymentPage = Schemas["TestPaymentPage"];
+export type PaymentNotifyResult = Schemas["PaymentNotifyResult"];
 export type PaymentMethod =
   PublicBusiness["booking"]["payment_methods"][number];
 

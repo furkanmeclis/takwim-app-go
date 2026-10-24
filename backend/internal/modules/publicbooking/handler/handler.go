@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
+	paymentshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/handler"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/usecase"
 	reservationsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
@@ -369,6 +370,37 @@ func (h *Handler) GetReservation(w http.ResponseWriter, r *http.Request) {
 	out, err := h.svc.Reservation(r.Context(), o, id, r.Header.Get(ReservationTokenHeader))
 	if err != nil {
 		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
+// StartPayment serves POST /v1/public/businesses/{slug}/reservations/{uuid}/payment
+// (TEC-912): the holder of the access token gets the provider's payment
+// page of a booking waiting for its online payment ({redirect_url}). The
+// page's result is recorded only from the provider's server notification.
+func (h *Handler) StartPayment(w http.ResponseWriter, r *http.Request) {
+	o, ok := h.business(w, r, "checkout", h.limits.Checkout)
+	if !ok {
+		return
+	}
+	id, ok := pathToken(w, r, "uuid", "Reservation")
+	if !ok {
+		return
+	}
+	var in struct {
+		Locale string `json:"locale"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	out, err := h.svc.StartPayment(r.Context(), o, id, r.Header.Get(ReservationTokenHeader), httpkit.ClientIP(r), in.Locale)
+	if errors.Is(err, usecase.ErrReservationNotFound) || errors.Is(err, usecase.ErrBusinessNotFound) {
+		writeError(w, r, err)
+		return
+	}
+	if err != nil {
+		paymentshandler.WriteError(w, r, err)
 		return
 	}
 	response.JSON(w, r, http.StatusOK, out)

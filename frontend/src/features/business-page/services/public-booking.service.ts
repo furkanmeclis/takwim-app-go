@@ -1,6 +1,9 @@
 import { apiConfig } from "@/config/api";
 import { ApiError, parseApiError } from "@/lib/api/errors";
 import type {
+  OnlinePaymentStart,
+  PaymentNotifyResult,
+  TestPaymentPage,
   PublicAvailability,
   PublicAvailabilityRequest,
   PublicBookingRequest,
@@ -37,21 +40,24 @@ type RequestOptions = {
   headers?: Record<string, string>;
 };
 
+const publicRoot = () => `${apiConfig.baseUrl.replace(/\/$/, "")}/v1/public`;
+
 const base = (slug: string) =>
-  `${apiConfig.baseUrl.replace(/\/$/, "")}/v1/public/businesses/${encodeURIComponent(slug)}`;
+  `${publicRoot()}/businesses/${encodeURIComponent(slug)}`;
 
 /**
  * Same-origin BFF call of the public booking API. Cookies are left out
  * (`credentials: "omit"`): the page is anonymous even when a panel user
- * is signed in on the same browser, and no session refresh runs.
+ * is signed in on the same browser, and no session refresh runs. A null
+ * slug calls `/v1/public{path}` (the test payment page).
  */
 async function request<T>(
   method: string,
-  slug: string,
+  slug: string | null,
   path: string,
   options?: RequestOptions,
 ): Promise<T> {
-  let url = `${base(slug)}${path}`;
+  let url = slug === null ? `${publicRoot()}${path}` : `${base(slug)}${path}`;
   if (options?.query) {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(options.query)) {
@@ -138,6 +144,39 @@ export const publicBookingService = {
       slug,
       `/reservations/${encodeURIComponent(uuid)}`,
       { headers: { "X-Reservation-Token": accessToken } },
+    );
+  },
+  /** Opens (or reopens) the provider's page for the full online payment. */
+  startPayment(
+    slug: string,
+    uuid: string,
+    accessToken: string,
+    locale: string,
+  ) {
+    return request<OnlinePaymentStart>(
+      "POST",
+      slug,
+      `/reservations/${encodeURIComponent(uuid)}/payment`,
+      {
+        body: { locale: locale === "en" ? "en" : "tr" },
+        headers: { "X-Reservation-Token": accessToken },
+      },
+    );
+  },
+  /** The test provider's page (development and test only). */
+  testPayment(ref: string) {
+    return request<TestPaymentPage>(
+      "GET",
+      null,
+      `/payments/testpay/${encodeURIComponent(ref)}`,
+    );
+  },
+  completeTestPayment(ref: string, outcome: "succeeded" | "failed") {
+    return request<PaymentNotifyResult>(
+      "POST",
+      null,
+      `/payments/testpay/${encodeURIComponent(ref)}/complete`,
+      { body: { outcome } },
     );
   },
 };

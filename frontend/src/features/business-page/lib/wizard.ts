@@ -142,10 +142,11 @@ export function toLines(
 
 /**
  * Payment methods the customer may pick: the business offers them and every
- * picked service allows them. Online payment needs the payment layer
- * (TEC-912) to send the customer to a payment page; until then on site is
- * offered whenever it is allowed and online only when it is the one way.
- * A free booking (total 0, e.g. a table) cannot be paid online.
+ * picked service allows them. Online payment sends the customer to the
+ * provider's page (TEC-912), so it is offered next to on site only when the
+ * business can take it (`booking.online_payment_ready`); without a working
+ * provider it stays only when it is the one way (the business collects it
+ * later). A free booking (total 0, e.g. a table) cannot be paid online.
  */
 export function paymentChoices(
   business: PublicBusiness,
@@ -161,6 +162,7 @@ export function paymentChoices(
           service.payment_mode === "both" || service.payment_mode === method,
       ),
   );
+  if (business.booking.online_payment_ready) return allowed;
   return allowed.includes("on_site") ? ["on_site"] : allowed;
 }
 

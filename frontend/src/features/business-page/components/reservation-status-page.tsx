@@ -6,12 +6,14 @@ import {
   CircleX,
   Clock,
   CreditCard,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,8 +29,10 @@ import { CUSTOMER_PANEL_PATH } from "@/features/business-page/constants";
 import {
   usePublicBusiness,
   usePublicReservation,
+  useStartPublicPayment,
 } from "@/features/business-page/hooks/use-public-booking";
 import { readAccessToken } from "@/features/business-page/lib/access";
+import { reportPaymentError } from "@/features/business-page/lib/errors";
 import { seatingLabel } from "@/features/business-page/lib/wizard";
 import type {
   PublicBusiness,
@@ -104,12 +108,102 @@ function headline(
   };
 }
 
+type PaymentReturn = "done" | "failed" | null;
+
+/** `?payment=done|failed` of the provider's return link (proves nothing). */
+function readPaymentReturn(): PaymentReturn {
+  const value = new URLSearchParams(window.location.search).get("payment");
+  return value === "done" || value === "failed" ? value : null;
+}
+
+/**
+ * Online payment of the booking: the "pay now" button while the server says
+ * it can be paid, and what the return from the provider's page means. The
+ * state shown is always the server's `payment_status`, recorded only from
+ * the provider's verified notification.
+ */
+function PaymentPanel({
+  reservation: r,
+  slug,
+  token,
+  returned,
+}: {
+  reservation: PublicReservation;
+  slug: string;
+  token: string;
+  returned: PaymentReturn;
+}) {
+  const { t, locale } = useLocale();
+  const start = useStartPublicPayment(slug, r.uuid, token);
+  const pending = r.payment_status === "online_pending";
+
+  let note: { title?: string; text: string; destructive?: boolean } | null =
+    null;
+  if (returned === "done" && pending) {
+    note = {
+      title: t("business_page.status.payment_checking_title"),
+      text: t("business_page.status.payment_checking"),
+    };
+  } else if (returned === "failed" && pending) {
+    note = {
+      title: t("business_page.status.payment_failed_title"),
+      text: t("business_page.status.payment_failed"),
+      destructive: true,
+    };
+  } else if (returned && r.payment_status === "paid") {
+    note = { text: t("business_page.status.payment_done") };
+  } else if (returned && r.payment_status === "refund_pending") {
+    note = { text: t("business_page.status.payment_late"), destructive: true };
+  }
+
+  if (!note && !r.can_pay_online) return null;
+
+  const pay = () =>
+    start.mutate(locale, {
+      onSuccess: (page) => window.location.assign(page.redirect_url),
+      onError: (error) => reportPaymentError(error, t),
+    });
+  // The browser leaves for the provider's page right after success.
+  const busy = start.isPending || start.isSuccess;
+
+  return (
+    <div className="space-y-3">
+      {note ? (
+        <Alert variant={note.destructive ? "destructive" : "default"}>
+          {note.destructive ? <CircleX /> : <Clock />}
+          {note.title ? <AlertTitle>{note.title}</AlertTitle> : null}
+          <AlertDescription>{note.text}</AlertDescription>
+        </Alert>
+      ) : null}
+      {r.can_pay_online ? (
+        <Card className="gap-3 py-4">
+          <CardContent className="space-y-3 px-4">
+            <Button className="w-full" onClick={pay} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" /> : <CreditCard />}
+              {busy
+                ? t("business_page.status.pay_redirecting")
+                : t("business_page.status.pay_now")}
+            </Button>
+            <p className="text-muted-foreground text-center text-xs">
+              {t("business_page.status.pay_secure")}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
 function ReservationView({
   reservation: r,
   business,
+  token,
+  returned,
 }: {
   reservation: PublicReservation;
   business: PublicBusiness;
+  token: string;
+  returned: PaymentReturn;
 }) {
   const { t, locale } = useLocale();
   const zone = r.timezone || business.timezone;
@@ -139,6 +233,13 @@ function ReservationView({
           ) : null}
         </CardHeader>
       </Card>
+
+      <PaymentPanel
+        reservation={r}
+        slug={business.slug}
+        token={token}
+        returned={returned}
+      />
 
       <Card className="gap-3 py-4">
         <CardHeader className="px-4">
@@ -249,8 +350,14 @@ export function ReservationStatusPage({
     () => readAccessToken(uuid),
     () => undefined,
   );
+  const returned = useSyncExternalStore(noop, readPaymentReturn, () => null);
   const businessQuery = usePublicBusiness(slug, initialBusiness);
-  const reservation = usePublicReservation(slug, uuid, token ?? null);
+  const reservation = usePublicReservation(
+    slug,
+    uuid,
+    token ?? null,
+    returned !== null,
+  );
   const business = businessQuery.data;
 
   let body: React.ReactNode;
@@ -285,11 +392,16 @@ export function ReservationStatusPage({
         retryLabel={t("common.retry")}
       />
     );
-  } else if (!reservation.data || !business) {
+  } else if (!reservation.data || !business || !token) {
     body = <Skeleton className="h-72 w-full rounded-xl" />;
   } else {
     body = (
-      <ReservationView reservation={reservation.data} business={business} />
+      <ReservationView
+        reservation={reservation.data}
+        business={business}
+        token={token}
+        returned={returned}
+      />
     );
   }
 

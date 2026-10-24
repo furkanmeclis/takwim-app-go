@@ -88,6 +88,8 @@ type Querier interface {
 	CountMembersByBranch(ctx context.Context, arg CountMembersByBranchParams) ([]CountMembersByBranchRow, error)
 	CountMembersInBranches(ctx context.Context, arg CountMembersInBranchesParams) (int64, error)
 	CountNotificationsForUser(ctx context.Context, arg CountNotificationsForUserParams) (int64, error)
+	// Online (provider receivable) accounts that can take the provider's money.
+	CountOnlineCashAccounts(ctx context.Context, arg CountOnlineCashAccountsParams) (int64, error)
 	CountOrganizationMembersByOrg(ctx context.Context, arg CountOrganizationMembersByOrgParams) (int64, error)
 	// Members holding the template owner role (any of their roles).
 	CountOrganizationOwners(ctx context.Context, organizationID int64) (int64, error)
@@ -254,6 +256,13 @@ type Querier interface {
 	ExpireDueCapacityHolds(ctx context.Context, arg ExpireDueCapacityHoldsParams) ([]int64, error)
 	ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHoldParams) (CapacityHold, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
+	FailPayment(ctx context.Context, arg FailPaymentParams) (int64, error)
+	// The receivable account of the provider for a branch: the branch's own
+	// online account before a business-wide one, an account naming the
+	// provider before one naming none.
+	FindOnlineCashAccount(ctx context.Context, arg FindOnlineCashAccountParams) (FindOnlineCashAccountRow, error)
+	// The latest attempt of a reservation whose page is still open.
+	FindOpenPayment(ctx context.Context, arg FindOpenPaymentParams) (Payment, error)
 	// A delivery report settles an accepted attempt (once).
 	FinishCustomerNotificationDelivery(ctx context.Context, arg FinishCustomerNotificationDeliveryParams) (int64, error)
 	FinishIntegrationJob(ctx context.Context, arg FinishIntegrationJobParams) error
@@ -285,6 +294,7 @@ type Querier interface {
 	GetCashClosing(ctx context.Context, arg GetCashClosingParams) (GetCashClosingRow, error)
 	GetCashMovement(ctx context.Context, arg GetCashMovementParams) (GetCashMovementRow, error)
 	GetCashMovementByIdempotencyKey(ctx context.Context, arg GetCashMovementByIdempotencyKeyParams) (GetCashMovementByIdempotencyKeyRow, error)
+	GetCollectAccount(ctx context.Context, arg GetCollectAccountParams) (GetCollectAccountRow, error)
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
 	GetCurrentOrganizationSettings(ctx context.Context, organizationID int64) (GetCurrentOrganizationSettingsRow, error)
@@ -351,6 +361,9 @@ type Querier interface {
 	GetOrganizationMember(ctx context.Context, arg GetOrganizationMemberParams) (GetOrganizationMemberRow, error)
 	GetOrganizationMemberByUserUUID(ctx context.Context, arg GetOrganizationMemberByUserUUIDParams) (GetOrganizationMemberByUserUUIDRow, error)
 	GetOrganizationSettingsVersion(ctx context.Context, arg GetOrganizationSettingsVersionParams) (GetOrganizationSettingsVersionRow, error)
+	// A notification names only our reference; the row gives its business
+	// (organization_id) and the account whose secret verifies it.
+	GetPaymentByOrderRef(ctx context.Context, orderRef string) (GetPaymentByOrderRefRow, error)
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
 	GetProduct(ctx context.Context, arg GetProductParams) (GetProductRow, error)
 	GetProductBySKU(ctx context.Context, arg GetProductBySKUParams) (Product, error)
@@ -425,6 +438,8 @@ type Querier interface {
 	GetTenantMemberByUserUUID(ctx context.Context, arg GetTenantMemberByUserUUIDParams) (GetTenantMemberByUserUUIDRow, error)
 	GetTenantRoleByKey(ctx context.Context, arg GetTenantRoleByKeyParams) (Role, error)
 	GetTenantRoleByUUIDForOrganization(ctx context.Context, arg GetTenantRoleByUUIDForOrganizationParams) (GetTenantRoleByUUIDForOrganizationRow, error)
+	// What the development provider's test page shows.
+	GetTestPaymentPage(ctx context.Context, orderRef string) (GetTestPaymentPageRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUUID(ctx context.Context, argUuid uuid.UUID) (User, error)
@@ -461,6 +476,8 @@ type Querier interface {
 	InsertNotificationHistory(ctx context.Context, arg InsertNotificationHistoryParams) (NotificationHistory, error)
 	InsertOrganizationSettingsVersion(ctx context.Context, arg InsertOrganizationSettingsVersionParams) (OrganizationSettingsVersion, error)
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (OutboxEvent, error)
+	// Online payments (TEC-912, docs/design/payments.md).
+	InsertPayment(ctx context.Context, arg InsertPaymentParams) (Payment, error)
 	InsertPushTicket(ctx context.Context, arg InsertPushTicketParams) error
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	// --------------------------------------------------------------- sale lines
@@ -549,6 +566,9 @@ type Querier interface {
 	ListCashMovementKindFacets(ctx context.Context, arg ListCashMovementKindFacetsParams) ([]ListCashMovementKindFacetsRow, error)
 	ListCashMovements(ctx context.Context, arg ListCashMovementsParams) ([]ListCashMovementsRow, error)
 	ListCashTransferLegs(ctx context.Context, arg ListCashTransferLegsParams) ([]ListCashTransferLegsRow, error)
+	// Tills and bank accounts a collection at the business may go into: the
+	// branch's own and the business-wide ones of the currency.
+	ListCollectAccounts(ctx context.Context, arg ListCollectAccountsParams) ([]ListCollectAccountsRow, error)
 	// The send history: one row per channel attempt. branch_ids = the caller's
 	// branch scope (NULL = every branch).
 	ListCustomerNotificationDeliveries(ctx context.Context, arg ListCustomerNotificationDeliveriesParams) ([]ListCustomerNotificationDeliveriesRow, error)
@@ -663,6 +683,7 @@ type Querier interface {
 	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
 	ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error)
 	ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error)
+	ListReservationPayments(ctx context.Context, arg ListReservationPaymentsParams) ([]ListReservationPaymentsRow, error)
 	// Reservation engines (TEC-963): Cmd+K documents. Every query filters by
 	// organization_id; joins by alias.organization_id too.
 	// owner_user_ids: the member who booked it and the accounts of the staff
@@ -769,6 +790,7 @@ type Querier interface {
 	// Serializes the refunds and the reversal of one collection.
 	LockLedgerEntry(ctx context.Context, arg LockLedgerEntryParams) (int64, error)
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
+	LockPayment(ctx context.Context, arg LockPaymentParams) (LockPaymentRow, error)
 	// Claims a job for one provider call (one worker at a time; an expired
 	// claim of a crashed worker is free again).
 	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
@@ -870,6 +892,7 @@ type Querier interface {
 	SetOrganizationAccessWindow(ctx context.Context, arg SetOrganizationAccessWindowParams) (Organization, error)
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
+	SetPaymentCheckout(ctx context.Context, arg SetPaymentCheckoutParams) error
 	SetProductActive(ctx context.Context, arg SetProductActiveParams) error
 	// Returns the previous key so the caller can remove the old object.
 	SetProductImage(ctx context.Context, arg SetProductImageParams) (pgtype.Text, error)
@@ -895,6 +918,8 @@ type Querier interface {
 	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
 	// SKUs are unique across products and variants of the organization.
 	StockCodeTaken(ctx context.Context, arg StockCodeTakenParams) (bool, error)
+	// One winner: only an attempt not succeeded yet moves.
+	SucceedPayment(ctx context.Context, arg SucceedPaymentParams) (int64, error)
 	// Units on hand and reserved of one stock item over every branch (a
 	// product row with variant NULL, or one variant).
 	SumStockItem(ctx context.Context, arg SumStockItemParams) (SumStockItemRow, error)

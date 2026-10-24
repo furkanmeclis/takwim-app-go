@@ -41,6 +41,7 @@ import (
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
+	paymentsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments"
 	productsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/adapters"
 	productsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/repository"
 	productsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/usecase"
@@ -281,7 +282,7 @@ func main() {
 	panelLinks := customerpanelusecase.New(queries, nil, fieldCipher, nil, nil, customerpanelusecase.PanelDeps{}, log)
 	panelLinks.SetConfig(panelCfg)
 	notifyEngine.SetLinkIssuer(customernotifyadapters.PanelLinks(panelLinks))
-	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log)
+	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log, paymentsmodule.Adapters(cfg)...)
 	if err != nil {
 		log.Error("integrations_failed", "error", err)
 		exit(1)

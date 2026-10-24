@@ -87,7 +87,7 @@ The steps follow the sector flow of the profile (`flow`); see [sectors.md](./sec
 The choices are the business's `payment_methods` that every picked service allows (`payment_mode`).
 
 - A free booking (total 0, such as a table) offers only payment on site, because the API refuses online payment for it (`400 payment / not_allowed`).
-- Until the payment layer (TEC-912) can send the customer to a payment page, **on site is offered whenever it is allowed**, and online only when it is the only way. Such a booking answers `online_pending` with `expires_at`, and the status page says the payment is awaited and until when.
+- Online is offered next to on site only when the business can take it (`booking.online_payment_ready`: a working payment provider account and an online cash account, [payments.md](./payments.md)). Without it, on site is offered whenever it is allowed and online only when it is the only way (the business then collects at the counter). An online booking answers `online_pending` with `expires_at`, and the status page says the payment is awaited and until when.
 
 ## Status page
 
@@ -105,6 +105,8 @@ The headline follows the states:
 
 Below the headline come the date and time in the business's time zone, the branch, the party and area (party sectors), the booking number, the state chips (the panel's labels), the lines and the total. A request waiting for the business is reloaded every 30 seconds.
 
+While the API answers `can_pay_online`, a "Şimdi öde" button opens the provider's hosted page (`POST …/reservations/{uuid}/payment`) and sends the browser there. The provider returns to this page with `?payment=done` or `?payment=failed`. That proves nothing, so the page polls every 3 seconds (about two minutes) while the payment is still `online_pending` and says "checking" or "not completed, try again". The state shown is always the server's, recorded only from the provider's verified notification. In development the test provider's page is `/pay/test/{ref}` (Pay / Decline).
+
 ## Errors and limits
 
 - Calls go out with `credentials: "omit"`, so the page stays anonymous even when a panel user is signed in on the same browser.
@@ -116,4 +118,4 @@ Below the headline come the date and time in the business's time zone, the branc
 
 - **Theme settings.** Colours, fonts, cover and texts set in the panel need a settings model and an API field; that is TEC-966. The page reads only the logo and branch photos today.
 - **Products, packages, vehicle steps.** They come with their catalog modules.
-- **Online payment redirect** (TEC-912), **phone OTP and the customer panel** (TEC-909 / TEC-910), **embedding and pre-selection** (TEC-908).
+- **Phone OTP and the customer panel** (TEC-909 / TEC-910), **embedding and pre-selection** (TEC-908). The online payment redirect is TEC-912 ([payments.md](./payments.md)).

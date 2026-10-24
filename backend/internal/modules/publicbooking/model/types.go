@@ -79,6 +79,10 @@ type Booking struct {
 	ChangeCutoffMinutes *int     `json:"change_cutoff_minutes"`
 	// PaymentMethods: on_site and / or online.
 	PaymentMethods []string `json:"payment_methods"`
+	// OnlinePaymentReady: online payment is offered and the business has a
+	// working payment provider and an online cash account (TEC-912); the
+	// customer is sent to the provider's page after booking.
+	OnlinePaymentReady bool `json:"online_payment_ready"`
 	// CheckoutMinutes is how long a checkout keeps its time.
 	CheckoutMinutes int `json:"checkout_minutes"`
 }
@@ -344,7 +348,10 @@ type Reservation struct {
 	// lets its time go at this instant.
 	ExpiresAt    *time.Time `json:"expires_at"`
 	CancelReason *string    `json:"cancel_reason"`
-	Lines        []Line     `json:"lines"`
-	CreatedAt    time.Time  `json:"created_at"`
-	AccessToken  string     `json:"access_token,omitempty"`
+	// CanPayOnline: the booking waits for its online payment and the page
+	// can be opened now (POST …/reservations/{uuid}/payment).
+	CanPayOnline bool      `json:"can_pay_online"`
+	Lines        []Line    `json:"lines"`
+	CreatedAt    time.Time `json:"created_at"`
+	AccessToken  string    `json:"access_token,omitempty"`
 }
