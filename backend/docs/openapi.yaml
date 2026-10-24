@@ -13287,6 +13287,60 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/public/businesses/{slug}/classes:
+    get:
+      tags: [Public booking]
+      operationId: getPublicClasses
+      summary: Class timetable of a branch (online channel)
+      description: |
+        No authentication (TEC-990). The sessions of the branch's group
+        classes (classes module, TEC-970) on the local dates `from` … `to`
+        (default: seven days from today, at most 31), in order: the class,
+        the trainer (the one serving the session's bookings, else the
+        timetable's), the area's name, the seats and the free seats. `state`
+        says whether the session can be booked now with `party_size` seats
+        on `channel`: `open` exactly when the slot engine offers its start
+        (book it with `POST …/checkouts` at `starts_at`); otherwise `full`,
+        `cancelled`, `past`, `too_soon`, `too_far` or `unavailable` (trainer
+        or area taken, branch closed, daily limit). Without the classes
+        module or group classes the list is empty. `409 BOOKING_UNAVAILABLE`
+        like availability. Rate limited per IP with availability.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - name: branch_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: service_uuid
+          in: query
+          description: Only this group class (`400 service_uuid / not_found` for anything else).
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: party_size
+          in: query
+          description: Seats the customer wants to take (default 1).
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+        - name: channel
+          in: query
+          schema: { type: string, enum: [web, widget, api] }
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicClassTimetable"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/public/businesses/{slug}/checkouts:
     post:
       tags: [Public booking]
@@ -24457,6 +24511,41 @@ components:
                       type: array
                       items: { $ref: "#/components/schemas/PublicSlotLine" }
 
+    PublicClassSession:
+      type: object
+      required: [service, date, starts_at, ends_at, trainer, trainer_changed, area, capacity, capacity_changed, seats_left, state]
+      properties:
+        service: { $ref: "#/components/schemas/PublicRef" }
+        date: { type: string, format: date, description: Local date of the session in the branch. }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        trainer:
+          description: The person serving the session's bookings, else the timetable's trainer, else the one the slot engine would assign; null when not known yet.
+          oneOf:
+            - $ref: "#/components/schemas/PublicRef"
+            - type: "null"
+        trainer_changed: { type: boolean, description: "The session keeps the trainer of its bookings, who is no longer the timetable's." }
+        area: { type: [string, "null"], description: Name of the session's area (studio). }
+        capacity: { type: integer, description: Seats of the session. }
+        capacity_changed: { type: boolean, description: The session has its own seats. }
+        seats_left: { type: integer }
+        state: { type: string, enum: [open, full, cancelled, past, too_soon, too_far, unavailable] }
+
+    PublicClassTimetable:
+      type: object
+      required: [branch, timezone, from, to, party_size, earliest_start, latest_date, sessions]
+      properties:
+        branch: { $ref: "#/components/schemas/PublicRef" }
+        timezone: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        party_size: { type: integer }
+        earliest_start: { type: [string, "null"], format: date-time, description: First instant a booking may start (null without sessions to book). }
+        latest_date: { type: [string, "null"], format: date }
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/PublicClassSession" }
+
     PublicCheckoutRequest:
       type: object
       additionalProperties: false
@@ -24688,6 +24777,14 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/PublicAvailability" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePublicClassTimetable:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PublicClassTimetable" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopePublicCheckout:

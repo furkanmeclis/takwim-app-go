@@ -19,18 +19,19 @@ The business comes from the slug only, never from a header or the body. An unkno
 
 ## Endpoints
 
-| Route                                         | Notes                                                                                                                                                                                      |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET {slug}`                                  | profile: name, logo URL, sector flow and terms, contact, policies, `booking` (channels, readiness, rules, payment methods), branch count, `embed.allowed_origins` ([embed.md](./embed.md)) |
-| `GET {slug}/logo`                             | logo stream (versioned URL in the profile)                                                                                                                                                 |
-| `GET {slug}/branches`                         | active, `show_online` branches: hours, today's and later special days, photos                                                                                                              |
-| `GET {slug}/services?branch_uuid=`            | active, `show_online` services a public branch offers; branch prices / durations; people shown online with their own price / duration; `group_capacity` of a group class                   |
-| `GET {slug}/staff?branch_uuid=&service_uuid=` | active, `show_online` people in public branches; no contact details                                                                                                                        |
-| `POST {slug}/availability`                    | `availability.Search` with channel `online`; the answer drops buffers and resources                                                                                                        |
-| `POST {slug}/checkouts`                       | holds the picked slot (`checkout` hold, 10 minutes); answers the checkout token and the planned lines                                                                                      |
-| `GET`, `DELETE {slug}/checkouts/{token}`      | checkout status (`active`, `expired`, `released`, `booked`); release when the customer goes back                                                                                           |
-| `POST {slug}/reservations`                    | books a checkout for a customer identified by phone; answers the reservation and its `access_token`                                                                                        |
-| `GET {slug}/reservations/{uuid}`              | status view behind `X-Reservation-Token`                                                                                                                                                   |
+| Route                                                                          | Notes                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET {slug}`                                                                   | profile: name, logo URL, sector flow and terms, contact, policies, `booking` (channels, readiness, rules, payment methods), branch count, `embed.allowed_origins` ([embed.md](./embed.md)) |
+| `GET {slug}/logo`                                                              | logo stream (versioned URL in the profile)                                                                                                                                                 |
+| `GET {slug}/branches`                                                          | active, `show_online` branches: hours, today's and later special days, photos                                                                                                              |
+| `GET {slug}/services?branch_uuid=`                                             | active, `show_online` services a public branch offers; branch prices / durations; people shown online with their own price / duration; `group_capacity` of a group class                   |
+| `GET {slug}/staff?branch_uuid=&service_uuid=`                                  | active, `show_online` people in public branches; no contact details                                                                                                                        |
+| `POST {slug}/availability`                                                     | `availability.Search` with channel `online`; the answer drops buffers and resources                                                                                                        |
+| `GET {slug}/classes?branch_uuid=&service_uuid=&from=&to=&party_size=&channel=` | class timetable of a branch (TEC-990), see below                                                                                                                                           |
+| `POST {slug}/checkouts`                                                        | holds the picked slot (`checkout` hold, 10 minutes); answers the checkout token and the planned lines                                                                                      |
+| `GET`, `DELETE {slug}/checkouts/{token}`                                       | checkout status (`active`, `expired`, `released`, `booked`); release when the customer goes back                                                                                           |
+| `POST {slug}/reservations`                                                     | books a checkout for a customer identified by phone; answers the reservation and its `access_token`                                                                                        |
+| `GET {slug}/reservations/{uuid}`                                               | status view behind `X-Reservation-Token`                                                                                                                                                   |
 
 Hidden, inactive, deleted and other businesses' branches, services and staff are never listed. When a body or filter names them, the answer is `400` with `not_found` (or the slot engine's `inactive` / `not_offered`).
 
@@ -66,6 +67,17 @@ In a party sector, availability and checkouts take `party_size` (required when a
 
 Group classes (TEC-904): availability lines carry `group_capacity` and slot lines `seats_left`; the checkout takes `party_size` seats of the session (one by default). Car washes: the booking body takes an optional `vehicle` (`type`: `car`, `suv`, `van`, `motorcycle`, `other`; `plate`), stored on the reservation and answered with it.
 
+## Class timetable (TEC-990)
+
+`GET {slug}/classes` lists the sessions of the group classes of a public branch ([classes.md](./classes.md)) on the local dates `from` … `to` (default seven days from today, at most 31), in order. `service_uuid` narrows it to one group class (anything else is `400 service_uuid / not_found`). It sits behind the booking gate and the availability rate limit, because it runs the slot engine.
+
+- **What a session shows.** The class, the date, start and end, the trainer, the area's name (the only resource detail that leaves the API: the studio is part of the published timetable), the seats (`capacity`, `capacity_changed` for a session with its own seats) and `seats_left`. The internal reason of a change, the bookings and the ids of resources stay out.
+- **Trainer.** A session with bookings keeps the person serving them (`reservation_lines`, query `ListPublicClassSessionStaff`); when the timetable's trainer changed since, `trainer_changed` is true. Otherwise the timetable's trainer, else the one the slot engine would assign; `null` when none is known yet.
+- **State.** `open` exactly when the slot engine offers the start on the channel for `party_size` seats (default 1), so a `POST …/checkouts` at `starts_at` with that party is accepted. Otherwise `cancelled`, `past`, `full` (fewer free seats than asked), `too_soon` (before `earliest_start`), `too_far` (after `latest_date`) or `unavailable` (trainer or area taken, branch closed, daily online limit).
+- **No timetable.** Without the `classes` module or without group classes in the branch the list is empty; a group class is not bookable then anyway.
+
+The answer is read from the classes module's own session list (`classes/usecase.Service.Sessions`, plugged in with `SetClasses`), so the panel and the booking page agree on which sessions exist and how many seats they have. Tests: `classes_db_test.go` (`TestPublicClassTimetable`).
+
 ## Customer by phone
 
 The phone is normalized to E.164 (`pkg/phone`; a number without a country code is Turkish).
@@ -98,7 +110,7 @@ The booking answer carries `access_token`. This is the field cipher's keyed hash
 
 - **Honeypot.** The booking body has a `website` field that people never see. A filled one answers `400 website / rejected`.
 - **Idempotency.** `middleware.Idempotency` also replays anonymous requests under `/v1/public/businesses/`, scoped by method, path and key; the fingerprint covers the body. Clients send a uuid `Idempotency-Key` on checkouts and bookings. `429` and `5xx` outcomes free the key, so a retry runs again.
-- **No internal data.** No internal ids, buffers, resources, staff contact details, provider keys, tax numbers or settings internals appear in any answer.
+- **No internal data.** No internal ids, buffers, resources (the class timetable shows only a session's area name), staff contact details, provider keys, tax numbers or settings internals appear in any answer.
 
 ## Data
 

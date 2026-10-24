@@ -398,6 +398,70 @@ func (q *Queries) ListPublicBranches(ctx context.Context, organizationID int64) 
 	return items, nil
 }
 
+const listPublicClassSessionStaff = `-- name: ListPublicClassSessionStaff :many
+SELECT DISTINCT ON (l.service_id, l.starts_at)
+    l.service_id::BIGINT AS service_id, l.starts_at, st.uuid AS staff_uuid,
+    COALESCE(st.name, l.staff_name, '')::TEXT AS staff_name
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+LEFT JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+WHERE l.organization_id = $1 AND r.branch_id = $2
+  AND l.service_id = ANY($3::BIGINT[]) AND l.staff_id IS NOT NULL
+  AND r.status NOT IN ('cancelled', 'rejected')
+  AND l.starts_at >= $4 AND l.starts_at < $5
+ORDER BY l.service_id, l.starts_at, r.created_at, r.id
+`
+
+type ListPublicClassSessionStaffParams struct {
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	ServiceIds     []int64            `json:"service_ids"`
+	Since          pgtype.Timestamptz `json:"since"`
+	Until          pgtype.Timestamptz `json:"until"`
+}
+
+type ListPublicClassSessionStaffRow struct {
+	ServiceID int64              `json:"service_id"`
+	StartsAt  pgtype.Timestamptz `json:"starts_at"`
+	StaffUuid pgtype.UUID        `json:"staff_uuid"`
+	StaffName string             `json:"staff_name"`
+}
+
+// The person serving the bookings of each group session (service, start)
+// of a branch in [since, until), from its first live booking: a session
+// that has bookings keeps their trainer when the timetable's trainer
+// changes (TEC-990).
+func (q *Queries) ListPublicClassSessionStaff(ctx context.Context, arg ListPublicClassSessionStaffParams) ([]ListPublicClassSessionStaffRow, error) {
+	rows, err := q.db.Query(ctx, listPublicClassSessionStaff,
+		arg.OrganizationID,
+		arg.BranchID,
+		arg.ServiceIds,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPublicClassSessionStaffRow{}
+	for rows.Next() {
+		var i ListPublicClassSessionStaffRow
+		if err := rows.Scan(
+			&i.ServiceID,
+			&i.StartsAt,
+			&i.StaffUuid,
+			&i.StaffName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublicServiceOffers = `-- name: ListPublicServiceOffers :many
 SELECT sb.service_id, sb.branch_id, sb.price, sb.duration_minutes
 FROM service_branches sb

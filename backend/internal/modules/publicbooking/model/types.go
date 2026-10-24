@@ -448,3 +448,69 @@ type Reservation struct {
 	CreatedAt    time.Time       `json:"created_at"`
 	AccessToken  string          `json:"access_token,omitempty"`
 }
+
+// Class session states of the public timetable (TEC-990).
+const (
+	// ClassOpen: bookable now on the channel for the asked seats.
+	ClassOpen = "open"
+	// ClassFull: fewer free seats than asked.
+	ClassFull = "full"
+	// ClassCancelled: the business cancelled the session.
+	ClassCancelled = "cancelled"
+	// ClassPast: the session has started.
+	ClassPast = "past"
+	// ClassTooSoon / ClassTooFar: inside the minimum notice, or after the
+	// furthest day the business books online.
+	ClassTooSoon = "too_soon"
+	ClassTooFar  = "too_far"
+	// ClassUnavailable: not offered for another reason (the trainer or the
+	// area is taken, the branch is closed, the daily online limit).
+	ClassUnavailable = "unavailable"
+)
+
+// ClassesInput is the query of GET …/classes.
+type ClassesInput struct {
+	BranchUUID  uuid.UUID
+	ServiceUUID *uuid.UUID
+	From        string
+	To          string
+	Channel     string
+	// PartySize is the seats the customer wants to take (default 1).
+	PartySize *int
+}
+
+// ClassSession is one session of the class timetable as a customer sees
+// it. The area is only its name (no resource id leaves the API).
+type ClassSession struct {
+	Service Ref `json:"service"`
+	// Date is the local date of the session in the branch.
+	Date     string    `json:"date"`
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+	// Trainer: the person of the session's bookings, else the timetable's,
+	// else the one the slot engine would assign; null when none is known.
+	Trainer *Ref `json:"trainer"`
+	// TrainerChanged: the session keeps the trainer of its bookings, who
+	// is no longer the timetable's.
+	TrainerChanged bool    `json:"trainer_changed"`
+	Area           *string `json:"area"`
+	Capacity       int     `json:"capacity"`
+	// CapacityChanged: the session has its own seats.
+	CapacityChanged bool `json:"capacity_changed"`
+	SeatsLeft       int  `json:"seats_left"`
+	// State: open, full, cancelled, past, too_soon, too_far or unavailable.
+	State string `json:"state"`
+}
+
+// ClassTimetable is the answer of GET …/classes: the sessions of the
+// branch's group classes on the local dates [From, To], in order.
+type ClassTimetable struct {
+	Branch        Ref            `json:"branch"`
+	Timezone      string         `json:"timezone"`
+	From          string         `json:"from"`
+	To            string         `json:"to"`
+	PartySize     int            `json:"party_size"`
+	EarliestStart *time.Time     `json:"earliest_start"`
+	LatestDate    *string        `json:"latest_date"`
+	Sessions      []ClassSession `json:"sessions"`
+}

@@ -19,6 +19,7 @@ import {
 import { LargePartyHint } from "@/features/business-page/components/large-party-hint";
 import { SeatsPicker } from "@/features/business-page/components/seats-picker";
 import { AreaStep } from "@/features/business-page/components/steps/area-step";
+import { ClassStep } from "@/features/business-page/components/steps/class-step";
 import { DatetimeStep } from "@/features/business-page/components/steps/datetime-step";
 import { PartyStep } from "@/features/business-page/components/steps/party-step";
 import { ProductStep } from "@/features/business-page/components/steps/product-step";
@@ -28,6 +29,7 @@ import { SummaryStep } from "@/features/business-page/components/steps/summary-s
 import { VehicleStep } from "@/features/business-page/components/steps/vehicle-step";
 import {
   usePublicAvailability,
+  usePublicClasses,
   usePublicProducts,
   usePublicServices,
   usePublicStaff,
@@ -59,6 +61,7 @@ import {
   paymentChoices,
   productPrices,
   serviceStepKey,
+  sessionSlot,
   staffCandidates,
   sumAmounts,
   toLines,
@@ -79,6 +82,7 @@ import type {
   PublicBranch,
   PublicBusiness,
   PublicCheckout,
+  PublicClassesQuery,
   PublicService,
   PublicSlot,
   PublicVehicle,
@@ -186,7 +190,16 @@ export function BookingWizard({
     .map((id) => services.find((s) => s.uuid === id))
     .filter((s): s is PublicService => Boolean(s));
   const staffUuids = staff.map((s) => s.uuid);
+  const byParty = flowHasParty(business.flow);
+  // A group class is booked on its own (TEC-904); the booking takes
+  // `party_size` seats of the session, 1 up to the class's capacity. Its
+  // sessions come from the class timetable (TEC-990), each with its own
+  // trainer, so the person step is not asked for it.
+  const classCapacity =
+    !byParty && selected.length === 1 ? groupCapacity(selected[0]) : null;
+  const isClass = classCapacity !== null;
   const staffChoice =
+    !isClass &&
     flowHasStaff(business.flow) &&
     selected.some((s) => staffCandidates(s, staffUuids).length > 0);
   // A pre-selected person serves every picked service they offer, until
@@ -197,8 +210,9 @@ export function BookingWizard({
       : null;
   const staffFor: Record<string, string | null> = {};
   for (const service of selected) {
-    staffFor[service.uuid] =
-      service.uuid in staffBy
+    staffFor[service.uuid] = isClass
+      ? null
+      : service.uuid in staffBy
         ? (staffBy[service.uuid] ?? null)
         : presetStaff &&
             staffCandidates(service, staffUuids).some(
@@ -207,12 +221,7 @@ export function BookingWizard({
           ? presetStaff
           : null;
   }
-  const byParty = flowHasParty(business.flow);
   const askVehicle = flowHasVehicle(business.flow);
-  // A group class is booked on its own (TEC-904); the booking takes
-  // `party_size` seats of the session, 1 up to the class's capacity.
-  const classCapacity =
-    !byParty && selected.length === 1 ? groupCapacity(selected[0]) : null;
   const activeSeats =
     classCapacity !== null ? (validSeats(seats, classCapacity) ?? 1) : null;
   const branch = branches.find((b) => b.uuid === branchUuid);
@@ -261,6 +270,7 @@ export function BookingWizard({
   const windowEnd = addDays(windowStart, WINDOW_DAYS - 1);
   const availabilityBody: PublicAvailabilityRequest | null =
     current === "datetime" &&
+    !isClass &&
     branchUuid &&
     lines.length > 0 &&
     (!byParty || partySize !== null)
@@ -276,14 +286,35 @@ export function BookingWizard({
         }
       : null;
   const availability = usePublicAvailability(slug, availabilityBody);
+  // The class timetable of a group class (TEC-990).
+  const classesQuery: PublicClassesQuery | null =
+    current === "datetime" && isClass && branchUuid && activeSeats !== null
+      ? {
+          branch_uuid: branchUuid,
+          service_uuid: serviceUuids[0]!,
+          from: windowStart,
+          to: windowEnd,
+          party_size: activeSeats,
+          channel: surface.channel,
+        }
+      : null;
+  const classes = usePublicClasses(slug, classesQuery);
   const days = availability.data?.days ?? [];
-  // The picked day, else the first day with free starts in the window.
-  const activeDate =
-    (date && days.some((d) => d.date === date) ? date : "") ||
-    days.find((d) => d.slots.length > 0)?.date ||
-    days[0]?.date ||
-    "";
-  const latest = availability.data?.latest_date ?? null;
+  const sessionList = classes.data?.sessions ?? [];
+  // The picked day, else the first day with free starts (open sessions) in
+  // the window.
+  const activeDate = isClass
+    ? (date && date >= windowStart && date <= windowEnd ? date : "") ||
+      sessionList.find((s) => s.state === "open")?.date ||
+      classes.data?.from ||
+      ""
+    : (date && days.some((d) => d.date === date) ? date : "") ||
+      days.find((d) => d.slots.length > 0)?.date ||
+      days[0]?.date ||
+      "";
+  const latest =
+    (isClass ? classes.data?.latest_date : availability.data?.latest_date) ??
+    null;
 
   // A signed-in customer panel session that this business knows can pay
   // lines with package sessions (TEC-984); the API checks every rule again.
@@ -399,7 +430,7 @@ export function BookingWizard({
       reportBookingError(error, t);
       if (isSlotTaken(error)) {
         setSlot(null);
-        void availability.refetch();
+        void (isClass ? classes.refetch() : availability.refetch());
       }
     } finally {
       setBusy(false);
@@ -438,6 +469,7 @@ export function BookingWizard({
       if (isSlotTaken(error) || isDayFull(error)) {
         setCheckout(null);
         resetTime();
+        if (isClass) void classes.refetch();
         goTo("datetime");
       } else if (isAnswerError(error)) {
         goTo("contact");
@@ -579,17 +611,19 @@ export function BookingWizard({
         }}
       />
     );
-  } else if (current === "datetime") {
+  } else if (current === "datetime" && isClass) {
     body = (
-      <DatetimeStep
-        query={availability}
+      <ClassStep
+        query={classes}
         date={activeDate}
         onDateChange={(value) => {
           setDate(value);
           setSlot(null);
         }}
-        slot={slot}
-        onSlotChange={setSlot}
+        value={
+          slot ? `${slot.lines[0]?.service_uuid ?? ""}@${slot.starts_at}` : ""
+        }
+        onChange={(session) => setSlot(session ? sessionSlot(session) : null)}
         canGoBack={windowStart > today}
         canGoForward={!latest || windowEnd < latest}
         onPrevWindow={() => {
@@ -613,6 +647,30 @@ export function BookingWizard({
             />
           ) : undefined
         }
+      />
+    );
+  } else if (current === "datetime") {
+    body = (
+      <DatetimeStep
+        query={availability}
+        date={activeDate}
+        onDateChange={(value) => {
+          setDate(value);
+          setSlot(null);
+        }}
+        slot={slot}
+        onSlotChange={setSlot}
+        canGoBack={windowStart > today}
+        canGoForward={!latest || windowEnd < latest}
+        onPrevWindow={() => {
+          const prev = addDays(windowStart, -WINDOW_DAYS);
+          setWindowStart(prev < today ? today : prev);
+          resetTime();
+        }}
+        onNextWindow={() => {
+          setWindowStart(addDays(windowStart, WINDOW_DAYS));
+          resetTime();
+        }}
         noSlotsHint={
           byParty && partySize !== null ? (
             <LargePartyHint

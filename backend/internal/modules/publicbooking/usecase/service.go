@@ -140,6 +140,7 @@ type Service struct {
 	reservations *reservationsusecase.Service
 	signer       TokenSigner
 	indexer      SearchIndexer
+	classes      ClassSessions
 	now          func() time.Time
 }
 

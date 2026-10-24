@@ -779,6 +779,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	publicSvc := publicbookingusecase.New(deps.Queries, orgsettingsSvc, availabilitySvc, capacityHolds, reservationsSvc, fieldCipher)
 	publicSvc.SetIndexer(searchIndexer)
 	publicSvc.SetPayments(paymentsSvc)
+	// The class timetable of the booking page (TEC-990), read only.
+	publicSvc.SetClasses(classesusecase.New(deps.Queries, capacityHolds))
 	// Shared customer panel (TEC-909): /v1/customer/*, its own token kind.
 	// Sign-in codes go through the same SMS sender (TEC-884 brings the provider).
 	panelSender := smsSender

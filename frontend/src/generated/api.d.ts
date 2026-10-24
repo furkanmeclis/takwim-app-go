@@ -8289,6 +8289,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/businesses/{slug}/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class timetable of a branch (online channel)
+         * @description No authentication (TEC-990). The sessions of the branch's group
+         *     classes (classes module, TEC-970) on the local dates `from` … `to`
+         *     (default: seven days from today, at most 31), in order: the class,
+         *     the trainer (the one serving the session's bookings, else the
+         *     timetable's), the area's name, the seats and the free seats. `state`
+         *     says whether the session can be booked now with `party_size` seats
+         *     on `channel`: `open` exactly when the slot engine offers its start
+         *     (book it with `POST …/checkouts` at `starts_at`); otherwise `full`,
+         *     `cancelled`, `past`, `too_soon`, `too_far` or `unavailable` (trainer
+         *     or area taken, branch closed, daily limit). Without the classes
+         *     module or group classes the list is empty. `409 BOOKING_UNAVAILABLE`
+         *     like availability. Rate limited per IP with availability.
+         */
+        get: operations["getPublicClasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/businesses/{slug}/checkouts": {
         parameters: {
             query?: never;
@@ -16772,6 +16803,48 @@ export interface components {
                 }[];
             }[];
         };
+        PublicClassSession: {
+            service: components["schemas"]["PublicRef"];
+            /**
+             * Format: date
+             * @description Local date of the session in the branch.
+             */
+            date: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** @description The person serving the session's bookings, else the timetable's trainer, else the one the slot engine would assign; null when not known yet. */
+            trainer: components["schemas"]["PublicRef"] | null;
+            /** @description The session keeps the trainer of its bookings, who is no longer the timetable's. */
+            trainer_changed: boolean;
+            /** @description Name of the session's area (studio). */
+            area: string | null;
+            /** @description Seats of the session. */
+            capacity: number;
+            /** @description The session has its own seats. */
+            capacity_changed: boolean;
+            seats_left: number;
+            /** @enum {string} */
+            state: "open" | "full" | "cancelled" | "past" | "too_soon" | "too_far" | "unavailable";
+        };
+        PublicClassTimetable: {
+            branch: components["schemas"]["PublicRef"];
+            timezone: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            party_size: number;
+            /**
+             * Format: date-time
+             * @description First instant a booking may start (null without sessions to book).
+             */
+            earliest_start: string | null;
+            /** Format: date */
+            latest_date: string | null;
+            sessions: components["schemas"]["PublicClassSession"][];
+        };
         PublicCheckoutRequest: {
             /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
             party_size?: number | null;
@@ -16963,6 +17036,12 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["PublicAvailability"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePublicClassTimetable: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicClassTimetable"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopePublicCheckout: {
@@ -33663,6 +33742,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopePublicAvailability"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPublicClasses: {
+        parameters: {
+            query: {
+                branch_uuid: string;
+                /** @description Only this group class (`400 service_uuid / not_found` for anything else). */
+                service_uuid?: string;
+                from?: string;
+                to?: string;
+                /** @description Seats the customer wants to take (default 1). */
+                party_size?: number;
+                channel?: "web" | "widget" | "api";
+            };
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicClassTimetable"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -19,7 +19,7 @@ A session is identified by its class and its **local date** in the branch time z
 - Seats of a session: the session change's capacity, else the class's capacity, else the service's `group_capacity`. The capacity hold trigger (TEC-905, `session_seats`) keeps A03: the seats of a session are never overbooked, also under concurrent bookings.
 - The session's trainer needs no shift; it must only be free (no other visit, leave or session). Its area is fixed the same way. An empty trainer or area is picked by the first booking as in TEC-904, and later bookings join it.
 - A scheduled session blocks its trainer and area from the start, before the first booking: individual visits and other classes at that time are not offered. A cancelled session frees them.
-- Online bookings use the same sessions: the public API and the booking page get the timetable starts with no change of contract (the gym's class step on the booking page is TEC-971).
+- Online bookings use the same sessions: the public API and the booking page get the timetable starts with no change of contract (the gym's class step on the booking page is TEC-971). The booking page shows the timetable itself through `GET /v1/public/businesses/{slug}/classes` (TEC-990, [public-booking-api.md](./public-booking-api.md#class-timetable-tec-990)): each session with its trainer, studio, seats and whether it can be booked.
 
 ## Writes
 

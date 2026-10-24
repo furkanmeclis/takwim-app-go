@@ -281,6 +281,46 @@ func (h *Handler) Availability(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, out)
 }
 
+// Classes serves GET /v1/public/businesses/{slug}/classes (TEC-990): the
+// class timetable of a branch with what can be booked. It runs the slot
+// engine, so it counts against the availability limit.
+func (h *Handler) Classes(w http.ResponseWriter, r *http.Request) {
+	o, ok := h.business(w, r, "availability", h.limits.Availability)
+	if !ok {
+		return
+	}
+	branch, ok := optionalUUID(w, r, "branch_uuid")
+	if !ok {
+		return
+	}
+	service, ok := optionalUUID(w, r, "service_uuid")
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	in := model.ClassesInput{
+		ServiceUUID: service, From: strings.TrimSpace(q.Get("from")), To: strings.TrimSpace(q.Get("to")),
+		Channel: strings.TrimSpace(q.Get("channel")),
+	}
+	if branch != nil {
+		in.BranchUUID = *branch
+	}
+	if raw := strings.TrimSpace(q.Get("party_size")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			response.ValidationError(w, r, []response.Detail{{Field: "party_size", Message: "party_size must be a number", Code: "invalid"}})
+			return
+		}
+		in.PartySize = &n
+	}
+	out, err := h.svc.Classes(r.Context(), o, in)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // CreateCheckout serves POST /v1/public/businesses/{slug}/checkouts.
 func (h *Handler) CreateCheckout(w http.ResponseWriter, r *http.Request) {
 	o, ok := h.business(w, r, "checkout", h.limits.Checkout)
