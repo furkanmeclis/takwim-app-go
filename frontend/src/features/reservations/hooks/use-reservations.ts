@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { cashKeys } from "@/features/cash/hooks/query-keys";
 import { reservationsKeys } from "@/features/reservations/hooks/query-keys";
 import { reportReservationError } from "@/features/reservations/lib/errors";
 import { reservationsService } from "@/features/reservations/services/reservations.service";
@@ -17,6 +18,7 @@ import type {
   ListReservationsParams,
   ReservationAction,
   ReservationActionRequest,
+  ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationNotesRequest,
   ReservationRescheduleRequest,
@@ -192,6 +194,34 @@ export function useUpdateReservationNotes() {
     onSuccess: () => {
       appToast.success(t("reservations.toast.notes_saved"));
       void invalidate();
+    },
+  });
+}
+
+/** Money of one visit: expected, paid, entries and online attempts. */
+export function useReservationPayments(uuid: string) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.payments(slug, uuid),
+    queryFn: () => reservationsService.payments(slug, uuid),
+    enabled: Boolean(uuid),
+  });
+}
+
+/** Records an on-site payment; the visit, history and money refresh. */
+export function useCollectReservationPayment(uuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: (body: ReservationCollectionRequest) =>
+      reservationsService.collect(slug, uuid, body),
+    onSuccess: (view) => {
+      queryClient.setQueryData(reservationsKeys.payments(slug, uuid), view);
+      appToast.success(t("reservations.toast.payment_collected"));
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: cashKeys.all(slug) });
     },
   });
 }

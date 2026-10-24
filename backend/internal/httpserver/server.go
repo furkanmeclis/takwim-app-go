@@ -90,6 +90,9 @@ import (
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	overviewmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/overview"
+	paymentsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments"
+	paymentshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/handler"
+	paymentsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/usecase"
 	productsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products"
 	productsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/adapters"
 	productshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/handler"
@@ -437,7 +440,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: field cipher: %w", err)
 	}
-	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log)
+	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log, paymentsmodule.Adapters(cfg)...)
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: %w", err)
 	}
@@ -447,6 +450,15 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	integrationKit.Runner.SetResourceEvents(resourceEvents)
 	integrationaccountsmodule.RegisterRoutes(mux, integrationaccountshandler.New(integrationKit.Accounts, activityRec), tokens, loader, tenantResolver)
 	integrationjobsmodule.RegisterRoutes(mux, integrationjobshandler.New(integrationKit.Runner, activityRec), tokens, loader, tenantResolver)
+	// Payments (TEC-912): collections at the business and online full
+	// payment through the business's own provider account; provider
+	// notifications are recorded once through the integration runner.
+	paymentsSvc := paymentsusecase.New(deps.Queries, reservationsSvc, salesSvc, integrationKit.Accounts, integrationKit.Runner,
+		paymentsusecase.Config{FrontendURL: cfg.Auth.FrontendURL}, log)
+	paymentsSvc.SetResourceEvents(resourceEvents)
+	paymentsH := paymentshandler.New(paymentsSvc, activityRec)
+	paymentsH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	paymentsmodule.RegisterRoutes(mux, paymentsH, tokens, loader, tenantResolver)
 
 	// Live lists of tenant resources: org:{org_uuid}:resource:{name}, open to
 	// members whose tenant role grants the resource's read permission.
@@ -626,6 +638,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Public booking API (TEC-906): business page, widget and mobile app.
 	publicSvc := publicbookingusecase.New(deps.Queries, orgsettingsSvc, availabilitySvc, capacityHolds, reservationsSvc, fieldCipher)
 	publicSvc.SetIndexer(searchIndexer)
+	publicSvc.SetPayments(paymentsSvc)
 	// Shared customer panel (TEC-909): /v1/customer/*, its own token kind.
 	// Sign-in codes go through the same SMS sender (TEC-884 brings the provider).
 	panelSender := smsSender

@@ -27,6 +27,8 @@ import (
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	customersusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/usecase"
 	orgsettings "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/model"
+	paymentsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/model"
+	paymentsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/model"
 	reservationsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
@@ -121,8 +123,16 @@ type SearchIndexer interface {
 	EnqueueUpsert(ctx context.Context, spec, id string)
 }
 
+// Payments is the online payment layer (TEC-912): whether the business
+// takes online payments and the start of one.
+type Payments interface {
+	OnlineReady(ctx context.Context, orgID int64) bool
+	StartOnline(ctx context.Context, in paymentsusecase.StartInput) (paymentsmodel.OnlineStart, error)
+}
+
 // Service implements the public booking API.
 type Service struct {
+	payments     Payments
 	q            *db.Queries
 	settings     SettingsReader
 	availability *availabilityusecase.Service
@@ -144,6 +154,12 @@ func New(q *db.Queries, settings SettingsReader, availability *availabilityuseca
 // SetIndexer indexes customers created by bookings (optional).
 func (s *Service) SetIndexer(ix SearchIndexer) {
 	s.indexer = ix
+}
+
+// SetPayments plugs in the online payment layer (nil: online payment is
+// never offered as ready).
+func (s *Service) SetPayments(p Payments) {
+	s.payments = p
 }
 
 // SetClock replaces time.Now (tests).
@@ -251,6 +267,7 @@ func (s *Service) booking(ctx context.Context, o Org) (model.Booking, error) {
 	}
 	if set.Payment.PayOnline {
 		out.PaymentMethods = append(out.PaymentMethods, reservationsmodel.MethodOnline)
+		out.OnlinePaymentReady = s.onlineReady(ctx, o)
 	}
 	if !o.modules.Allows(sector.ModuleReservations) || !o.modules.Allows(sector.ModuleBookingPage) {
 		out.Unavailable = append(out.Unavailable, model.UnavailableModule)
@@ -1045,7 +1062,28 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		}
 		out.Lines = append(out.Lines, line)
 	}
+	out.CanPayOnline = r.Status == reservationsmodel.StatusRequested && r.ApprovalStatus == reservationsmodel.ApprovalAccepted &&
+		r.PaymentStatus == reservationsmodel.PaymentOnlinePending && r.HoldExpiresAt != nil && r.HoldExpiresAt.After(s.now()) &&
+		s.onlineReady(ctx, o)
 	return out, nil
+}
+
+func (s *Service) onlineReady(ctx context.Context, o Org) bool {
+	return s.payments != nil && s.payments.OnlineReady(ctx, o.ID)
+}
+
+// StartPayment opens the payment page of a reservation for the holder of
+// its access token (ErrReservationNotFound otherwise).
+func (s *Service) StartPayment(ctx context.Context, o Org, id uuid.UUID, token, ip, locale string) (paymentsmodel.OnlineStart, error) {
+	if _, err := s.Reservation(ctx, o, id, token); err != nil {
+		return paymentsmodel.OnlineStart{}, err
+	}
+	if s.payments == nil {
+		return paymentsmodel.OnlineStart{}, paymentsusecase.ErrNotReady
+	}
+	return s.payments.StartOnline(ctx, paymentsusecase.StartInput{
+		OrganizationID: o.ID, Slug: o.Slug, ReservationUUID: id, IP: ip, Locale: locale,
+	})
 }
 
 // partyParam stores a party size.

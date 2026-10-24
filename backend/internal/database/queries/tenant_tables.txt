@@ -44,3 +44,4 @@ customer_notification_rules
 customer_notification_templates
 customer_notification_dispatches
 customer_notification_deliveries
+payments

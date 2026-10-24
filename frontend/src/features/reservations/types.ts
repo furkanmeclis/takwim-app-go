@@ -6,6 +6,14 @@ export type Reservation = Schemas["TenantReservation"];
 export type ReservationListItem = Schemas["TenantReservationListItem"];
 export type ReservationPage = Schemas["TenantReservationPage"];
 export type ReservationFacets = Schemas["TenantReservationFacets"];
+/** Money of one visit (`GET /v1/tenant/reservations/{uuid}/payments`). */
+export type ReservationPayments = Schemas["ReservationPayments"];
+export type ReservationLedgerEntry = Schemas["LedgerEntry"];
+export type PaymentAttempt = Schemas["PaymentAttempt"];
+export type CollectAccount = Schemas["CollectAccount"];
+export type ReservationCollectionRequest =
+  Schemas["ReservationCollectionRequest"];
+export type CollectMethod = ReservationCollectionRequest["method"];
 export type ReservationCreateRequest =
   Schemas["TenantReservationCreateRequest"];
 export type ReservationRescheduleRequest =

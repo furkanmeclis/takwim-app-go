@@ -18,10 +18,15 @@ export const INTEGRATION_FIELD_LABEL_KEYS: Record<string, string> = {
   secret_key: "integrations.fields.secret_key",
   username: "integrations.fields.username",
   password: "integrations.fields.password",
+  merchant_id: "integrations.fields.merchant_id",
+  merchant_key: "integrations.fields.merchant_key",
+  merchant_salt: "integrations.fields.merchant_salt",
 };
 
 export const INTEGRATION_PROVIDER_LABEL_KEYS: Record<string, string> = {
   log: "integrations.providers.log",
+  testpay: "integrations.providers.testpay",
+  paytr: "integrations.providers.paytr",
 };
 
 export const INTEGRATION_KIND_LABEL_KEYS: Record<string, string> = {
@@ -34,6 +39,8 @@ export const INTEGRATION_KIND_LABEL_KEYS: Record<string, string> = {
 /** Connect form hint per provider (where the organization finds its keys). */
 export const INTEGRATION_PROVIDER_HINT_KEYS: Record<string, string> = {
   log: "integrations.provider_hints.log",
+  testpay: "integrations.provider_hints.testpay",
+  paytr: "integrations.provider_hints.paytr",
 };
 
 /** Live list resource of integration jobs (backend jobs usecase). */

@@ -4865,6 +4865,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/{uuid}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payments of a reservation
+         * @description What the visit costs and what was paid for it, from the ledger:
+         *     expected, paid, remaining, credit; the money entries (collections,
+         *     refunds and their reversals; sale lines stay in the finance views);
+         *     the online payment attempts. For a member with
+         *     `tenant.payment.collect` and the cash module, `collect_accounts`
+         *     lists the tills and bank accounts of the visit's branch (and the
+         *     business-wide ones) and `can_collect` says whether money can be
+         *     taken now. Needs `tenant.reservations.read` or `.own` (own visits).
+         */
+        get: operations["getTenantReservationPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take money at the business
+         * @description Records money taken at the business for a visit (cash, card or
+         *     transfer; one part or the rest, at most the remaining amount): a
+         *     ledger collection and its cash movement into an active till or bank
+         *     account of the visit's branch or a business-wide one, in the
+         *     reservation's transaction. A visit paid in full becomes `paid`. A
+         *     cancelled or rejected visit answers `409 PAYMENT_NOT_COLLECTABLE`; a
+         *     closed day of the till `409` `cash_account_uuid` / `closed`. Needs
+         *     `tenant.payment.collect`, the cash module and
+         *     `tenant.reservations.read` or `.own`.
+         */
+        post: operations["postTenantReservationCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations/{uuid}/accept": {
         parameters: {
             query?: never;
@@ -6625,6 +6680,113 @@ export interface paths {
         get: operations["getPublicReservation"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/reservations/{uuid}/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the online payment page
+         * @description The holder of the reservation's access token (`X-Reservation-Token`)
+         *     gets the hosted page of the business's own payment provider for the
+         *     full amount of a booking that waits for its online payment (accepted,
+         *     `online_pending`, before `expires_at`). Asking again while the page
+         *     is open returns the same page. The result is recorded only from the
+         *     provider's server notification; returning from the page proves
+         *     nothing, so the status page shows the server's `payment_status`.
+         *     `409 PAYMENT_NOT_AVAILABLE`: nothing to pay (not accepted yet, paid,
+         *     cancelled, window over). `409 PAYMENT_NOT_READY`: the business has no
+         *     working provider account or online cash account. `502
+         *     PAYMENT_PROVIDER_ERROR`: the provider did not open the page. Limit:
+         *     the checkout window per IP.
+         */
+        post: operations["startPublicReservationPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/payments/paytr/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * PayTR payment notification
+         * @description PayTR's server notification (iFrame API step 2), configured as the
+         *     notification URL of the business's merchant panel. The business is
+         *     found from `merchant_oid` (our payment reference); `hash` is checked
+         *     with that business's merchant key and salt (`401` otherwise). A
+         *     notification is applied once (`integration_jobs`, key per payment
+         *     and status): a repeated delivery answers `OK` again without a second
+         *     collection. A success writes the ledger collection into the
+         *     provider's online cash account and confirms the booking; a payment
+         *     for a visit cancelled meanwhile is recorded, the visit is not
+         *     reopened and the payment waits for its refund. The adapter is
+         *     mounted only with `PAYMENTS_PAYTR_ENABLED` (`404` otherwise). Limit:
+         *     600 per minute per IP.
+         */
+        post: operations["postPayTRNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/payments/testpay/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Development provider's test page
+         * @description What the test page (`/pay/test/{ref}`) shows. The test provider is
+         *     registered in development and test only; elsewhere every reference
+         *     is `404`. No money moves.
+         */
+        get: operations["getTestPaymentPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/payments/testpay/{ref}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay or decline on the test page
+         * @description The test page's buttons. The server signs the notification a real
+         *     provider would send with the account's secret and handles it on the
+         *     same verified path as a provider notification (once per outcome).
+         *     Development and test only (`404` elsewhere).
+         */
+        post: operations["completeTestPayment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12105,6 +12267,8 @@ export interface components {
                 cancel_cutoff_minutes: number | null;
                 change_cutoff_minutes: number | null;
                 payment_methods: ("on_site" | "online")[];
+                /** @description Online payment is offered and the business has a working payment provider and an online cash account; the customer pays on the provider's page after booking. */
+                online_payment_ready: boolean;
                 checkout_minutes: number;
             };
             branch_count: number;
@@ -12355,6 +12519,8 @@ export interface components {
              */
             expires_at: string | null;
             cancel_reason: string | null;
+            /** @description The booking waits for its online payment and the page can be opened now (`POST …/payment`). */
+            can_pay_online: boolean;
             lines: {
                 /** Format: uuid */
                 service_uuid: string | null;
@@ -12411,6 +12577,125 @@ export interface components {
             success: true;
             data: components["schemas"]["PublicCheckout"];
             meta: components["schemas"]["ResponseMeta"];
+        };
+        OnlinePaymentStart: {
+            /** Format: uuid */
+            payment_uuid: string;
+            /** @description The provider's hosted page; send the browser there. */
+            redirect_url: string;
+            amount: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        EnvelopeOnlinePaymentStart: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OnlinePaymentStart"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PaymentNotifyResult: {
+            /** @description Integration job status (`succeeded`, `ignored`, `failed`). */
+            status: string;
+            /** @description The notification was handled before; nothing ran again. */
+            duplicate: boolean;
+        };
+        EnvelopePaymentNotifyResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PaymentNotifyResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TestPaymentPage: {
+            business: string;
+            slug: string;
+            /** Format: uuid */
+            reservation_uuid: string;
+            /** Format: int64 */
+            reservation_number: number;
+            amount: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** @enum {string} */
+            status: "pending" | "succeeded" | "failed";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        EnvelopeTestPaymentPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TestPaymentPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PaymentAttempt: {
+            /** Format: uuid */
+            uuid: string;
+            provider: string;
+            amount: components["schemas"]["MoneyAmount"];
+            paid_amount: components["schemas"]["MoneyAmount"] | null;
+            currency: string;
+            /** @enum {string} */
+            status: "pending" | "succeeded" | "failed";
+            /**
+             * @description `late`: paid after the visit was cancelled; refund pending.
+             * @enum {string}
+             */
+            outcome: "" | "confirmed" | "recorded" | "late";
+            failure_reason: string;
+            cash_account: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CollectAccount: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            /** @enum {string} */
+            kind: "cash" | "bank";
+            currency: string;
+            /** @description false = a business-wide account. */
+            branch: boolean;
+        };
+        ReservationPayments: {
+            reservation: {
+                /** Format: uuid */
+                uuid: string;
+                /** Format: int64 */
+                number: number;
+            };
+            status: string;
+            /** @enum {string} */
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            currency: string;
+            expected: components["schemas"]["MoneyAmount"];
+            paid: components["schemas"]["MoneyAmount"];
+            remaining: components["schemas"]["MoneyAmount"];
+            credit: components["schemas"]["MoneyAmount"];
+            entries: components["schemas"]["LedgerEntry"][];
+            online: components["schemas"]["PaymentAttempt"][];
+            can_collect: boolean;
+            collect_accounts: components["schemas"]["CollectAccount"][];
+        };
+        EnvelopeReservationPayments: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ReservationPayments"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ReservationCollectionRequest: {
+            amount: components["schemas"]["MoneyInput"];
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer";
+            /** Format: uuid */
+            cash_account_uuid: string;
+            note?: string;
         };
         EnvelopePublicReservation: {
             /** @enum {boolean} */
@@ -12805,6 +13090,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Our payment reference at the provider (`order_ref`). */
+        PaymentRef: string;
         /** @description The business's slug (`takwim.link/{slug}`). */
         PublicBusinessSlug: string;
         /** @description Checkout token from `POST …/checkouts`. */
@@ -21686,6 +21973,76 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    getTenantReservationPayments: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeReservationPayments"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantReservationCollection: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservationCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Payments after the collection */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeReservationPayments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     postTenantReservationAccept: {
         parameters: {
             query?: never;
@@ -25048,6 +25405,143 @@ export interface operations {
                     "application/json": components["schemas"]["EnvelopePublicReservation"];
                 };
             };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    startPublicReservationPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Reservation-Token": string;
+            };
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    locale?: "tr" | "en";
+                };
+            };
+        };
+        responses: {
+            /** @description Payment page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOnlinePaymentStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            502: components["responses"]["InternalError"];
+        };
+    };
+    postPayTRNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    merchant_oid: string;
+                    /** @enum {string} */
+                    status: "success" | "failed";
+                    total_amount: string;
+                    payment_amount?: string;
+                    hash: string;
+                    failed_reason_code?: string;
+                    failed_reason_msg?: string;
+                    test_mode?: string;
+                    payment_type?: string;
+                    currency?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Plain text `OK` (PayTR stops sending the notification) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": "OK";
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTestPaymentPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Our payment reference at the provider (`order_ref`). */
+                ref: components["parameters"]["PaymentRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTestPaymentPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    completeTestPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Our payment reference at the provider (`order_ref`). */
+                ref: components["parameters"]["PaymentRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    outcome: "succeeded" | "failed";
+                };
+            };
+        };
+        responses: {
+            /** @description What the notification did */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePaymentNotifyResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             429: components["responses"]["TooManyRequests"];
         };

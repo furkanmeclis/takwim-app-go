@@ -806,6 +806,32 @@ type OutboxEvent struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type Payment struct {
+	ID                   int64              `json:"id"`
+	Uuid                 uuid.UUID          `json:"uuid"`
+	OrganizationID       int64              `json:"organization_id"`
+	BranchID             int64              `json:"branch_id"`
+	ReservationID        int64              `json:"reservation_id"`
+	IntegrationAccountID pgtype.Int8        `json:"integration_account_id"`
+	CashAccountID        int64              `json:"cash_account_id"`
+	Provider             string             `json:"provider"`
+	OrderRef             string             `json:"order_ref"`
+	Amount               pgtype.Numeric     `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               string             `json:"status"`
+	PageUrl              string             `json:"page_url"`
+	ProviderToken        string             `json:"provider_token"`
+	ProviderPaymentID    string             `json:"provider_payment_id"`
+	PaidAmount           pgtype.Numeric     `json:"paid_amount"`
+	FailureReason        string             `json:"failure_reason"`
+	Outcome              string             `json:"outcome"`
+	LedgerEntryID        pgtype.Int8        `json:"ledger_entry_id"`
+	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Permission struct {
 	ID        int64              `json:"id"`
 	Uuid      uuid.UUID          `json:"uuid"`

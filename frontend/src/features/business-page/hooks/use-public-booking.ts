@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 
 import { publicBookingService } from "@/features/business-page/services/public-booking.service";
 import type {
@@ -84,11 +84,19 @@ export function usePublicAvailability(
   });
 }
 
-/** Status view of a booking behind its access token. */
+/** Polls of a booking just back from the payment page (about two minutes). */
+const PAYMENT_WATCH_POLLS = 40;
+
+/**
+ * Status view of a booking behind its access token. `watchPayment` (back
+ * from the provider's page) looks every few seconds while the payment is
+ * still open: only the provider's server notification records the result.
+ */
 export function usePublicReservation(
   slug: string,
   uuid: string,
   accessToken: string | null,
+  watchPayment = false,
 ) {
   return useQuery({
     queryKey: publicBookingKeys.reservation(slug, uuid),
@@ -96,7 +104,28 @@ export function usePublicReservation(
     enabled: Boolean(accessToken),
     // A request waiting for the business or for payment changes on the
     // business side; look again now and then.
-    refetchInterval: (query) =>
-      query.state.data?.status === "requested" ? 30_000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (
+        watchPayment &&
+        data?.payment_status === "online_pending" &&
+        query.state.dataUpdateCount < PAYMENT_WATCH_POLLS
+      ) {
+        return 3_000;
+      }
+      return data?.status === "requested" ? 30_000 : false;
+    },
+  });
+}
+
+/** Opens the provider's page for the booking's online payment. */
+export function useStartPublicPayment(
+  slug: string,
+  uuid: string,
+  accessToken: string | null,
+) {
+  return useMutation({
+    mutationFn: (locale: string) =>
+      publicBookingService.startPayment(slug, uuid, accessToken!, locale),
   });
 }

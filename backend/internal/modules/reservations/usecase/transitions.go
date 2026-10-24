@@ -12,6 +12,7 @@ import (
 	availabilitymodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/model"
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
 // ChangeInput is the common part of a transition. ExpectedVersion, when
@@ -275,4 +276,104 @@ func expireRequests(ctx context.Context, q *db.Queries, n Notifier, orgID int64,
 		}
 	}
 	return nil
+}
+
+// PaymentPost writes the money of a payment inside the reservation's
+// transaction (the payments module posts a ledger collection there) and
+// returns what is paid for the visit in total after it.
+type PaymentPost func(ctx context.Context, q *db.Queries, row db.Reservation) (money.Money, error)
+
+// What RecordPayment did with the reservation.
+const (
+	// PaymentConfirmed: the online payment of an accepted request made it
+	// a booking (active, paid).
+	PaymentConfirmed = "confirmed"
+	// PaymentRecorded: the money was recorded; the state changed only when
+	// the visit is now paid in full.
+	PaymentRecorded = "recorded"
+	// PaymentLate: an online payment for a visit cancelled or rejected
+	// before it arrived. The visit is not reopened (its time may be taken
+	// again); the payment waits for its refund (refund_pending).
+	PaymentLate = "late"
+)
+
+// OnlinePaymentOutcome is what an online payment does to the locked
+// record (see RecordPayment).
+func OnlinePaymentOutcome(row db.Reservation) string {
+	switch {
+	case row.Status == model.StatusRequested && row.ApprovalStatus == model.ApprovalAccepted &&
+		row.PaymentStatus == model.PaymentOnlinePending:
+		return PaymentConfirmed
+	case row.Status == model.StatusCancelled || row.Status == model.StatusRejected:
+		return PaymentLate
+	}
+	return PaymentRecorded
+}
+
+// RecordPayment applies money taken for a visit (TEC-912) in one capacity
+// transaction with the posting itself: lapsed holds are expired first, the
+// record is locked, post writes the money, then the state follows.
+//
+//   - online, an accepted request waiting for its payment: paid and
+//     active, its hold becomes a booking (PaymentConfirmed);
+//   - online, a cancelled or rejected visit: refund_pending, the visit is
+//     not reopened (PaymentLate);
+//   - otherwise the money is recorded, and a visit paid in full is paid.
+//
+// Money at the business is refused for a cancelled or rejected visit
+// (ErrInvalidTransition) before anything is written. A payment never
+// confirms the customer's attendance.
+func (s *Service) RecordPayment(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64,
+	online bool, note string, post PaymentPost,
+) (model.Reservation, string, error) {
+	outcome := ""
+	err := s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
+		row, err := s.visible(ctx, tx.Q, orgID, id, caller, true)
+		if err != nil {
+			return err
+		}
+		closed := row.Status == model.StatusCancelled || row.Status == model.StatusRejected
+		if closed && !online {
+			return ErrInvalidTransition
+		}
+		paid, err := post(ctx, tx.Q, row)
+		if err != nil {
+			return err
+		}
+		outcome = PaymentRecorded
+		if online {
+			outcome = OnlinePaymentOutcome(row)
+		}
+		next, typ := stateOf(row), "payment_recorded"
+		switch outcome {
+		case PaymentConfirmed:
+			next.payment, next.status, typ = model.PaymentPaid, model.StatusActive, "paid"
+			if err := s.holds.ConfirmIn(ctx, tx, holdID(row), RefType, &row.Uuid); err != nil {
+				return err
+			}
+		case PaymentLate:
+			next.payment, typ = model.PaymentRefundPending, "late_payment"
+		default:
+			total := money.FromNumericOrZero(row.TotalPrice)
+			switch row.PaymentStatus {
+			case model.PaymentOnSite, model.PaymentOnlinePending, model.PaymentFailed:
+				if paid.Minor() >= total.Minor() {
+					next.payment = model.PaymentPaid
+				}
+			}
+		}
+		updated, err := tx.Q.UpdateReservationState(ctx, db.UpdateReservationStateParams{
+			OrganizationID: orgID, ID: row.ID, Status: next.status, ApprovalStatus: next.approval,
+			PaymentStatus: next.payment, CancelReason: pgtype.Text{String: next.cancelReason, Valid: next.cancelReason != ""},
+		})
+		if err != nil {
+			return err
+		}
+		return s.event(ctx, tx.Q, updated, typ, row.Status, updated.Status, actorID, note)
+	})
+	if err != nil {
+		return model.Reservation{}, "", err
+	}
+	out, err := s.get(ctx, orgID, id)
+	return out, outcome, err
 }

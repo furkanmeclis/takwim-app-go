@@ -82,6 +82,8 @@ export const EVENT_LABEL_KEYS: Record<string, string> = {
   expired: "reservations.events.expired",
   rescheduled: "reservations.events.rescheduled",
   notes_updated: "reservations.events.notes_updated",
+  payment_recorded: "reservations.events.payment_recorded",
+  late_payment: "reservations.events.late_payment",
 };
 
 /** System cancel reasons; people's own reasons are shown as typed. */

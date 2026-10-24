@@ -102,6 +102,41 @@ export function createNotesSchema(t: Translate) {
 
 export type NotesFormValues = z.infer<ReturnType<typeof createNotesSchema>>;
 
+/** Ways of an on-site payment (online comes only from the provider). */
+export const COLLECT_METHODS = ["cash", "card", "transfer"] as const;
+
+/** Most characters of a collection's note (API limit). */
+export const MAX_COLLECT_NOTE = 240;
+
+const AMOUNT = /^\d+([.,]\d{1,2})?$/;
+
+/** "450,5" → 450.5 (NaN when not an amount). */
+export const parseAmount = (value: string) =>
+  AMOUNT.test(value.trim()) ? Number(value.trim().replace(",", ".")) : NaN;
+
+/** On-site payment: at most the remaining amount (the API checks again). */
+export function createCollectSchema(t: Translate, remaining: number) {
+  return z.object({
+    amount: z
+      .string()
+      .trim()
+      .refine((v) => parseAmount(v) > 0, t("reservations.validation.amount"))
+      .refine(
+        (v) => !(parseAmount(v) > remaining + 0.0001),
+        t("reservations.validation.amount_over_remaining"),
+      ),
+    method: z.enum(COLLECT_METHODS),
+    cash_account_uuid: z
+      .string()
+      .min(1, t("reservations.validation.account_required")),
+    note: z
+      .string()
+      .max(MAX_COLLECT_NOTE, t("reservations.validation.collect_note_max")),
+  });
+}
+
+export type CollectFormValues = z.infer<ReturnType<typeof createCollectSchema>>;
+
 /** Select value for "anyone free" (Radix Select has no empty value). */
 export const ANY_STAFF = "any";
 

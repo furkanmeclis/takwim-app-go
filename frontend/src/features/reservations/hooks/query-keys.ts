@@ -12,6 +12,8 @@ export const reservationsKeys = {
     [...reservationsKeys.all(slug), "agenda", params] as const,
   detail: (slug: string, uuid: string) =>
     [...reservationsKeys.all(slug), "detail", uuid] as const,
+  payments: (slug: string, uuid: string) =>
+    [...reservationsKeys.all(slug), "payments", uuid] as const,
   availability: (slug: string, body: Record<string, unknown>) =>
     ["tenant", slug, "availability", body] as const,
 };

@@ -52,6 +52,8 @@ tags:
     description: Invitation accept flow (`/invite/{token}`) and organization logos
   - name: Public booking
     description: Unauthenticated booking API of a business (`/v1/public/businesses/{slug}`) for the business page, the widget and the mobile app
+  - name: Payments
+    description: Online payment provider notifications (`/v1/public/payments/*`) and the development provider's test page. A payment is recorded only from a provider notification whose signature verified with the business's own secret.
   - name: Customer panel
     description: Shared customer panel (`takwim.link/panel`, `/v1/customer/*`). Sign-in by a code sent to the phone; a customer token (kind `customer`) that staff routes refuse, and that only opens the records the verified phone was linked to.
 
@@ -7968,6 +7970,75 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /v1/tenant/reservations/{uuid}/payments:
+    get:
+      tags: [Tenant]
+      operationId: getTenantReservationPayments
+      summary: Payments of a reservation
+      description: |
+        What the visit costs and what was paid for it, from the ledger:
+        expected, paid, remaining, credit; the money entries (collections,
+        refunds and their reversals; sale lines stay in the finance views);
+        the online payment attempts. For a member with
+        `tenant.payment.collect` and the cash module, `collect_accounts`
+        lists the tills and bank accounts of the visit's branch (and the
+        business-wide ones) and `can_collect` says whether money can be
+        taken now. Needs `tenant.reservations.read` or `.own` (own visits).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Payments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeReservationPayments"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/reservations/{uuid}/collections:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationCollection
+      summary: Take money at the business
+      description: |
+        Records money taken at the business for a visit (cash, card or
+        transfer; one part or the rest, at most the remaining amount): a
+        ledger collection and its cash movement into an active till or bank
+        account of the visit's branch or a business-wide one, in the
+        reservation's transaction. A visit paid in full becomes `paid`. A
+        cancelled or rejected visit answers `409 PAYMENT_NOT_COLLECTABLE`; a
+        closed day of the till `409` `cash_account_uuid` / `closed`. Needs
+        `tenant.payment.collect`, the cash module and
+        `tenant.reservations.read` or `.own`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationCollectionRequest"
+      responses:
+        "201":
+          description: Payments after the collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeReservationPayments"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/reservations/{uuid}/accept:
     post:
       tags: [Tenant]
@@ -10710,6 +10781,156 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/public/businesses/{slug}/reservations/{uuid}/payment:
+    post:
+      tags: [Public booking]
+      operationId: startPublicReservationPayment
+      summary: Open the online payment page
+      description: |
+        The holder of the reservation's access token (`X-Reservation-Token`)
+        gets the hosted page of the business's own payment provider for the
+        full amount of a booking that waits for its online payment (accepted,
+        `online_pending`, before `expires_at`). Asking again while the page
+        is open returns the same page. The result is recorded only from the
+        provider's server notification; returning from the page proves
+        nothing, so the status page shows the server's `payment_status`.
+        `409 PAYMENT_NOT_AVAILABLE`: nothing to pay (not accepted yet, paid,
+        cancelled, window over). `409 PAYMENT_NOT_READY`: the business has no
+        working provider account or online cash account. `502
+        PAYMENT_PROVIDER_ERROR`: the provider did not open the page. Limit:
+        the checkout window per IP.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: X-Reservation-Token
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                locale: { type: string, enum: [tr, en] }
+      responses:
+        "200":
+          description: Payment page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOnlinePaymentStart"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "502": { $ref: "#/components/responses/InternalError" }
+
+  /v1/public/payments/paytr/notify:
+    post:
+      tags: [Payments]
+      operationId: postPayTRNotification
+      summary: PayTR payment notification
+      description: |
+        PayTR's server notification (iFrame API step 2), configured as the
+        notification URL of the business's merchant panel. The business is
+        found from `merchant_oid` (our payment reference); `hash` is checked
+        with that business's merchant key and salt (`401` otherwise). A
+        notification is applied once (`integration_jobs`, key per payment
+        and status): a repeated delivery answers `OK` again without a second
+        collection. A success writes the ledger collection into the
+        provider's online cash account and confirms the booking; a payment
+        for a visit cancelled meanwhile is recorded, the visit is not
+        reopened and the payment waits for its refund. The adapter is
+        mounted only with `PAYMENTS_PAYTR_ENABLED` (`404` otherwise). Limit:
+        600 per minute per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [merchant_oid, status, total_amount, hash]
+              properties:
+                merchant_oid: { type: string }
+                status: { type: string, enum: [success, failed] }
+                total_amount: { type: string }
+                payment_amount: { type: string }
+                hash: { type: string }
+                failed_reason_code: { type: string }
+                failed_reason_msg: { type: string }
+                test_mode: { type: string }
+                payment_type: { type: string }
+                currency: { type: string }
+      responses:
+        "200":
+          description: Plain text `OK` (PayTR stops sending the notification)
+          content:
+            text/plain:
+              schema: { type: string, enum: [OK] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/payments/testpay/{ref}:
+    get:
+      tags: [Payments]
+      operationId: getTestPaymentPage
+      summary: Development provider's test page
+      description: |
+        What the test page (`/pay/test/{ref}`) shows. The test provider is
+        registered in development and test only; elsewhere every reference
+        is `404`. No money moves.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PaymentRef"
+      responses:
+        "200":
+          description: Test page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTestPaymentPage"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/payments/testpay/{ref}/complete:
+    post:
+      tags: [Payments]
+      operationId: completeTestPayment
+      summary: Pay or decline on the test page
+      description: |
+        The test page's buttons. The server signs the notification a real
+        provider would send with the account's secret and handles it on the
+        same verified path as a provider notification (once per outcome).
+        Development and test only (`404` elsewhere).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PaymentRef"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [succeeded, failed] }
+      responses:
+        "200":
+          description: What the notification did
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePaymentNotifyResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/customer/auth/start:
     post:
       tags: [Customer panel]
@@ -11301,6 +11522,12 @@ components:
       description: Customer panel token (kind `customer`) from `POST /v1/customer/auth/verify`. Staff routes refuse it; customer routes refuse staff tokens.
 
   parameters:
+    PaymentRef:
+      name: ref
+      in: path
+      required: true
+      description: Our payment reference at the provider (`order_ref`).
+      schema: { type: string, maxLength: 64, pattern: "^[A-Za-z0-9]+$" }
     PublicBusinessSlug:
       name: slug
       in: path
@@ -17743,7 +17970,7 @@ components:
             no_show: { type: string }
         booking:
           type: object
-          required: [channels, ready, unavailable, approval_mode, min_lead_minutes, max_advance_days, cancel_cutoff_minutes, change_cutoff_minutes, payment_methods, checkout_minutes]
+          required: [channels, ready, unavailable, approval_mode, min_lead_minutes, max_advance_days, cancel_cutoff_minutes, change_cutoff_minutes, payment_methods, online_payment_ready, checkout_minutes]
           properties:
             channels:
               type: object
@@ -17761,6 +17988,9 @@ components:
             payment_methods:
               type: array
               items: { type: string, enum: [on_site, online] }
+            online_payment_ready:
+              type: boolean
+              description: Online payment is offered and the business has a working payment provider and an online cash account; the customer pays on the provider's page after booking.
             checkout_minutes: { type: integer }
         branch_count: { type: integer }
 
@@ -18030,7 +18260,7 @@ components:
 
     PublicReservation:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, lines, created_at, party_size, zone, vehicle]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, can_pay_online, lines, created_at, party_size, zone, vehicle]
       properties:
         party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
@@ -18053,6 +18283,7 @@ components:
         customer_note: { type: string }
         expires_at: { type: [string, "null"], format: date-time, description: "A request waiting for the business or for payment lets its time go then." }
         cancel_reason: { type: [string, "null"] }
+        can_pay_online: { type: boolean, description: "The booking waits for its online payment and the page can be opened now (`POST …/payment`)." }
         lines:
           type: array
           items:
@@ -18132,6 +18363,140 @@ components:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/PublicCheckout" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    OnlinePaymentStart:
+      type: object
+      required: [payment_uuid, redirect_url, amount, currency, expires_at]
+      properties:
+        payment_uuid: { type: string, format: uuid }
+        redirect_url: { type: string, description: The provider's hosted page; send the browser there. }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    EnvelopeOnlinePaymentStart:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OnlinePaymentStart" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    PaymentNotifyResult:
+      type: object
+      required: [status, duplicate]
+      properties:
+        status: { type: string, description: "Integration job status (`succeeded`, `ignored`, `failed`)." }
+        duplicate: { type: boolean, description: The notification was handled before; nothing ran again. }
+
+    EnvelopePaymentNotifyResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PaymentNotifyResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TestPaymentPage:
+      type: object
+      required: [business, slug, reservation_uuid, reservation_number, amount, currency, status, expires_at]
+      properties:
+        business: { type: string }
+        slug: { type: string }
+        reservation_uuid: { type: string, format: uuid }
+        reservation_number: { type: integer, format: int64 }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        status: { type: string, enum: [pending, succeeded, failed] }
+        expires_at: { type: string, format: date-time }
+
+    EnvelopeTestPaymentPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TestPaymentPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    PaymentAttempt:
+      type: object
+      required: [uuid, provider, amount, paid_amount, currency, status, outcome, failure_reason, cash_account, expires_at, completed_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        provider: { type: string }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        paid_amount:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        currency: { type: string }
+        status: { type: string, enum: [pending, succeeded, failed] }
+        outcome: { type: string, enum: ["", confirmed, recorded, late], description: "`late`: paid after the visit was cancelled; refund pending." }
+        failure_reason: { type: string }
+        cash_account:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        expires_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CollectAccount:
+      type: object
+      required: [uuid, name, kind, currency, branch]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [cash, bank] }
+        currency: { type: string }
+        branch: { type: boolean, description: false = a business-wide account. }
+
+    ReservationPayments:
+      type: object
+      required: [reservation, status, payment_status, currency, expected, paid, remaining, credit, entries, online, can_collect, collect_accounts]
+      properties:
+        reservation:
+          type: object
+          required: [uuid, number]
+          properties:
+            uuid: { type: string, format: uuid }
+            number: { type: integer, format: int64 }
+        status: { type: string }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        currency: { type: string }
+        expected: { $ref: "#/components/schemas/MoneyAmount" }
+        paid: { $ref: "#/components/schemas/MoneyAmount" }
+        remaining: { $ref: "#/components/schemas/MoneyAmount" }
+        credit: { $ref: "#/components/schemas/MoneyAmount" }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerEntry" }
+        online:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentAttempt" }
+        can_collect: { type: boolean }
+        collect_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CollectAccount" }
+
+    EnvelopeReservationPayments:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ReservationPayments" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ReservationCollectionRequest:
+      type: object
+      required: [amount, method, cash_account_uuid]
+      properties:
+        amount: { $ref: "#/components/schemas/MoneyInput" }
+        method: { type: string, enum: [cash, card, transfer] }
+        cash_account_uuid: { type: string, format: uuid }
+        note: { type: string, maxLength: 240 }
 
     EnvelopePublicReservation:
       type: object

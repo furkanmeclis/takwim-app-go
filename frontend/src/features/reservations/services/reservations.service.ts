@@ -10,10 +10,12 @@ import type {
   ReservationActionRequest,
   ReservationAgenda,
   ReservationCalendar,
+  ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationFacets,
   ReservationNotesRequest,
   ReservationPage,
+  ReservationPayments,
   ReservationRescheduleRequest,
 } from "@/features/reservations/types";
 import { tenantRequest } from "@/lib/api/tenant-request";
@@ -88,6 +90,25 @@ export const reservationsService = {
     return tenantRequest<Reservation>(slug, "PATCH", `${BASE}/${uuid}`, {
       body,
     });
+  },
+
+  /** Expected, paid and remaining money; ledger entries; online attempts. */
+  payments(slug: string, uuid: string) {
+    return tenantRequest<ReservationPayments>(
+      slug,
+      "GET",
+      `${BASE}/${uuid}/payments`,
+    );
+  },
+
+  /** On-site payment (cash, card, transfer) into a till or bank account. */
+  collect(slug: string, uuid: string, body: ReservationCollectionRequest) {
+    return tenantRequest<ReservationPayments>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/collections`,
+      { body },
+    );
   },
 
   availability(slug: string, body: AvailabilitySearchRequest) {

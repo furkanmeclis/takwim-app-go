@@ -32,6 +32,18 @@ type Config struct {
 	Search     SearchConfig
 	Sentry     SentryConfig
 	Tenancy    TenancyConfig
+	Payments   PaymentsConfig
+}
+
+// PaymentsConfig switches real payment providers on (TEC-912). Each
+// business connects its own provider account in the panel; nothing here
+// is a credential. The development test provider (testpay) is registered
+// outside production only.
+type PaymentsConfig struct {
+	// PayTREnabled registers the PayTR adapter (PAYMENTS_PAYTR_ENABLED).
+	PayTREnabled bool
+	// PayTRBaseURL is PayTR's API origin (PAYMENTS_PAYTR_BASE_URL).
+	PayTRBaseURL string
 }
 
 // TenancyConfig controls organizations (the multi-tenant shell). See
@@ -334,6 +346,10 @@ func Load() (Config, error) {
 			Enabled:   getBool("TENANCY_ENABLED", false),
 			SelfServe: getBool("TENANCY_SELF_SERVE", false),
 			CacheTTL:  getDuration("TENANCY_CACHE_TTL", 60*time.Second),
+		},
+		Payments: PaymentsConfig{
+			PayTREnabled: getBool("PAYMENTS_PAYTR_ENABLED", false),
+			PayTRBaseURL: strings.TrimRight(getEnv("PAYMENTS_PAYTR_BASE_URL", "https://www.paytr.com"), "/"),
 		},
 	}
 

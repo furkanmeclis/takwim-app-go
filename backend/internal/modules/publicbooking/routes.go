@@ -24,4 +24,5 @@ func RegisterRoutes(mux *http.ServeMux, h *publicbookinghandler.Handler) {
 	mux.HandleFunc("DELETE /v1/public/businesses/{slug}/checkouts/{token}", h.ReleaseCheckout)
 	mux.HandleFunc("POST /v1/public/businesses/{slug}/reservations", h.CreateReservation)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/reservations/{uuid}", h.GetReservation)
+	mux.HandleFunc("POST /v1/public/businesses/{slug}/reservations/{uuid}/payment", h.StartPayment)
 }

@@ -4,16 +4,16 @@ Status: **implemented** (TEC-880). The skeleton every external provider plugs in
 
 Code:
 
-| Area | Package |
-|------|---------|
-| Adapter / registry / credential vault | `backend/internal/platform/integrations/integrations.go` |
-| Operation contract (`Submit` / `CheckStatus`, outcomes, `ErrUnsupported`) | `backend/internal/platform/integrations/operation.go` |
-| Development log provider (one adapter per kind) | `backend/internal/platform/integrations/logprovider` |
-| Wiring (`integrations.New` → vault, operations, accounts, runner) | `backend/internal/modules/integrations/kit.go` |
-| Accounts API (`/v1/tenant/integrations`) | `backend/internal/modules/integrations/accounts` |
-| Runner, inbound idempotency, jobs API (`/v1/tenant/integration-jobs`) | `backend/internal/modules/integrations/jobs` |
-| Queues, dispatcher, sweep schedule | `backend/internal/queue/integrations.go` |
-| Panel (Ayarlar → Entegrasyonlar) | `frontend/src/features/integrations/components` |
+| Area                                                                      | Package                                                  |
+| ------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Adapter / registry / credential vault                                     | `backend/internal/platform/integrations/integrations.go` |
+| Operation contract (`Submit` / `CheckStatus`, outcomes, `ErrUnsupported`) | `backend/internal/platform/integrations/operation.go`    |
+| Development log provider (one adapter per kind)                           | `backend/internal/platform/integrations/logprovider`     |
+| Wiring (`integrations.New` → vault, operations, accounts, runner)         | `backend/internal/modules/integrations/kit.go`           |
+| Accounts API (`/v1/tenant/integrations`)                                  | `backend/internal/modules/integrations/accounts`         |
+| Runner, inbound idempotency, jobs API (`/v1/tenant/integration-jobs`)     | `backend/internal/modules/integrations/jobs`             |
+| Queues, dispatcher, sweep schedule                                        | `backend/internal/queue/integrations.go`                 |
+| Panel (Ayarlar → Entegrasyonlar)                                          | `frontend/src/features/integrations/components`          |
 
 ## 1. The rule
 
@@ -67,6 +67,6 @@ All behind `RequireOrganization`; reads need `tenant.integrations.read` (owner, 
 
 ## 8. Open items
 
-- Real adapters: SMS and WhatsApp providers, payment providers (their issues).
+- Real adapters: SMS and WhatsApp providers (their issues). Payment providers (`testpay`, `paytr`) arrived with TEC-912 ([payments.md](./payments.md)); their webhooks go through `HandleInbound` (kind `payment.webhook`).
 - A step-up gate on connect / rotate / retry once the tenant shell has a step-up policy.
 - Retention of `integration_attempts`.
