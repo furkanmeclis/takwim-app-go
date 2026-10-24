@@ -34,6 +34,11 @@ import (
 const (
 	CodeInvalidCode      = "OTP_INVALID"
 	CodeActionNotAllowed = "ACTION_NOT_ALLOWED"
+	// CodeLinkInvalid: an unknown, expired, used or revoked panel or visit
+	// link (TEC-910); the page offers a new sign-in.
+	CodeLinkInvalid = "LINK_INVALID"
+	// CodePhoneInUse: the new number has its own profile (no merge).
+	CodePhoneInUse = "PHONE_IN_USE"
 )
 
 // Limit is one fixed window.
@@ -51,6 +56,9 @@ type Limits struct {
 	Read        Limit // signed-in reads per session
 	Search      Limit // reschedule searches per session
 	Write       Limit // cancel / reschedule per session
+	LinkIP      Limit // panel link redemptions per IP
+	VisitIP     Limit // visit link calls per IP
+	Security    Limit // number change / reassignment / device sign-out per session
 }
 
 // DefaultLimits are the production limits.
@@ -62,6 +70,9 @@ var DefaultLimits = Limits{
 	Read:        Limit{Max: 240, Window: time.Minute},
 	Search:      Limit{Max: 60, Window: time.Minute},
 	Write:       Limit{Max: 20, Window: 10 * time.Minute},
+	LinkIP:      Limit{Max: 10, Window: 10 * time.Minute},
+	VisitIP:     Limit{Max: 30, Window: 10 * time.Minute},
+	Security:    Limit{Max: 10, Window: 10 * time.Minute},
 }
 
 // RateLimiter is a fixed-window limiter (ratelimit.Limiter).
@@ -382,7 +393,7 @@ func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	h.record(r, "reservations.cancelled", out, map[string]any{"reason": usecase.CancelReason})
+	h.record(r, "reservations.cancelled", out, map[string]any{"reason": usecase.CancelReason}, "customer_panel")
 	response.JSON(w, r, http.StatusOK, out.Reservation)
 }
 
@@ -427,13 +438,13 @@ func (h *Handler) Reschedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	h.record(r, "reservations.rescheduled", out, map[string]any{"starts_at": out.Reservation.StartsAt})
+	h.record(r, "reservations.rescheduled", out, map[string]any{"starts_at": out.Reservation.StartsAt}, "customer_panel")
 	response.JSON(w, r, http.StatusOK, out.Reservation)
 }
 
 // record publishes the change to the business panel's live list and
 // writes the business activity entry (no actor: the customer acted).
-func (h *Handler) record(r *http.Request, action string, c usecase.Changed, payload map[string]any) {
+func (h *Handler) record(r *http.Request, action string, c usecase.Changed, payload map[string]any, source string) {
 	ctx := orgctx.WithScope(r.Context(), c.Scope)
 	if h.events != nil {
 		h.events.Publish(ctx, reservationsmodel.Slug, resourceevents.ActionUpdated, c.Reservation.UUID.String())
@@ -446,7 +457,7 @@ func (h *Handler) record(r *http.Request, action string, c usecase.Changed, payl
 		payload = map[string]any{}
 	}
 	payload["number"] = c.Reservation.Number
-	payload["source"] = "customer_panel"
+	payload["source"] = source
 	h.activity.RecordEntry(ctx, activity.Entry{
 		Action: action, Resource: reservationsmodel.Slug, ResourceUUID: &id, BranchUUID: &branch,
 		Payload: payload, Request: r,
@@ -496,6 +507,12 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	switch {
+	case errors.Is(err, usecase.ErrLinkInvalid):
+		response.BadRequest(w, r, CodeLinkInvalid, "The link is invalid or expired")
+	case errors.Is(err, usecase.ErrPhoneInUse):
+		response.ErrorWithDetails(w, r, http.StatusConflict, CodePhoneInUse, err.Error(), []response.Detail{{
+			Field: "phone", Message: err.Error(), Code: "in_use",
+		}})
 	case errors.Is(err, usecase.ErrInvalidCode):
 		response.BadRequest(w, r, CodeInvalidCode, "The code is invalid or expired")
 	case errors.Is(err, usecase.ErrUnauthorized):

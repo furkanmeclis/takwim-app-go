@@ -341,6 +341,15 @@ func (s *Service) Restore(ctx context.Context, orgID int64, id uuid.UUID) error 
 // record must carry that very phone. Staff-typed and imported numbers never
 // call this, so they never open shared history.
 func (s *Service) LinkVerified(ctx context.Context, orgID int64, id uuid.UUID, phoneE164, source string, verifiedAt time.Time) (model.Customer, error) {
+	return s.LinkVerifiedFrom(ctx, orgID, id, phoneE164, source, verifiedAt, nil)
+}
+
+// LinkVerifiedFrom is LinkVerified with a visibility start: with visibleFrom
+// set, the person sees only the record's reservations made from then on
+// (TEC-910: a record older than the phone's last change of hands). A record
+// already linked to another identity stays with it (ErrIdentityLinked): a
+// proven phone never takes over somebody else's history.
+func (s *Service) LinkVerifiedFrom(ctx context.Context, orgID int64, id uuid.UUID, phoneE164, source string, verifiedAt time.Time, visibleFrom *time.Time) (model.Customer, error) {
 	if !slices.Contains(model.LinkSources, source) {
 		return model.Customer{}, fmt.Errorf("customers: unknown link source %q", source)
 	}
@@ -371,13 +380,16 @@ func (s *Service) LinkVerified(ctx context.Context, orgID int64, id uuid.UUID, p
 			if link.IdentityID == identity.ID {
 				return nil
 			}
-			if _, err := tx.DeleteCustomerIdentityLink(ctx, db.DeleteCustomerIdentityLinkParams{OrganizationID: orgID, CustomerID: row.ID}); err != nil {
-				return err
-			}
+			return ErrIdentityLinked
+		}
+		var from pgtype.Timestamptz
+		if visibleFrom != nil {
+			from = pgtype.Timestamptz{Time: *visibleFrom, Valid: true}
 		}
 		_, err = tx.CreateCustomerIdentityLink(ctx, db.CreateCustomerIdentityLinkParams{
 			OrganizationID: orgID, CustomerID: row.ID, IdentityID: identity.ID, Source: source,
 			VerifiedPhoneE164: normalized, VerifiedAt: pgtype.Timestamptz{Time: verifiedAt, Valid: true},
+			VisibleFrom: from,
 		})
 		return err
 	})

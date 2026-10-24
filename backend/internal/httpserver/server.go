@@ -616,6 +616,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	panelSvc := customerpanelusecase.New(deps.Queries, tokens, fieldCipher, panelSender, customersSvc, customerpanelusecase.PanelDeps{
 		Reservations: reservationsSvc, Availability: availabilitySvc, Settings: orgsettingsSvc,
 	}, log)
+	panelSvc.SetTx(customersrepository.NewPostgres(deps.DB, deps.Queries))
 	panelCfg := customerpanelusecase.DefaultConfig
 	panelCfg.PanelURL = strings.TrimRight(cfg.Auth.FrontendURL, "/") + "/panel"
 	panelSvc.SetConfig(panelCfg)

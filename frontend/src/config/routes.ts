@@ -15,6 +15,10 @@ export const routes = {
   customer: {
     root: "/panel",
     login: "/panel/login",
+    /** Single-use panel link from the booking SMS (`/panel/l#token`). */
+    link: "/panel/l",
+    /** Link to one visit (`/panel/v#token`); opens no panel session. */
+    visit: "/panel/v",
     reservation: (uuid: string) => `/panel/reservations/${uuid}`,
     payments: "/panel/payments",
     profile: "/panel/profile",

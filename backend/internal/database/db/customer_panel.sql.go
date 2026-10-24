@@ -12,20 +12,65 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeCustomerIdentityLinksOfPhone = `-- name: CloseCustomerIdentityLinksOfPhone :execrows
+UPDATE customer_identity_links l SET visible_until = NOW()
+WHERE l.identity_id = $1 AND l.verified_phone_e164 = $2
+  AND l.visible_until IS NULL
+RETURNING l.organization_id
+`
+
+type CloseCustomerIdentityLinksOfPhoneParams struct {
+	IdentityID int64  `json:"identity_id"`
+	PhoneE164  string `json:"phone_e164"`
+}
+
+// After a number change the records proven with the old phone show only
+// what was booked before: a later booking with that phone is the next
+// holder's.
+func (q *Queries) CloseCustomerIdentityLinksOfPhone(ctx context.Context, arg CloseCustomerIdentityLinksOfPhoneParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeCustomerIdentityLinksOfPhone, arg.IdentityID, arg.PhoneE164)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const closeOpenCustomerOTPChallenges = `-- name: CloseOpenCustomerOTPChallenges :exec
 UPDATE customer_otp_challenges SET consumed_at = $1
-WHERE phone_e164 = $2 AND consumed_at IS NULL
+WHERE phone_e164 = $2 AND purpose = $3 AND consumed_at IS NULL
 `
 
 type CloseOpenCustomerOTPChallengesParams struct {
 	Now       pgtype.Timestamptz `json:"now"`
 	PhoneE164 string             `json:"phone_e164"`
+	Purpose   string             `json:"purpose"`
 }
 
-// A new code replaces the open ones: only the latest code works.
+// A new code replaces the open ones of the same purpose: only the latest
+// code works.
 func (q *Queries) CloseOpenCustomerOTPChallenges(ctx context.Context, arg CloseOpenCustomerOTPChallengesParams) error {
-	_, err := q.db.Exec(ctx, closeOpenCustomerOTPChallenges, arg.Now, arg.PhoneE164)
+	_, err := q.db.Exec(ctx, closeOpenCustomerOTPChallenges, arg.Now, arg.PhoneE164, arg.Purpose)
 	return err
+}
+
+const consumeCustomerAccessLink = `-- name: ConsumeCustomerAccessLink :one
+UPDATE customer_access_links SET consumed_at = $1
+WHERE token_hash = $2 AND consumed_at IS NULL AND expires_at > $1
+RETURNING phone_e164
+`
+
+type ConsumeCustomerAccessLinkParams struct {
+	Now       pgtype.Timestamptz `json:"now"`
+	TokenHash string             `json:"token_hash"`
+}
+
+// Single use: the first redemption inside the lifetime wins; an expired,
+// used or unknown link is no row.
+func (q *Queries) ConsumeCustomerAccessLink(ctx context.Context, arg ConsumeCustomerAccessLinkParams) (string, error) {
+	row := q.db.QueryRow(ctx, consumeCustomerAccessLink, arg.Now, arg.TokenHash)
+	var phone_e164 string
+	err := row.Scan(&phone_e164)
+	return phone_e164, err
 }
 
 const consumeCustomerOTPChallenge = `-- name: ConsumeCustomerOTPChallenge :execrows
@@ -64,6 +109,41 @@ func (q *Queries) CountActiveCustomerSessions(ctx context.Context, arg CountActi
 	return column_1, err
 }
 
+const countCustomerAccessLinksSince = `-- name: CountCustomerAccessLinksSince :one
+SELECT COUNT(*)::BIGINT FROM customer_access_links
+WHERE phone_e164 = $1 AND created_at >= $2
+`
+
+type CountCustomerAccessLinksSinceParams struct {
+	PhoneE164 string             `json:"phone_e164"`
+	Since     pgtype.Timestamptz `json:"since"`
+}
+
+func (q *Queries) CountCustomerAccessLinksSince(ctx context.Context, arg CountCustomerAccessLinksSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomerAccessLinksSince, arg.PhoneE164, arg.Since)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countCustomerAuthEventsFromIPSince = `-- name: CountCustomerAuthEventsFromIPSince :one
+SELECT COUNT(*)::BIGINT FROM customer_auth_events
+WHERE ip = $1 AND kind = $2 AND created_at >= $3
+`
+
+type CountCustomerAuthEventsFromIPSinceParams struct {
+	Ip    string             `json:"ip"`
+	Kind  string             `json:"kind"`
+	Since pgtype.Timestamptz `json:"since"`
+}
+
+func (q *Queries) CountCustomerAuthEventsFromIPSince(ctx context.Context, arg CountCustomerAuthEventsFromIPSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomerAuthEventsFromIPSince, arg.Ip, arg.Kind, arg.Since)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countCustomerOTPAttempt = `-- name: CountCustomerOTPAttempt :one
 UPDATE customer_otp_challenges SET attempts = attempts + 1
 WHERE id = $1
@@ -80,6 +160,24 @@ func (q *Queries) CountCustomerOTPAttempt(ctx context.Context, id int64) (CountC
 	var i CountCustomerOTPAttemptRow
 	err := row.Scan(&i.Attempts, &i.MaxAttempts)
 	return i, err
+}
+
+const countCustomerOTPChallengesOfIdentitySince = `-- name: CountCustomerOTPChallengesOfIdentitySince :one
+SELECT COUNT(*)::BIGINT FROM customer_otp_challenges
+WHERE identity_id = $1 AND purpose = 'phone_change' AND created_at >= $2
+`
+
+type CountCustomerOTPChallengesOfIdentitySinceParams struct {
+	IdentityID pgtype.Int8        `json:"identity_id"`
+	Since      pgtype.Timestamptz `json:"since"`
+}
+
+// Phone change codes one signed-in person asked for.
+func (q *Queries) CountCustomerOTPChallengesOfIdentitySince(ctx context.Context, arg CountCustomerOTPChallengesOfIdentitySinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomerOTPChallengesOfIdentitySince, arg.IdentityID, arg.Since)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const countCustomerOTPChallengesSince = `-- name: CountCustomerOTPChallengesSince :one
@@ -99,12 +197,32 @@ func (q *Queries) CountCustomerOTPChallengesSince(ctx context.Context, arg Count
 	return column_1, err
 }
 
+const countCustomerOTPPhonesFromIPSince = `-- name: CountCustomerOTPPhonesFromIPSince :one
+SELECT COUNT(DISTINCT phone_e164)::BIGINT FROM customer_otp_challenges
+WHERE ip = $1 AND created_at >= $2
+`
+
+type CountCustomerOTPPhonesFromIPSinceParams struct {
+	Ip    string             `json:"ip"`
+	Since pgtype.Timestamptz `json:"since"`
+}
+
+// Distinct phones that asked for a code from one address (abuse limit).
+func (q *Queries) CountCustomerOTPPhonesFromIPSince(ctx context.Context, arg CountCustomerOTPPhonesFromIPSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomerOTPPhonesFromIPSince, arg.Ip, arg.Since)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countCustomerPanelReservations = `-- name: CountCustomerPanelReservations :one
 SELECT COUNT(*)::BIGINT
 FROM customer_identity_links l
 JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id = l.customer_id
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
 WHERE l.identity_id = $1
+  AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
+  AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
   AND ($2::BOOLEAN IS NULL
        OR $2::BOOLEAN = (r.status IN ('requested', 'active', 'in_service') AND r.ends_at > $3))
   AND ($4::UUID IS NULL OR o.uuid = $4::UUID)
@@ -136,19 +254,78 @@ func (q *Queries) CountCustomerPanelReservations(ctx context.Context, arg CountC
 	return column_1, err
 }
 
+const createCustomerAccessLink = `-- name: CreateCustomerAccessLink :one
+INSERT INTO customer_access_links (token_hash, phone_e164, expires_at, created_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id, uuid, token_hash, phone_e164, expires_at, consumed_at, created_at
+`
+
+type CreateCustomerAccessLinkParams struct {
+	TokenHash string             `json:"token_hash"`
+	PhoneE164 string             `json:"phone_e164"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateCustomerAccessLink(ctx context.Context, arg CreateCustomerAccessLinkParams) (CustomerAccessLink, error) {
+	row := q.db.QueryRow(ctx, createCustomerAccessLink,
+		arg.TokenHash,
+		arg.PhoneE164,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	var i CustomerAccessLink
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.TokenHash,
+		&i.PhoneE164,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createCustomerAuthEvent = `-- name: CreateCustomerAuthEvent :exec
+INSERT INTO customer_auth_events (kind, phone_e164, identity_id, ip, created_at)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type CreateCustomerAuthEventParams struct {
+	Kind       string             `json:"kind"`
+	PhoneE164  pgtype.Text        `json:"phone_e164"`
+	IdentityID pgtype.Int8        `json:"identity_id"`
+	Ip         string             `json:"ip"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateCustomerAuthEvent(ctx context.Context, arg CreateCustomerAuthEventParams) error {
+	_, err := q.db.Exec(ctx, createCustomerAuthEvent,
+		arg.Kind,
+		arg.PhoneE164,
+		arg.IdentityID,
+		arg.Ip,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const createCustomerOTPChallenge = `-- name: CreateCustomerOTPChallenge :one
 
-INSERT INTO customer_otp_challenges (uuid, phone_e164, code_hash, sent, max_attempts, expires_at, ip, created_at)
+INSERT INTO customer_otp_challenges (uuid, phone_e164, purpose, identity_id, code_hash, sent, max_attempts, expires_at, ip, created_at)
 VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10
 )
-RETURNING id, uuid, phone_e164, purpose, code_hash, sent, attempts, max_attempts, expires_at, consumed_at, ip, created_at
+RETURNING id, uuid, phone_e164, purpose, code_hash, sent, attempts, max_attempts, expires_at, consumed_at, ip, created_at, identity_id
 `
 
 type CreateCustomerOTPChallengeParams struct {
 	Uuid        uuid.UUID          `json:"uuid"`
 	PhoneE164   string             `json:"phone_e164"`
+	Purpose     string             `json:"purpose"`
+	IdentityID  pgtype.Int8        `json:"identity_id"`
 	CodeHash    string             `json:"code_hash"`
 	Sent        bool               `json:"sent"`
 	MaxAttempts int32              `json:"max_attempts"`
@@ -166,6 +343,8 @@ func (q *Queries) CreateCustomerOTPChallenge(ctx context.Context, arg CreateCust
 	row := q.db.QueryRow(ctx, createCustomerOTPChallenge,
 		arg.Uuid,
 		arg.PhoneE164,
+		arg.Purpose,
+		arg.IdentityID,
 		arg.CodeHash,
 		arg.Sent,
 		arg.MaxAttempts,
@@ -187,23 +366,43 @@ func (q *Queries) CreateCustomerOTPChallenge(ctx context.Context, arg CreateCust
 		&i.ConsumedAt,
 		&i.Ip,
 		&i.CreatedAt,
+		&i.IdentityID,
 	)
 	return i, err
 }
 
+const createCustomerPhoneRelease = `-- name: CreateCustomerPhoneRelease :exec
+INSERT INTO customer_phone_releases (phone_e164, identity_id, reason, released_at)
+VALUES ($1, $2, $3, NOW())
+`
+
+type CreateCustomerPhoneReleaseParams struct {
+	PhoneE164  string      `json:"phone_e164"`
+	IdentityID pgtype.Int8 `json:"identity_id"`
+	Reason     string      `json:"reason"`
+}
+
+// Release times and history windows use the database clock, like the
+// created_at of the records they are compared with.
+func (q *Queries) CreateCustomerPhoneRelease(ctx context.Context, arg CreateCustomerPhoneReleaseParams) error {
+	_, err := q.db.Exec(ctx, createCustomerPhoneRelease, arg.PhoneE164, arg.IdentityID, arg.Reason)
+	return err
+}
+
 const createCustomerSession = `-- name: CreateCustomerSession :one
-INSERT INTO customer_sessions (identity_id, phone_e164, verified_at, ip, user_agent, last_seen_at, idle_expires_at, expires_at)
+INSERT INTO customer_sessions (identity_id, phone_e164, verified_at, method, ip, user_agent, last_seen_at, idle_expires_at, expires_at)
 VALUES (
-    $1, $2, $3, $4, $5,
-    $3, $6, $7
+    $1, $2, $3, $4, $5, $6,
+    $3, $7, $8
 )
-RETURNING id, uuid, identity_id, phone_e164, verified_at, ip, user_agent, last_seen_at, idle_expires_at, expires_at, revoked_at, created_at
+RETURNING id, uuid, identity_id, phone_e164, verified_at, ip, user_agent, last_seen_at, idle_expires_at, expires_at, revoked_at, created_at, method
 `
 
 type CreateCustomerSessionParams struct {
 	IdentityID    int64              `json:"identity_id"`
 	PhoneE164     string             `json:"phone_e164"`
 	VerifiedAt    pgtype.Timestamptz `json:"verified_at"`
+	Method        string             `json:"method"`
 	Ip            string             `json:"ip"`
 	UserAgent     string             `json:"user_agent"`
 	IdleExpiresAt pgtype.Timestamptz `json:"idle_expires_at"`
@@ -215,6 +414,7 @@ func (q *Queries) CreateCustomerSession(ctx context.Context, arg CreateCustomerS
 		arg.IdentityID,
 		arg.PhoneE164,
 		arg.VerifiedAt,
+		arg.Method,
 		arg.Ip,
 		arg.UserAgent,
 		arg.IdleExpiresAt,
@@ -234,6 +434,44 @@ func (q *Queries) CreateCustomerSession(ctx context.Context, arg CreateCustomerS
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.Method,
+	)
+	return i, err
+}
+
+const createCustomerVisitLink = `-- name: CreateCustomerVisitLink :one
+INSERT INTO customer_visit_links (organization_id, reservation_id, token_hash, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, uuid, organization_id, reservation_id, token_hash, expires_at, revoked_at, last_used_at, created_at
+`
+
+type CreateCustomerVisitLinkParams struct {
+	OrganizationID int64              `json:"organization_id"`
+	ReservationID  int64              `json:"reservation_id"`
+	TokenHash      string             `json:"token_hash"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateCustomerVisitLink(ctx context.Context, arg CreateCustomerVisitLinkParams) (CustomerVisitLink, error) {
+	row := q.db.QueryRow(ctx, createCustomerVisitLink,
+		arg.OrganizationID,
+		arg.ReservationID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	var i CustomerVisitLink
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ReservationID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -245,6 +483,8 @@ FROM customer_identity_links l
 JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id = l.customer_id
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
 WHERE l.identity_id = $1
+  AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
+  AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
 GROUP BY r.currency, r.payment_status, standing
 ORDER BY r.currency, r.payment_status, standing
 `
@@ -307,6 +547,30 @@ func (q *Queries) CustomerPhoneKnown(ctx context.Context, phoneE164 pgtype.Text)
 	return column_1, err
 }
 
+const deleteStaleCustomerAccessLinks = `-- name: DeleteStaleCustomerAccessLinks :execrows
+DELETE FROM customer_access_links WHERE expires_at < $1
+`
+
+func (q *Queries) DeleteStaleCustomerAccessLinks(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleCustomerAccessLinks, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteStaleCustomerAuthEvents = `-- name: DeleteStaleCustomerAuthEvents :execrows
+DELETE FROM customer_auth_events WHERE created_at < $1
+`
+
+func (q *Queries) DeleteStaleCustomerAuthEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleCustomerAuthEvents, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteStaleCustomerOTPChallenges = `-- name: DeleteStaleCustomerOTPChallenges :execrows
 DELETE FROM customer_otp_challenges WHERE created_at < $1
 `
@@ -330,6 +594,8 @@ JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id =
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
 JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
 WHERE l.identity_id = $1 AND r.uuid = $2
+  AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
+  AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
 ORDER BY r.organization_id
 LIMIT 1
 `
@@ -393,7 +659,7 @@ func (q *Queries) GetCustomerPanelReservation(ctx context.Context, arg GetCustom
 }
 
 const getCustomerSession = `-- name: GetCustomerSession :one
-SELECT s.id, s.uuid, s.identity_id, s.phone_e164, s.verified_at, s.ip, s.user_agent, s.last_seen_at, s.idle_expires_at, s.expires_at, s.revoked_at, s.created_at, i.uuid AS identity_uuid, i.phone_e164 AS identity_phone
+SELECT s.id, s.uuid, s.identity_id, s.phone_e164, s.verified_at, s.ip, s.user_agent, s.last_seen_at, s.idle_expires_at, s.expires_at, s.revoked_at, s.created_at, s.method, i.uuid AS identity_uuid, i.phone_e164 AS identity_phone
 FROM customer_sessions s
 JOIN customer_identities i ON i.id = s.identity_id
 WHERE s.uuid = $1
@@ -412,6 +678,7 @@ type GetCustomerSessionRow struct {
 	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
 	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Method        string             `json:"method"`
 	IdentityUuid  uuid.UUID          `json:"identity_uuid"`
 	IdentityPhone string             `json:"identity_phone"`
 }
@@ -432,14 +699,85 @@ func (q *Queries) GetCustomerSession(ctx context.Context, argUuid uuid.UUID) (Ge
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.Method,
 		&i.IdentityUuid,
 		&i.IdentityPhone,
 	)
 	return i, err
 }
 
+const getCustomerVisitReservation = `-- name: GetCustomerVisitReservation :one
+SELECT r.organization_id, r.id, r.uuid, r.customer_id,
+    o.uuid AS business_uuid, o.slug AS business_slug, o.name AS business_name, o.status AS business_status,
+    o.access_starts_at, o.access_ends_at, o.sector, o.plan, o.addons, o.branch_limit, o.staff_limit,
+    b.address AS branch_address, b.city AS branch_city, b.district AS branch_district, b.phone AS branch_phone,
+    COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone
+FROM reservations r
+JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+WHERE r.organization_id = $1 AND r.id = $2
+`
+
+type GetCustomerVisitReservationParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type GetCustomerVisitReservationRow struct {
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	CustomerID     int64              `json:"customer_id"`
+	BusinessUuid   uuid.UUID          `json:"business_uuid"`
+	BusinessSlug   string             `json:"business_slug"`
+	BusinessName   string             `json:"business_name"`
+	BusinessStatus string             `json:"business_status"`
+	AccessStartsAt pgtype.Timestamptz `json:"access_starts_at"`
+	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
+	Sector         string             `json:"sector"`
+	Plan           string             `json:"plan"`
+	Addons         []string           `json:"addons"`
+	BranchLimit    pgtype.Int4        `json:"branch_limit"`
+	StaffLimit     pgtype.Int4        `json:"staff_limit"`
+	BranchAddress  string             `json:"branch_address"`
+	BranchCity     string             `json:"branch_city"`
+	BranchDistrict string             `json:"branch_district"`
+	BranchPhone    string             `json:"branch_phone"`
+	Timezone       string             `json:"timezone"`
+}
+
+// The reservation of a visit link, with the same columns as
+// GetCustomerPanelReservation (the panel's view and rules are reused).
+func (q *Queries) GetCustomerVisitReservation(ctx context.Context, arg GetCustomerVisitReservationParams) (GetCustomerVisitReservationRow, error) {
+	row := q.db.QueryRow(ctx, getCustomerVisitReservation, arg.OrganizationID, arg.ID)
+	var i GetCustomerVisitReservationRow
+	err := row.Scan(
+		&i.OrganizationID,
+		&i.ID,
+		&i.Uuid,
+		&i.CustomerID,
+		&i.BusinessUuid,
+		&i.BusinessSlug,
+		&i.BusinessName,
+		&i.BusinessStatus,
+		&i.AccessStartsAt,
+		&i.AccessEndsAt,
+		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
+		&i.BranchAddress,
+		&i.BranchCity,
+		&i.BranchDistrict,
+		&i.BranchPhone,
+		&i.Timezone,
+	)
+	return i, err
+}
+
 const getLatestCustomerOTPChallenge = `-- name: GetLatestCustomerOTPChallenge :one
-SELECT id, uuid, phone_e164, purpose, code_hash, sent, attempts, max_attempts, expires_at, consumed_at, ip, created_at FROM customer_otp_challenges
+SELECT id, uuid, phone_e164, purpose, code_hash, sent, attempts, max_attempts, expires_at, consumed_at, ip, created_at, identity_id FROM customer_otp_challenges
 WHERE phone_e164 = $1
 ORDER BY created_at DESC, id DESC
 LIMIT 1
@@ -461,29 +799,39 @@ func (q *Queries) GetLatestCustomerOTPChallenge(ctx context.Context, phoneE164 s
 		&i.ConsumedAt,
 		&i.Ip,
 		&i.CreatedAt,
+		&i.IdentityID,
 	)
 	return i, err
 }
 
 const getOpenCustomerOTPChallenge = `-- name: GetOpenCustomerOTPChallenge :one
-SELECT id, uuid, phone_e164, purpose, code_hash, sent, attempts, max_attempts, expires_at, consumed_at, ip, created_at FROM customer_otp_challenges
+SELECT id, uuid, phone_e164, purpose, code_hash, sent, attempts, max_attempts, expires_at, consumed_at, ip, created_at, identity_id FROM customer_otp_challenges
 WHERE phone_e164 = $1
+  AND purpose = $2
+  AND identity_id IS NOT DISTINCT FROM $3::BIGINT
   AND consumed_at IS NULL
-  AND expires_at > $2
+  AND expires_at > $4
   AND attempts < max_attempts
 ORDER BY created_at DESC, id DESC
 LIMIT 1
 `
 
 type GetOpenCustomerOTPChallengeParams struct {
-	PhoneE164 string             `json:"phone_e164"`
-	Now       pgtype.Timestamptz `json:"now"`
+	PhoneE164  string             `json:"phone_e164"`
+	Purpose    string             `json:"purpose"`
+	IdentityID pgtype.Int8        `json:"identity_id"`
+	Now        pgtype.Timestamptz `json:"now"`
 }
 
 // The open code of a phone. Attempts are counted and the code consumed
 // with single atomic updates, so no lock is held.
 func (q *Queries) GetOpenCustomerOTPChallenge(ctx context.Context, arg GetOpenCustomerOTPChallengeParams) (CustomerOtpChallenge, error) {
-	row := q.db.QueryRow(ctx, getOpenCustomerOTPChallenge, arg.PhoneE164, arg.Now)
+	row := q.db.QueryRow(ctx, getOpenCustomerOTPChallenge,
+		arg.PhoneE164,
+		arg.Purpose,
+		arg.IdentityID,
+		arg.Now,
+	)
 	var i CustomerOtpChallenge
 	err := row.Scan(
 		&i.ID,
@@ -498,14 +846,136 @@ func (q *Queries) GetOpenCustomerOTPChallenge(ctx context.Context, arg GetOpenCu
 		&i.ConsumedAt,
 		&i.Ip,
 		&i.CreatedAt,
+		&i.IdentityID,
 	)
 	return i, err
 }
 
+const getReservationForVisitLink = `-- name: GetReservationForVisitLink :one
+SELECT r.organization_id, r.id, r.ends_at FROM reservations r
+WHERE r.organization_id = $1 AND r.uuid = $2
+`
+
+type GetReservationForVisitLinkParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type GetReservationForVisitLinkRow struct {
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+}
+
+func (q *Queries) GetReservationForVisitLink(ctx context.Context, arg GetReservationForVisitLinkParams) (GetReservationForVisitLinkRow, error) {
+	row := q.db.QueryRow(ctx, getReservationForVisitLink, arg.OrganizationID, arg.Uuid)
+	var i GetReservationForVisitLinkRow
+	err := row.Scan(&i.OrganizationID, &i.ID, &i.EndsAt)
+	return i, err
+}
+
+const hideCustomerIdentityHistory = `-- name: HideCustomerIdentityHistory :execrows
+UPDATE customer_identity_links l SET visible_from = GREATEST(COALESCE(l.visible_from, NOW()), NOW())
+FROM organizations o
+WHERE o.id = l.organization_id AND l.identity_id = $1
+  AND NOT (o.uuid = ANY($2::UUID[]))
+`
+
+type HideCustomerIdentityHistoryParams struct {
+	IdentityID int64       `json:"identity_id"`
+	Keep       []uuid.UUID `json:"keep"`
+}
+
+// The number was reassigned to the person: every business except the kept
+// ones opens only what is booked from now on.
+func (q *Queries) HideCustomerIdentityHistory(ctx context.Context, arg HideCustomerIdentityHistoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, hideCustomerIdentityHistory, arg.IdentityID, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const latestCustomerPhoneRelease = `-- name: LatestCustomerPhoneRelease :one
+SELECT released_at FROM customer_phone_releases
+WHERE phone_e164 = $1
+ORDER BY released_at DESC, id DESC
+LIMIT 1
+`
+
+// The last time the phone changed hands (no row: never).
+func (q *Queries) LatestCustomerPhoneRelease(ctx context.Context, phoneE164 string) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, latestCustomerPhoneRelease, phoneE164)
+	var released_at pgtype.Timestamptz
+	err := row.Scan(&released_at)
+	return released_at, err
+}
+
+const listActiveCustomerSessions = `-- name: ListActiveCustomerSessions :many
+
+SELECT uuid, method, ip, user_agent, created_at, last_seen_at, idle_expires_at, expires_at
+FROM customer_sessions
+WHERE identity_id = $1 AND revoked_at IS NULL
+  AND expires_at > $2 AND idle_expires_at > $2
+ORDER BY last_seen_at DESC, id DESC
+`
+
+type ListActiveCustomerSessionsParams struct {
+	IdentityID int64              `json:"identity_id"`
+	Now        pgtype.Timestamptz `json:"now"`
+}
+
+type ListActiveCustomerSessionsRow struct {
+	Uuid          uuid.UUID          `json:"uuid"`
+	Method        string             `json:"method"`
+	Ip            string             `json:"ip"`
+	UserAgent     string             `json:"user_agent"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
+	IdleExpiresAt pgtype.Timestamptz `json:"idle_expires_at"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+}
+
+// TEC-910: access security. Panel links, visit links, number changes, the
+// device list and abuse events.
+func (q *Queries) ListActiveCustomerSessions(ctx context.Context, arg ListActiveCustomerSessionsParams) ([]ListActiveCustomerSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveCustomerSessions, arg.IdentityID, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveCustomerSessionsRow{}
+	for rows.Next() {
+		var i ListActiveCustomerSessionsRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Method,
+			&i.Ip,
+			&i.UserAgent,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.IdleExpiresAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCustomerPanelBusinesses = `-- name: ListCustomerPanelBusinesses :many
-SELECT o.uuid, o.slug, o.name, c.first_name, c.last_name, l.verified_at,
+SELECT o.uuid, o.slug, o.name,
+    (CASE WHEN l.visible_from IS NULL THEN c.first_name ELSE '' END)::TEXT AS first_name,
+    (CASE WHEN l.visible_from IS NULL THEN c.last_name ELSE '' END)::TEXT AS last_name,
+    l.verified_at, l.visible_from, l.visible_until,
     (SELECT COUNT(*) FROM reservations r
-     WHERE r.organization_id = l.organization_id AND r.customer_id = l.customer_id)::BIGINT AS reservation_count
+     WHERE r.organization_id = l.organization_id AND r.customer_id = l.customer_id
+       AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
+       AND (l.visible_until IS NULL OR r.created_at < l.visible_until))::BIGINT AS reservation_count
 FROM customer_identity_links l
 JOIN organizations o ON o.id = l.organization_id AND o.deleted_at IS NULL
 JOIN customers c ON c.organization_id = l.organization_id AND c.id = l.customer_id
@@ -520,11 +990,15 @@ type ListCustomerPanelBusinessesRow struct {
 	FirstName        string             `json:"first_name"`
 	LastName         string             `json:"last_name"`
 	VerifiedAt       pgtype.Timestamptz `json:"verified_at"`
+	VisibleFrom      pgtype.Timestamptz `json:"visible_from"`
+	VisibleUntil     pgtype.Timestamptz `json:"visible_until"`
 	ReservationCount int64              `json:"reservation_count"`
 }
 
 // The businesses that linked the identity, with the person's name as each
 // business keeps it.
+// A link whose older history was hidden (number reassigned) shows no name:
+// the name may be the previous holder's.
 func (q *Queries) ListCustomerPanelBusinesses(ctx context.Context, identityID int64) ([]ListCustomerPanelBusinessesRow, error) {
 	rows, err := q.db.Query(ctx, listCustomerPanelBusinesses, identityID)
 	if err != nil {
@@ -541,6 +1015,8 @@ func (q *Queries) ListCustomerPanelBusinesses(ctx context.Context, identityID in
 			&i.FirstName,
 			&i.LastName,
 			&i.VerifiedAt,
+			&i.VisibleFrom,
+			&i.VisibleUntil,
 			&i.ReservationCount,
 		); err != nil {
 			return nil, err
@@ -574,6 +1050,8 @@ JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id =
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
 JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
 WHERE l.identity_id = $1
+  AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
+  AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
   AND ($2::BOOLEAN IS NULL
        OR $2::BOOLEAN = (r.status IN ('requested', 'active', 'in_service') AND r.ends_at > $3))
   AND ($4::UUID IS NULL OR o.uuid = $4::UUID)
@@ -675,7 +1153,7 @@ func (q *Queries) ListCustomerPanelReservations(ctx context.Context, arg ListCus
 }
 
 const listUnlinkedCustomersByPhone = `-- name: ListUnlinkedCustomersByPhone :many
-SELECT c.organization_id, c.uuid
+SELECT c.organization_id, c.uuid, c.created_at
 FROM customers c
 JOIN organizations o ON o.id = c.organization_id AND o.deleted_at IS NULL
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
@@ -684,12 +1162,14 @@ ORDER BY c.organization_id, c.id
 `
 
 type ListUnlinkedCustomersByPhoneRow struct {
-	OrganizationID int64     `json:"organization_id"`
-	Uuid           uuid.UUID `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 // Live records with the proven phone that are not linked yet, in every live
-// business. The caller links each one with customers.LinkVerified.
+// business. The caller links each one with customers.LinkVerified; a
+// record older than the phone's last release opens only what came after.
 func (q *Queries) ListUnlinkedCustomersByPhone(ctx context.Context, phoneE164 pgtype.Text) ([]ListUnlinkedCustomersByPhoneRow, error) {
 	rows, err := q.db.Query(ctx, listUnlinkedCustomersByPhone, phoneE164)
 	if err != nil {
@@ -699,7 +1179,7 @@ func (q *Queries) ListUnlinkedCustomersByPhone(ctx context.Context, phoneE164 pg
 	items := []ListUnlinkedCustomersByPhoneRow{}
 	for rows.Next() {
 		var i ListUnlinkedCustomersByPhoneRow
-		if err := rows.Scan(&i.OrganizationID, &i.Uuid); err != nil {
+		if err := rows.Scan(&i.OrganizationID, &i.Uuid, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -728,6 +1208,26 @@ func (q *Queries) RevokeCustomerSession(ctx context.Context, arg RevokeCustomerS
 	return result.RowsAffected(), nil
 }
 
+const revokeCustomerSessionOfIdentity = `-- name: RevokeCustomerSessionOfIdentity :execrows
+UPDATE customer_sessions SET revoked_at = $1
+WHERE uuid = $2 AND identity_id = $3 AND revoked_at IS NULL
+`
+
+type RevokeCustomerSessionOfIdentityParams struct {
+	Now        pgtype.Timestamptz `json:"now"`
+	Uuid       uuid.UUID          `json:"uuid"`
+	IdentityID int64              `json:"identity_id"`
+}
+
+// Signs out one device of the person; another person's session is no row.
+func (q *Queries) RevokeCustomerSessionOfIdentity(ctx context.Context, arg RevokeCustomerSessionOfIdentityParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeCustomerSessionOfIdentity, arg.Now, arg.Uuid, arg.IdentityID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeCustomerSessionsOfIdentity = `-- name: RevokeCustomerSessionsOfIdentity :execrows
 UPDATE customer_sessions SET revoked_at = $1
 WHERE identity_id = $2 AND revoked_at IS NULL
@@ -746,6 +1246,68 @@ func (q *Queries) RevokeCustomerSessionsOfIdentity(ctx context.Context, arg Revo
 	return result.RowsAffected(), nil
 }
 
+const revokeOtherCustomerSessions = `-- name: RevokeOtherCustomerSessions :execrows
+UPDATE customer_sessions SET revoked_at = $1
+WHERE identity_id = $2 AND id <> $3 AND revoked_at IS NULL
+`
+
+type RevokeOtherCustomerSessionsParams struct {
+	Now        pgtype.Timestamptz `json:"now"`
+	IdentityID int64              `json:"identity_id"`
+	KeepID     int64              `json:"keep_id"`
+}
+
+func (q *Queries) RevokeOtherCustomerSessions(ctx context.Context, arg RevokeOtherCustomerSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOtherCustomerSessions, arg.Now, arg.IdentityID, arg.KeepID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setCustomerIdentityPhone = `-- name: SetCustomerIdentityPhone :execrows
+UPDATE customer_identities SET phone_e164 = $1, phone_verified_at = $2
+WHERE id = $3 AND phone_e164 = $4
+`
+
+type SetCustomerIdentityPhoneParams struct {
+	PhoneE164    string             `json:"phone_e164"`
+	VerifiedAt   pgtype.Timestamptz `json:"verified_at"`
+	ID           int64              `json:"id"`
+	OldPhoneE164 string             `json:"old_phone_e164"`
+}
+
+// Number change: the identity keeps its uuid and history; the phone is only
+// its lookup key. The unique phone refuses a phone with its own identity.
+func (q *Queries) SetCustomerIdentityPhone(ctx context.Context, arg SetCustomerIdentityPhoneParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCustomerIdentityPhone,
+		arg.PhoneE164,
+		arg.VerifiedAt,
+		arg.ID,
+		arg.OldPhoneE164,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setCustomerSessionPhone = `-- name: SetCustomerSessionPhone :exec
+UPDATE customer_sessions SET phone_e164 = $1, verified_at = $2
+WHERE id = $3
+`
+
+type SetCustomerSessionPhoneParams struct {
+	PhoneE164  string             `json:"phone_e164"`
+	VerifiedAt pgtype.Timestamptz `json:"verified_at"`
+	ID         int64              `json:"id"`
+}
+
+func (q *Queries) SetCustomerSessionPhone(ctx context.Context, arg SetCustomerSessionPhoneParams) error {
+	_, err := q.db.Exec(ctx, setCustomerSessionPhone, arg.PhoneE164, arg.VerifiedAt, arg.ID)
+	return err
+}
+
 const touchCustomerSession = `-- name: TouchCustomerSession :exec
 UPDATE customer_sessions SET last_seen_at = $1, idle_expires_at = $2
 WHERE id = $3 AND revoked_at IS NULL
@@ -760,4 +1322,29 @@ type TouchCustomerSessionParams struct {
 func (q *Queries) TouchCustomerSession(ctx context.Context, arg TouchCustomerSessionParams) error {
 	_, err := q.db.Exec(ctx, touchCustomerSession, arg.Now, arg.IdleExpiresAt, arg.ID)
 	return err
+}
+
+const useCustomerVisitLink = `-- name: UseCustomerVisitLink :one
+UPDATE customer_visit_links v SET last_used_at = $1
+WHERE v.token_hash = $2 AND v.revoked_at IS NULL AND v.expires_at > $1
+RETURNING v.organization_id, v.reservation_id
+`
+
+type UseCustomerVisitLinkParams struct {
+	Now       pgtype.Timestamptz `json:"now"`
+	TokenHash string             `json:"token_hash"`
+}
+
+type UseCustomerVisitLinkRow struct {
+	OrganizationID int64 `json:"organization_id"`
+	ReservationID  int64 `json:"reservation_id"`
+}
+
+// A live visit link by its hash. The link is the only key: the business
+// and the reservation come from the row, never from the request.
+func (q *Queries) UseCustomerVisitLink(ctx context.Context, arg UseCustomerVisitLinkParams) (UseCustomerVisitLinkRow, error) {
+	row := q.db.QueryRow(ctx, useCustomerVisitLink, arg.Now, arg.TokenHash)
+	var i UseCustomerVisitLinkRow
+	err := row.Scan(&i.OrganizationID, &i.ReservationID)
+	return i, err
 }

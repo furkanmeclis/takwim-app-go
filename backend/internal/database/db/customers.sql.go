@@ -130,12 +130,12 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 }
 
 const createCustomerIdentityLink = `-- name: CreateCustomerIdentityLink :one
-INSERT INTO customer_identity_links (organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at)
+INSERT INTO customer_identity_links (organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, visible_from)
 VALUES (
     $1, $2, $3, $4,
-    $5, $6
+    $5, $6, $7
 )
-RETURNING id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at
+RETURNING id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at, visible_from, visible_until
 `
 
 type CreateCustomerIdentityLinkParams struct {
@@ -145,8 +145,11 @@ type CreateCustomerIdentityLinkParams struct {
 	Source            string             `json:"source"`
 	VerifiedPhoneE164 string             `json:"verified_phone_e164"`
 	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	VisibleFrom       pgtype.Timestamptz `json:"visible_from"`
 }
 
+// visible_from (TEC-910): a record older than the phone's last change of
+// hands opens only the reservations made after it.
 func (q *Queries) CreateCustomerIdentityLink(ctx context.Context, arg CreateCustomerIdentityLinkParams) (CustomerIdentityLink, error) {
 	row := q.db.QueryRow(ctx, createCustomerIdentityLink,
 		arg.OrganizationID,
@@ -155,6 +158,7 @@ func (q *Queries) CreateCustomerIdentityLink(ctx context.Context, arg CreateCust
 		arg.Source,
 		arg.VerifiedPhoneE164,
 		arg.VerifiedAt,
+		arg.VisibleFrom,
 	)
 	var i CustomerIdentityLink
 	err := row.Scan(
@@ -166,6 +170,8 @@ func (q *Queries) CreateCustomerIdentityLink(ctx context.Context, arg CreateCust
 		&i.VerifiedPhoneE164,
 		&i.VerifiedAt,
 		&i.CreatedAt,
+		&i.VisibleFrom,
+		&i.VisibleUntil,
 	)
 	return i, err
 }
@@ -318,7 +324,7 @@ func (q *Queries) GetCustomerIdentityByPhone(ctx context.Context, phoneE164 stri
 }
 
 const getCustomerIdentityLink = `-- name: GetCustomerIdentityLink :one
-SELECT id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at FROM customer_identity_links
+SELECT id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at, visible_from, visible_until FROM customer_identity_links
 WHERE organization_id = $1 AND customer_id = $2
 `
 
@@ -339,6 +345,8 @@ func (q *Queries) GetCustomerIdentityLink(ctx context.Context, arg GetCustomerId
 		&i.VerifiedPhoneE164,
 		&i.VerifiedAt,
 		&i.CreatedAt,
+		&i.VisibleFrom,
+		&i.VisibleUntil,
 	)
 	return i, err
 }

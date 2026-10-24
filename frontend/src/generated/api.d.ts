@@ -6531,7 +6531,10 @@ export interface paths {
          *     record with the phone (or the phone was verified before). The answer
          *     is the same for every valid phone, whether a code went out, the
          *     60 second cooldown or the hourly cap (5 codes) applied, or the phone
-         *     is unknown. Limits: 10 per IP and 5 per phone in 10 minutes.
+         *     is unknown. Codes of one phone: 60 second cooldown, 5 an hour and 10
+         *     a day. An address that asked codes for 20 different phones within an
+         *     hour gets no more codes for an hour (same answer). Limits: 10 per IP
+         *     and 5 per phone in 10 minutes.
          */
         post: operations["startCustomerSignIn"];
         delete?: never;
@@ -6755,6 +6758,196 @@ export interface paths {
         get: operations["getCustomerPaymentSummary"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/auth/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a panel link for a panel session
+         * @description The SMS after an online booking carries a single-use panel link,
+         *     `takwim.link/panel/l#<token>`. The token sits after `#`, so it never
+         *     reaches a server log; the page (or the mobile app) sends it here in
+         *     the body. A link works once, for 24 hours; an unknown, expired or
+         *     used link answers `400 LINK_INVALID` and the person signs in with a
+         *     code instead. Only a keyed hash of the token is stored. On success
+         *     the answer is the same as `auth/verify` (session method `link`,
+         *     link source `panel_link`). Limit: 10 per IP in 10 minutes.
+         */
+        post: operations["redeemCustomerPanelLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The person's signed-in devices
+         * @description Live panel sessions of the identity, most recently used first; `current` marks this one.
+         */
+        get: operations["listCustomerSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/sessions/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Sign one device out
+         * @description The session ends at once. Another person's session or an unknown id answers `404`.
+         */
+        delete: operations["revokeCustomerSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/phone/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a code to the new number
+         * @description Number change, step 1. The code is bound to the signed-in profile
+         *     and works only for `phone/verify`. Cooldown and caps of the target
+         *     number apply as in `auth/start`, plus 5 number change codes a day
+         *     per profile (past it the answer is the same, nothing is sent). The
+         *     current number answers `400` with `phone` / `same`.
+         */
+        post: operations["startCustomerPhoneChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/phone/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the profile to the confirmed number
+         * @description Number change, step 2. The profile keeps its identity and every
+         *     visit it sees. The old number is released: its next holder starts
+         *     with an empty panel, and the records proven with the old number stop
+         *     showing visits booked after the change. Every other session of the
+         *     profile ends; this one continues on the new number. A number that
+         *     has its own Takwim profile answers `409 PHONE_IN_USE` (profiles are
+         *     never merged on a number). A wrong code answers `400 OTP_INVALID`.
+         */
+        post: operations["verifyCustomerPhoneChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/phone/reassigned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report that this number was recently given to me
+         * @description For a person who received a recycled number and sees somebody
+         *     else's visits. Every business except `keep_businesses` shows only
+         *     visits booked from now on (its earlier history and the name it
+         *     keeps are hidden); records of the number found later open the same
+         *     way; every other session of the profile (the previous holder's
+         *     devices) ends. Nothing is deleted: the businesses keep their
+         *     records. A business that is not in the profile answers `400` with
+         *     `keep_businesses` / `unknown`.
+         */
+        post: operations["reportCustomerNumberReassigned"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/visit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open one visit by its visit link
+         * @description A visit link (`takwim.link/panel/v#<token>`, sent with confirmation
+         *     and cancel messages) opens exactly one reservation: the panel detail
+         *     of it, with `actions.reschedule` refused (`sign_in_required`). It is
+         *     a separate token type: it opens no panel session and no other visit.
+         *     It works until a day after the visit ends. An unknown, expired or
+         *     revoked link answers `400 LINK_INVALID`. Limit: 30 per IP in 10
+         *     minutes.
+         */
+        post: operations["getCustomerVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/visit/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel the visit of a visit link
+         * @description The business's cancel rules apply exactly as in the panel (`409 ACTION_NOT_ALLOWED`, `stale`).
+         */
+        post: operations["cancelCustomerVisit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12000,13 +12193,59 @@ export interface components {
             uuid: string;
             slug: string;
             name: string;
-            /** @description The name this business keeps for the person. */
+            /** @description The name this business keeps for the person; empty while `history_from` is set (it may be the previous holder's). */
             first_name: string;
             last_name: string;
             /** Format: date-time */
             linked_at: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Visits shown (inside the history window).
+             */
             reservation_count: number;
+            /**
+             * Format: date-time
+             * @description Only visits booked from this moment are shown (the number was reassigned to the person, or the record is older than the number's last change of hands).
+             */
+            history_from: string | null;
+            /**
+             * Format: date-time
+             * @description Only visits booked before this moment are shown (the person moved to another number).
+             */
+            history_until: string | null;
+        };
+        CustomerDevice: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description The session of this request. */
+            current: boolean;
+            /**
+             * @description How the session was opened.
+             * @enum {string}
+             */
+            method: "code" | "link";
+            /** @description Browser and system from the user agent ("Chrome · Android"); empty when unknown. */
+            device: string;
+            /** @description Masked address of the sign-in ("85.105.*.*"). */
+            ip: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /**
+             * Format: date-time
+             * @description The earlier of the idle and the hard expiry.
+             */
+            expires_at: string;
+        };
+        CustomerDeviceList: {
+            items: components["schemas"]["CustomerDevice"][];
+        };
+        EnvelopeCustomerDeviceList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerDeviceList"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         CustomerProfile: {
             /** @description E.164 */
@@ -12094,7 +12333,7 @@ export interface components {
              */
             until: string | null;
             /** @enum {string|null} */
-            reason: "status" | "cutoff" | "business_unavailable" | "online_unavailable" | "services_changed" | null;
+            reason: "status" | "cutoff" | "business_unavailable" | "online_unavailable" | "services_changed" | "sign_in_required" | null;
         };
         CustomerReservation: components["schemas"]["CustomerReservationItem"] & {
             branch: {
@@ -24677,6 +24916,227 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    redeemCustomerPanelLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listCustomerSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Devices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerDeviceList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    revokeCustomerSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    startCustomerPhoneChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    phone: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Code sent */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerSignInStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    verifyCustomerPhoneChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    phone: string;
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Profile on the new number */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reportCustomerNumberReassigned: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Businesses whose history is the person's own. */
+                    keep_businesses?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCustomerVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelCustomerVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    expected_version?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Cancelled visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

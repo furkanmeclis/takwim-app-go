@@ -177,10 +177,12 @@ RETURNING *;
 SELECT * FROM customer_identities WHERE phone_e164 = sqlc.arg(phone_e164);
 
 -- name: CreateCustomerIdentityLink :one
-INSERT INTO customer_identity_links (organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at)
+-- visible_from (TEC-910): a record older than the phone's last change of
+-- hands opens only the reservations made after it.
+INSERT INTO customer_identity_links (organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, visible_from)
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(customer_id), sqlc.arg(identity_id), sqlc.arg(source),
-    sqlc.arg(verified_phone_e164), sqlc.arg(verified_at)
+    sqlc.arg(verified_phone_e164), sqlc.arg(verified_at), sqlc.narg(visible_from)
 )
 RETURNING *;
 

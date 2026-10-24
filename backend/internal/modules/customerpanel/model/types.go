@@ -56,14 +56,77 @@ type Profile struct {
 }
 
 // Business is one business that linked the person, with the name it keeps.
+// HistoryFrom / HistoryUntil bound the visits shown (by booking time)
+// after the number was reassigned to the person or changed (TEC-910); the
+// name is empty while HistoryFrom is set (it may be the previous holder's).
 type Business struct {
-	UUID             uuid.UUID `json:"uuid"`
-	Slug             string    `json:"slug"`
-	Name             string    `json:"name"`
-	FirstName        string    `json:"first_name"`
-	LastName         string    `json:"last_name"`
-	LinkedAt         time.Time `json:"linked_at"`
-	ReservationCount int64     `json:"reservation_count"`
+	UUID             uuid.UUID  `json:"uuid"`
+	Slug             string     `json:"slug"`
+	Name             string     `json:"name"`
+	FirstName        string     `json:"first_name"`
+	LastName         string     `json:"last_name"`
+	LinkedAt         time.Time  `json:"linked_at"`
+	ReservationCount int64      `json:"reservation_count"`
+	HistoryFrom      *time.Time `json:"history_from"`
+	HistoryUntil     *time.Time `json:"history_until"`
+}
+
+// LinkInput redeems a panel link (the token after "#" in
+// takwim.link/panel/l#…). The token travels in the body, never in a URL.
+type LinkInput struct {
+	Token string `json:"token"`
+}
+
+// PhoneStartInput asks for a code on the new number of a number change.
+type PhoneStartInput struct {
+	Phone string `json:"phone"`
+}
+
+// ReassignedInput reports that the signed-in number was recently given to
+// the person: every business's earlier history is hidden except the ones
+// the person keeps as their own.
+type ReassignedInput struct {
+	KeepBusinesses []uuid.UUID `json:"keep_businesses"`
+}
+
+// Session methods: how a panel session was opened.
+const (
+	MethodCode = "code"
+	MethodLink = "link"
+)
+
+// Device is one live panel session of the person (device list).
+type Device struct {
+	UUID       uuid.UUID `json:"uuid"`
+	Current    bool      `json:"current"`
+	Method     string    `json:"method"`
+	Device     string    `json:"device"`
+	IP         string    `json:"ip"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+// DeviceList is the answer of GET /v1/customer/sessions.
+type DeviceList struct {
+	Items []Device `json:"items"`
+}
+
+// VisitInput opens one visit by its visit link (takwim.link/panel/v#…).
+type VisitInput struct {
+	Token string `json:"token"`
+}
+
+// VisitCancelInput cancels the visit of a visit link.
+type VisitCancelInput struct {
+	Token           string `json:"token"`
+	ExpectedVersion *int   `json:"expected_version"`
+}
+
+// VisitLink is a link to one visit, for the message that carries it.
+type VisitLink struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // BusinessRef names the business of a record.
@@ -172,6 +235,9 @@ const (
 	ReasonBusinessUnavailable = "business_unavailable"
 	ReasonOnlineUnavailable   = "online_unavailable"
 	ReasonServicesChanged     = "services_changed"
+	// ReasonSignInRequired: a visit link does not move a visit; the panel
+	// (signed in) does.
+	ReasonSignInRequired = "sign_in_required"
 )
 
 // Action says whether the customer may take an action now, until when, and

@@ -58,22 +58,13 @@ type Line = CustomerReservation["lines"][number] & { index: number };
  * when; the page only shows that answer.
  */
 export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const query = useCustomerReservation(uuid);
   const reservation = query.data;
   const cancel = useCancelReservation(uuid);
   const reload = useReloadReservation(uuid);
   const [confirming, setConfirming] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
-
-  const zone = reservation?.timezone;
-  const when = (
-    iso: string,
-    options: Intl.DateTimeFormatOptions = {
-      dateStyle: "medium",
-      timeStyle: "short",
-    },
-  ) => datetimeInZone(iso, zone, locale, options);
 
   const notFound =
     query.isError && isApiError(query.error) && query.error.status === 404;
@@ -150,194 +141,7 @@ export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
 
       {reservation ? (
         <div className="space-y-6">
-          <EntityHeader
-            title={reservation.services.join(", ") || reservation.business.name}
-            subtitle={`${when(reservation.starts_at)} – ${when(
-              reservation.ends_at,
-              { timeStyle: "short" },
-            )} · ${reservation.branch.name}`}
-            badges={
-              <>
-                <ReservationStatusChip status={reservation.status} />
-                <PaymentChip status={reservation.payment_status} />
-              </>
-            }
-          />
-
-          {reservation.status === "requested" ? (
-            <Alert>
-              <Hourglass className="size-4" />
-              <AlertDescription>
-                {reservation.hold_expires_at
-                  ? t("customer_panel.detail.awaiting_until", {
-                      at: when(reservation.hold_expires_at),
-                    })
-                  : t("customer_panel.detail.awaiting")}
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          <ActionNotes reservation={reservation} when={when} />
-
-          <EntitySectionCard title={t("customer_panel.detail.visit")}>
-            <EntityDetail
-              sections={[
-                {
-                  id: "visit",
-                  fields: [
-                    {
-                      key: "business",
-                      label: t("customer_panel.columns.business"),
-                      value: reservation.business.name,
-                    },
-                    {
-                      key: "branch",
-                      label: t("customer_panel.detail.branch"),
-                      value: reservation.branch.name,
-                    },
-                    {
-                      key: "address",
-                      label: t("customer_panel.detail.address"),
-                      value:
-                        [
-                          reservation.branch.address,
-                          reservation.branch.district,
-                          reservation.branch.city,
-                        ]
-                          .filter(Boolean)
-                          .join(", ") || "—",
-                    },
-                    {
-                      key: "phone",
-                      label: t("customer_panel.detail.phone"),
-                      value: reservation.branch.phone ? (
-                        <a
-                          className="text-primary hover:underline"
-                          href={`tel:${reservation.branch.phone}`}
-                        >
-                          {reservation.branch.phone}
-                        </a>
-                      ) : (
-                        "—"
-                      ),
-                    },
-                    {
-                      key: "starts_at",
-                      label: t("customer_panel.columns.starts_at"),
-                      value: when(reservation.starts_at),
-                    },
-                    {
-                      key: "ends_at",
-                      label: t("customer_panel.detail.ends_at"),
-                      value: when(reservation.ends_at),
-                    },
-                    ...(reservation.cancel_reason
-                      ? [
-                          {
-                            key: "cancel_reason",
-                            label: t("customer_panel.detail.cancel_reason"),
-                            value: cancelReasonLabel(
-                              t,
-                              reservation.cancel_reason,
-                            ),
-                          },
-                        ]
-                      : []),
-                    ...(reservation.customer_note
-                      ? [
-                          {
-                            key: "note",
-                            label: t("customer_panel.detail.note"),
-                            value: reservation.customer_note,
-                          },
-                        ]
-                      : []),
-                  ],
-                },
-              ]}
-            />
-          </EntitySectionCard>
-
-          <LinesCard reservation={reservation} />
-
-          <EntitySectionCard title={t("customer_panel.detail.payment")}>
-            <EntityDetail
-              sections={[
-                {
-                  id: "money",
-                  fields: [
-                    {
-                      key: "total",
-                      label: t("customer_panel.columns.total"),
-                      value: amount(
-                        reservation.money.total,
-                        reservation.money.currency,
-                        locale,
-                      ),
-                    },
-                    {
-                      key: "method",
-                      label: t("customer_panel.columns.method"),
-                      value: t(METHOD_KEYS[reservation.money.method]),
-                    },
-                    {
-                      key: "paid",
-                      label: t("customer_panel.columns.paid"),
-                      value: amount(
-                        reservation.money.paid,
-                        reservation.money.currency,
-                        locale,
-                      ),
-                    },
-                    {
-                      key: "balance",
-                      label: t("customer_panel.columns.balance"),
-                      value:
-                        reservation.money.balance == null
-                          ? "—"
-                          : amount(
-                              reservation.money.balance,
-                              reservation.money.currency,
-                              locale,
-                            ),
-                    },
-                    ...(reservation.money.refunded != null &&
-                    toMinor(reservation.money.refunded)
-                      ? [
-                          {
-                            key: "refunded",
-                            label: t("customer_panel.columns.refunded"),
-                            value: amount(
-                              reservation.money.refunded,
-                              reservation.money.currency,
-                              locale,
-                            ),
-                          },
-                        ]
-                      : []),
-                  ],
-                },
-              ]}
-            />
-          </EntitySectionCard>
-
-          <PoliciesCard reservation={reservation} />
-
-          <EntitySectionCard
-            title={t("customer_panel.detail.history")}
-            badge={reservation.history.length}
-          >
-            <Timeline
-              items={[...reservation.history].reverse().map((entry, index) => ({
-                id: `${index}-${entry.type}`,
-                title: t(EVENT_LABEL_KEYS[entry.type] ?? entry.type),
-                description: entry.to_status
-                  ? statusLabel(t, entry.to_status)
-                  : undefined,
-                meta: when(entry.at),
-              }))}
-            />
-          </EntitySectionCard>
+          <CustomerReservationBody reservation={reservation} />
 
           <ConfirmDialog
             open={confirming}
@@ -361,6 +165,217 @@ export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
         </div>
       ) : null}
     </EntityPage>
+  );
+}
+
+/**
+ * The visit as the person sees it: header, deadlines, place, lines,
+ * payment, policies and history. The panel detail and the visit link page
+ * (`/panel/v`) share it; each adds its own actions.
+ */
+export function CustomerReservationBody({
+  reservation,
+}: {
+  reservation: CustomerReservation;
+}) {
+  const { t, locale } = useLocale();
+  const zone = reservation.timezone;
+  const when = (
+    iso: string,
+    options: Intl.DateTimeFormatOptions = {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ) => datetimeInZone(iso, zone, locale, options);
+
+  return (
+    <>
+      <EntityHeader
+        title={reservation.services.join(", ") || reservation.business.name}
+        subtitle={`${when(reservation.starts_at)} – ${when(
+          reservation.ends_at,
+          { timeStyle: "short" },
+        )} · ${reservation.branch.name}`}
+        badges={
+          <>
+            <ReservationStatusChip status={reservation.status} />
+            <PaymentChip status={reservation.payment_status} />
+          </>
+        }
+      />
+
+      {reservation.status === "requested" ? (
+        <Alert>
+          <Hourglass className="size-4" />
+          <AlertDescription>
+            {reservation.hold_expires_at
+              ? t("customer_panel.detail.awaiting_until", {
+                  at: when(reservation.hold_expires_at),
+                })
+              : t("customer_panel.detail.awaiting")}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <ActionNotes reservation={reservation} when={when} />
+
+      <EntitySectionCard title={t("customer_panel.detail.visit")}>
+        <EntityDetail
+          sections={[
+            {
+              id: "visit",
+              fields: [
+                {
+                  key: "business",
+                  label: t("customer_panel.columns.business"),
+                  value: reservation.business.name,
+                },
+                {
+                  key: "branch",
+                  label: t("customer_panel.detail.branch"),
+                  value: reservation.branch.name,
+                },
+                {
+                  key: "address",
+                  label: t("customer_panel.detail.address"),
+                  value:
+                    [
+                      reservation.branch.address,
+                      reservation.branch.district,
+                      reservation.branch.city,
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "—",
+                },
+                {
+                  key: "phone",
+                  label: t("customer_panel.detail.phone"),
+                  value: reservation.branch.phone ? (
+                    <a
+                      className="text-primary hover:underline"
+                      href={`tel:${reservation.branch.phone}`}
+                    >
+                      {reservation.branch.phone}
+                    </a>
+                  ) : (
+                    "—"
+                  ),
+                },
+                {
+                  key: "starts_at",
+                  label: t("customer_panel.columns.starts_at"),
+                  value: when(reservation.starts_at),
+                },
+                {
+                  key: "ends_at",
+                  label: t("customer_panel.detail.ends_at"),
+                  value: when(reservation.ends_at),
+                },
+                ...(reservation.cancel_reason
+                  ? [
+                      {
+                        key: "cancel_reason",
+                        label: t("customer_panel.detail.cancel_reason"),
+                        value: cancelReasonLabel(t, reservation.cancel_reason),
+                      },
+                    ]
+                  : []),
+                ...(reservation.customer_note
+                  ? [
+                      {
+                        key: "note",
+                        label: t("customer_panel.detail.note"),
+                        value: reservation.customer_note,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]}
+        />
+      </EntitySectionCard>
+
+      <LinesCard reservation={reservation} />
+
+      <EntitySectionCard title={t("customer_panel.detail.payment")}>
+        <EntityDetail
+          sections={[
+            {
+              id: "money",
+              fields: [
+                {
+                  key: "total",
+                  label: t("customer_panel.columns.total"),
+                  value: amount(
+                    reservation.money.total,
+                    reservation.money.currency,
+                    locale,
+                  ),
+                },
+                {
+                  key: "method",
+                  label: t("customer_panel.columns.method"),
+                  value: t(METHOD_KEYS[reservation.money.method]),
+                },
+                {
+                  key: "paid",
+                  label: t("customer_panel.columns.paid"),
+                  value: amount(
+                    reservation.money.paid,
+                    reservation.money.currency,
+                    locale,
+                  ),
+                },
+                {
+                  key: "balance",
+                  label: t("customer_panel.columns.balance"),
+                  value:
+                    reservation.money.balance == null
+                      ? "—"
+                      : amount(
+                          reservation.money.balance,
+                          reservation.money.currency,
+                          locale,
+                        ),
+                },
+                ...(reservation.money.refunded != null &&
+                toMinor(reservation.money.refunded)
+                  ? [
+                      {
+                        key: "refunded",
+                        label: t("customer_panel.columns.refunded"),
+                        value: amount(
+                          reservation.money.refunded,
+                          reservation.money.currency,
+                          locale,
+                        ),
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]}
+        />
+      </EntitySectionCard>
+
+      <PoliciesCard reservation={reservation} />
+
+      <EntitySectionCard
+        title={t("customer_panel.detail.history")}
+        badge={reservation.history.length}
+      >
+        <Timeline
+          items={[...reservation.history].reverse().map((entry, index) => ({
+            id: `${index}-${entry.type}`,
+            title: t(EVENT_LABEL_KEYS[entry.type] ?? entry.type),
+            description: entry.to_status
+              ? statusLabel(t, entry.to_status)
+              : undefined,
+            meta: when(entry.at),
+          }))}
+        />
+      </EntitySectionCard>
+    </>
   );
 }
 
