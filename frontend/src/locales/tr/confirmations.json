@@ -202,5 +202,20 @@
   "calls.no_retry": "Tekrar aranmaz",
   "calls.retries_value": "{{count}} kez, {{minutes}} dakika arayla",
   "calls.wait": "Tekrar aramadan önce",
-  "calls.wait_value": "{{minutes}} dakika"
+  "calls.wait_value": "{{minutes}} dakika",
+  "texts.title": "Teyit mesajı",
+  "texts.hint": "Teyit isteğinde müşteriye giden metin. SMS ve e-posta metnini kendiniz yazabilirsiniz; kanal sırası ve zamanlama yukarıdaki kurallardan gelir.",
+  "texts.edit": "Metinleri düzenle",
+  "texts.reset": "Varsayılan metinlere dön",
+  "texts.reset_title": "Metinler varsayılana dönsün mü?",
+  "texts.reset_description": "SMS ve e-posta için kaydettiğiniz teyit metinleri silinir; bundan sonraki isteklerde varsayılan metinler kullanılır.",
+  "texts.load_failed": "Teyit metinleri yüklenemedi.",
+  "texts.dialog_title": "Teyit mesajı metinleri",
+  "texts.dialog_description": "Metinler bütün şubelerde kullanılır ve bundan sonra gönderilen isteklere uygulanır.",
+  "texts.editor_hint": "Her kanal için bir metin; boş bırakılan metin varsayılana döner. Randevu bağlantısı metinde kalmalıdır: müşteri geleceğini, iptalini veya değişiklik isteğini bu bağlantıdan bildirir.",
+  "texts.link_required": "Metin şu değişkeni içermeli: {{names}}. Müşteri yanıtını bu bağlantıdan verir.",
+  "texts.whatsapp_note": "İşletmenizin Meta hesabında onaylanan şablon gönderilir (varsayılan adı randevu_teyit; Geleceğim, İptal ve Değişiklik düğmeleriyle). Metni Meta'da değiştirip yeniden onaylatabilirsiniz.",
+  "texts.voice_note": "Otomatik arama aşağıdaki standart metni okur; bu metin düzenlenemez.",
+  "texts.toast_saved": "Teyit metinleri kaydedildi",
+  "texts.toast_reset": "Teyit metinleri varsayılana döndü"
 }

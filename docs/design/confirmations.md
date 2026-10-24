@@ -1,4 +1,4 @@
-# Customer confirmations (TEC-921, TEC-922, TEC-923, TEC-924, TEC-981)
+# Customer confirmations (TEC-921, TEC-922, TEC-923, TEC-924, TEC-979, TEC-981)
 
 The Konfirmasyon add-on: before a visit the business asks the customer to confirm it, on its channels in order, a set number of times, and cancels or flags the booking when no answer comes by the deadline. The customer answers in the customer panel or on the single-visit link of the message: "Geleceğim", "Değişiklik iste" or cancel. Everything is gated by the `confirmation` module (`sector.ModuleConfirmation`, an add-on, entitlements.md); without it no task is planned, no request is sent and no answer is offered.
 
@@ -77,8 +77,28 @@ The cancel runs after the task's transaction, guarded on `confirmation_status` s
 | `GET /v1/tenant/confirmations/settings`        | channels with readiness, the business-wide rule, template, branch rules, limits   |
 | `PUT /v1/tenant/confirmations/settings`        | save the business-wide rule (no `branch_uuid`, every branch needed) or a branch's |
 | `POST /v1/tenant/confirmations/settings/reset` | remove a saved rule                                                               |
+| `GET /v1/tenant/confirmations/texts`           | the request's SMS and e-mail texts with defaults, variables, the call text        |
+| `PUT /v1/tenant/confirmations/texts`           | save the SMS / e-mail texts (TEC-979)                                             |
+| `POST /v1/tenant/confirmations/texts/reset`    | every request text back to the default                                            |
 
-Activity history: `confirmations.updated` / `.reset`, `reservations.confirmed` / `.change_requested` (source `customer_panel` / `visit_link`).
+Activity history: `confirmations.updated` / `.reset`, `confirmations.texts_updated` / `.texts_reset`, `reservations.confirmed` / `.change_requested` (source `customer_panel` / `visit_link`).
+
+## Request texts (TEC-979)
+
+What the request says is the business's on SMS and e-mail, like any customer notice; the rule (channels, order, fallback, timing) stays the confirmation rule's.
+
+| Channel      | Text                                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `sms`        | the business's text, else the catalog default                                                                                      |
+| `email`      | the business's subject and text, else the catalog default                                                                          |
+| `whatsapp`   | the template approved in the business's Meta account (below); a business-initiated message cannot carry free text, so not editable |
+| `voice_call` | the catalog's call text (`catalog.Event.Voice`), read out with the three keys; not editable (TEC-923)                              |
+
+- The texts live in `customer_notification_templates` (event `confirmation.request`), business-wide: one text for every branch. The notification engine renders them as for any event, so a saved text applies to requests sent from then on, retries and repeated calls of a request already planned included.
+- The catalog marks the event's editable channels (`Editable`), its variables (the reservation variables plus `deadline`) and the ones every text keeps (`Required`: `link`, the single-visit link, since the customer answers an SMS or an e-mail only through it). Saving refuses a text without `{{link}}` (`missing_variable`), a placeholder that is not a variable (`unknown_variable`) and any other channel (`invalid`). An empty text, or the default one, goes back to the default; a channel left out keeps its text. Limits are the notification texts' (subject 200, text 1000).
+- `customernotify` `Engine.ManagedTexts` / `SaveManagedTexts` / `ResetManagedTexts` do the work; the confirmation handler serves them behind the add-on (`TextStore`). `PUT` / reset of the notification settings still refuse the event. The preview (`POST /v1/tenant/customer-notifications/preview`) knows `deadline` for it.
+- Web: the "Teyit mesajı" card of `/t/{slug}/settings/confirmation` shows each channel's text (default or custom; WhatsApp and the call read-only) and opens the notification editor (`TemplatesField`: tabs per channel, variables, preview, "Varsayılan metin") for SMS and e-mail.
+- Tests: `confirmations/texts_db_test.go`.
 
 ## Confirmation list and follow-up (TEC-924)
 
@@ -222,5 +242,4 @@ The automatic call with keys (K-006, A10): `voice_call` is a channel of the conf
 ## Not here yet
 
 - Live list events for delivery failures and provider reports (TEC-981).
-- Editing the confirmation message text (the catalog's Turkish default is used, TEC-979, the call text included); the WhatsApp text is the business's approved template.
 - Twilio as a second voice provider (TEC-986); polling Netgsm's report when a result never arrives (the receipt timeout runs the next channel).

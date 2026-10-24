@@ -8,6 +8,9 @@ export type ConfirmationBranchRule = Schemas["ConfirmationBranchRule"];
 export type ConfirmationSettings = Schemas["ConfirmationSettings"];
 export type ConfirmationLimits = ConfirmationSettings["limits"];
 export type OnNoAnswer = ConfirmationRule["on_no_answer"];
+/** The business's SMS and e-mail texts of the request (TEC-979). */
+export type ConfirmationTexts = Schemas["ConfirmationTexts"];
+export type ConfirmationTextsInput = Schemas["ConfirmationTextsInput"];
 
 /** The rule being edited: the business-wide one (branch null) or a branch's. */
 export type ConfirmationRuleTarget = {

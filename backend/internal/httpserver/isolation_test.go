@@ -83,6 +83,8 @@ var isolationAllowlist = map[string]string{
 	"POST /v1/tenant/customer-notifications/settings/reset": "resets an event code of the caller's organization; no ids",
 	"POST /v1/tenant/customer-notifications/preview":        "renders the body's text with sample values and the caller's business name; no ids",
 	"POST /v1/tenant/finance/categories":                    "body has no foreign references (kind, name, status, sort order)",
+	"PUT /v1/tenant/confirmations/texts":                    "confirmation request texts of the caller's organization (channel names, texts); no ids",
+	"POST /v1/tenant/confirmations/texts/reset":             "resets the confirmation request texts of the caller's organization; no ids",
 }
 
 type isoOrg struct {

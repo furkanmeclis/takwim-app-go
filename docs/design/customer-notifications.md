@@ -100,7 +100,7 @@ The reservation and customer detail pages have a "Gönderilen bildirimler" card 
 
 ## Confirmation requests (TEC-921)
 
-`confirmation.request` is a **managed** event: the confirmation module (confirmations.md) writes it through `Engine.EmitReservation` with its own channels, fallback, key and variables (`deadline`), so it is not listed on the settings page and `PUT` / reset refuse it. Two hooks serve it:
+`confirmation.request` is a **managed** event: the confirmation module (confirmations.md) writes it through `Engine.EmitReservation` with its own channels, fallback, key and variables (`deadline`), so it is not listed on the settings page and `PUT` / reset refuse it. Its SMS and e-mail texts are still the business's: they are saved on the confirmation settings (`/v1/tenant/confirmations/texts`, TEC-979, [confirmations.md](./confirmations.md#request-texts-tec-979)) into the same `customer_notification_templates` and rendered like any text; a text must keep `{{link}}`. Two hooks serve it:
 
 - `SetDispatchGuard`: before a dispatch is claimed, the confirmation engine may cancel it (the task was answered, closed or planned again).
 - `SetLinkIssuerFor(event, issuer)`: confirmation requests carry the single-visit link (`adapters.VisitLinks` over `customerpanel.IssueVisitLinkFor`) on every channel instead of the panel link.

@@ -127,6 +127,7 @@ export const VARIABLE_LABEL_KEYS: Record<string, string> = {
   time: "customer_notifications.variables.time",
   services: "customer_notifications.variables.services",
   link: "customer_notifications.variables.link",
+  deadline: "customer_notifications.variables.deadline",
 };
 
 /** Reminder offsets offered in the editor, in minutes before the visit. */

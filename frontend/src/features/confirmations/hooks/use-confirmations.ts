@@ -15,6 +15,7 @@ import type {
   ConfirmationConfirmInput,
   ConfirmationFacetParams,
   ConfirmationSaveInput,
+  ConfirmationTextsInput,
   ListConfirmationsParams,
 } from "@/features/confirmations/types";
 import { RESERVATIONS_RESOURCE } from "@/features/reservations/constants";
@@ -34,6 +35,7 @@ export const confirmationKeys = {
   all: (slug: string) => ["tenant", slug, "confirmations"] as const,
   settings: (slug: string) =>
     [...confirmationKeys.all(slug), "settings"] as const,
+  texts: (slug: string) => [...confirmationKeys.all(slug), "texts"] as const,
   /**
    * Under the reservations keys: any change of a visit (cancel, move,
    * answer) refreshes the list, the counts and the alerts too.
@@ -84,6 +86,43 @@ export function useResetConfirmationRule() {
     onSuccess: (data) => {
       queryClient.setQueryData(confirmationKeys.settings(slug), data);
       appToast.success(t("confirmations.toast.reset"));
+    },
+  });
+}
+
+export function useConfirmationTexts(enabled = true) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: confirmationKeys.texts(slug),
+    queryFn: () => confirmationsService.texts(slug),
+    enabled,
+  });
+}
+
+export function useSaveConfirmationTexts() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ConfirmationTextsInput) =>
+      confirmationsService.saveTexts(slug, body),
+    meta: { silent: true },
+    onSuccess: (data) => {
+      queryClient.setQueryData(confirmationKeys.texts(slug), data);
+      appToast.success(t("confirmations.texts.toast_saved"));
+    },
+  });
+}
+
+export function useResetConfirmationTexts() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => confirmationsService.resetTexts(slug),
+    onSuccess: (data) => {
+      queryClient.setQueryData(confirmationKeys.texts(slug), data);
+      appToast.success(t("confirmations.texts.toast_reset"));
     },
   });
 }

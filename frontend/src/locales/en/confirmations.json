@@ -202,5 +202,20 @@
   "calls.no_retry": "No second call",
   "calls.retries_value": "{{count}} times, {{minutes}} minutes apart",
   "calls.wait": "Wait before calling again",
-  "calls.wait_value": "{{minutes}} minutes"
+  "calls.wait_value": "{{minutes}} minutes",
+  "texts.title": "Confirmation message",
+  "texts.hint": "The text customers get with a confirmation request. You can write the SMS and e-mail texts yourself; the channel order and timing come from the rules above.",
+  "texts.edit": "Edit texts",
+  "texts.reset": "Back to default texts",
+  "texts.reset_title": "Restore the default texts?",
+  "texts.reset_description": "Your SMS and e-mail confirmation texts are removed; requests sent from now on use the default texts.",
+  "texts.load_failed": "Confirmation texts could not be loaded.",
+  "texts.dialog_title": "Confirmation message texts",
+  "texts.dialog_description": "The texts are used in every branch and apply to requests sent from now on.",
+  "texts.editor_hint": "One text per channel; an empty text goes back to the default. The visit link must stay in the text: the customer confirms, cancels or asks for a change through it.",
+  "texts.link_required": "The text must contain: {{names}}. The customer answers through this link.",
+  "texts.whatsapp_note": "The template approved in your Meta account is sent (named randevu_teyit by default, with the Geleceğim, İptal and Değişiklik buttons). Change its text in Meta and have it approved again.",
+  "texts.voice_note": "The automatic call reads the standard text below; it cannot be edited.",
+  "texts.toast_saved": "Confirmation texts saved",
+  "texts.toast_reset": "Confirmation texts restored to the defaults"
 }
