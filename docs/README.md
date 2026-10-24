@@ -6,6 +6,7 @@ Human and agent entry points for this boilerplate. Prefer these files over lefto
 |-----|----------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Anyone new to the repo |
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | Local setup and production |
+| [OPERATIONS.md](./OPERATIONS.md) | Backups, restore drill, error tracking, failed work |
 | [EXTENDING.md](./EXTENDING.md) | Adding a feature on top of the starter |
 | [../AGENTS.md](../AGENTS.md) | Agent skill index |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Day-to-day contribution rules |

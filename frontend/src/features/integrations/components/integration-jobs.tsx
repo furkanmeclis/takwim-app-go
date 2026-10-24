@@ -312,7 +312,7 @@ export function IntegrationJobDrawer({
           retryLabel={t("common.retry")}
         />
       ) : (
-        <JobDetailBody job={job} />
+        <IntegrationJobDetailBody job={job} />
       )}
     </EntityDrawer>
   );
@@ -430,7 +430,17 @@ export function IntegrationAttemptsTable({
   );
 }
 
-function JobDetailBody({ job }: { job: IntegrationJobDetail }) {
+/**
+ * The facts, payload and provider calls of one job: the business's job
+ * drawer and the platform's provider error drawer (TEC-930).
+ */
+export function IntegrationJobDetailBody({
+  job,
+  attemptsPersistKey = "tenant-integration-attempts-v1",
+}: {
+  job: IntegrationJobDetail;
+  attemptsPersistKey?: string;
+}) {
   const { t, locale } = useLocale();
   return (
     <div className="space-y-6">
@@ -508,7 +518,7 @@ function JobDetailBody({ job }: { job: IntegrationJobDetail }) {
       />
       <IntegrationAttemptsTable
         attempts={job.attempt_log}
-        persistKey="tenant-integration-attempts-v1"
+        persistKey={attemptsPersistKey}
       />
     </div>
   );

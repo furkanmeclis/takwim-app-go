@@ -2725,6 +2725,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/platform/operations/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Background work health and failure counts (TEC-930)
+         * @description `platform.settings.read`. Asynq queue sizes (pending, active, scheduled, retry, archived, today's
+         *     processed / failed) and running workers; integration jobs that need a person (failed,
+         *     needs_verification, blocked) of every organization; failed customer notice sends (24 h / 7 days);
+         *     outbox events not published; failed export / import / bulk jobs of the last 7 days; error
+         *     tracking status of the API. `status` is `attention` when any of them needs a look (no worker,
+         *     archived tasks, failed jobs or sends, failed outbox events) or the queue cannot be inspected.
+         */
+        get: operations["getPlatformOperationsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/queue-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Failed background tasks
+         * @description `platform.settings.read`. Asynq tasks of every queue in one state: `archived` (default; out of
+         *     automatic attempts) or `retry` (waiting for the next automatic attempt), the most recent failure
+         *     first. At most 1000 tasks per queue are read. The payload is not returned.
+         */
+        get: operations["listPlatformQueueTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/queue-tasks/{queue}/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a failed task again now
+         * @description `platform.settings.write`. Only `archived` and `retry` tasks (`409 QUEUE_TASK_NOT_FAILED`
+         *     otherwise). The task's own handler decides again whether there is work left (jobs are idempotent).
+         *     Written to the activity log (`operations.queue_task_run`).
+         */
+        post: operations["runPlatformQueueTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/queue-tasks/{queue}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Drop a failed task
+         * @description `platform.settings.write`. Only `archived` and `retry` tasks. Written to the activity log
+         *     (`operations.queue_task_deleted`).
+         */
+        delete: operations["deletePlatformQueueTask"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/integration-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider errors of every organization
+         * @description `platform.settings.read`. Integration jobs of every organization (and platform jobs), by default
+         *     the ones that need a person (`failed`, `needs_verification`, `blocked`). `q` searches the
+         *     organization name, the kind and the last error.
+         */
+        get: operations["listPlatformIntegrationJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/integration-jobs/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An integration job with its provider calls
+         * @description `platform.settings.read`. The same view as the business's own job drawer.
+         */
+        get: operations["getPlatformIntegrationJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/integration-jobs/{uuid}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry an integration job
+         * @description `platform.settings.write`. The runner's retry in the job's own organization scope, the same rules
+         *     as `POST /v1/tenant/integration-jobs/{uuid}/retry`: CheckStatus first, resubmit only work the
+         *     provider confirms was not done; `409 INTEGRATION_JOB_UNVERIFIED` (job in `data`),
+         *     `INTEGRATION_JOB_NOT_RETRYABLE` or `INTEGRATION_JOB_BUSY`. Written to the activity log
+         *     (`operations.integration_job_retried`).
+         */
+        post: operations["postPlatformIntegrationJobRetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/operations/notice-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Failed customer notice sends of every organization
+         * @description `platform.settings.read`. Read only: a channel is tried at most once per notice
+         *     (docs/design/customer-notifications.md), so nothing is sent again from here. No recipient and no
+         *     text are returned. `q` searches the organization name and the error.
+         */
+        get: operations["listPlatformNoticeFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/integration-jobs/{uuid}": {
         parameters: {
             query?: never;
@@ -10392,6 +10570,175 @@ export interface components {
             };
             meta: components["schemas"]["ResponseMeta"];
         };
+        OperationsQueueStats: {
+            name: string;
+            pending: number;
+            active: number;
+            scheduled: number;
+            retry: number;
+            archived: number;
+            processed_today: number;
+            failed_today: number;
+            paused: boolean;
+            /** @description Age of the oldest pending task. */
+            latency_ms: number;
+        };
+        OperationsSummary: {
+            /** @enum {string} */
+            status: "healthy" | "attention";
+            /** Format: date-time */
+            generated_at: string;
+            queue: {
+                available: boolean;
+                message?: string;
+                /** @description Running worker processes (Asynq servers). */
+                workers: number;
+                retry: number;
+                archived: number;
+                queues: components["schemas"]["OperationsQueueStats"][];
+            };
+            integrations: {
+                /** Format: int64 */
+                failed: number;
+                /** Format: int64 */
+                needs_verification: number;
+                /** Format: int64 */
+                blocked: number;
+            };
+            notices: {
+                /** Format: int64 */
+                failed_24h: number;
+                /** Format: int64 */
+                failed_7d: number;
+            };
+            outbox: {
+                /** Format: int64 */
+                pending: number;
+                /** Format: int64 */
+                failed: number;
+            };
+            /** @description Failed jobs of the last 7 days. */
+            engine: {
+                /** Format: int64 */
+                exports: number;
+                /** Format: int64 */
+                imports: number;
+                /** Format: int64 */
+                bulk: number;
+            };
+            error_tracking: {
+                /** @description The API reports errors (a DSN is set). */
+                enabled: boolean;
+                environment: string;
+            };
+        };
+        EnvelopeOperationsSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OperationsSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        QueueTask: {
+            id: string;
+            queue: string;
+            type: string;
+            /** @enum {string} */
+            state: "archived" | "retry";
+            retried: number;
+            max_retry: number;
+            last_error: string;
+            /** Format: date-time */
+            last_failed_at: string | null;
+            /** Format: date-time */
+            next_process_at: string | null;
+        };
+        EnvelopeQueueTask: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["QueueTask"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeQueueTaskPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["QueueTask"][];
+                /** Format: int64 */
+                total: number;
+                limit: number;
+                offset: number;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        OperationsOrganization: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        PlatformIntegrationJob: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description null = a platform job */
+            organization: components["schemas"]["OperationsOrganization"] | null;
+            /** @enum {string} */
+            direction: "inbound" | "outbound";
+            provider: string;
+            kind: string;
+            status: components["schemas"]["IntegrationJobStatus"];
+            /** @enum {string} */
+            priority: "critical" | "normal";
+            attempts: number;
+            max_attempts: number;
+            last_error: string;
+            ref_type: string;
+            retryable: boolean;
+            /** Format: date-time */
+            next_attempt_at: string | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        EnvelopePlatformIntegrationJobPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["PlatformIntegrationJob"][];
+                /** Format: int64 */
+                total: number;
+                limit: number;
+                offset: number;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        NoticeFailure: {
+            /** Format: uuid */
+            uuid: string;
+            organization: components["schemas"]["OperationsOrganization"];
+            event_code: string;
+            channel: string;
+            provider: string;
+            attempt_no: number;
+            error: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
+        };
+        EnvelopeNoticeFailurePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["NoticeFailure"][];
+                /** Format: int64 */
+                total: number;
+                limit: number;
+                offset: number;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
         IntegrationActor: {
             /** Format: uuid */
             uuid: string;
@@ -17976,6 +18323,10 @@ export interface components {
         PointUUID: string;
         Limit: number;
         Offset: number;
+        /** @description Asynq queue name */
+        QueueName: string;
+        /** @description Asynq task id */
+        QueueTaskID: string;
         Q: string;
         /** @description Comma-separated fields; prefix `-` for descending */
         Sort: string;
@@ -22346,6 +22697,246 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getPlatformOperationsSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOperationsSummary"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPlatformQueueTasks: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                state?: "archived" | "retry";
+                /** @description Comma-separated queue names */
+                queue?: string;
+                /** @description Comma-separated task types */
+                type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeQueueTaskPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description `QUEUE_UNAVAILABLE`: Redis is not configured or cannot be reached */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    runPlatformQueueTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Asynq queue name */
+                queue: components["parameters"]["QueueName"];
+                /** @description Asynq task id */
+                id: components["parameters"]["QueueTaskID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task as it was before it was queued again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeQueueTask"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deletePlatformQueueTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Asynq queue name */
+                queue: components["parameters"]["QueueName"];
+                /** @description Asynq task id */
+                id: components["parameters"]["QueueTaskID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deleted task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeQueueTask"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listPlatformIntegrationJobs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description `created_at` or `updated_at`; prefix `-` for descending (default `-updated_at`). */
+                sort?: string;
+                /** @description Comma-separated job statuses */
+                status?: string;
+                /** @description Comma-separated providers */
+                provider?: string;
+                /** @description Comma-separated job kinds */
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePlatformIntegrationJobPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getPlatformIntegrationJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationJobDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postPlatformIntegrationJobRetry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retried */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeIntegrationJobRetry"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listPlatformNoticeFailures: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description `created_at`; prefix `-` for descending (default `-created_at`). */
+                sort?: string;
+                /** @description Comma-separated channels (sms, email, whatsapp, voice_call) */
+                channel?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Failure page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeNoticeFailurePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getTenantIntegrationJob: {

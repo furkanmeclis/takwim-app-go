@@ -220,6 +220,8 @@ export const routes = {
       roles: "/platform/settings/roles",
       activity: "/platform/settings/activity",
       logs: "/platform/settings/logs",
+      /** Background work and failures (TEC-930). */
+      operations: "/platform/settings/operations",
       storage: "/platform/settings/storage",
       access: "/platform/settings/access",
       auth: "/platform/settings/auth",

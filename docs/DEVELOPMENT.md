@@ -91,6 +91,8 @@ Networks: Compose creates a private bridge network per app (`${APP_NETWORK_NAME:
 
 `APP_ENCRYPTION_KEY` (32-byte, raw or base64) encrypts GitHub App secrets at rest. Generate: `openssl rand -base64 32`. Replace the example key in production.
 
+Backups (`make backup`), the restore drill (`make restore-drill`) and the failed work lists: [OPERATIONS.md](./OPERATIONS.md).
+
 ## Error tracking (optional, Sentry protocol)
 
 The tracker is a self-hosted, Sentry-protocol endpoint (events only; it has no `sentry-cli` API, so nothing is uploaded at build time: no source maps, no releases, no auth token). Every variable is optional; an empty DSN turns reporting off.

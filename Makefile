@@ -19,7 +19,8 @@ endef
 FRONTEND_PORT ?= 3000
 
 .PHONY: infra infra-down infra-logs infra-ps migrate-up backend-dev frontend-dev local-dev \
-	free-dev-ports prod-config prod-up prod-down tools create-super-admin search-reindex demo-seed check-i18n
+	free-dev-ports prod-config prod-up prod-down tools create-super-admin search-reindex demo-seed check-i18n \
+	backup restore-drill
 
 infra:
 	@if [ -n "$(ENV_FILE)" ]; then \
@@ -117,6 +118,13 @@ prod-up:
 
 prod-down:
 	docker compose --env-file $(PROD_ENV_FILE) -f compose.prod.yml down
+
+# Backup and restore drill of the production stack (docs/OPERATIONS.md).
+backup:
+	ENV_FILE="$(PROD_ENV_FILE)" scripts/backup.sh
+
+restore-drill:
+	ENV_FILE="$(PROD_ENV_FILE)" scripts/restore-drill.sh $(BACKUP)
 
 tools:
 	@echo "docker:  $$(docker version --format '{{.Server.Version}}' 2>&1)"

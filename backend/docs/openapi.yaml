@@ -4287,6 +4287,219 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/platform/operations/summary:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOperationsSummary
+      summary: Background work health and failure counts (TEC-930)
+      description: |
+        `platform.settings.read`. Asynq queue sizes (pending, active, scheduled, retry, archived, today's
+        processed / failed) and running workers; integration jobs that need a person (failed,
+        needs_verification, blocked) of every organization; failed customer notice sends (24 h / 7 days);
+        outbox events not published; failed export / import / bulk jobs of the last 7 days; error
+        tracking status of the API. `status` is `attention` when any of them needs a look (no worker,
+        archived tasks, failed jobs or sends, failed outbox events) or the queue cannot be inspected.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeOperationsSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/platform/operations/queue-tasks:
+    get:
+      tags: [Platform]
+      operationId: listPlatformQueueTasks
+      summary: Failed background tasks
+      description: |
+        `platform.settings.read`. Asynq tasks of every queue in one state: `archived` (default; out of
+        automatic attempts) or `retry` (waiting for the next automatic attempt), the most recent failure
+        first. At most 1000 tasks per queue are read. The payload is not returned.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - { name: state, in: query, schema: { type: string, enum: [archived, retry] } }
+        - { name: queue, in: query, schema: { type: string }, description: "Comma-separated queue names" }
+        - { name: type, in: query, schema: { type: string }, description: "Comma-separated task types" }
+      responses:
+        "200":
+          description: Task page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeQueueTaskPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503":
+          description: "`QUEUE_UNAVAILABLE`: Redis is not configured or cannot be reached"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/platform/operations/queue-tasks/{queue}/{id}/run:
+    post:
+      tags: [Platform]
+      operationId: runPlatformQueueTask
+      summary: Run a failed task again now
+      description: |
+        `platform.settings.write`. Only `archived` and `retry` tasks (`409 QUEUE_TASK_NOT_FAILED`
+        otherwise). The task's own handler decides again whether there is work left (jobs are idempotent).
+        Written to the activity log (`operations.queue_task_run`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueName"
+        - $ref: "#/components/parameters/QueueTaskID"
+      responses:
+        "200":
+          description: The task as it was before it was queued again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeQueueTask" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/operations/queue-tasks/{queue}/{id}:
+    delete:
+      tags: [Platform]
+      operationId: deletePlatformQueueTask
+      summary: Drop a failed task
+      description: |
+        `platform.settings.write`. Only `archived` and `retry` tasks. Written to the activity log
+        (`operations.queue_task_deleted`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueName"
+        - $ref: "#/components/parameters/QueueTaskID"
+      responses:
+        "200":
+          description: The deleted task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeQueueTask" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/operations/integration-jobs:
+    get:
+      tags: [Platform]
+      operationId: listPlatformIntegrationJobs
+      summary: Provider errors of every organization
+      description: |
+        `platform.settings.read`. Integration jobs of every organization (and platform jobs), by default
+        the ones that need a person (`failed`, `needs_verification`, `blocked`). `q` searches the
+        organization name, the kind and the last error.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "`created_at` or `updated_at`; prefix `-` for descending (default `-updated_at`)."
+          schema: { type: string }
+        - { name: status, in: query, schema: { type: string }, description: "Comma-separated job statuses" }
+        - { name: provider, in: query, schema: { type: string }, description: "Comma-separated providers" }
+        - { name: kind, in: query, schema: { type: string }, description: "Comma-separated job kinds" }
+      responses:
+        "200":
+          description: Job page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopePlatformIntegrationJobPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/platform/operations/integration-jobs/{uuid}:
+    get:
+      tags: [Platform]
+      operationId: getPlatformIntegrationJob
+      summary: An integration job with its provider calls
+      description: "`platform.settings.read`. The same view as the business's own job drawer."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationJobDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/platform/operations/integration-jobs/{uuid}/retry:
+    post:
+      tags: [Platform]
+      operationId: postPlatformIntegrationJobRetry
+      summary: Retry an integration job
+      description: |
+        `platform.settings.write`. The runner's retry in the job's own organization scope, the same rules
+        as `POST /v1/tenant/integration-jobs/{uuid}/retry`: CheckStatus first, resubmit only work the
+        provider confirms was not done; `409 INTEGRATION_JOB_UNVERIFIED` (job in `data`),
+        `INTEGRATION_JOB_NOT_RETRYABLE` or `INTEGRATION_JOB_BUSY`. Written to the activity log
+        (`operations.integration_job_retried`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Retried
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeIntegrationJobRetry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/platform/operations/notice-failures:
+    get:
+      tags: [Platform]
+      operationId: listPlatformNoticeFailures
+      summary: Failed customer notice sends of every organization
+      description: |
+        `platform.settings.read`. Read only: a channel is tried at most once per notice
+        (docs/design/customer-notifications.md), so nothing is sent again from here. No recipient and no
+        text are returned. `q` searches the organization name and the error.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "`created_at`; prefix `-` for descending (default `-created_at`)."
+          schema: { type: string }
+        - { name: channel, in: query, schema: { type: string }, description: "Comma-separated channels (sms, email, whatsapp, voice_call)" }
+      responses:
+        "200":
+          description: Failure page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeNoticeFailurePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /v1/tenant/integration-jobs/{uuid}:
     get:
       tags: [Tenant]
@@ -15438,6 +15651,18 @@ components:
       name: offset
       in: query
       schema: { type: integer, minimum: 0, default: 0 }
+    QueueName:
+      name: queue
+      in: path
+      required: true
+      description: Asynq queue name
+      schema: { type: string }
+    QueueTaskID:
+      name: id
+      in: path
+      required: true
+      description: Asynq task id
+      schema: { type: string }
     Q:
       name: q
       in: query
@@ -16527,6 +16752,200 @@ components:
             items:
               type: array
               items: { $ref: "#/components/schemas/IntegrationJob" }
+            total: { type: integer, format: int64 }
+            limit: { type: integer }
+            offset: { type: integer }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    OperationsQueueStats:
+      type: object
+      required: [name, pending, active, scheduled, retry, archived, processed_today, failed_today, paused, latency_ms]
+      properties:
+        name: { type: string }
+        pending: { type: integer }
+        active: { type: integer }
+        scheduled: { type: integer }
+        retry: { type: integer }
+        archived: { type: integer }
+        processed_today: { type: integer }
+        failed_today: { type: integer }
+        paused: { type: boolean }
+        latency_ms: { type: number, description: "Age of the oldest pending task." }
+
+    OperationsSummary:
+      type: object
+      required: [status, generated_at, queue, integrations, notices, outbox, engine, error_tracking]
+      properties:
+        status: { type: string, enum: [healthy, attention] }
+        generated_at: { type: string, format: date-time }
+        queue:
+          type: object
+          required: [available, workers, retry, archived, queues]
+          properties:
+            available: { type: boolean }
+            message: { type: string }
+            workers: { type: integer, description: "Running worker processes (Asynq servers)." }
+            retry: { type: integer }
+            archived: { type: integer }
+            queues:
+              type: array
+              items: { $ref: "#/components/schemas/OperationsQueueStats" }
+        integrations:
+          type: object
+          required: [failed, needs_verification, blocked]
+          properties:
+            failed: { type: integer, format: int64 }
+            needs_verification: { type: integer, format: int64 }
+            blocked: { type: integer, format: int64 }
+        notices:
+          type: object
+          required: [failed_24h, failed_7d]
+          properties:
+            failed_24h: { type: integer, format: int64 }
+            failed_7d: { type: integer, format: int64 }
+        outbox:
+          type: object
+          required: [pending, failed]
+          properties:
+            pending: { type: integer, format: int64 }
+            failed: { type: integer, format: int64 }
+        engine:
+          type: object
+          required: [exports, imports, bulk]
+          description: Failed jobs of the last 7 days.
+          properties:
+            exports: { type: integer, format: int64 }
+            imports: { type: integer, format: int64 }
+            bulk: { type: integer, format: int64 }
+        error_tracking:
+          type: object
+          required: [enabled, environment]
+          properties:
+            enabled: { type: boolean, description: "The API reports errors (a DSN is set)." }
+            environment: { type: string }
+
+    EnvelopeOperationsSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OperationsSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    QueueTask:
+      type: object
+      required: [id, queue, type, state, retried, max_retry, last_error, last_failed_at, next_process_at]
+      properties:
+        id: { type: string }
+        queue: { type: string }
+        type: { type: string }
+        state: { type: string, enum: [archived, retry] }
+        retried: { type: integer }
+        max_retry: { type: integer }
+        last_error: { type: string }
+        last_failed_at: { type: [string, "null"], format: date-time }
+        next_process_at: { type: [string, "null"], format: date-time }
+
+    EnvelopeQueueTask:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/QueueTask" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeQueueTaskPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/QueueTask" }
+            total: { type: integer, format: int64 }
+            limit: { type: integer }
+            offset: { type: integer }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    OperationsOrganization:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    PlatformIntegrationJob:
+      type: object
+      required: [uuid, organization, direction, provider, kind, status, priority, attempts, max_attempts, last_error, ref_type, retryable, next_attempt_at, completed_at, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        organization:
+          description: "null = a platform job"
+          oneOf:
+            - { $ref: "#/components/schemas/OperationsOrganization" }
+            - { type: "null" }
+        direction: { type: string, enum: [inbound, outbound] }
+        provider: { type: string }
+        kind: { type: string }
+        status: { $ref: "#/components/schemas/IntegrationJobStatus" }
+        priority: { type: string, enum: [critical, normal] }
+        attempts: { type: integer }
+        max_attempts: { type: integer }
+        last_error: { type: string }
+        ref_type: { type: string }
+        retryable: { type: boolean }
+        next_attempt_at: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    EnvelopePlatformIntegrationJobPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/PlatformIntegrationJob" }
+            total: { type: integer, format: int64 }
+            limit: { type: integer }
+            offset: { type: integer }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    NoticeFailure:
+      type: object
+      required: [uuid, organization, event_code, channel, provider, attempt_no, error, created_at, finished_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        organization: { $ref: "#/components/schemas/OperationsOrganization" }
+        event_code: { type: string }
+        channel: { type: string }
+        provider: { type: string }
+        attempt_no: { type: integer }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+
+    EnvelopeNoticeFailurePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items, total, limit, offset]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/NoticeFailure" }
             total: { type: integer, format: int64 }
             limit: { type: integer }
             offset: { type: integer }
