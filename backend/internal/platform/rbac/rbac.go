@@ -109,6 +109,11 @@ const (
 	PermTenantProductsImport         = "tenant.products.import"
 	PermTenantProductsBulkActivate   = "tenant.products.bulk.activate"
 	PermTenantProductsBulkDeactivate = "tenant.products.bulk.deactivate"
+	// Session packages (TEC-920): read the packages and the customers'
+	// packages, manage the definitions, sell a package to a customer.
+	PermTenantSessionPackagesRead  = "tenant.session_packages.read"
+	PermTenantSessionPackagesWrite = "tenant.session_packages.write"
+	PermTenantSessionPackagesSell  = "tenant.session_packages.sell"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

@@ -1104,9 +1104,31 @@ func (q *Queries) InsertSaleLine(ctx context.Context, arg InsertSaleLineParams) 
 	return i, err
 }
 
+const isPackageSessionLine = `-- name: IsPackageSessionLine :one
+SELECT EXISTS (
+    SELECT 1 FROM package_sessions ps
+    WHERE ps.organization_id = $1 AND ps.reservation_id = $2
+      AND ps.line_index = $3 AND ps.status = 'consumed'
+)::boolean AS covered
+`
+
+type IsPackageSessionLineParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ReservationID  int64 `json:"reservation_id"`
+	LineIndex      int32 `json:"line_index"`
+}
+
+// Whether a reservation line was served on a consumed package session.
+func (q *Queries) IsPackageSessionLine(ctx context.Context, arg IsPackageSessionLineParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isPackageSessionLine, arg.OrganizationID, arg.ReservationID, arg.LineIndex)
+	var covered bool
+	err := row.Scan(&covered)
+	return covered, err
+}
+
 const ledgerTotals = `-- name: LedgerTotals :many
 SELECT e.currency::text AS currency,
-    COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+    COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) IN ('sale', 'package')
         THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::numeric AS charged,
     COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
         THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::numeric AS collected,
@@ -1136,8 +1158,9 @@ type LedgerTotalsRow struct {
 	Refunded  pgtype.Numeric `json:"refunded"`
 }
 
-// Charged (sale entries), collected and refunded per currency of one
-// reservation or one customer, reversals netted into the kind they undo.
+// Charged (sale entries and sold session packages), collected and
+// refunded per currency of one reservation or one customer, reversals
+// netted into the kind they undo.
 func (q *Queries) LedgerTotals(ctx context.Context, arg LedgerTotalsParams) ([]LedgerTotalsRow, error) {
 	rows, err := q.db.Query(ctx, ledgerTotals,
 		arg.OrganizationID,
@@ -1559,8 +1582,11 @@ func (q *Queries) ListSalesBranchesByUUID(ctx context.Context, arg ListSalesBran
 }
 
 const listSalesReservationLines = `-- name: ListSalesReservationLines :many
-SELECT rl.line_index, rl.service_id, rl.service_name, rl.staff_id, rl.unit_price
+SELECT rl.line_index, rl.service_id, rl.service_name, rl.staff_id, rl.unit_price,
+    ps.amount AS package_amount
 FROM reservation_lines rl
+LEFT JOIN package_sessions ps ON ps.organization_id = rl.organization_id AND ps.reservation_id = rl.reservation_id
+    AND ps.line_index = rl.line_index AND ps.status = 'consumed'
 WHERE rl.organization_id = $1 AND rl.reservation_id = $2
 ORDER BY rl.line_index
 `
@@ -1571,13 +1597,17 @@ type ListSalesReservationLinesParams struct {
 }
 
 type ListSalesReservationLinesRow struct {
-	LineIndex   int32          `json:"line_index"`
-	ServiceID   pgtype.Int8    `json:"service_id"`
-	ServiceName string         `json:"service_name"`
-	StaffID     pgtype.Int8    `json:"staff_id"`
-	UnitPrice   pgtype.Numeric `json:"unit_price"`
+	LineIndex     int32          `json:"line_index"`
+	ServiceID     pgtype.Int8    `json:"service_id"`
+	ServiceName   string         `json:"service_name"`
+	StaffID       pgtype.Int8    `json:"staff_id"`
+	UnitPrice     pgtype.Numeric `json:"unit_price"`
+	PackageAmount pgtype.Numeric `json:"package_amount"`
 }
 
+// A line served on a package session (TEC-920) carries the session's
+// value: that value is the line's revenue, and the package already
+// charged the customer for it.
 func (q *Queries) ListSalesReservationLines(ctx context.Context, arg ListSalesReservationLinesParams) ([]ListSalesReservationLinesRow, error) {
 	rows, err := q.db.Query(ctx, listSalesReservationLines, arg.OrganizationID, arg.ReservationID)
 	if err != nil {
@@ -1593,6 +1623,7 @@ func (q *Queries) ListSalesReservationLines(ctx context.Context, arg ListSalesRe
 			&i.ServiceName,
 			&i.StaffID,
 			&i.UnitPrice,
+			&i.PackageAmount,
 		); err != nil {
 			return nil, err
 		}

@@ -54,3 +54,7 @@ confirmation_settings
 reservation_confirmations
 finance_categories
 finance_entries
+session_packages
+session_package_branches
+customer_packages
+package_sessions

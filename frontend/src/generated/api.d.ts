@@ -8523,6 +8523,292 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/{uuid}/package-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Packages that can give a session to a visit
+         * @description The visit customer's packages (TEC-920) that can give a session to some of its lines: not refunded, valid on
+         *     the visit day, usable in the visit's branch, for the line's service, with sessions left. `line_indexes` are
+         *     the lines of the visit each one can serve (same service, not on a session yet); `next_value` is the value of
+         *     the session it would give. Needs the packages module besides reservation read or own.
+         */
+        get: operations["listTenantReservationPackageOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/package-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use a package session for a visit line
+         * @description Holds the next free session of one of the customer's packages for a service line of a requested or active
+         *     visit (TEC-920). The line's price becomes the session value (package price / total sessions, the last one
+         *     takes the rounding remainder) and leaves the visit total: the package was paid when it was sold. The session
+         *     is consumed when the visit is completed (its value is then the line's revenue and the staff share base) and
+         *     released when the visit is rejected, cancelled, expires or is a no-show. A reschedule keeps it when the
+         *     service stays and the new day is inside the validity. The last session is never held twice (`400`
+         *     `customer_package_uuid` / `no_sessions_left`). Validation codes: `line_index` / `not_found`,
+         *     `service_mismatch`, `already_on_package`; `customer_package_uuid` / `not_found`, `refunded`, `expired`,
+         *     `branch_not_allowed`. Needs the packages module and reservation write or own.
+         */
+        post: operations["postTenantReservationPackageSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/package-sessions/{sessionUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take a package session off a visit
+         * @description Releases a held session (reason `removed`): it goes back to the package and the line is charged at its
+         *     service price again. A consumed or released session, or a finished visit, is `409` `status` /
+         *     `invalid_transition`. Optional body `expected_version`.
+         */
+        delete: operations["deleteTenantReservationPackageSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/session-packages/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session package list metadata
+         * @description Table contract of `GET /v1/tenant/session-packages` (TEC-920).
+         */
+        get: operations["getTenantSessionPackagesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/session-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session packages
+         * @description The multi-session packages of the business (TEC-920): N sessions of one service for a price, the branches
+         *     they can be used in and the validity in days. Business-wide definitions. Needs the packages module and
+         *     `tenant.session_packages.read`.
+         */
+        get: operations["getTenantSessionPackages"];
+        put?: never;
+        /**
+         * Add a session package
+         * @description `tenant.session_packages.write` with access to every branch. `total_sessions` 1–1000, `price` the package
+         *     price (the session value is price / total sessions; the last session takes the rounding remainder),
+         *     `validity_days` days from the sale (null = no end), `all_branches` or `branch_uuids` where the sessions can be
+         *     used. The name is unique among live packages (`409` `name` / `taken`). Sold packages keep the terms of the
+         *     day they were sold.
+         */
+        post: operations["postTenantSessionPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/session-packages/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A session package */
+        get: operations["getTenantSessionPackage"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a session package
+         * @description Soft delete; it can no longer be sold. Packages already sold stay usable.
+         */
+        delete: operations["deleteTenantSessionPackage"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a session package
+         * @description The whole definition (as on create). Packages already sold keep their own terms (sessions, price, service,
+         *     branches, last day).
+         */
+        patch: operations["patchTenantSessionPackage"];
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer package list metadata
+         * @description Table contract of `GET /v1/tenant/customer-packages`.
+         */
+        get: operations["getTenantCustomerPackagesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer package filter options
+         * @description The packages and selling branches of the list with their counts, inside the caller's branch scope.
+         */
+        get: operations["getTenantCustomerPackagesFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Package report
+         * @description Per currency, inside the caller's branch scope: packages sold in the range and the money taken (`sold`, a
+         *     cash figure, not revenue), sessions used and their value (`used`, the revenue that reaches the sales report
+         *     through the visits), refunds (`refunded`), and today's open rights (`open`: valid sessions neither used nor
+         *     held), held sessions (`held`), expired rights (`expired`) and used-up packages. Default range: this month to
+         *     today.
+         */
+        get: operations["getTenantCustomerPackagesSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Packages sold to customers
+         * @description The packages sold to customers with their balance (used, held, remaining sessions and amounts) and state
+         *     (`active`, `used_up`, `expired`, `refunded`), inside the caller's branch scope (the selling branch).
+         */
+        get: operations["getTenantCustomerPackages"];
+        put?: never;
+        /**
+         * Sell a package to a customer
+         * @description Sells an active package in a branch where it is usable and takes the full price as a payment (a cash
+         *     entry into `cash_account_uuid` when given; it is not revenue). The terms (service, sessions, price,
+         *     branches, last day = today + validity) are kept on the sold package. Needs the packages and cash modules,
+         *     `tenant.session_packages.sell` and `tenant.payment.collect`. The same `idempotency_key` with the same body
+         *     returns the first sale (`200`); with another body `409` `idempotency_key` / `reused`.
+         */
+        post: operations["postTenantCustomerPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A package sold to a customer
+         * @description The package with its balance and every session (held, consumed, released) with its visit.
+         */
+        get: operations["getTenantCustomerPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages/{uuid}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund a package
+         * @description Closes the package (state `refunded`; its left sessions can no longer be used) and pays `amount` back (0 =
+         *     nothing paid back, at most the price) from `cash_account_uuid` against the sale's payment. The kept part
+         *     (price - amount) stays the customer's charge. Sessions held on open visits are `409` `sessions` / `held`
+         *     (release them first); a refunded package `409` `status` / `already_refunded`. `reason` at
+         *     least 3 characters. Needs the cash module and `tenant.payment.refund`.
+         */
+        post: operations["postTenantCustomerPackageRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11222,13 +11508,16 @@ export interface components {
         LedgerEntry: {
             /** Format: uuid */
             uuid: string;
-            /** @enum {string} */
-            kind: "sale" | "collection" | "refund" | "reversal";
+            /**
+             * @description `package`: the charge of a package sold to the customer (TEC-920; a debit with no sale line, not revenue)
+             * @enum {string}
+             */
+            kind: "sale" | "package" | "collection" | "refund" | "reversal";
             /**
              * @description The kind a reversal undoes (the kind itself otherwise)
              * @enum {string}
              */
-            effective_kind: "sale" | "collection" | "refund";
+            effective_kind: "sale" | "package" | "collection" | "refund";
             /** @enum {string} */
             direction: "debit" | "credit";
             /** @example 100.00 */
@@ -14651,6 +14940,8 @@ export interface components {
                 unit_price: components["schemas"]["MoneyAmount"];
             }[];
             products: components["schemas"]["TenantReservationProduct"][];
+            /** @description Sessions of the customer's packages given to the lines (TEC-920), released ones included */
+            package_sessions?: components["schemas"]["TenantReservationPackageSession"][];
             events: {
                 version: number;
                 /** @enum {string} */
@@ -15873,6 +16164,334 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["CustomerPaymentSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description A multi-session package of the business (TEC-920). */
+        SessionPackage: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            service: components["schemas"]["SalesRef"];
+            total_sessions: number;
+            /** @example 2500.00 */
+            price: string;
+            /**
+             * @description Price / total sessions (the last session also takes the rounding remainder)
+             * @example 500.00
+             */
+            session_value: string;
+            currency: string;
+            /** @description Days from the sale the package can be used; null = no end */
+            validity_days: number | null;
+            all_branches: boolean;
+            /** @description Branches the sessions can be used in (empty with all_branches) */
+            branches: components["schemas"]["SalesRef"][];
+            /** @description Can be sold */
+            is_active: boolean;
+            /** Format: int64 */
+            sold_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description The whole definition (create and patch). */
+        SessionPackageInput: {
+            name: string;
+            description?: string;
+            /** Format: uuid */
+            service_uuid: string;
+            total_sessions: number;
+            /** @example 2500.00 */
+            price: string;
+            validity_days?: number | null;
+            all_branches?: boolean;
+            branch_uuids?: string[];
+            /** @description Default true */
+            is_active?: boolean | null;
+        };
+        SessionPackagePage: {
+            items: components["schemas"]["SessionPackage"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CustomerPackageRefund: {
+            /**
+             * @description Money paid back (0 = none)
+             * @example 2000.00
+             */
+            amount: string;
+            reason: string;
+            /** Format: date */
+            refunded_on: string;
+            /** Format: date-time */
+            refunded_at: string;
+            /**
+             * Format: uuid
+             * @description The refund ledger entry
+             */
+            entry_uuid: string | null;
+        };
+        /** @description One session of a sold package given to a visit. */
+        CustomerPackageSession: {
+            /** Format: uuid */
+            uuid: string;
+            session_no: number;
+            /**
+             * @description Session value
+             * @example 500.00
+             */
+            amount: string;
+            /** @enum {string} */
+            status: "held" | "consumed" | "released";
+            /** @description rejected, cancelled, no_show, expired, rescheduled, removed */
+            release_reason: string | null;
+            reservation: {
+                /** Format: uuid */
+                uuid: string;
+                /** Format: int64 */
+                number: number;
+                /** Format: date-time */
+                starts_at: string;
+                status: components["schemas"]["TenantReservationStatus"];
+            };
+            service_name: string | null;
+            staff_name: string | null;
+            /** Format: date */
+            consumed_on: string | null;
+            /** Format: date-time */
+            consumed_at: string | null;
+            /** Format: date-time */
+            released_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description A package sold to a customer with its balance. The terms are those of the day it was sold. */
+        CustomerPackage: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            service_name: string;
+            /** Format: uuid */
+            service_uuid: string | null;
+            /** Format: uuid */
+            package_uuid: string | null;
+            customer: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                phone: string | null;
+            };
+            branch: components["schemas"]["SalesRef"];
+            all_branches: boolean;
+            branches: components["schemas"]["SalesRef"][];
+            total_sessions: number;
+            used: number;
+            held: number;
+            /** @description Neither used nor held */
+            remaining: number;
+            /** @example 2500.00 */
+            price: string;
+            currency: string;
+            /** @example 500.00 */
+            session_value: string;
+            used_amount: string;
+            held_amount: string;
+            /** @description Value of the sessions neither used nor held */
+            remaining_amount: string;
+            /** Format: date */
+            sold_on: string;
+            /**
+             * Format: date
+             * @description Last valid day; null = no end
+             */
+            expires_on: string | null;
+            /** @enum {string} */
+            state: "active" | "used_up" | "expired" | "refunded";
+            staff: components["schemas"]["SalesRef"] | null;
+            note: string;
+            /**
+             * Format: uuid
+             * @description The payment ledger entry of the sale
+             */
+            collection_uuid: string | null;
+            refund: components["schemas"]["CustomerPackageRefund"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @description On the detail only */
+            sessions?: components["schemas"]["CustomerPackageSession"][];
+        };
+        CustomerPackagePage: {
+            items: components["schemas"]["CustomerPackage"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CustomerPackageSellRequest: {
+            /** Format: uuid */
+            package_uuid: string;
+            /** Format: uuid */
+            customer_uuid: string;
+            /**
+             * Format: uuid
+             * @description Selling branch; the package must be usable there
+             */
+            branch_uuid: string;
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer" | "online" | "other";
+            /** Format: uuid */
+            cash_account_uuid?: string | null;
+            /**
+             * Format: uuid
+             * @description Who sold it
+             */
+            staff_uuid?: string | null;
+            note?: string;
+            idempotency_key?: string;
+        };
+        CustomerPackageRefundRequest: {
+            /**
+             * @description Money paid back, 0 to the price
+             * @example 2000.00
+             */
+            amount: string;
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer" | "online" | "other";
+            /** Format: uuid */
+            cash_account_uuid?: string | null;
+            reason: string;
+            idempotency_key?: string;
+        };
+        CustomerPackageFacet: {
+            value: string;
+            label: string;
+            /** Format: int64 */
+            count: number;
+        };
+        CustomerPackageFacets: {
+            package: components["schemas"]["CustomerPackageFacet"][];
+            branch: components["schemas"]["CustomerPackageFacet"][];
+        };
+        CustomerPackageCount: {
+            /**
+             * Format: int64
+             * @description Packages
+             */
+            count: number;
+            /** Format: int64 */
+            sessions: number;
+            amount: string;
+        };
+        CustomerPackageFigures: {
+            currency: string;
+            sold: components["schemas"]["CustomerPackageCount"];
+            used: components["schemas"]["CustomerPackageCount"];
+            refunded: components["schemas"]["CustomerPackageCount"];
+            open: components["schemas"]["CustomerPackageCount"];
+            held: components["schemas"]["CustomerPackageCount"];
+            expired: components["schemas"]["CustomerPackageCount"];
+            /** Format: int64 */
+            used_up: number;
+        };
+        CustomerPackageSummary: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            /** Format: date */
+            today: string;
+            totals: components["schemas"]["CustomerPackageFigures"][];
+        };
+        EnvelopeSessionPackage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SessionPackage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSessionPackagePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SessionPackagePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPackage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPackage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPackagePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPackagePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPackageFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPackageFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPackageSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPackageSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description A session of the customer's package given to a line of the visit (TEC-920). */
+        TenantReservationPackageSession: {
+            /** Format: uuid */
+            uuid: string;
+            line_index: number;
+            customer_package: components["schemas"]["SalesRef"];
+            session_no: number;
+            total_sessions: number;
+            /**
+             * @description Session value (the line's price)
+             * @example 500.00
+             */
+            amount: string;
+            /** @enum {string} */
+            status: "held" | "consumed" | "released";
+            release_reason: string | null;
+            /** Format: date-time */
+            consumed_at: string | null;
+            /** Format: date-time */
+            released_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TenantReservationPackageSessionRequest: {
+            /** Format: uuid */
+            customer_package_uuid: string;
+            line_index: number;
+            expected_version?: number | null;
+        };
+        TenantReservationPackageOption: {
+            /** Format: uuid */
+            customer_package_uuid: string;
+            name: string;
+            service_name: string;
+            /** Format: uuid */
+            service_uuid: string | null;
+            total_sessions: number;
+            remaining: number;
+            /** Format: date */
+            expires_on: string | null;
+            /** @example 500.00 */
+            next_value: string;
+            line_indexes: number[];
+        };
+        EnvelopeTenantReservationPackageOptions: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["TenantReservationPackageOption"][];
+            };
             meta: components["schemas"]["ResponseMeta"];
         };
     };
@@ -31397,6 +32016,592 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTenantReservationPackageOptions: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationPackageOptions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantReservationPackageSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantReservationPackageSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Reservation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteTenantReservationPackageSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                sessionUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TenantReservationActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Reservation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantSessionPackagesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantSessionPackages: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `price`, `total_sessions`, `created_at`; prefix `-` for descending. */
+                sort?: string;
+                is_active?: "true" | "false";
+                /** @description Service uuids; comma-separate or repeat */
+                service?: string;
+                /** @description A branch uuid: packages usable there */
+                branch?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Package page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSessionPackagePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantSessionPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionPackageInput"];
+            };
+        };
+        responses: {
+            /** @description The package */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSessionPackage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantSessionPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSessionPackage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantSessionPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantSessionPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionPackageInput"];
+            };
+        };
+        responses: {
+            /** @description The package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSessionPackage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCustomerPackagesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomerPackagesFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackageFacets"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomerPackagesSummary: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackageSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomerPackages: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `sold_on`, `expires_on`, `price`, `created_at`; prefix `-` for descending. */
+                sort?: string;
+                /** @description `active`, `used_up`, `expired`, `refunded`; comma-separate or repeat */
+                state?: string;
+                /** @description Session package uuids; comma-separate or repeat */
+                package?: string;
+                /** @description Selling branch uuids; comma-separate or repeat */
+                branch?: string;
+                customer?: string;
+                /** @description Sold on or after */
+                date_from?: string;
+                /** @description Sold on or before */
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer package page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackagePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCustomerPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerPackageSellRequest"];
+            };
+        };
+        responses: {
+            /** @description The package sold before with the same key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackage"];
+                };
+            };
+            /** @description The package sold */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCustomerPackage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCustomerPackageRefund: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerPackageRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description The refunded package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPackage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
 }

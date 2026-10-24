@@ -11,6 +11,7 @@ import { cashKeys } from "@/features/cash/hooks/query-keys";
 import { productsKeys } from "@/features/products/hooks/query-keys";
 import { reservationsKeys } from "@/features/reservations/hooks/query-keys";
 import { reportReservationError } from "@/features/reservations/lib/errors";
+import { sessionPackagesKeys } from "@/features/session-packages/hooks/query-keys";
 import { reservationsService } from "@/features/reservations/services/reservations.service";
 import type {
   AvailabilitySearchRequest,
@@ -24,6 +25,7 @@ import type {
   ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationNotesRequest,
+  ReservationPackageSessionRequest,
   ReservationProductRequest,
   ReservationRefundRequest,
   ReservationRescheduleRequest,
@@ -260,6 +262,76 @@ export function useRemoveReservationProduct(uuid: string) {
       appToast.success(t("reservations.toast.product_removed"));
       void invalidate();
       void queryClient.invalidateQueries({ queryKey: productsKeys.all(slug) });
+    },
+    onError: (error) => {
+      reportReservationError(error, t);
+      void invalidate();
+    },
+  });
+}
+
+/** Packages of the visit's customer that can give a session to its lines. */
+export function useReservationPackageOptions(uuid: string, enabled: boolean) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: [...reservationsKeys.detail(slug, uuid), "package-options"],
+    queryFn: () => reservationsService.packageOptions(slug, uuid),
+    enabled,
+  });
+}
+
+/** Uses a package session for a line; the visit, its money and the package refresh. */
+export function useApplyReservationPackage(uuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: (body: ReservationPackageSessionRequest) =>
+      reservationsService.applyPackage(slug, uuid, body),
+    onSuccess: (reservation) => {
+      queryClient.setQueryData(
+        reservationsKeys.detail(slug, uuid),
+        reservation,
+      );
+      appToast.success(t("reservations.toast.package_applied"));
+      void invalidate();
+      void queryClient.invalidateQueries({
+        queryKey: sessionPackagesKeys.all(slug),
+      });
+    },
+    onError: (error) => {
+      reportReservationError(error, t);
+      void invalidate();
+    },
+  });
+}
+
+/** Gives a held package session back; the line is charged again. */
+export function useRemoveReservationPackageSession(uuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({
+      sessionUuid,
+      body,
+    }: {
+      sessionUuid: string;
+      body: ReservationActionRequest;
+    }) =>
+      reservationsService.removePackageSession(slug, uuid, sessionUuid, body),
+    onSuccess: (reservation) => {
+      queryClient.setQueryData(
+        reservationsKeys.detail(slug, uuid),
+        reservation,
+      );
+      appToast.success(t("reservations.toast.package_removed"));
+      void invalidate();
+      void queryClient.invalidateQueries({
+        queryKey: sessionPackagesKeys.all(slug),
+      });
     },
     onError: (error) => {
       reportReservationError(error, t);

@@ -64,6 +64,13 @@ export type ReservationProductRequest =
   Schemas["TenantReservationProductRequest"];
 export type ReservationProductOption =
   Schemas["TenantReservationProductOption"];
+/** A session of the customer's package on a line (TEC-920). */
+export type ReservationPackageSession =
+  Schemas["TenantReservationPackageSession"];
+export type ReservationPackageSessionRequest =
+  Schemas["TenantReservationPackageSessionRequest"];
+export type ReservationPackageOption =
+  Schemas["TenantReservationPackageOption"];
 
 export type ReservationCalendar = Schemas["TenantReservationCalendar"];
 export type CalendarColumn = Schemas["TenantReservationCalendarColumn"];

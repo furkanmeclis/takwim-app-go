@@ -554,6 +554,9 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 	if out.Products, err = listProducts(ctx, s.q, orgID, row.ID); err != nil {
 		return model.Reservation{}, err
 	}
+	if out.PackageSessions, err = listSessions(ctx, s.q, orgID, row.ID); err != nil {
+		return model.Reservation{}, err
+	}
 	if out.Confirmation, err = s.confirmation(ctx, orgID, row.ID); err != nil {
 		return model.Reservation{}, err
 	}

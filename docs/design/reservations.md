@@ -50,11 +50,11 @@ Anything else is `ErrInvalidTransition`. A visit in service or finished is never
 
 Lapsed holds are expired by the minute sweep and by every writer before it works, and the expiry hook (`ExpireRequests`) cancels their requests in the same transaction. A writer whose own action then fails (e.g. accepting a request that just timed out) still commits the expiry: the action runs in a savepoint.
 
-Products of the visit ([reservation-products.md](./reservation-products.md), TEC-919) are released by reject, cancel, no-show and expiry and handed over by complete, in the same transaction. Releasing session rights on cancel comes with that module; capacity is released here.
+Products of the visit ([reservation-products.md](./reservation-products.md), TEC-919) are released by reject, cancel, no-show and expiry and handed over by complete, in the same transaction. Package sessions ([session-packages.md](./session-packages.md), TEC-920) are released by reject, cancel, no-show and expiry and consumed by complete in the same way; a reschedule keeps a session whose line keeps its service and whose new day is inside the package's validity. Capacity is released here.
 
 ## Rescheduling and notes (TEC-900)
 
-`Reschedule` moves a request or an active booking in one transaction: it lets the old hold go, plans the new start (panel channel) and takes it again; for a booking it confirms at once, for a request it keeps the hold reason and the time left. Lines with the same service and person keep their old price; changed lines take today's price. Lines are rewritten, `version` goes up and a `rescheduled` event is written, so jobs planned against the old version (confirmation messages) no longer apply. If the new start is taken, nothing changes. `UpdateNotes` changes the customer and internal notes (`notes_updated` event).
+`Reschedule` moves a request or an active booking in one transaction: it lets the old hold go, plans the new start (panel channel) and takes it again; for a booking it confirms at once, for a request it keeps the hold reason and the time left. Lines with the same service and person keep their old price; changed lines take today's price. Lines are rewritten, `version` goes up and a `rescheduled` event is written (the total is recomputed without the lines paid by a package session), so jobs planned against the old version (confirmation messages) no longer apply. If the new start is taken, nothing changes. `UpdateNotes` changes the customer and internal notes (`notes_updated` event).
 
 ## Panel API (TEC-900)
 

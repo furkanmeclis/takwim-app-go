@@ -184,6 +184,73 @@ type Product struct {
 	CreatedAt     time.Time   `json:"created_at"`
 }
 
+// States of a package session (TEC-920).
+const (
+	// SessionHeld: the session is reserved for the line.
+	SessionHeld = "held"
+	// SessionConsumed: the visit was completed; the session is used.
+	SessionConsumed = "consumed"
+	// SessionReleased: removed, or the visit was cancelled, rejected,
+	// expired, a no-show or moved to another service.
+	SessionReleased = "released"
+)
+
+// SessionValue is the value of session no (1-based) of a package of
+// total sessions for price: the price split evenly, the remainder on the
+// last session, so the sessions add up to the price (5 × 2.500,00 TL =
+// 500,00 TL each).
+func SessionValue(price money.Money, total, no int) money.Money {
+	if total < 1 {
+		return money.Zero()
+	}
+	base := price.Minor() / int64(total)
+	if no >= total {
+		return money.NewIn(price.Minor()-base*int64(total-1), price.Currency())
+	}
+	return money.NewIn(base, price.Currency())
+}
+
+// PackageSession is one session of a customer's package given to a line
+// of the visit (TEC-920).
+type PackageSession struct {
+	UUID            uuid.UUID   `json:"uuid"`
+	LineIndex       int         `json:"line_index"`
+	CustomerPackage Ref         `json:"customer_package"`
+	SessionNo       int         `json:"session_no"`
+	TotalSessions   int         `json:"total_sessions"`
+	Amount          money.Money `json:"amount"`
+	Status          string      `json:"status"`
+	ReleaseReason   *string     `json:"release_reason"`
+	ConsumedAt      *time.Time  `json:"consumed_at"`
+	ReleasedAt      *time.Time  `json:"released_at"`
+	CreatedAt       time.Time   `json:"created_at"`
+}
+
+// ApplyPackageInput is the body of POST …/{uuid}/package-sessions: use a
+// session of one of the customer's packages for a line of the visit.
+type ApplyPackageInput struct {
+	CustomerPackageUUID uuid.UUID `json:"customer_package_uuid"`
+	LineIndex           int       `json:"line_index"`
+	ExpectedVersion     *int      `json:"expected_version"`
+}
+
+// PackageOption is a package of the visit's customer that can give a
+// session to some of its lines: active, valid on the visit day, usable in
+// the branch, with sessions left.
+type PackageOption struct {
+	CustomerPackageUUID uuid.UUID   `json:"customer_package_uuid"`
+	Name                string      `json:"name"`
+	ServiceName         string      `json:"service_name"`
+	ServiceUUID         *uuid.UUID  `json:"service_uuid"`
+	TotalSessions       int         `json:"total_sessions"`
+	Remaining           int         `json:"remaining"`
+	ExpiresOn           *string     `json:"expires_on"`
+	NextValue           money.Money `json:"next_value"`
+	// LineIndexes are the lines of the visit it can serve (same service,
+	// not on a session yet).
+	LineIndexes []int `json:"line_indexes"`
+}
+
 // ProductOption is a stock item that can be added to a visit in its
 // branch, with the units available there (on hand - reserved).
 type ProductOption struct {
@@ -283,7 +350,10 @@ type Reservation struct {
 	HoldExpiresAt *time.Time `json:"hold_expires_at"`
 	Lines         []Line     `json:"lines"`
 	Products      []Product  `json:"products"`
-	Events        []Event    `json:"events"`
+	// PackageSessions are the sessions of the customer's packages the
+	// lines use (TEC-920), in the order they were given.
+	PackageSessions []PackageSession `json:"package_sessions"`
+	Events          []Event          `json:"events"`
 	// Confirmation is the customer confirmation task (nil: none planned).
 	Confirmation *Confirmation `json:"confirmation"`
 	CreatedAt    time.Time     `json:"created_at"`

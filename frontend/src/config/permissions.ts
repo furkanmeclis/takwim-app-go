@@ -92,6 +92,9 @@ export const Permission = {
   TenantProductsImport: "tenant.products.import",
   TenantProductsBulkActivate: "tenant.products.bulk.activate",
   TenantProductsBulkDeactivate: "tenant.products.bulk.deactivate",
+  TenantSessionPackagesRead: "tenant.session_packages.read",
+  TenantSessionPackagesWrite: "tenant.session_packages.write",
+  TenantSessionPackagesSell: "tenant.session_packages.sell",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantActivityRead: "tenant.activity.read",
@@ -285,6 +288,12 @@ export const permissions = {
       import: Permission.TenantProductsImport,
       bulkActivate: Permission.TenantProductsBulkActivate,
       bulkDeactivate: Permission.TenantProductsBulkDeactivate,
+    },
+    /** Multi-session packages (TEC-920). */
+    sessionPackages: {
+      read: Permission.TenantSessionPackagesRead,
+      write: Permission.TenantSessionPackagesWrite,
+      sell: Permission.TenantSessionPackagesSell,
     },
     integrations: {
       read: Permission.TenantIntegrationsRead,

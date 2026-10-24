@@ -13605,6 +13605,492 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/tenant/reservations/{uuid}/package-options:
+    get:
+      tags: [Tenant]
+      operationId: listTenantReservationPackageOptions
+      summary: Packages that can give a session to a visit
+      description: |
+        The visit customer's packages (TEC-920) that can give a session to some of its lines: not refunded, valid on
+        the visit day, usable in the visit's branch, for the line's service, with sessions left. `line_indexes` are
+        the lines of the visit each one can serve (same service, not on a session yet); `next_value` is the value of
+        the session it would give. Needs the packages module besides reservation read or own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservationPackageOptions"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/reservations/{uuid}/package-sessions:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationPackageSession
+      summary: Use a package session for a visit line
+      description: |
+        Holds the next free session of one of the customer's packages for a service line of a requested or active
+        visit (TEC-920). The line's price becomes the session value (package price / total sessions, the last one
+        takes the rounding remainder) and leaves the visit total: the package was paid when it was sold. The session
+        is consumed when the visit is completed (its value is then the line's revenue and the staff share base) and
+        released when the visit is rejected, cancelled, expires or is a no-show. A reschedule keeps it when the
+        service stays and the new day is inside the validity. The last session is never held twice (`400`
+        `customer_package_uuid` / `no_sessions_left`). Validation codes: `line_index` / `not_found`,
+        `service_mismatch`, `already_on_package`; `customer_package_uuid` / `not_found`, `refunded`, `expired`,
+        `branch_not_allowed`. Needs the packages module and reservation write or own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantReservationPackageSessionRequest"
+      responses:
+        "200":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/reservations/{uuid}/package-sessions/{sessionUuid}:
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantReservationPackageSession
+      summary: Take a package session off a visit
+      description: |
+        Releases a held session (reason `removed`): it goes back to the package and the line is charged at its
+        service price again. A consumed or released session, or a finished visit, is `409` `status` /
+        `invalid_transition`. Optional body `expected_version`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: sessionUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantReservationActionRequest"
+      responses:
+        "200":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/session-packages/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSessionPackagesMeta
+      summary: Session package list metadata
+      description: Table contract of `GET /v1/tenant/session-packages` (TEC-920).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/session-packages:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSessionPackages
+      summary: Session packages
+      description: |
+        The multi-session packages of the business (TEC-920): N sessions of one service for a price, the branches
+        they can be used in and the validity in days. Business-wide definitions. Needs the packages module and
+        `tenant.session_packages.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `price`, `total_sessions`, `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - name: is_active
+          in: query
+          schema: { type: string, enum: ["true", "false"] }
+        - name: service
+          in: query
+          description: "Service uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "A branch uuid: packages usable there"
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Package page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSessionPackagePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantSessionPackage
+      summary: Add a session package
+      description: |
+        `tenant.session_packages.write` with access to every branch. `total_sessions` 1–1000, `price` the package
+        price (the session value is price / total sessions; the last session takes the rounding remainder),
+        `validity_days` days from the sale (null = no end), `all_branches` or `branch_uuids` where the sessions can be
+        used. The name is unique among live packages (`409` `name` / `taken`). Sold packages keep the terms of the
+        day they were sold.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionPackageInput"
+      responses:
+        "201":
+          description: The package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSessionPackage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/session-packages/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSessionPackage
+      summary: A session package
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: The package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSessionPackage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantSessionPackage
+      summary: Change a session package
+      description: |
+        The whole definition (as on create). Packages already sold keep their own terms (sessions, price, service,
+        branches, last day).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionPackageInput"
+      responses:
+        "200":
+          description: The package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSessionPackage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantSessionPackage
+      summary: Remove a session package
+      description: Soft delete; it can no longer be sold. Packages already sold stay usable.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/customer-packages/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerPackagesMeta
+      summary: Customer package list metadata
+      description: Table contract of `GET /v1/tenant/customer-packages`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customer-packages/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerPackagesFacets
+      summary: Customer package filter options
+      description: The packages and selling branches of the list with their counts, inside the caller's branch scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackageFacets"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customer-packages/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerPackagesSummary
+      summary: Package report
+      description: |
+        Per currency, inside the caller's branch scope: packages sold in the range and the money taken (`sold`, a
+        cash figure, not revenue), sessions used and their value (`used`, the revenue that reaches the sales report
+        through the visits), refunds (`refunded`), and today's open rights (`open`: valid sessions neither used nor
+        held), held sessions (`held`), expired rights (`expired`) and used-up packages. Default range: this month to
+        today.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackageSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customer-packages:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerPackages
+      summary: Packages sold to customers
+      description: |
+        The packages sold to customers with their balance (used, held, remaining sessions and amounts) and state
+        (`active`, `used_up`, `expired`, `refunded`), inside the caller's branch scope (the selling branch).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `sold_on`, `expires_on`, `price`, `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - name: state
+          in: query
+          description: "`active`, `used_up`, `expired`, `refunded`; comma-separate or repeat"
+          schema: { type: string }
+        - name: package
+          in: query
+          description: "Session package uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Selling branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: customer
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date_from
+          in: query
+          description: Sold on or after
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Sold on or before
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Customer package page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackagePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomerPackage
+      summary: Sell a package to a customer
+      description: |
+        Sells an active package in a branch where it is usable and takes the full price as a payment (a cash
+        entry into `cash_account_uuid` when given; it is not revenue). The terms (service, sessions, price,
+        branches, last day = today + validity) are kept on the sold package. Needs the packages and cash modules,
+        `tenant.session_packages.sell` and `tenant.payment.collect`. The same `idempotency_key` with the same body
+        returns the first sale (`200`); with another body `409` `idempotency_key` / `reused`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerPackageSellRequest"
+      responses:
+        "200":
+          description: The package sold before with the same key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackage"
+        "201":
+          description: The package sold
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/customer-packages/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerPackage
+      summary: A package sold to a customer
+      description: The package with its balance and every session (held, consumed, released) with its visit.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: The package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/customer-packages/{uuid}/refund:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomerPackageRefund
+      summary: Refund a package
+      description: |
+        Closes the package (state `refunded`; its left sessions can no longer be used) and pays `amount` back (0 =
+        nothing paid back, at most the price) from `cash_account_uuid` against the sale's payment. The kept part
+        (price - amount) stays the customer's charge. Sessions held on open visits are `409` `sessions` / `held`
+        (release them first); a refunded package `409` `status` / `already_refunded`. `reason` at
+        least 3 characters. Needs the cash module and `tenant.payment.refund`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerPackageRefundRequest"
+      responses:
+        "200":
+          description: The refunded package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPackage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -17007,8 +17493,8 @@ components:
       required: [uuid, kind, effective_kind, direction, amount, currency, entry_date, method, branch, customer, reservation, sale_line_uuid, cash_movement_uuid, cash_account, refunds_uuid, reverses_uuid, reversed_by_uuid, source_type, source_uuid, description, created_by, created_at]
       properties:
         uuid: { type: string, format: uuid }
-        kind: { type: string, enum: [sale, collection, refund, reversal] }
-        effective_kind: { type: string, enum: [sale, collection, refund], description: "The kind a reversal undoes (the kind itself otherwise)" }
+        kind: { type: string, enum: [sale, package, collection, refund, reversal], description: "`package`: the charge of a package sold to the customer (TEC-920; a debit with no sale line, not revenue)" }
+        effective_kind: { type: string, enum: [sale, package, collection, refund], description: "The kind a reversal undoes (the kind itself otherwise)" }
         direction: { type: string, enum: [debit, credit] }
         amount: { type: string, example: "100.00" }
         currency: { type: string }
@@ -21366,6 +21852,10 @@ components:
         products:
           type: array
           items: { $ref: "#/components/schemas/TenantReservationProduct" }
+        package_sessions:
+          type: array
+          description: Sessions of the customer's packages given to the lines (TEC-920), released ones included
+          items: { $ref: "#/components/schemas/TenantReservationPackageSession" }
         events:
           type: array
           items:
@@ -22835,4 +23325,330 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/CustomerPaymentSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    SessionPackage:
+      type: object
+      description: A multi-session package of the business (TEC-920).
+      required: [uuid, name, description, service, total_sessions, price, session_value, currency, validity_days, all_branches, branches, is_active, sold_count, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        service: { $ref: "#/components/schemas/SalesRef" }
+        total_sessions: { type: integer }
+        price: { type: string, example: "2500.00" }
+        session_value: { type: string, example: "500.00", description: "Price / total sessions (the last session also takes the rounding remainder)" }
+        currency: { type: string }
+        validity_days: { type: [integer, "null"], description: "Days from the sale the package can be used; null = no end" }
+        all_branches: { type: boolean }
+        branches:
+          type: array
+          description: Branches the sessions can be used in (empty with all_branches)
+          items: { $ref: "#/components/schemas/SalesRef" }
+        is_active: { type: boolean, description: "Can be sold" }
+        sold_count: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SessionPackageInput:
+      type: object
+      description: The whole definition (create and patch).
+      required: [name, service_uuid, total_sessions, price]
+      properties:
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        service_uuid: { type: string, format: uuid }
+        total_sessions: { type: integer, minimum: 1, maximum: 1000 }
+        price: { type: string, example: "2500.00" }
+        validity_days: { type: [integer, "null"], minimum: 1, maximum: 3650 }
+        all_branches: { type: boolean }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+        is_active: { type: [boolean, "null"], description: "Default true" }
+
+    SessionPackagePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SessionPackage" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CustomerPackageRefund:
+      type: object
+      required: [amount, reason, refunded_on, refunded_at, entry_uuid]
+      properties:
+        amount: { type: string, example: "2000.00", description: "Money paid back (0 = none)" }
+        reason: { type: string }
+        refunded_on: { type: string, format: date }
+        refunded_at: { type: string, format: date-time }
+        entry_uuid: { type: [string, "null"], format: uuid, description: "The refund ledger entry" }
+
+    CustomerPackageSession:
+      type: object
+      description: One session of a sold package given to a visit.
+      required: [uuid, session_no, amount, status, release_reason, reservation, service_name, staff_name, consumed_on, consumed_at, released_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        session_no: { type: integer }
+        amount: { type: string, example: "500.00", description: "Session value" }
+        status: { type: string, enum: [held, consumed, released] }
+        release_reason: { type: [string, "null"], description: "rejected, cancelled, no_show, expired, rescheduled, removed" }
+        reservation:
+          type: object
+          required: [uuid, number, starts_at, status]
+          properties:
+            uuid: { type: string, format: uuid }
+            number: { type: integer, format: int64 }
+            starts_at: { type: string, format: date-time }
+            status: { $ref: "#/components/schemas/TenantReservationStatus" }
+        service_name: { type: [string, "null"] }
+        staff_name: { type: [string, "null"] }
+        consumed_on: { type: [string, "null"], format: date }
+        consumed_at: { type: [string, "null"], format: date-time }
+        released_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CustomerPackage:
+      type: object
+      description: A package sold to a customer with its balance. The terms are those of the day it was sold.
+      required: [uuid, name, service_name, service_uuid, package_uuid, customer, branch, all_branches, branches, total_sessions, used, held, remaining, price, currency, session_value, used_amount, held_amount, remaining_amount, sold_on, expires_on, state, staff, note, collection_uuid, refund, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        service_name: { type: string }
+        service_uuid: { type: [string, "null"], format: uuid }
+        package_uuid: { type: [string, "null"], format: uuid }
+        customer:
+          type: object
+          required: [uuid, name, phone]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+            phone: { type: [string, "null"] }
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        all_branches: { type: boolean }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/SalesRef" }
+        total_sessions: { type: integer }
+        used: { type: integer }
+        held: { type: integer }
+        remaining: { type: integer, description: "Neither used nor held" }
+        price: { type: string, example: "2500.00" }
+        currency: { type: string }
+        session_value: { type: string, example: "500.00" }
+        used_amount: { type: string }
+        held_amount: { type: string }
+        remaining_amount: { type: string, description: "Value of the sessions neither used nor held" }
+        sold_on: { type: string, format: date }
+        expires_on: { type: [string, "null"], format: date, description: "Last valid day; null = no end" }
+        state: { type: string, enum: [active, used_up, expired, refunded] }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        note: { type: string }
+        collection_uuid: { type: [string, "null"], format: uuid, description: "The payment ledger entry of the sale" }
+        refund:
+          oneOf:
+            - $ref: "#/components/schemas/CustomerPackageRefund"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        sessions:
+          type: array
+          description: On the detail only
+          items: { $ref: "#/components/schemas/CustomerPackageSession" }
+
+    CustomerPackagePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerPackage" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CustomerPackageSellRequest:
+      type: object
+      required: [package_uuid, customer_uuid, branch_uuid, method]
+      properties:
+        package_uuid: { type: string, format: uuid }
+        customer_uuid: { type: string, format: uuid }
+        branch_uuid: { type: string, format: uuid, description: "Selling branch; the package must be usable there" }
+        method: { type: string, enum: [cash, card, transfer, online, other] }
+        cash_account_uuid: { type: [string, "null"], format: uuid }
+        staff_uuid: { type: [string, "null"], format: uuid, description: "Who sold it" }
+        note: { type: string, maxLength: 500 }
+        idempotency_key: { type: string, maxLength: 100 }
+
+    CustomerPackageRefundRequest:
+      type: object
+      required: [amount, method, reason]
+      properties:
+        amount: { type: string, example: "2000.00", description: "Money paid back, 0 to the price" }
+        method: { type: string, enum: [cash, card, transfer, online, other] }
+        cash_account_uuid: { type: [string, "null"], format: uuid }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+        idempotency_key: { type: string, maxLength: 100 }
+
+    CustomerPackageFacet:
+      type: object
+      required: [value, label, count]
+      properties:
+        value: { type: string }
+        label: { type: string }
+        count: { type: integer, format: int64 }
+
+    CustomerPackageFacets:
+      type: object
+      required: [package, branch]
+      properties:
+        package:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerPackageFacet" }
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerPackageFacet" }
+
+    CustomerPackageCount:
+      type: object
+      required: [count, sessions, amount]
+      properties:
+        count: { type: integer, format: int64, description: "Packages" }
+        sessions: { type: integer, format: int64 }
+        amount: { type: string }
+
+    CustomerPackageFigures:
+      type: object
+      required: [currency, sold, used, refunded, open, held, expired, used_up]
+      properties:
+        currency: { type: string }
+        sold: { $ref: "#/components/schemas/CustomerPackageCount" }
+        used: { $ref: "#/components/schemas/CustomerPackageCount" }
+        refunded: { $ref: "#/components/schemas/CustomerPackageCount" }
+        open: { $ref: "#/components/schemas/CustomerPackageCount" }
+        held: { $ref: "#/components/schemas/CustomerPackageCount" }
+        expired: { $ref: "#/components/schemas/CustomerPackageCount" }
+        used_up: { type: integer, format: int64 }
+
+    CustomerPackageSummary:
+      type: object
+      required: [date_from, date_to, today, totals]
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        today: { type: string, format: date }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerPackageFigures" }
+
+    EnvelopeSessionPackage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SessionPackage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeSessionPackagePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SessionPackagePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPackage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPackage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPackagePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPackagePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPackageFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPackageFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPackageSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPackageSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantReservationPackageSession:
+      type: object
+      description: A session of the customer's package given to a line of the visit (TEC-920).
+      required: [uuid, line_index, customer_package, session_no, total_sessions, amount, status, release_reason, consumed_at, released_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        line_index: { type: integer }
+        customer_package: { $ref: "#/components/schemas/SalesRef" }
+        session_no: { type: integer }
+        total_sessions: { type: integer }
+        amount: { type: string, example: "500.00", description: "Session value (the line's price)" }
+        status: { type: string, enum: [held, consumed, released] }
+        release_reason: { type: [string, "null"] }
+        consumed_at: { type: [string, "null"], format: date-time }
+        released_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    TenantReservationPackageSessionRequest:
+      type: object
+      required: [customer_package_uuid, line_index]
+      properties:
+        customer_package_uuid: { type: string, format: uuid }
+        line_index: { type: integer, minimum: 0 }
+        expected_version: { type: [integer, "null"] }
+
+    TenantReservationPackageOption:
+      type: object
+      required: [customer_package_uuid, name, service_name, service_uuid, total_sessions, remaining, expires_on, next_value, line_indexes]
+      properties:
+        customer_package_uuid: { type: string, format: uuid }
+        name: { type: string }
+        service_name: { type: string }
+        service_uuid: { type: [string, "null"], format: uuid }
+        total_sessions: { type: integer }
+        remaining: { type: integer }
+        expires_on: { type: [string, "null"], format: date }
+        next_value: { type: string, example: "500.00" }
+        line_indexes:
+          type: array
+          items: { type: integer }
+
+    EnvelopeTenantReservationPackageOptions:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/TenantReservationPackageOption" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }

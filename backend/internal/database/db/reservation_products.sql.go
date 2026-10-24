@@ -573,9 +573,14 @@ func (q *Queries) SetStockLevelStock(ctx context.Context, arg SetStockLevelStock
 }
 
 const sumReservationLinePrices = `-- name: SumReservationLinePrices :one
-SELECT COALESCE(SUM(unit_price), 0)::numeric(14, 2) AS total
-FROM reservation_lines
-WHERE organization_id = $1 AND reservation_id = $2
+SELECT COALESCE(SUM(rl.unit_price), 0)::numeric(14, 2) AS total
+FROM reservation_lines rl
+WHERE rl.organization_id = $1 AND rl.reservation_id = $2
+  AND NOT EXISTS (
+    SELECT 1 FROM package_sessions ps
+    WHERE ps.organization_id = rl.organization_id AND ps.reservation_id = rl.reservation_id
+      AND ps.line_index = rl.line_index AND ps.status <> 'released'
+  )
 `
 
 type SumReservationLinePricesParams struct {
@@ -583,6 +588,7 @@ type SumReservationLinePricesParams struct {
 	ReservationID  int64 `json:"reservation_id"`
 }
 
+// Lines served on a package session (TEC-920) are paid by the package.
 func (q *Queries) SumReservationLinePrices(ctx context.Context, arg SumReservationLinePricesParams) (pgtype.Numeric, error) {
 	row := q.db.QueryRow(ctx, sumReservationLinePrices, arg.OrganizationID, arg.ReservationID)
 	var total pgtype.Numeric

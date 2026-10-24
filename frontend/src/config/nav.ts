@@ -34,6 +34,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Store,
+  Ticket,
   Upload,
   UserRound,
   Users,
@@ -416,6 +417,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: UserRound,
             permission: permissions.tenant.customers.read,
             module: "customers",
+          },
+          {
+            id: "packages",
+            titleKey: "layout.nav_packages",
+            href: routes.tenant.packages.root(slug),
+            icon: Ticket,
+            permission: permissions.tenant.sessionPackages.read,
+            module: "packages",
           },
           {
             id: "cash",

@@ -54,6 +54,9 @@ type Querier interface {
 	ConsumeCustomerAccessLink(ctx context.Context, arg ConsumeCustomerAccessLinkParams) (string, error)
 	ConsumeCustomerOTPChallenge(ctx context.Context, arg ConsumeCustomerOTPChallengeParams) (int64, error)
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
+	// A completed visit uses its held sessions; the business day is the day
+	// the visit ended (never later than now) in the branch's time zone.
+	ConsumeReservationPackageSessions(ctx context.Context, arg ConsumeReservationPackageSessionsParams) (int64, error)
 	CountActiveCustomerSessions(ctx context.Context, arg CountActiveCustomerSessionsParams) (int64, error)
 	CountActivityEvents(ctx context.Context, arg CountActivityEventsParams) (int64, error)
 	CountAllBulkJobs(ctx context.Context) (int64, error)
@@ -84,6 +87,7 @@ type Querier interface {
 	CountCustomerOTPChallengesSince(ctx context.Context, arg CountCustomerOTPChallengesSinceParams) (int64, error)
 	// Distinct phones that asked for a code from one address (abuse limit).
 	CountCustomerOTPPhonesFromIPSince(ctx context.Context, arg CountCustomerOTPPhonesFromIPSinceParams) (int64, error)
+	CountCustomerPackages(ctx context.Context, arg CountCustomerPackagesParams) (int64, error)
 	CountCustomerPanelReservations(ctx context.Context, arg CountCustomerPanelReservationsParams) (int64, error)
 	CountCustomers(ctx context.Context, arg CountCustomersParams) (int64, error)
 	// Live branches and staff seats of a business: members, open invitations
@@ -146,6 +150,7 @@ type Querier interface {
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountSaleLines(ctx context.Context, arg CountSaleLinesParams) (int64, error)
 	CountServices(ctx context.Context, arg CountServicesParams) (int64, error)
+	CountSessionPackages(ctx context.Context, arg CountSessionPackagesParams) (int64, error)
 	CountShareLines(ctx context.Context, arg CountShareLinesParams) (int64, error)
 	CountSharePayouts(ctx context.Context, arg CountSharePayoutsParams) (int64, error)
 	CountShareRules(ctx context.Context, arg CountShareRulesParams) (int64, error)
@@ -240,6 +245,9 @@ type Querier interface {
 	CreateTenantRole(ctx context.Context, arg CreateTenantRoleParams) (CreateTenantRoleRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
+	CustomerPackageFacetBranches(ctx context.Context, arg CustomerPackageFacetBranchesParams) ([]CustomerPackageFacetBranchesRow, error)
+	// Package definitions sold in the caller's branches (list filter options).
+	CustomerPackageFacetPackages(ctx context.Context, arg CustomerPackageFacetPackagesParams) ([]CustomerPackageFacetPackagesRow, error)
 	// Amounts per currency, payment state and whether the visit still stands
 	// (cancelled / rejected visits count only for refunds). Currencies are
 	// never added together.
@@ -279,6 +287,7 @@ type Querier interface {
 	DeleteServiceBranch(ctx context.Context, arg DeleteServiceBranchParams) error
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
 	DeleteServiceStaffExcept(ctx context.Context, arg DeleteServiceStaffExceptParams) error
+	DeleteSessionPackageBranches(ctx context.Context, arg DeleteSessionPackageBranchesParams) error
 	DeleteShareRule(ctx context.Context, arg DeleteShareRuleParams) (int64, error)
 	DeleteStaffTimeOff(ctx context.Context, arg DeleteStaffTimeOffParams) (int64, error)
 	DeleteStaleCustomerAccessLinks(ctx context.Context, before pgtype.Timestamptz) (int64, error)
@@ -382,6 +391,9 @@ type Querier interface {
 	// joins by alias.organization_id too.
 	GetCustomerNotificationRule(ctx context.Context, arg GetCustomerNotificationRuleParams) (CustomerNotificationRule, error)
 	GetCustomerNotificationTemplate(ctx context.Context, arg GetCustomerNotificationTemplateParams) (CustomerNotificationTemplate, error)
+	GetCustomerPackage(ctx context.Context, arg GetCustomerPackageParams) (GetCustomerPackageRow, error)
+	GetCustomerPackageByIdempotencyKey(ctx context.Context, arg GetCustomerPackageByIdempotencyKeyParams) (GetCustomerPackageByIdempotencyKeyRow, error)
+	GetCustomerPackageRow(ctx context.Context, arg GetCustomerPackageRowParams) (CustomerPackage, error)
 	// One reservation of the identity: its business and branch context. Any
 	// uuid outside the identity's links answers no rows.
 	GetCustomerPanelReservation(ctx context.Context, arg GetCustomerPanelReservationParams) (GetCustomerPanelReservationRow, error)
@@ -439,6 +451,14 @@ type Querier interface {
 	GetOrganizationMember(ctx context.Context, arg GetOrganizationMemberParams) (GetOrganizationMemberRow, error)
 	GetOrganizationMemberByUserUUID(ctx context.Context, arg GetOrganizationMemberByUserUUIDParams) (GetOrganizationMemberByUserUUIDRow, error)
 	GetOrganizationSettingsVersion(ctx context.Context, arg GetOrganizationSettingsVersionParams) (GetOrganizationSettingsVersionRow, error)
+	// Time zone (branch override, else the business) and currency of a branch.
+	GetPackageClock(ctx context.Context, arg GetPackageClockParams) (GetPackageClockRow, error)
+	GetPackageCustomerByUUID(ctx context.Context, arg GetPackageCustomerByUUIDParams) (GetPackageCustomerByUUIDRow, error)
+	GetPackageLine(ctx context.Context, arg GetPackageLineParams) (GetPackageLineRow, error)
+	GetPackageServiceByUUID(ctx context.Context, arg GetPackageServiceByUUIDParams) (GetPackageServiceByUUIDRow, error)
+	GetPackageStaffByUUID(ctx context.Context, arg GetPackageStaffByUUIDParams) (GetPackageStaffByUUIDRow, error)
+	// The local day of a visit's start in its branch's time zone.
+	GetPackageVisitDay(ctx context.Context, arg GetPackageVisitDayParams) (pgtype.Date, error)
 	// A notification names only our reference; the row gives its business
 	// (organization_id) and the account whose secret verifies it.
 	GetPaymentByOrderRef(ctx context.Context, orderRef string) (GetPaymentByOrderRefRow, error)
@@ -477,6 +497,7 @@ type Querier interface {
 	// The service of a planned line with its prices: personal (service_staff) ›
 	// branch offer (service_branches) › list price.
 	GetReservationLineService(ctx context.Context, arg GetReservationLineServiceParams) (GetReservationLineServiceRow, error)
+	GetReservationPackageSessionForUpdate(ctx context.Context, arg GetReservationPackageSessionForUpdateParams) (GetReservationPackageSessionForUpdateRow, error)
 	GetReservationProductForUpdate(ctx context.Context, arg GetReservationProductForUpdateParams) (ReservationProduct, error)
 	// TEC-919: products of a reservation and their stock reservation. Every
 	// query takes the organization id.
@@ -515,6 +536,7 @@ type Querier interface {
 	GetServicePoint(ctx context.Context, arg GetServicePointParams) (ServicePoint, error)
 	GetServicePublicImage(ctx context.Context, arg GetServicePublicImageParams) (GetServicePublicImageRow, error)
 	GetServiceSearchDocument(ctx context.Context, arg GetServiceSearchDocumentParams) (GetServiceSearchDocumentRow, error)
+	GetSessionPackage(ctx context.Context, arg GetSessionPackageParams) (GetSessionPackageRow, error)
 	// ------------------------------------------------------------- share lines
 	GetShareLineBySaleLine(ctx context.Context, arg GetShareLineBySaleLineParams) (GetShareLineBySaleLineRow, error)
 	GetSharePayout(ctx context.Context, arg GetSharePayoutParams) (GetSharePayoutRow, error)
@@ -581,6 +603,8 @@ type Querier interface {
 	// One reply on a channel; a repeated webhook of the same inbound message
 	// writes nothing.
 	InsertCustomerNotificationResponse(ctx context.Context, arg InsertCustomerNotificationResponseParams) (CustomerNotificationResponse, error)
+	// ------------------------------------------------------- customer packages
+	InsertCustomerPackage(ctx context.Context, arg InsertCustomerPackageParams) (InsertCustomerPackageRow, error)
 	InsertFinanceCategory(ctx context.Context, arg InsertFinanceCategoryParams) (InsertFinanceCategoryRow, error)
 	// ----------------------------------------------------------------- entries
 	InsertFinanceEntry(ctx context.Context, arg InsertFinanceEntryParams) (InsertFinanceEntryRow, error)
@@ -595,6 +619,7 @@ type Querier interface {
 	InsertNotificationHistory(ctx context.Context, arg InsertNotificationHistoryParams) (NotificationHistory, error)
 	InsertOrganizationSettingsVersion(ctx context.Context, arg InsertOrganizationSettingsVersionParams) (OrganizationSettingsVersion, error)
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (OutboxEvent, error)
+	InsertPackageSession(ctx context.Context, arg InsertPackageSessionParams) (InsertPackageSessionRow, error)
 	// Online payments (TEC-912, docs/design/payments.md).
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (Payment, error)
 	InsertPushTicket(ctx context.Context, arg InsertPushTicketParams) error
@@ -604,6 +629,12 @@ type Querier interface {
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	// --------------------------------------------------------------- sale lines
 	InsertSaleLine(ctx context.Context, arg InsertSaleLineParams) (InsertSaleLineRow, error)
+	// TEC-920: multi-session packages (definitions, packages sold to
+	// customers, their sessions on reservations). Every query takes the
+	// organization id.
+	// ------------------------------------------------------------- definitions
+	InsertSessionPackage(ctx context.Context, arg InsertSessionPackageParams) (InsertSessionPackageRow, error)
+	InsertSessionPackageBranch(ctx context.Context, arg InsertSessionPackageBranchParams) error
 	InsertShareLine(ctx context.Context, arg InsertShareLineParams) (InsertShareLineRow, error)
 	// ------------------------------------------------------------------ payouts
 	InsertSharePayout(ctx context.Context, arg InsertSharePayoutParams) (InsertSharePayoutRow, error)
@@ -617,6 +648,8 @@ type Querier interface {
 	InsertStorageTrash(ctx context.Context, arg InsertStorageTrashParams) (StorageTrash, error)
 	InsertUserRole(ctx context.Context, arg InsertUserRoleParams) error
 	InvalidateActiveOTPs(ctx context.Context, arg InvalidateActiveOTPsParams) error
+	// Whether a reservation line was served on a consumed package session.
+	IsPackageSessionLine(ctx context.Context, arg IsPackageSessionLineParams) (bool, error)
 	// The staff member is the account of a business owner (their own services
 	// stay in the business share).
 	IsShareStaffOwner(ctx context.Context, arg IsShareStaffOwnerParams) (bool, error)
@@ -624,8 +657,9 @@ type Querier interface {
 	// The last time the phone changed hands (no row: never).
 	LatestCustomerPhoneRelease(ctx context.Context, phoneE164 string) (pgtype.Timestamptz, error)
 	LatestOrganizationSettingsVersion(ctx context.Context, organizationID int64) (int32, error)
-	// Charged (sale entries), collected and refunded per currency of one
-	// reservation or one customer, reversals netted into the kind they undo.
+	// Charged (sale entries and sold session packages), collected and
+	// refunded per currency of one reservation or one customer, reversals
+	// netted into the kind they undo.
 	LedgerTotals(ctx context.Context, arg LedgerTotalsParams) ([]LedgerTotalsRow, error)
 	// TEC-910: access security. Panel links, visit links, number changes, the
 	// device list and abuse events.
@@ -658,6 +692,7 @@ type Querier interface {
 	ListBranchCityFacets(ctx context.Context, arg ListBranchCityFacetsParams) ([]ListBranchCityFacetsRow, error)
 	ListBranchIDsByUUIDs(ctx context.Context, arg ListBranchIDsByUUIDsParams) ([]ListBranchIDsByUUIDsRow, error)
 	ListBranchImages(ctx context.Context, arg ListBranchImagesParams) ([]BranchImage, error)
+	ListBranchRefsByIDs(ctx context.Context, arg ListBranchRefsByIDsParams) ([]ListBranchRefsByIDsRow, error)
 	ListBranchSearchDocuments(ctx context.Context, organizationID int64) ([]ListBranchSearchDocumentsRow, error)
 	ListBranchUUIDs(ctx context.Context, arg ListBranchUUIDsParams) ([]uuid.UUID, error)
 	ListBranches(ctx context.Context, arg ListBranchesParams) ([]ListBranchesRow, error)
@@ -725,6 +760,11 @@ type Querier interface {
 	ListCustomerNotificationDeliveriesForDispatch(ctx context.Context, arg ListCustomerNotificationDeliveriesForDispatchParams) ([]CustomerNotificationDelivery, error)
 	ListCustomerNotificationRules(ctx context.Context, organizationID int64) ([]CustomerNotificationRule, error)
 	ListCustomerNotificationTemplates(ctx context.Context, organizationID int64) ([]CustomerNotificationTemplate, error)
+	// ---------------------------------------------------------------- sessions
+	ListCustomerPackageSessions(ctx context.Context, arg ListCustomerPackageSessionsParams) ([]ListCustomerPackageSessionsRow, error)
+	// state: active (sessions left, valid), used_up (every session consumed),
+	// expired (sessions left after the last day), refunded.
+	ListCustomerPackages(ctx context.Context, arg ListCustomerPackagesParams) ([]ListCustomerPackagesRow, error)
 	// The businesses that linked the identity, with the person's name as each
 	// business keeps it.
 	// A link whose older history was hidden (number reassigned) shows no name:
@@ -781,6 +821,7 @@ type Querier interface {
 	// confirmed bookings, with the seats each takes and what it holds (the
 	// session's trainer and area). exclude_hold_id leaves one out (0 = none).
 	ListGroupSessionHolds(ctx context.Context, arg ListGroupSessionHoldsParams) ([]ListGroupSessionHoldsRow, error)
+	ListHeldReservationPackageSessions(ctx context.Context, arg ListHeldReservationPackageSessionsParams) ([]ListHeldReservationPackageSessionsRow, error)
 	// Held lines of a visit, locked, in stock-level lock order.
 	ListHeldReservationProducts(ctx context.Context, arg ListHeldReservationProductsParams) ([]ReservationProduct, error)
 	ListImportChangesForJob(ctx context.Context, jobID int64) ([]ImportChange, error)
@@ -828,6 +869,9 @@ type Querier interface {
 	// Access state: 'upcoming' before access_starts_at, 'expired' after
 	// access_ends_at, 'open' otherwise. Window: 'unlimited' without an end.
 	ListOrganizationsWithStats(ctx context.Context, arg ListOrganizationsWithStatsParams) ([]ListOrganizationsWithStatsRow, error)
+	ListPackageBranchesByUUID(ctx context.Context, arg ListPackageBranchesByUUIDParams) ([]ListPackageBranchesByUUIDRow, error)
+	ListPackageListFilterPackages(ctx context.Context, arg ListPackageListFilterPackagesParams) ([]ListPackageListFilterPackagesRow, error)
+	ListPackageServicesByUUID(ctx context.Context, arg ListPackageServicesByUUIDParams) ([]ListPackageServicesByUUIDRow, error)
 	// Visits whose money needs a person: a refund waiting (cancelled after it
 	// was paid, a late online payment), a refund whose provider result is
 	// unknown, a last refund that failed while money is still held, and
@@ -889,6 +933,7 @@ type Querier interface {
 	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
 	ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error)
 	ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error)
+	ListReservationPackageSessions(ctx context.Context, arg ListReservationPackageSessionsParams) ([]ListReservationPackageSessionsRow, error)
 	ListReservationPayments(ctx context.Context, arg ListReservationPaymentsParams) ([]ListReservationPaymentsRow, error)
 	// Stock items sold in a branch with their available units (on hand -
 	// reserved): active products offered there, one row per active variant
@@ -928,6 +973,9 @@ type Querier interface {
 	ListRolesForUserIDs(ctx context.Context, userIds []int64) ([]ListRolesForUserIDsRow, error)
 	ListSaleLines(ctx context.Context, arg ListSaleLinesParams) ([]ListSaleLinesRow, error)
 	ListSalesBranchesByUUID(ctx context.Context, arg ListSalesBranchesByUUIDParams) ([]ListSalesBranchesByUUIDRow, error)
+	// A line served on a package session (TEC-920) carries the session's
+	// value: that value is the line's revenue, and the package already
+	// charged the customer for it.
 	ListSalesReservationLines(ctx context.Context, arg ListSalesReservationLinesParams) ([]ListSalesReservationLinesRow, error)
 	// Products handed over with a completed visit (TEC-919): each became one
 	// stock sale movement.
@@ -944,6 +992,8 @@ type Querier interface {
 	ListServiceUUIDs(ctx context.Context, arg ListServiceUUIDsParams) ([]uuid.UUID, error)
 	ListServices(ctx context.Context, arg ListServicesParams) ([]ListServicesRow, error)
 	ListServicesForExport(ctx context.Context, arg ListServicesForExportParams) ([]ListServicesForExportRow, error)
+	ListSessionPackageBranches(ctx context.Context, arg ListSessionPackageBranchesParams) ([]ListSessionPackageBranchesRow, error)
+	ListSessionPackages(ctx context.Context, arg ListSessionPackagesParams) ([]ListSessionPackagesRow, error)
 	// A share is payable once its visit is paid in full (collections minus
 	// refunds cover the posted sales); a counter sale is payable at once.
 	ListShareLines(ctx context.Context, arg ListShareLinesParams) ([]ListShareLinesRow, error)
@@ -1003,6 +1053,8 @@ type Querier interface {
 	ListUsersForExport(ctx context.Context, arg ListUsersForExportParams) ([]User, error)
 	ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebauthnCredential, error)
 	ListWebAuthnCredentialsForUserIDs(ctx context.Context, userIds []int64) ([]WebauthnCredential, error)
+	// Session numbers of a package that are held or consumed.
+	LivePackageSessionNumbers(ctx context.Context, arg LivePackageSessionNumbersParams) ([]int32, error)
 	// Capacity holds and allocations (TEC-898). Every query filters by
 	// organization_id; joins by alias.organization_id too.
 	// Serialises the writers of one organization inside a transaction (the
@@ -1014,6 +1066,7 @@ type Querier interface {
 	// Another worker holding the row: no row (it sends it).
 	LockCustomerNotificationDispatch(ctx context.Context, arg LockCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
 	LockCustomerNotificationDispatchWait(ctx context.Context, arg LockCustomerNotificationDispatchWaitParams) (CustomerNotificationDispatch, error)
+	LockCustomerPackage(ctx context.Context, arg LockCustomerPackageParams) (CustomerPackage, error)
 	LockFinanceEntry(ctx context.Context, arg LockFinanceEntryParams) (int64, error)
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
 	// Serializes the refunds and the reversal of one collection.
@@ -1069,15 +1122,27 @@ type Querier interface {
 	// joins by alias.organization_id too.
 	// Runs under the capacity lock of the organization (uq number guards).
 	NextReservationNumber(ctx context.Context, organizationID int64) (int64, error)
+	// Packages not refunded, today: the sessions and value still open on
+	// valid packages, and what was left on expired ones (forfeited).
+	PackageOutstanding(ctx context.Context, arg PackageOutstandingParams) ([]PackageOutstandingRow, error)
+	PackageRefundTotals(ctx context.Context, arg PackageRefundTotalsParams) ([]PackageRefundTotalsRow, error)
+	// ------------------------------------------------------------------ report
+	PackageSalesTotals(ctx context.Context, arg PackageSalesTotalsParams) ([]PackageSalesTotalsRow, error)
+	// Sessions used in the range (their value is service revenue of the
+	// visits, through the sale lines).
+	PackageUsageTotals(ctx context.Context, arg PackageUsageTotalsParams) ([]PackageUsageTotalsRow, error)
 	PingDB(ctx context.Context) (int32, error)
 	// A new task, or the task planned again for a moved visit (next round,
 	// answers cleared).
 	PlanReservationConfirmation(ctx context.Context, arg PlanReservationConfirmationParams) (ReservationConfirmation, error)
 	ProductVariantNameTaken(ctx context.Context, arg ProductVariantNameTakenParams) (bool, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
+	RefundCustomerPackage(ctx context.Context, arg RefundCustomerPackageParams) error
 	// Amount paid back from one collection (refunds minus reversed refunds).
 	RefundedOfCollection(ctx context.Context, arg RefundedOfCollectionParams) (pgtype.Numeric, error)
 	ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHoldParams) (CapacityHold, error)
+	ReleasePackageSession(ctx context.Context, arg ReleasePackageSessionParams) error
+	ReleaseReservationPackageSessions(ctx context.Context, arg ReleaseReservationPackageSessionsParams) (int64, error)
 	ReleaseReservationProduct(ctx context.Context, arg ReleaseReservationProductParams) error
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
@@ -1120,6 +1185,9 @@ type Querier interface {
 	// Units moved per branch and kind in the period (local day of
 	// occurred_at in the branch time zone). Adjustments are signed.
 	ReportStockMovements(ctx context.Context, arg ReportStockMovementsParams) ([]ReportStockMovementsRow, error)
+	// Packages of a customer that can give a session to a visit in a branch:
+	// active, not used up, valid on the visit day and usable in the branch.
+	ReservationPackageOptions(ctx context.Context, arg ReservationPackageOptionsParams) ([]ReservationPackageOptionsRow, error)
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
 	// A person settled an unknown result: the provider did not refund.
@@ -1172,6 +1240,7 @@ type Querier interface {
 	// Number change: the identity keeps its uuid and history; the phone is only
 	// its lookup key. The unique phone refuses a phone with its own identity.
 	SetCustomerIdentityPhone(ctx context.Context, arg SetCustomerIdentityPhoneParams) (int64, error)
+	SetCustomerPackageEntries(ctx context.Context, arg SetCustomerPackageEntriesParams) error
 	SetCustomerSessionPhone(ctx context.Context, arg SetCustomerSessionPhoneParams) error
 	SetCustomerTags(ctx context.Context, arg SetCustomerTagsParams) error
 	SetFinanceEntryDocument(ctx context.Context, arg SetFinanceEntryDocumentParams) (int64, error)
@@ -1217,6 +1286,7 @@ type Querier interface {
 	SoftDeleteResource(ctx context.Context, arg SoftDeleteResourceParams) (int64, error)
 	SoftDeleteService(ctx context.Context, arg SoftDeleteServiceParams) (int64, error)
 	SoftDeleteServiceCategory(ctx context.Context, arg SoftDeleteServiceCategoryParams) (int64, error)
+	SoftDeleteSessionPackage(ctx context.Context, arg SoftDeleteSessionPackageParams) (int64, error)
 	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
 	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
 	// Paid to each staff member (payouts minus reversals): over every account
@@ -1235,6 +1305,7 @@ type Querier interface {
 	StockCodeTaken(ctx context.Context, arg StockCodeTakenParams) (bool, error)
 	// One winner: only an attempt not succeeded yet moves.
 	SucceedPayment(ctx context.Context, arg SucceedPaymentParams) (int64, error)
+	// Lines served on a package session (TEC-920) are paid by the package.
 	SumReservationLinePrices(ctx context.Context, arg SumReservationLinePricesParams) (pgtype.Numeric, error)
 	// What the visit's products add to its total (held and delivered lines).
 	SumReservationProducts(ctx context.Context, arg SumReservationProductsParams) (pgtype.Numeric, error)
@@ -1285,6 +1356,7 @@ type Querier interface {
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	UpdateServiceCategory(ctx context.Context, arg UpdateServiceCategoryParams) (ServiceCategory, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)
+	UpdateSessionPackage(ctx context.Context, arg UpdateSessionPackageParams) (int64, error)
 	UpdateShareRule(ctx context.Context, arg UpdateShareRuleParams) (int64, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) (Staff, error)
 	UpdateStaffShifts(ctx context.Context, arg UpdateStaffShiftsParams) (int64, error)

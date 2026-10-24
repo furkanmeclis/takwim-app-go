@@ -415,6 +415,39 @@ type CustomerOtpChallenge struct {
 	IdentityID  pgtype.Int8        `json:"identity_id"`
 }
 
+type CustomerPackage struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	PackageID         pgtype.Int8        `json:"package_id"`
+	CustomerID        int64              `json:"customer_id"`
+	BranchID          int64              `json:"branch_id"`
+	ServiceID         pgtype.Int8        `json:"service_id"`
+	Name              string             `json:"name"`
+	ServiceName       string             `json:"service_name"`
+	TotalSessions     int32              `json:"total_sessions"`
+	Price             pgtype.Numeric     `json:"price"`
+	Currency          string             `json:"currency"`
+	BranchIds         []int64            `json:"branch_ids"`
+	SoldOn            pgtype.Date        `json:"sold_on"`
+	ExpiresOn         pgtype.Date        `json:"expires_on"`
+	Status            string             `json:"status"`
+	StaffID           pgtype.Int8        `json:"staff_id"`
+	Note              string             `json:"note"`
+	CollectionEntryID pgtype.Int8        `json:"collection_entry_id"`
+	ChargeEntryID     pgtype.Int8        `json:"charge_entry_id"`
+	IdempotencyKey    pgtype.Text        `json:"idempotency_key"`
+	RefundAmount      pgtype.Numeric     `json:"refund_amount"`
+	RefundEntryID     pgtype.Int8        `json:"refund_entry_id"`
+	RefundReason      pgtype.Text        `json:"refund_reason"`
+	RefundedOn        pgtype.Date        `json:"refunded_on"`
+	RefundedAt        pgtype.Timestamptz `json:"refunded_at"`
+	RefundedBy        pgtype.Int8        `json:"refunded_by"`
+	CreatedBy         pgtype.Int8        `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CustomerPhoneRelease struct {
 	ID         int64              `json:"id"`
 	PhoneE164  string             `json:"phone_e164"`
@@ -884,6 +917,25 @@ type OutboxEvent struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type PackageSession struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	CustomerPackageID int64              `json:"customer_package_id"`
+	ReservationID     int64              `json:"reservation_id"`
+	LineIndex         int32              `json:"line_index"`
+	SessionNo         int32              `json:"session_no"`
+	Amount            pgtype.Numeric     `json:"amount"`
+	Status            string             `json:"status"`
+	ReleaseReason     pgtype.Text        `json:"release_reason"`
+	ConsumedAt        pgtype.Timestamptz `json:"consumed_at"`
+	ConsumedOn        pgtype.Date        `json:"consumed_on"`
+	ReleasedAt        pgtype.Timestamptz `json:"released_at"`
+	CreatedBy         pgtype.Int8        `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Payment struct {
 	ID                   int64              `json:"id"`
 	Uuid                 uuid.UUID          `json:"uuid"`
@@ -1351,6 +1403,30 @@ type ServiceStaff struct {
 	DurationMinutes pgtype.Int4        `json:"duration_minutes"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SessionPackage struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	ServiceID      int64              `json:"service_id"`
+	TotalSessions  int32              `json:"total_sessions"`
+	Price          pgtype.Numeric     `json:"price"`
+	ValidityDays   pgtype.Int4        `json:"validity_days"`
+	AllBranches    bool               `json:"all_branches"`
+	IsActive       bool               `json:"is_active"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type SessionPackageBranch struct {
+	OrganizationID int64 `json:"organization_id"`
+	PackageID      int64 `json:"package_id"`
+	BranchID       int64 `json:"branch_id"`
 }
 
 type Staff struct {

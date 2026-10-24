@@ -121,6 +121,12 @@ export const routes = {
       detail: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/finance/${uuid}`,
     },
+    /** Multi-session packages (TEC-920): sold packages and definitions. */
+    packages: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/packages`,
+      detail: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/packages/${uuid}`,
+    },
     cash: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/cash`,
       create: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/create`,
