@@ -68,7 +68,7 @@ There is no payment ledger yet (TEC-912). The amounts come from the visit total 
 
 ## Panel link by SMS
 
-After a new public booking (not a replay), `publicbooking` calls `PanelLinkNotice`, which sends "your booking was received; see and manage all your bookings at …" (A28) with a single-use panel link (below). Past 5 links a day for the phone it carries the plain `takwim.link/panel` address, which asks for a code.
+The customer notification engine sends it ([customer-notifications.md](./customer-notifications.md), TEC-911). Every reservation notice (received, accepted, rejected, changed, cancelled, reminder) carries `{{link}}`, so a new public booking gets "your request was received" or "your booking was accepted" with the link to see and manage all bookings (A28). On SMS, `PanelLink` puts a single-use panel link (below) into the text at send time; past 5 links a day for the phone, on other channels, or while the channel is not ready, it is the plain `takwim.link/panel` address, which asks for a code. Stored texts never hold a token.
 
 ## SMS provider
 

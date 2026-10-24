@@ -262,5 +262,14 @@
   "fields.tenant.cash_accounts.provider": "Sağlayıcı",
   "fields.tenant.cash_accounts.note": "Not",
   "fields.tenant.cash_accounts.status": "Durum",
-  "fields.tenant.cash_accounts.sort_order": "Sıra"
+  "fields.tenant.cash_accounts.sort_order": "Sıra",
+  "resources.tenant.customer_notifications": "Müşteri bildirimleri",
+  "actions.customer_notifications.updated": "Müşteri bildirimi ayarı güncellendi",
+  "actions.customer_notifications.reset": "Müşteri bildirimi varsayılana döndü",
+  "fields.tenant.customer_notifications.event": "Olay",
+  "fields.tenant.customer_notifications.enabled": "Açık",
+  "fields.tenant.customer_notifications.channels": "Kanallar",
+  "fields.tenant.customer_notifications.fallback": "Yedek kanal",
+  "fields.tenant.customer_notifications.reminder_offsets": "Hatırlatma zamanları (dakika)",
+  "fields.tenant.customer_notifications.templates": "Metinler"
 }

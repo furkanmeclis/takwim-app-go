@@ -66,6 +66,7 @@ type Querier interface {
 	CountCashMovements(ctx context.Context, arg CountCashMovementsParams) (int64, error)
 	CountCustomerAccessLinksSince(ctx context.Context, arg CountCustomerAccessLinksSinceParams) (int64, error)
 	CountCustomerAuthEventsFromIPSince(ctx context.Context, arg CountCustomerAuthEventsFromIPSinceParams) (int64, error)
+	CountCustomerNotificationDeliveries(ctx context.Context, arg CountCustomerNotificationDeliveriesParams) (int64, error)
 	CountCustomerOTPAttempt(ctx context.Context, id int64) (CountCustomerOTPAttemptRow, error)
 	// Phone change codes one signed-in person asked for.
 	CountCustomerOTPChallengesOfIdentitySince(ctx context.Context, arg CountCustomerOTPChallengesOfIdentitySinceParams) (int64, error)
@@ -210,6 +211,9 @@ type Querier interface {
 	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
 	DeleteCapacityAllocations(ctx context.Context, arg DeleteCapacityAllocationsParams) error
 	DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCustomerIdentityLinkParams) (int64, error)
+	DeleteCustomerNotificationRule(ctx context.Context, arg DeleteCustomerNotificationRuleParams) error
+	DeleteCustomerNotificationTemplate(ctx context.Context, arg DeleteCustomerNotificationTemplateParams) error
+	DeleteCustomerNotificationTemplates(ctx context.Context, arg DeleteCustomerNotificationTemplatesParams) error
 	DeleteLogPurgeRule(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteMemberBranches(ctx context.Context, arg DeleteMemberBranchesParams) error
 	DeleteMemberRoles(ctx context.Context, arg DeleteMemberRolesParams) error
@@ -250,6 +254,8 @@ type Querier interface {
 	ExpireDueCapacityHolds(ctx context.Context, arg ExpireDueCapacityHoldsParams) ([]int64, error)
 	ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHoldParams) (CapacityHold, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
+	// A delivery report settles an accepted attempt (once).
+	FinishCustomerNotificationDelivery(ctx context.Context, arg FinishCustomerNotificationDeliveryParams) (int64, error)
 	FinishIntegrationJob(ctx context.Context, arg FinishIntegrationJobParams) error
 	// The organization's active account of a kind (payments go to it).
 	GetActiveIntegrationAccount(ctx context.Context, arg GetActiveIntegrationAccountParams) (GetActiveIntegrationAccountRow, error)
@@ -287,6 +293,14 @@ type Querier interface {
 	GetCustomerByPhone(ctx context.Context, arg GetCustomerByPhoneParams) (GetCustomerByPhoneRow, error)
 	GetCustomerIdentityByPhone(ctx context.Context, phoneE164 string) (CustomerIdentity, error)
 	GetCustomerIdentityLink(ctx context.Context, arg GetCustomerIdentityLinkParams) (CustomerIdentityLink, error)
+	GetCustomerNotificationDeliveryByExternal(ctx context.Context, arg GetCustomerNotificationDeliveryByExternalParams) (CustomerNotificationDelivery, error)
+	GetCustomerNotificationDeliveryByUUID(ctx context.Context, arg GetCustomerNotificationDeliveryByUUIDParams) (CustomerNotificationDelivery, error)
+	GetCustomerNotificationDispatch(ctx context.Context, arg GetCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
+	GetCustomerNotificationDispatchByKey(ctx context.Context, arg GetCustomerNotificationDispatchByKeyParams) (CustomerNotificationDispatch, error)
+	// Customer notifications (TEC-911). Every query filters by organization_id;
+	// joins by alias.organization_id too.
+	GetCustomerNotificationRule(ctx context.Context, arg GetCustomerNotificationRuleParams) (CustomerNotificationRule, error)
+	GetCustomerNotificationTemplate(ctx context.Context, arg GetCustomerNotificationTemplateParams) (CustomerNotificationTemplate, error)
 	// One reservation of the identity: its business and branch context. Any
 	// uuid outside the identity's links answers no rows.
 	GetCustomerPanelReservation(ctx context.Context, arg GetCustomerPanelReservationParams) (GetCustomerPanelReservationRow, error)
@@ -320,6 +334,11 @@ type Querier interface {
 	GetNotificationByID(ctx context.Context, id int64) (Notification, error)
 	GetNotificationByUUID(ctx context.Context, argUuid uuid.UUID) (Notification, error)
 	GetNotificationPreferences(ctx context.Context, userID int64) (NotificationPreference, error)
+	GetNotifyCustomer(ctx context.Context, arg GetNotifyCustomerParams) (GetNotifyCustomerRow, error)
+	GetNotifyOrganization(ctx context.Context, organizationID int64) (GetNotifyOrganizationRow, error)
+	// What a reservation notice says: the visit, its branch (and the time zone
+	// its times are shown in) and its services.
+	GetNotifyReservation(ctx context.Context, arg GetNotifyReservationParams) (GetNotifyReservationRow, error)
 	GetOAuthAccountByProviderAccount(ctx context.Context, arg GetOAuthAccountByProviderAccountParams) (GetOAuthAccountByProviderAccountRow, error)
 	GetOAuthAccountByUserProvider(ctx context.Context, arg GetOAuthAccountByUserProviderParams) (GetOAuthAccountByUserProviderRow, error)
 	GetOAuthProviderSettings(ctx context.Context, provider string) (OauthProviderSetting, error)
@@ -427,6 +446,10 @@ type Querier interface {
 	InsertCashClosing(ctx context.Context, arg InsertCashClosingParams) (InsertCashClosingRow, error)
 	// ------------------------------------------------------------ movements
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	// No row when this channel was already tried for the dispatch.
+	InsertCustomerNotificationDelivery(ctx context.Context, arg InsertCustomerNotificationDeliveryParams) (CustomerNotificationDelivery, error)
+	// No row when the idempotency key was already used (the notice exists).
+	InsertCustomerNotificationDispatch(ctx context.Context, arg InsertCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
 	InsertImportChange(ctx context.Context, arg InsertImportChangeParams) (ImportChange, error)
 	// Integration accounts and jobs (TEC-880). Accounts are organization-owned
 	// (every query filters by organization_id); jobs are mixed scope
@@ -526,6 +549,12 @@ type Querier interface {
 	ListCashMovementKindFacets(ctx context.Context, arg ListCashMovementKindFacetsParams) ([]ListCashMovementKindFacetsRow, error)
 	ListCashMovements(ctx context.Context, arg ListCashMovementsParams) ([]ListCashMovementsRow, error)
 	ListCashTransferLegs(ctx context.Context, arg ListCashTransferLegsParams) ([]ListCashTransferLegsRow, error)
+	// The send history: one row per channel attempt. branch_ids = the caller's
+	// branch scope (NULL = every branch).
+	ListCustomerNotificationDeliveries(ctx context.Context, arg ListCustomerNotificationDeliveriesParams) ([]ListCustomerNotificationDeliveriesRow, error)
+	ListCustomerNotificationDeliveriesForDispatch(ctx context.Context, arg ListCustomerNotificationDeliveriesForDispatchParams) ([]CustomerNotificationDelivery, error)
+	ListCustomerNotificationRules(ctx context.Context, organizationID int64) ([]CustomerNotificationRule, error)
+	ListCustomerNotificationTemplates(ctx context.Context, organizationID int64) ([]CustomerNotificationTemplate, error)
 	// The businesses that linked the identity, with the person's name as each
 	// business keeps it.
 	// A link whose older history was hidden (number reassigned) shows no name:
@@ -540,6 +569,9 @@ type Querier interface {
 	ListCustomersForExport(ctx context.Context, arg ListCustomersForExportParams) ([]ListCustomersForExportRow, error)
 	// Organizations with holds past their expiry (the minute sweep).
 	ListDueCapacityHoldOrganizations(ctx context.Context, now pgtype.Timestamptz) ([]int64, error)
+	ListDueCustomerNotificationDispatches(ctx context.Context, arg ListDueCustomerNotificationDispatchesParams) ([]int64, error)
+	// Businesses with notices to send (the worker's scan).
+	ListDueCustomerNotificationOrganizations(ctx context.Context, nowAt pgtype.Timestamptz) ([]int64, error)
 	ListDuePushTickets(ctx context.Context, arg ListDuePushTicketsParams) ([]ListDuePushTicketsRow, error)
 	// The sweep: runner jobs whose next call is due, across organizations
 	// (each row carries its organization_id; the runner re-scopes from it).
@@ -575,6 +607,9 @@ type Querier interface {
 	ListMemberPermissionSlugs(ctx context.Context, arg ListMemberPermissionSlugsParams) ([]string, error)
 	ListMemberRoles(ctx context.Context, arg ListMemberRolesParams) ([]ListMemberRolesRow, error)
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]Notification, error)
+	ListNotifyReminderCandidates(ctx context.Context, arg ListNotifyReminderCandidatesParams) ([]ListNotifyReminderCandidatesRow, error)
+	// Businesses with active visits starting inside the reminder window.
+	ListNotifyReminderOrganizations(ctx context.Context, arg ListNotifyReminderOrganizationsParams) ([]int64, error)
 	ListOAuthAccountsByUserID(ctx context.Context, userID int64) ([]ListOAuthAccountsByUserIDRow, error)
 	ListOAuthAccountsForUserIDs(ctx context.Context, userIds []int64) ([]ListOAuthAccountsForUserIDsRow, error)
 	ListOAuthProviderSettings(ctx context.Context) ([]OauthProviderSetting, error)
@@ -727,6 +762,9 @@ type Querier interface {
 	// Locks the accounts in id order (concurrent transfers in opposite
 	// directions cannot deadlock).
 	LockCashAccounts(ctx context.Context, arg LockCashAccountsParams) ([]LockCashAccountsRow, error)
+	// Another worker holding the row: no row (it sends it).
+	LockCustomerNotificationDispatch(ctx context.Context, arg LockCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
+	LockCustomerNotificationDispatchWait(ctx context.Context, arg LockCustomerNotificationDispatchWaitParams) (CustomerNotificationDispatch, error)
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
 	// Serializes the refunds and the reversal of one collection.
 	LockLedgerEntry(ctx context.Context, arg LockLedgerEntryParams) (int64, error)
@@ -873,6 +911,9 @@ type Querier interface {
 	UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error)
 	UpdateCashAccount(ctx context.Context, arg UpdateCashAccountParams) (int64, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
+	// The send result of an attempt still in flight.
+	UpdateCustomerNotificationDelivery(ctx context.Context, arg UpdateCustomerNotificationDeliveryParams) (int64, error)
+	UpdateCustomerNotificationDispatchState(ctx context.Context, arg UpdateCustomerNotificationDispatchStateParams) error
 	UpdateGitHubAppSettings(ctx context.Context, arg UpdateGitHubAppSettingsParams) (GithubAppSetting, error)
 	UpdateImportJobFileKey(ctx context.Context, arg UpdateImportJobFileKeyParams) (ImportJob, error)
 	UpdateImportJobMapping(ctx context.Context, arg UpdateImportJobMappingParams) (ImportJob, error)
@@ -915,6 +956,8 @@ type Querier interface {
 	UpdateWebAuthnCredentialName(ctx context.Context, arg UpdateWebAuthnCredentialNameParams) (WebauthnCredential, error)
 	// Platform-level: called only after the phone was proven.
 	UpsertCustomerIdentity(ctx context.Context, arg UpsertCustomerIdentityParams) (CustomerIdentity, error)
+	UpsertCustomerNotificationRule(ctx context.Context, arg UpsertCustomerNotificationRuleParams) (CustomerNotificationRule, error)
+	UpsertCustomerNotificationTemplate(ctx context.Context, arg UpsertCustomerNotificationTemplateParams) error
 	// Records a job once per provider and idempotency key; a repeated key
 	// counts the delivery and returns the existing row (inserted = false).
 	UpsertIntegrationJob(ctx context.Context, arg UpsertIntegrationJobParams) (UpsertIntegrationJobRow, error)

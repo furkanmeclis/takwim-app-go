@@ -12,11 +12,13 @@ import (
 
 // Message purposes (log fields, provider templates later).
 const (
-	PurposeCustomerOTP       = "customer_otp"
-	PurposeCustomerPanelLink = "customer_panel_link"
+	PurposeCustomerOTP = "customer_otp"
 	// PurposeCustomerPhoneChange: the code that confirms a new number of a
 	// panel profile (TEC-910).
 	PurposeCustomerPhoneChange = "customer_phone_change"
+	// PurposeCustomerNotice is a reservation notice of the notification
+	// engine (TEC-911).
+	PurposeCustomerNotice = "customer_notice"
 )
 
 // ErrUnavailable: no provider can deliver messages (callers answer 503 or
@@ -33,6 +35,26 @@ type Message struct {
 // Sender delivers a text message.
 type Sender interface {
 	Send(ctx context.Context, msg Message) error
+}
+
+// Describer is implemented by senders that can tell whether they really
+// deliver. A sender that is not Ready (LogSender) is never recorded as a
+// successful send by the notification engine.
+type Describer interface {
+	Provider() string
+	Ready() bool
+}
+
+// Describe answers the provider name and readiness of s (a sender without
+// Describer is taken as ready).
+func Describe(s Sender) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	if d, ok := s.(Describer); ok {
+		return d.Provider(), d.Ready()
+	}
+	return "sms", true
 }
 
 // LogSender writes messages to the log instead of sending them. The text
@@ -60,6 +82,12 @@ func (s *LogSender) Send(ctx context.Context, msg Message) error {
 	s.log.InfoContext(ctx, "sms_log_sender", attrs...)
 	return nil
 }
+
+// Provider implements Describer.
+func (s *LogSender) Provider() string { return "log" }
+
+// Ready implements Describer: the log sender delivers nothing.
+func (s *LogSender) Ready() bool { return false }
 
 // Mask hides the middle of a phone number for logs and answers:
 // "+905321234567" → "+90532*****67".

@@ -262,5 +262,14 @@
   "fields.tenant.cash_accounts.provider": "Provider",
   "fields.tenant.cash_accounts.note": "Note",
   "fields.tenant.cash_accounts.status": "Status",
-  "fields.tenant.cash_accounts.sort_order": "Order"
+  "fields.tenant.cash_accounts.sort_order": "Order",
+  "resources.tenant.customer_notifications": "Customer notifications",
+  "actions.customer_notifications.updated": "Customer notification setting updated",
+  "actions.customer_notifications.reset": "Customer notification reset to default",
+  "fields.tenant.customer_notifications.event": "Event",
+  "fields.tenant.customer_notifications.enabled": "On",
+  "fields.tenant.customer_notifications.channels": "Channels",
+  "fields.tenant.customer_notifications.fallback": "Fallback channel",
+  "fields.tenant.customer_notifications.reminder_offsets": "Reminder times (minutes)",
+  "fields.tenant.customer_notifications.templates": "Texts"
 }

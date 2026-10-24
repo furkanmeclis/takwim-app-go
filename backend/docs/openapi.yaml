@@ -8317,6 +8317,207 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/customer-notifications/settings:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerNotificationSettings
+      summary: Customer notification rules and texts
+      description: |
+        The channels (with whether a provider can deliver now) and every
+        customer notification event with the business's rule (on / off,
+        ordered channels, fallback, reminder offsets) and texts, next to the
+        defaults (`tenant.settings.read`). Works without the confirmation
+        add-on (A28).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerNotificationSettings"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantCustomerNotificationSettings
+      summary: Save one event's rule and texts
+      description: |
+        `tenant.settings.write`. Replaces the rule of `event`; each text in
+        `templates` is stored, and an empty text (or the default) goes back
+        to the default. Texts may use only the event's `{{variables}}`
+        (`unknown_variable`). Reminder offsets are minutes before the visit
+        (15 to 10080, at most 3; only for `reservation.reminder`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerNotificationSaveInput"
+      responses:
+        "200":
+          description: The event with its new rule and texts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerNotificationEvent"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/customer-notifications/settings/reset:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomerNotificationReset
+      summary: Set an event back to the defaults
+      description: "`tenant.settings.write`. Removes the business's rule and texts of `event`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event]
+              properties:
+                event: { type: string, example: reservation.reminder }
+      responses:
+        "200":
+          description: The event with the default rule and texts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerNotificationEvent"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/customer-notifications/preview:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomerNotificationPreview
+      summary: Render a notification text with sample values
+      description: "`tenant.settings.read`. Sample customer and visit, the business's own name; `unknown` lists placeholders that are not variables."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event, channel, body]
+              properties:
+                event: { type: string }
+                channel: { type: string, enum: [sms, whatsapp, email] }
+                subject: { type: string }
+                body: { type: string, maxLength: 1000 }
+      responses:
+        "200":
+          description: Rendered text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerNotificationPreview"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/customer-notifications/deliveries/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerNotificationDeliveriesMeta
+      summary: Notification history metadata
+      description: Table contract of `GET /v1/tenant/customer-notifications/deliveries` (`tenant.settings.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customer-notifications/deliveries:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerNotificationDeliveries
+      summary: Customer notification history
+      description: |
+        One row per channel attempt, newest first (`tenant.settings.read`),
+        inside the caller's branch scope. A channel without a ready provider
+        is `skipped`, never `sent`. Recipients are masked; the stored text
+        never holds a personal sign-in link.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `created_at`, `channel`, `status`, `event`; prefix `-` for descending. Default `-created_at`."
+          schema: { type: string, example: -created_at }
+        - name: channel
+          in: query
+          description: "`sms`, `whatsapp`, `email`; comma-separate or repeat"
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "`sending`, `sent`, `delivered`, `failed`, `skipped`; comma-separate or repeat"
+          schema: { type: string }
+        - name: event
+          in: query
+          description: Event codes; comma-separate or repeat
+          schema: { type: string }
+        - name: customer_uuid
+          in: query
+          schema: { type: string, format: uuid }
+        - name: reservation_uuid
+          in: query
+          schema: { type: string, format: uuid }
+        - name: created_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: created_to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: History page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerNotificationDeliveryPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/cash/accounts:
     get:
       tags: [Tenant]
@@ -13376,6 +13577,171 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/CashAccount" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    CustomerNotificationRule:
+      type: object
+      required: [enabled, channels, fallback, reminder_offsets]
+      properties:
+        enabled: { type: boolean }
+        channels:
+          type: array
+          description: Ordered; the next one runs when one fails or is skipped (with `fallback`).
+          items: { type: string, enum: [sms, whatsapp, email] }
+        fallback: { type: boolean }
+        reminder_offsets:
+          type: array
+          description: Minutes before the visit (reminder only).
+          items: { type: integer, format: int32 }
+
+    CustomerNotificationTemplate:
+      type: object
+      required: [channel, subject, body, custom, default_subject, default_body]
+      properties:
+        channel: { type: string, enum: [sms, whatsapp, email] }
+        subject: { type: string, description: E-mail only }
+        body: { type: string }
+        custom: { type: boolean }
+        default_subject: { type: string }
+        default_body: { type: string }
+
+    CustomerNotificationEvent:
+      type: object
+      required: [code, reminder, variables, rule, default_rule, custom, templates]
+      properties:
+        code:
+          type: string
+          enum: [reservation.requested, reservation.accepted, reservation.rejected, reservation.rescheduled, reservation.cancelled, reservation.reminder]
+        reminder: { type: boolean }
+        variables:
+          type: array
+          items: { type: string }
+        rule: { $ref: "#/components/schemas/CustomerNotificationRule" }
+        default_rule: { $ref: "#/components/schemas/CustomerNotificationRule" }
+        custom: { type: boolean }
+        templates:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerNotificationTemplate" }
+        updated_at: { type: string, format: date-time }
+
+    CustomerNotificationChannel:
+      type: object
+      required: [name, ready]
+      properties:
+        name: { type: string, enum: [sms, whatsapp, email] }
+        ready: { type: boolean, description: A provider can deliver now; otherwise sends are skipped. }
+
+    CustomerNotificationSettings:
+      type: object
+      required: [channels, events]
+      properties:
+        channels:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerNotificationChannel" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerNotificationEvent" }
+
+    CustomerNotificationSaveInput:
+      type: object
+      required: [event, enabled, channels, fallback]
+      properties:
+        event: { type: string }
+        enabled: { type: boolean }
+        channels:
+          type: array
+          items: { type: string, enum: [sms, whatsapp, email] }
+        fallback: { type: boolean }
+        reminder_offsets:
+          type: array
+          items: { type: integer, format: int32 }
+        templates:
+          type: array
+          items:
+            type: object
+            required: [channel, body]
+            properties:
+              channel: { type: string, enum: [sms, whatsapp, email] }
+              subject: { type: string, maxLength: 200 }
+              body: { type: string, maxLength: 1000 }
+
+    CustomerNotificationPreview:
+      type: object
+      required: [subject, body, unknown]
+      properties:
+        subject: { type: string }
+        body: { type: string }
+        unknown:
+          type: array
+          items: { type: string }
+
+    CustomerNotificationDelivery:
+      type: object
+      required: [uuid, dispatch_uuid, event, channel, attempt_no, status, dispatch_status, provider, provider_ref,
+        recipient_masked, customer_uuid, customer_name, subject, body, error, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        dispatch_uuid: { type: string, format: uuid }
+        event: { type: string }
+        channel: { type: string, enum: [sms, whatsapp, email] }
+        attempt_no: { type: integer, format: int32 }
+        status: { type: string, enum: [sending, sent, delivered, failed, skipped] }
+        dispatch_status: { type: string, enum: [pending, sending, delivered, failed, skipped, cancelled] }
+        provider: { type: string }
+        provider_ref: { type: string }
+        recipient_masked: { type: string }
+        customer_uuid: { type: string, format: uuid }
+        customer_name: { type: string }
+        reservation_uuid: { type: string, format: uuid }
+        reservation_number: { type: integer, format: int64 }
+        subject: { type: string }
+        body: { type: string }
+        error: { type: string }
+        sent_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CustomerNotificationDeliveryPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerNotificationDelivery" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeCustomerNotificationSettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerNotificationSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerNotificationEvent:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerNotificationEvent" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerNotificationPreview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerNotificationPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerNotificationDeliveryPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerNotificationDeliveryPage" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeCashAccountPage:

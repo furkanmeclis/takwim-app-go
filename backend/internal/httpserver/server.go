@@ -43,6 +43,10 @@ import (
 	cashhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/handler"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	customernotifymodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify"
+	customernotifyadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/adapters"
+	customernotifyhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/handler"
+	customernotifyusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/usecase"
 	customerpanelmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel"
 	customerpanelhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/handler"
 	customerpanelusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/usecase"
@@ -397,9 +401,22 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Slot engine (TEC-897): the panel search; the public booking API uses
 	// the same service with the online channel.
 	capacityHolds := availabilityusecase.NewHolds(deps.DB, deps.Queries, orgsettingsSvc)
+	// Customer notifications (TEC-911): every reservation change writes its
+	// notice in the same transaction; the worker sends them. The channels
+	// are registered here for their readiness on the settings page.
+	panelURL := strings.TrimRight(cfg.Auth.FrontendURL, "/") + "/panel"
+	notifyEngine := customernotifyusecase.New(deps.DB, deps.Queries, panelURL)
+	// The SMS provider is not chosen yet (TEC-884): the log sender stands
+	// in (it shows message texts outside production only) and counts as not
+	// ready, so no notice is recorded as sent through it.
+	smsSender := sms.NewLogSender(log, cfg.App.Env != "production")
+	notifyEngine.Register(customernotifyadapters.SMS{Sender: smsSender},
+		customernotifyadapters.Email{Mail: mail.NewSMTPSender(cfg.SMTP), Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""})
 	// Lapsed approval / payment holds cancel their requests (TEC-899).
-	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
+	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(notifyEngine))
 	reservationsSvc := reservationsusecase.New(capacityHolds, deps.Queries, orgsettingsSvc)
+	reservationsSvc.SetNotifier(notifyEngine)
+	customernotifymodule.RegisterRoutes(mux, customernotifyhandler.New(notifyEngine, activityRec), tokens, loader, tenantResolver)
 	reservationsSvc.SetSearchIndexer(searchIndexer)
 	// Sale lines and the customer ledger (TEC-916): a completed visit and a
 	// stock sale write their sale lines in the same transaction.
@@ -610,9 +627,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	publicSvc := publicbookingusecase.New(deps.Queries, orgsettingsSvc, availabilitySvc, capacityHolds, reservationsSvc, fieldCipher)
 	publicSvc.SetIndexer(searchIndexer)
 	// Shared customer panel (TEC-909): /v1/customer/*, its own token kind.
-	// The SMS provider is not chosen yet (TEC-884): the log sender stands in
-	// and shows message texts outside production only.
-	panelSender := sms.NewLogSender(log, cfg.App.Env != "production")
+	// Sign-in codes go through the same SMS sender (TEC-884 brings the provider).
+	panelSender := smsSender
 	panelSvc := customerpanelusecase.New(deps.Queries, tokens, fieldCipher, panelSender, customersSvc, customerpanelusecase.PanelDeps{
 		Reservations: reservationsSvc, Availability: availabilitySvc, Settings: orgsettingsSvc,
 	}, log)
@@ -624,7 +640,6 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	panelH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	panelH.SetResourceEvents(resourceEvents)
 	customerpanelmodule.RegisterRoutes(mux, panelH)
-	publicSvc.SetPanelNotifier(panelSvc)
 	publicH := publicbookinghandler.New(publicSvc, deps.Storage, activityRec)
 	publicH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	publicH.SetResourceEvents(resourceEvents)

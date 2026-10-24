@@ -589,25 +589,25 @@ func (s *Service) profile(ctx context.Context, p Principal) (model.Profile, erro
 	return out, nil
 }
 
-// PanelLinkNotice sends the panel address to the phone of a new online
-// booking (requirements §14A step 2), as a single-use panel link
-// (takwim.link/panel/l#token, LinkTTL). Past the daily link cap of the phone
-// the message carries the plain address, which asks for a code. It needs no
-// confirmation module.
-func (s *Service) PanelLinkNotice(ctx context.Context, phoneE164, businessName string) {
-	if s.sender == nil || phoneE164 == "" {
-		return
+// PanelLink is the panel address a customer notice sends to a phone
+// (requirements §14A step 2): a single-use panel link
+// (takwim.link/panel/l#token, LinkTTL). Past the daily link cap of the phone,
+// or when no link can be issued, it is the plain address, which asks for a
+// code. The customer notification engine (TEC-911) puts it into the text at
+// send time, so stored texts never hold a token.
+func (s *Service) PanelLink(ctx context.Context, phoneE164 string) string {
+	if phoneE164 == "" {
+		return s.cfg.PanelURL
 	}
-	address := s.cfg.PanelURL
-	if link, err := s.issuePanelLink(ctx, phoneE164); err != nil {
+	link, err := s.issuePanelLink(ctx, phoneE164)
+	if err != nil {
 		s.log.WarnContext(ctx, "customer_panel_link_not_issued", "to", sms.Mask(phoneE164), "error", err)
-	} else if link != "" {
-		address = link
+		return s.cfg.PanelURL
 	}
-	text := fmt.Sprintf("%s randevunuz alındı. Tüm randevularınızı görmek ve yönetmek için: %s", businessName, address)
-	if err := s.sender.Send(ctx, sms.Message{To: phoneE164, Text: text, Purpose: sms.PurposeCustomerPanelLink}); err != nil {
-		s.log.WarnContext(ctx, "customer_panel_link_not_sent", "to", sms.Mask(phoneE164), "error", err)
+	if link == "" {
+		return s.cfg.PanelURL
 	}
+	return link
 }
 
 // cleanup removes rows that serve no rule any more: codes older than a day,

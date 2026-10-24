@@ -40,3 +40,7 @@ cash_closings
 sale_lines
 ledger_entries
 customer_visit_links
+customer_notification_rules
+customer_notification_templates
+customer_notification_dispatches
+customer_notification_deliveries

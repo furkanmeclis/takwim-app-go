@@ -297,6 +297,72 @@ type CustomerIdentityLink struct {
 	VisibleUntil      pgtype.Timestamptz `json:"visible_until"`
 }
 
+type CustomerNotificationDelivery struct {
+	ID              int64              `json:"id"`
+	Uuid            uuid.UUID          `json:"uuid"`
+	OrganizationID  int64              `json:"organization_id"`
+	DispatchID      int64              `json:"dispatch_id"`
+	Channel         string             `json:"channel"`
+	AttemptNo       int32              `json:"attempt_no"`
+	Status          string             `json:"status"`
+	Provider        string             `json:"provider"`
+	ProviderRef     string             `json:"provider_ref"`
+	ExternalUuid    pgtype.UUID        `json:"external_uuid"`
+	RecipientMasked string             `json:"recipient_masked"`
+	Subject         string             `json:"subject"`
+	Body            string             `json:"body"`
+	Error           string             `json:"error"`
+	SentAt          pgtype.Timestamptz `json:"sent_at"`
+	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomerNotificationDispatch struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	EventCode          string             `json:"event_code"`
+	CustomerID         int64              `json:"customer_id"`
+	ReservationID      pgtype.Int8        `json:"reservation_id"`
+	ReservationVersion int32              `json:"reservation_version"`
+	IdempotencyKey     string             `json:"idempotency_key"`
+	Channels           []string           `json:"channels"`
+	Fallback           bool               `json:"fallback"`
+	NextChannelIndex   int32              `json:"next_channel_index"`
+	Vars               []byte             `json:"vars"`
+	Status             string             `json:"status"`
+	LastError          string             `json:"last_error"`
+	DueAt              pgtype.Timestamptz `json:"due_at"`
+	ScheduledAt        pgtype.Timestamptz `json:"scheduled_at"`
+	CompletedAt        pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomerNotificationRule struct {
+	OrganizationID  int64              `json:"organization_id"`
+	EventCode       string             `json:"event_code"`
+	Enabled         bool               `json:"enabled"`
+	Channels        []string           `json:"channels"`
+	Fallback        bool               `json:"fallback"`
+	ReminderOffsets []int32            `json:"reminder_offsets"`
+	UpdatedBy       pgtype.Int8        `json:"updated_by"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomerNotificationTemplate struct {
+	OrganizationID int64              `json:"organization_id"`
+	EventCode      string             `json:"event_code"`
+	Channel        string             `json:"channel"`
+	Subject        string             `json:"subject"`
+	Body           string             `json:"body"`
+	UpdatedBy      pgtype.Int8        `json:"updated_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CustomerOtpChallenge struct {
 	ID          int64              `json:"id"`
 	Uuid        uuid.UUID          `json:"uuid"`

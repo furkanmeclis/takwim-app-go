@@ -422,6 +422,13 @@ export function tenantNav(slug: string): NavCatalog {
             permission: permissions.tenant.integrations.read,
           },
           {
+            id: "settings-notifications",
+            titleKey: "layout.nav_tenant_settings_notifications",
+            href: routes.tenant.settings.notifications(slug),
+            icon: Bell,
+            permission: permissions.tenant.settings.read,
+          },
+          {
             id: "settings-plan",
             titleKey: "layout.nav_tenant_settings_plan",
             href: routes.tenant.settings.plan(slug),
