@@ -413,3 +413,18 @@ WHERE m.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR m.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
 GROUP BY m.movement_date, m.currency
 ORDER BY m.movement_date, m.currency;
+
+-- name: SalesFinanceByDay :many
+-- Income and expenses entered outside sales (TEC-915) per day and
+-- currency; a reversal is a negative row on the day it was posted. Neither
+-- includes staff payouts or transfers, which have their own figures.
+SELECT e.entry_date, e.currency::text AS currency,
+    COALESCE(SUM(e.amount) FILTER (WHERE e.kind = 'income'), 0)::numeric AS income,
+    COALESCE(SUM(e.amount) FILTER (WHERE e.kind = 'expense'), 0)::numeric AS expenses
+FROM finance_entries e
+WHERE e.organization_id = sqlc.arg(organization_id)
+  AND e.entry_date BETWEEN sqlc.arg(date_from)::date AND sqlc.arg(date_to)::date
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR e.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR e.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
+GROUP BY e.entry_date, e.currency
+ORDER BY e.entry_date, e.currency;

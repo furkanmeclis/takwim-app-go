@@ -10330,6 +10330,594 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/finance/categories:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceCategories
+      summary: Income and expense categories
+      description: |
+        `tenant.finance.read`. The defaults seeded for every business
+        (`is_system`, with a `code`) and the business's own categories,
+        with the number of records using each.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `sort_order`, `name`, `kind`, `status`, `created_at`; prefix `-` for descending. Default: kind, sort order, name."
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "`income`, `expense`; comma-separate or repeat"
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "`active`, `archived`; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Category page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceCategoryPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantFinanceCategory
+      summary: Create a category
+      description: |
+        `tenant.finance.write` and every branch. Names are unique per kind
+        (`409 name.taken`, case-insensitive).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCategoryCreateRequest"
+      responses:
+        "201":
+          description: Category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/finance/categories/{categoryUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceCategory
+      summary: Get a category
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceCategoryUUID"
+      responses:
+        "200":
+          description: Category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantFinanceCategory
+      summary: Rename, reorder or archive a category
+      description: |
+        `tenant.finance.write` and every branch. The kind is fixed. An
+        archived category is no longer offered for new records; its records
+        keep it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceCategoryUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceCategoryPatchRequest"
+      responses:
+        "200":
+          description: Category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantFinanceCategory
+      summary: Delete an unused category
+      description: |
+        `tenant.finance.write` and every branch. Default categories and
+        categories with records are archived instead (`409 in_use`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceCategoryUUID"
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/finance/entries/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceEntriesMeta
+      summary: Income / expense list metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/finance/entries/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceEntriesFacets
+      summary: Income / expense faceted filter options
+      description: |
+        Categories (with `sale_service` / `sale_product` for the sale rows),
+        branches (with `head_office` for business-wide records) and staff
+        in use inside the caller's scope, with counts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/finance/entries:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceEntries
+      summary: Income and expenses
+      description: |
+        `tenant.finance.read`. The business's own records (`source=manual`:
+        income, expenses, their reversals and corrections) and the sale
+        lines (`source=sale`), which appear here as income automatically.
+        Branch-limited members see their branches only; business-wide
+        records need every branch. `q` searches the description, category
+        and staff names.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `entry_date`, `amount`, `created_at`; prefix `-` for descending. Default: `-entry_date`."
+          schema: { type: string }
+        - name: source
+          in: query
+          description: "`manual`, `sale`; comma-separate or repeat"
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "`income`, `expense`; comma-separate or repeat"
+          schema: { type: string }
+        - name: category
+          in: query
+          description: "Category uuids, `sale_service`, `sale_product`; comma-separate or repeat"
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids and / or `head_office`; comma-separate or repeat"
+          schema: { type: string }
+        - name: staff
+          in: query
+          description: "Staff uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: account
+          in: query
+          description: "Cash account uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Row page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceLedgerPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantFinanceEntry
+      summary: Record income or an expense
+      description: |
+        `tenant.finance.write`. Money in or out outside sales: the amount
+        enters or leaves the cash account in the same transaction (an
+        `income` / `expense` movement of the cash book). The account must
+        be in the caller's scope and belong to the record's branch or be
+        business-wide; without `branch_uuid` the record takes the account's
+        branch (a business-wide account makes a business-wide record, which
+        needs every branch). The day must be open (`409
+        entry_date.day_closed`); a till cannot go below zero. The same
+        `idempotency_key` with the same body answers the first record; with
+        another body `409 idempotency_key.reused`. Staff payouts are not
+        recorded here (they come from staff shares).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceEntryCreateRequest"
+      responses:
+        "201":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/finance/entries/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantFinanceEntriesExport
+      summary: Export income and expenses
+      description: |
+        Queues an export of the list (`tenant.finance.read` and
+        `tenant.report.export`). `query` honours `q`, `source`, `kind`,
+        `category`, `branch`, `staff`, `account`, `date_from` and
+        `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/finance/entries/{entryUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceEntry
+      summary: Get an income / expense record
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      responses:
+        "200":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantFinanceEntry
+      summary: Reclassify a record
+      description: |
+        `tenant.finance.write`. Changes the category (same kind), the
+        description and the staff member of a live record; the change is in
+        the activity log. Amount, date, account and branch change through a
+        correction only. Reversals and reversed records are not edited
+        (`409`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceEntryPatchRequest"
+      responses:
+        "200":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/finance/entries/{entryUuid}/reverse:
+    post:
+      tags: [Tenant]
+      operationId: postTenantFinanceEntryReverse
+      summary: Reverse a record
+      description: |
+        `tenant.finance.write` and a reason. Writes the exact negative of
+        the record dated today and reverses its cash movement; the record
+        stays and links to the reversal. Records are never deleted. A
+        record is reversed once (`409 already_reversed`); a reversal is not
+        reversed (`409 not_reversible`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashReasonRequest"
+      responses:
+        "201":
+          description: The reversal record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/finance/entries/{entryUuid}/correct:
+    post:
+      tags: [Tenant]
+      operationId: postTenantFinanceEntryCorrect
+      summary: Correct a record
+      description: |
+        `tenant.finance.write` and a reason. Reverses the record (today)
+        and writes its replacement with the given values in one
+        transaction; missing values are copied (the date too) and the
+        document moves along. Both stay in the history, linked
+        (`replaces_uuid` / `replaced_by_uuid`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceEntryCorrectRequest"
+      responses:
+        "201":
+          description: The replacement record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/finance/entries/{entryUuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceEntryActivity
+      summary: Activity of a record
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/finance/entries/{entryUuid}/document:
+    put:
+      tags: [Tenant]
+      operationId: putTenantFinanceEntryDocument
+      summary: Attach a document (receipt, invoice)
+      description: |
+        `tenant.finance.write`. Multipart `file`: PDF, JPEG, PNG or WebP
+        (sniffed from the content) up to 10 MiB. Replaces the previous
+        document of the record; the stored object is kept. Stored under
+        the organization's prefix; read it through `GET …/document`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { description: Storage is not configured }
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceEntryDocument
+      summary: Download the document of a record
+      description: "`tenant.finance.read` and `tenant.document.download`. Streams the file (`404` without one)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantFinanceEntryDocument
+      summary: Detach the document of a record
+      description: "`tenant.finance.write`. The record no longer shows the document; the stored object is kept."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/FinanceEntryUUID"
+      responses:
+        "200":
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/finance/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantFinanceSummary
+      summary: Income / expense summary of a period
+      description: |
+        Per currency, kept apart: `revenue` (net of the sale lines),
+        `income` and `expenses` recorded here (reversals netted) and
+        `staff_payments` from the cash book. `net = revenue + income -
+        expenses`; staff payouts, transfers and product costs are outside
+        it. Plus the total per category. Default period: the first of the
+        month to today (at most 366 days).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeFinanceSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/staff-shares/me:
     get:
       tags: [Tenant]
@@ -12927,6 +13515,22 @@ components:
       schema:
         type: string
         format: uuid
+    FinanceEntryUUID:
+      name: entryUuid
+      in: path
+      required: true
+      description: Income / expense record UUID.
+      schema:
+        type: string
+        format: uuid
+    FinanceCategoryUUID:
+      name: categoryUuid
+      in: path
+      required: true
+      description: Income / expense category UUID.
+      schema:
+        type: string
+        format: uuid
     CashMovementUUID:
       name: uuid
       in: path
@@ -14754,6 +15358,299 @@ components:
         name: { type: string }
         code: { type: string }
 
+    FinanceKind:
+      type: string
+      enum: [income, expense]
+
+    FinanceRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    FinanceCategory:
+      type: object
+      description: An income or expense category. Defaults are seeded for every business (`is_system`, with a `code`).
+      required: [uuid, kind, code, name, is_system, status, sort_order, entry_count, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        code: { type: [string, "null"], description: "Default category code (`rent`, `utilities` …); null for the business's own" }
+        name: { type: string }
+        is_system: { type: boolean }
+        status: { type: string, enum: [active, archived] }
+        sort_order: { type: integer }
+        entry_count: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    FinanceCategoryCreateRequest:
+      type: object
+      required: [kind, name]
+      properties:
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        name: { type: string, maxLength: 120 }
+        status: { type: string, enum: [active, archived] }
+        sort_order: { type: integer }
+
+    FinanceCategoryPatchRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        status: { type: string, enum: [active, archived] }
+        sort_order: { type: integer }
+
+    FinanceCategoryPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceCategory" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    FinanceDocument:
+      type: object
+      description: The attached file; `url` is the API path that streams it.
+      required: [name, content_type, size_bytes, url]
+      properties:
+        name: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        url: { type: string }
+
+    FinanceEntry:
+      type: object
+      description: |
+        One income / expense record (append-only). `entry_type=reversal` is
+        the exact negative of the record in `reverses_uuid`; a correction
+        is a reversal plus a replacement (`replaces_uuid`).
+      required: [uuid, entry_type, kind, category, branch, staff, account, cash_movement_uuid, amount, currency, entry_date,
+        description, reason, document, reverses_uuid, reversed_by_uuid, replaces_uuid, replaced_by_uuid, created_by, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        entry_type: { type: string, enum: [entry, reversal] }
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        category: { $ref: "#/components/schemas/FinanceRef" }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceRef"
+            - type: "null"
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceRef"
+            - type: "null"
+        account: { $ref: "#/components/schemas/CashAccountRef" }
+        cash_movement_uuid: { type: string, format: uuid }
+        amount: { type: string, example: "150.00", description: "Signed: negative on a reversal" }
+        currency: { type: string }
+        entry_date: { type: string, format: date }
+        description: { type: string }
+        reason: { type: string }
+        document:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceDocument"
+            - type: "null"
+        reverses_uuid: { type: [string, "null"], format: uuid }
+        reversed_by_uuid: { type: [string, "null"], format: uuid }
+        replaces_uuid: { type: [string, "null"], format: uuid }
+        replaced_by_uuid: { type: [string, "null"], format: uuid }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    FinanceEntryCreateRequest:
+      type: object
+      required: [kind, category_uuid, cash_account_uuid, amount]
+      properties:
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        category_uuid: { type: string, format: uuid }
+        cash_account_uuid: { type: string, format: uuid }
+        branch_uuid: { type: [string, "null"], format: uuid, description: "Default: the account's branch" }
+        staff_uuid: { type: [string, "null"], format: uuid }
+        amount: { type: string, example: "150.00" }
+        entry_date: { type: string, format: date, description: "Default today; never in the future" }
+        description: { type: string, maxLength: 500 }
+        idempotency_key: { type: string, maxLength: 128 }
+
+    FinanceEntryPatchRequest:
+      type: object
+      properties:
+        category_uuid: { type: string, format: uuid }
+        description: { type: string, maxLength: 500 }
+        staff_uuid: { type: [string, "null"], format: uuid }
+
+    FinanceEntryCorrectRequest:
+      type: object
+      required: [reason]
+      properties:
+        category_uuid: { type: string, format: uuid }
+        cash_account_uuid: { type: string, format: uuid }
+        branch_uuid: { type: [string, "null"], format: uuid }
+        staff_uuid: { type: [string, "null"], format: uuid }
+        amount: { type: string, example: "120.00" }
+        entry_date: { type: string, format: date }
+        description: { type: string, maxLength: 500 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    FinanceLedgerRow:
+      type: object
+      description: A row of the list; `source=sale` rows are sale lines (automatic income).
+      required: [source, uuid, entry_type, kind, entry_date, amount, currency, branch, category, staff, account, description,
+        has_document, reversed, reservation_uuid, created_at]
+      properties:
+        source: { type: string, enum: [manual, sale] }
+        uuid: { type: string, format: uuid }
+        entry_type: { type: string, enum: [entry, reversal] }
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        entry_date: { type: string, format: date }
+        amount: { type: string }
+        currency: { type: string }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceRef"
+            - type: "null"
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceRef"
+            - type: "null"
+        item_type: { type: string, enum: [service, product], description: "Sale rows only" }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceRef"
+            - type: "null"
+        account:
+          oneOf:
+            - $ref: "#/components/schemas/FinanceRef"
+            - type: "null"
+        description: { type: string }
+        has_document: { type: boolean }
+        reversed: { type: boolean }
+        reservation_uuid: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+
+    FinanceLedgerPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceLedgerRow" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    FinanceFacet:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        label: { type: string }
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        count: { type: integer, format: int64 }
+
+    FinanceFacets:
+      type: object
+      required: [category, branch, staff]
+      properties:
+        category:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceFacet" }
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceFacet" }
+        staff:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceFacet" }
+
+    FinanceSummaryTotals:
+      type: object
+      required: [currency, revenue, income, expenses, staff_payments, net]
+      properties:
+        currency: { type: string }
+        revenue: { type: string, description: "Net of the sale lines" }
+        income: { type: string, description: "Income recorded here (reversals netted)" }
+        expenses: { type: string, description: "Expenses recorded here (reversals netted)" }
+        staff_payments: { type: string, description: "Staff payouts from the cash book; not an expense, outside net" }
+        net: { type: string, description: "revenue + income - expenses" }
+
+    FinanceCategoryTotal:
+      type: object
+      required: [kind, category, currency, total, entry_count]
+      properties:
+        kind: { $ref: "#/components/schemas/FinanceKind" }
+        category: { $ref: "#/components/schemas/FinanceRef" }
+        currency: { type: string }
+        total: { type: string }
+        entry_count: { type: integer, format: int64 }
+
+    FinanceSummary:
+      type: object
+      required: [date_from, date_to, totals, categories]
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceSummaryTotals" }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceCategoryTotal" }
+
+    EnvelopeFinanceCategory:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/FinanceCategory" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeFinanceCategoryPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/FinanceCategoryPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeFinanceEntry:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/FinanceEntry" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeFinanceLedgerPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/FinanceLedgerPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeFinanceFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/FinanceFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeFinanceSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/FinanceSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     CashAccountKind:
       type: string
       description: "`cash` = till, `bank` = bank account, `online` = online payment provider receivable"
@@ -15774,13 +16671,15 @@ components:
 
     SalesFigures:
       type: object
-      required: [currency, revenue, collections, transfers, staff_payments]
+      required: [currency, revenue, collections, transfers, staff_payments, income, expenses]
       properties:
         currency: { type: string }
         revenue: { $ref: "#/components/schemas/SalesRevenue" }
         collections: { $ref: "#/components/schemas/SalesCollections" }
         transfers: { type: string, description: "Money moved between accounts (not revenue)" }
         staff_payments: { type: string, description: "Staff payouts from the cash book (not an expense of the sale)" }
+        income: { type: string, description: "Other income recorded under finance (reversals netted)" }
+        expenses: { type: string, description: "Expenses recorded under finance (reversals netted); staff payouts are not in it" }
 
     SalesSummary:
       type: object

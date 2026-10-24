@@ -31,6 +31,9 @@ import (
 	customersusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/usecase"
 	entitlementsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/usecase"
+	financeadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/adapters"
+	financerepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/repository"
+	financeusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/usecase"
 	importusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/usecase"
 	integrationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations"
 	integrationjobsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations/jobs/usecase"
@@ -207,6 +210,8 @@ func main() {
 	// ... and every sale line with a staff member its share (TEC-917).
 	salesSvc.SetLineHook(staffsharesusecase.New(staffsharesrepository.NewPostgres(pool, queries), cashSvc).RecordLineTx)
 	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
+	// Income and expense records (TEC-915): the export of the list.
+	financeSvc := financeusecase.New(financerepository.NewPostgres(pool, queries), cashSvc, salesSvc)
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
@@ -230,6 +235,7 @@ func main() {
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
 		cashadapters.NewMovementsIO(cashSvc),
+		financeadapters.NewEntriesIO(financeSvc),
 		orgadapters.NewIO(jobScopes),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)

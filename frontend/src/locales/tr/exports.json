@@ -80,5 +80,6 @@
   "resources.tenant.reservations": "Rezervasyonlar",
   "resources.tenant.products": "Ürünler",
   "resources.tenant.cash_accounts": "Kasa ve banka hesapları",
-  "resources.tenant.cash_movements": "Kasa hareketleri"
+  "resources.tenant.cash_movements": "Kasa hareketleri",
+  "resources.tenant.finance_entries": "Gelir ve gider kayıtları"
 }

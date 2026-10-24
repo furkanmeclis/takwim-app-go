@@ -70,6 +70,14 @@ func ProductImageObjectKey(orgUUID, productUUID, imageUUID, ext string) string {
 	return fmt.Sprintf("%sproducts/%s/image/%s.%s", OrganizationPrefix(orgUUID), productUUID, imageUUID, trimExt(ext))
 }
 
+// FinanceDocumentObjectKey builds
+// organizations/{orgUUID}/finance/{entryUUID}/{documentUUID}.{ext} for the
+// receipt / invoice of an income or expense record (private; streamed by
+// the API).
+func FinanceDocumentObjectKey(orgUUID, entryUUID, documentUUID, ext string) string {
+	return fmt.Sprintf("%sfinance/%s/%s.%s", OrganizationPrefix(orgUUID), entryUUID, documentUUID, trimExt(ext))
+}
+
 // ImportSourceObjectKey builds imports/{jobUUID}/source.{ext}.
 func ImportSourceObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("imports/%s/source.%s", jobUUID, trimExt(ext))

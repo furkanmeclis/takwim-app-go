@@ -115,6 +115,11 @@ export const routes = {
     myShares: (slug: string) => `/t/${encodeURIComponent(slug)}/my-shares`,
     staffShares: (slug: string) =>
       `/t/${encodeURIComponent(slug)}/staff-shares`,
+    finance: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/finance`,
+      detail: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/finance/${uuid}`,
+    },
     cash: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/cash`,
       create: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/create`,

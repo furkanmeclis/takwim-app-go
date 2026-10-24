@@ -49,13 +49,13 @@ All routes need the finance module and `tenant.finance.read`; writes also need `
 
 - `GET /v1/tenant/sales/lines` (+ `/meta`, `/{uuid}`), `POST …/{uuid}/reverse`, `POST …/{uuid}/correct`
 - `GET /v1/tenant/sales/entries` (+ `/meta`, `/{uuid}`), `POST …/{uuid}/reverse`
-- `GET /v1/tenant/sales/summary?from&to&branch`: per day and currency: revenue (gross, discount, reversed, net, service / product), collections (collected, refunded, reversed, net), account transfers and staff payouts from the cash book, kept apart (A20). At most 366 days, default today.
+- `GET /v1/tenant/sales/summary?from&to&branch`: per day and currency: revenue (gross, discount, reversed, net, service / product), collections (collected, refunded, reversed, net), account transfers and staff payouts from the cash book, and the income and expenses recorded under finance ([finance-entries.md](./finance-entries.md), TEC-915), kept apart (A20). At most 366 days, default today.
 - `GET /v1/tenant/sales/reservations/{uuid}/balance`: expected (the posted sale lines, or the booked total of an open visit), collected, refunded, paid, remaining, credit, with its lines and entries.
 - `GET /v1/tenant/sales/customers/{uuid}/balance`: charged, paid and balance per currency.
 
 ## Not yet
 
-No ledger screen and no export (reports TEC-925). Collections come from the payments module ([payments.md](./payments.md), TEC-912): the verified online notification and the panel's on-site payment both post through `RecordCollectionTx`, and the reservation detail shows the visit's money entries. A hand-recorded stock return does not reverse a sale line. The manager's return flow (`POST /v1/tenant/stock-movements/{uuid}/return`, TEC-913) writes the return movement and calls `ReverseLineTx` on the sale's line in the same transaction. Refunds post through `RecordRefundTx` from the refunds flow ([payments.md](./payments.md#refunds-tec-913)).
+No ledger screen and no export (reports TEC-925); the finance list ([finance-entries.md](./finance-entries.md)) shows sale lines as income and exports them with the business's own records. Collections come from the payments module ([payments.md](./payments.md), TEC-912): the verified online notification and the panel's on-site payment both post through `RecordCollectionTx`, and the reservation detail shows the visit's money entries. A hand-recorded stock return does not reverse a sale line. The manager's return flow (`POST /v1/tenant/stock-movements/{uuid}/return`, TEC-913) writes the return movement and calls `ReverseLineTx` on the sale's line in the same transaction. Refunds post through `RecordRefundTx` from the refunds flow ([payments.md](./payments.md#refunds-tec-913)).
 
 ## Tests
 

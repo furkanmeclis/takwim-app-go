@@ -62,5 +62,6 @@
   "nav_payment_follow_ups": "Ödeme takibi",
   "nav_tenant_settings_confirmation": "Randevu teyidi",
   "nav_tenant_settings_embed": "Gömme kodu",
-  "nav_confirmations": "Teyit listesi"
+  "nav_confirmations": "Teyit listesi",
+  "nav_finance": "Gelir ve gider"
 }

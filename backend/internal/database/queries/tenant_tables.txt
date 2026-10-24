@@ -52,3 +52,5 @@ staff_share_payouts
 refunds
 confirmation_settings
 reservation_confirmations
+finance_categories
+finance_entries

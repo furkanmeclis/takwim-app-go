@@ -3,6 +3,7 @@ import {
   BadgePercent,
   HandCoins,
   ArrowLeftRight,
+  ArrowDownUp,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
@@ -422,6 +423,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: Wallet,
             permission: permissions.tenant.cash.read,
             module: "cash",
+          },
+          {
+            id: "finance",
+            titleKey: "layout.nav_finance",
+            href: routes.tenant.finance.root(slug),
+            icon: ArrowDownUp,
+            permission: permissions.tenant.finance.read,
+            module: "finance",
           },
           {
             id: "staff-shares",

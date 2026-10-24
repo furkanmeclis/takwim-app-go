@@ -108,7 +108,8 @@ func (s *Service) CustomerBalance(ctx context.Context, orgID int64, id uuid.UUID
 
 // Summary returns the figures of a date range (default: today) per
 // currency and per day: revenue from the sale lines, collections and
-// refunds from the ledger, transfers and staff payouts from the cash book.
+// refunds from the ledger, transfers and staff payouts from the cash book,
+// and the income / expenses entered outside sales.
 func (s *Service) Summary(ctx context.Context, orgID int64, from, to *time.Time, branches []uuid.UUID) (model.Summary, error) {
 	today := s.today(ctx)
 	df, dt := today, today
@@ -184,6 +185,18 @@ func (s *Service) Summary(ctx context.Context, orgID int64, from, to *time.Time,
 		f := at(r.MovementDate, r.Currency)
 		f.Transfers, f.StaffPayments = amountOf(r.Transfers), amountOf(r.StaffPayments)
 	}
+	// Income and expenses entered outside sales (TEC-915), by the branch
+	// of the record; staff payouts are never among them.
+	fin, err := q.SalesFinanceByDay(ctx, db.SalesFinanceByDayParams{
+		OrganizationID: orgID, DateFrom: dateArg(df), DateTo: dateArg(dt), BranchIds: scope, FilterBranchIds: a.branches,
+	})
+	if err != nil {
+		return out, err
+	}
+	for _, r := range fin {
+		f := at(r.EntryDate, r.Currency)
+		f.Income, f.Expenses = amountOf(r.Income), amountOf(r.Expenses)
+	}
 
 	keys := make([]key, 0, len(figs))
 	for k := range figs {
@@ -234,6 +247,7 @@ func zero(f *model.Figures) {
 	f.Revenue = model.Revenue{Gross: z, Discount: z, Reversed: z, Net: z, ServiceNet: z, ProductNet: z}
 	f.Collections = model.Collections{Collected: z, Refunded: z, Reversed: z, Net: z}
 	f.Transfers, f.StaffPayments = z, z
+	f.Income, f.Expenses = z, z
 }
 
 func add(t *model.Figures, f model.Figures) {
@@ -251,6 +265,8 @@ func add(t *model.Figures, f model.Figures) {
 	t.Collections.Count += f.Collections.Count
 	t.Transfers = t.Transfers.Add(f.Transfers)
 	t.StaffPayments = t.StaffPayments.Add(f.StaffPayments)
+	t.Income = t.Income.Add(f.Income)
+	t.Expenses = t.Expenses.Add(f.Expenses)
 }
 
 func contains(list []string, v string) bool {

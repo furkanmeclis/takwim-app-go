@@ -262,14 +262,17 @@ type Collections struct {
 }
 
 // Figures are the separate figures of one currency (A20): revenue,
-// collections, transfers between accounts and staff payouts. None of them
-// is derived from another.
+// collections, transfers between accounts, staff payouts, and the income
+// and expenses entered outside sales (TEC-915). None of them is derived
+// from another; staff payouts are not expenses (A17).
 type Figures struct {
 	Currency      string      `json:"currency"`
 	Revenue       Revenue     `json:"revenue"`
 	Collections   Collections `json:"collections"`
 	Transfers     money.Money `json:"transfers"`
 	StaffPayments money.Money `json:"staff_payments"`
+	Income        money.Money `json:"income"`
+	Expenses      money.Money `json:"expenses"`
 }
 
 // Day are the figures of one business day.
