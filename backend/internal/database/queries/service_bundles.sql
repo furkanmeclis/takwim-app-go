@@ -144,3 +144,54 @@ SELECT b.id, b.uuid, b.name, b.price, b.is_active, b.show_online,
                  AND bb.branch_id = sqlc.arg(branch_id))::boolean AS offered
 FROM service_bundles b
 WHERE b.organization_id = sqlc.arg(organization_id) AND b.uuid = sqlc.arg(uuid) AND b.deleted_at IS NULL;
+
+-- name: SetServiceBundleActive :exec
+UPDATE service_bundles SET is_active = sqlc.arg(is_active)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL;
+
+-- name: ListServiceBundleUUIDs :many
+-- The bundles matching a list filter (bulk "all matching" scope).
+SELECT b.uuid
+FROM service_bundles b
+WHERE b.organization_id = sqlc.arg(organization_id)
+  AND b.deleted_at IS NULL
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR EXISTS (
+        SELECT 1 FROM service_bundle_branches bb
+        WHERE bb.organization_id = b.organization_id AND bb.bundle_id = b.id
+          AND bb.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[])))
+  AND (sqlc.narg(is_active)::boolean IS NULL OR b.is_active = sqlc.narg(is_active))
+  AND (sqlc.narg(show_online)::boolean IS NULL OR b.show_online = sqlc.narg(show_online))
+  AND (sqlc.narg(q)::text IS NULL OR b.name ILIKE '%' || sqlc.narg(q) || '%' OR b.description ILIKE '%' || sqlc.narg(q) || '%')
+ORDER BY b.sort_order ASC, lower(b.name) ASC, b.id ASC
+LIMIT sqlc.arg(limit_count);
+
+-- name: ListServiceBundleSearchDocuments :many
+-- Cmd+K documents of the live bundles of one organization.
+SELECT b.id, b.uuid, b.organization_id, b.name, b.description, o.slug AS organization_slug,
+       COALESCE((SELECT string_agg(s.name, ' + ' ORDER BY i.position)
+                 FROM service_bundle_items i
+                 JOIN services s ON s.organization_id = i.organization_id AND s.id = i.service_id
+                 WHERE i.organization_id = b.organization_id AND i.bundle_id = b.id), '')::text AS items
+FROM service_bundles b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = sqlc.arg(organization_id)
+  AND b.deleted_at IS NULL;
+
+-- name: GetServiceBundleSearchDocument :one
+SELECT b.id, b.uuid, b.organization_id, b.name, b.description, o.slug AS organization_slug,
+       COALESCE((SELECT string_agg(s.name, ' + ' ORDER BY i.position)
+                 FROM service_bundle_items i
+                 JOIN services s ON s.organization_id = i.organization_id AND s.id = i.service_id
+                 WHERE i.organization_id = b.organization_id AND i.bundle_id = b.id), '')::text AS items
+FROM service_bundles b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = sqlc.arg(organization_id) AND b.uuid = sqlc.arg(uuid) AND b.deleted_at IS NULL;
+
+-- name: ListPublicServiceBundles :many
+-- Active bundles shown online (public booking, TEC-985); the contents and
+-- the branches come from ListServiceBundleItems / ListServiceBundleBranches.
+SELECT b.*
+FROM service_bundles b
+WHERE b.organization_id = sqlc.arg(organization_id)
+  AND b.deleted_at IS NULL AND b.is_active AND b.show_online
+ORDER BY b.sort_order ASC, lower(b.name) ASC, b.id ASC;

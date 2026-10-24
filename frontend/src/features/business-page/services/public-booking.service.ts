@@ -8,6 +8,7 @@ import type {
   PublicAvailabilityRequest,
   PublicBookingRequest,
   PublicBranch,
+  PublicBundle,
   PublicBusiness,
   PublicCheckout,
   PublicCheckoutRequest,
@@ -109,6 +110,12 @@ export const publicBookingService = {
   },
   staff(slug: string, branchUuid?: string) {
     return request<PublicStaff[]>("GET", slug, "/staff", {
+      query: { branch_uuid: branchUuid },
+    });
+  },
+  /** Combined bundles bookable online in the branch (TEC-985). */
+  bundles(slug: string, branchUuid: string) {
+    return request<PublicBundle[]>("GET", slug, "/bundles", {
       query: { branch_uuid: branchUuid },
     });
   },

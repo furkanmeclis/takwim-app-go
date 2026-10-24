@@ -68,6 +68,7 @@
   "lines.price": "Price",
   "lines.minutes": "{{minutes}} min",
   "lines.empty": "No services",
+  "lines.bundle": "In the {{name}} bundle",
   "policies.title": "Business rules",
   "policies.cancellation": "Cancellation",
   "policies.change": "Changes",

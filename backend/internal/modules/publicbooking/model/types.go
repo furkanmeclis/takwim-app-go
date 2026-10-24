@@ -243,6 +243,37 @@ type Service struct {
 	Staff         []ServiceStaff `json:"staff"`
 }
 
+// BundleItem is one service of a bundle as offered online, in serving
+// order. Price is the branch's (the list price with no branch filter);
+// AllocatedPrice its share of the bundle price at that price (the booking
+// splits the bundle price again over the final line prices, the same way).
+type BundleItem struct {
+	ServiceUUID     uuid.UUID   `json:"service_uuid"`
+	ServiceName     string      `json:"service_name"`
+	DurationMinutes int         `json:"duration_minutes"`
+	Price           money.Money `json:"price"`
+	AllocatedPrice  money.Money `json:"allocated_price"`
+	StaffMode       string      `json:"staff_mode"`
+}
+
+// Bundle is a combined service bundle a customer may book online
+// (TEC-985): active, shown online, every service of it bookable online in
+// the branch. ListPrice is the sum of the item prices and Discount what the
+// bundle saves (zero when it costs more).
+type Bundle struct {
+	UUID            uuid.UUID    `json:"uuid"`
+	Name            string       `json:"name"`
+	Description     string       `json:"description"`
+	Price           money.Money  `json:"price"`
+	ListPrice       money.Money  `json:"list_price"`
+	Discount        money.Money  `json:"discount"`
+	Currency        string       `json:"currency"`
+	DurationMinutes int          `json:"duration_minutes"`
+	PaymentModes    []string     `json:"payment_modes"`
+	Items           []BundleItem `json:"items"`
+	BranchUUIDs     []uuid.UUID  `json:"branch_uuids"`
+}
+
 // Staff is a person shown on the customer screens.
 type Staff struct {
 	UUID         uuid.UUID   `json:"uuid"`
@@ -253,9 +284,12 @@ type Staff struct {
 	ServiceUUIDs []uuid.UUID `json:"service_uuids"`
 }
 
-// AvailabilityInput is the POST …/availability body.
+// AvailabilityInput is the POST …/availability body. With BundleUUID the
+// lines are the bundle's services in order (empty = every service with any
+// free person; given = those services, each with the person picked).
 type AvailabilityInput struct {
 	BranchUUID  uuid.UUID                `json:"branch_uuid"`
+	BundleUUID  *uuid.UUID               `json:"bundle_uuid"`
 	Lines       []availability.LineInput `json:"lines"`
 	From        string                   `json:"from"`
 	To          string                   `json:"to"`
@@ -313,8 +347,10 @@ type Availability struct {
 }
 
 // CheckoutInput is the POST …/checkouts body: the slot the customer picked.
+// BundleUUID books a bundle (TEC-985); see AvailabilityInput.
 type CheckoutInput struct {
 	BranchUUID uuid.UUID                `json:"branch_uuid"`
+	BundleUUID *uuid.UUID               `json:"bundle_uuid"`
 	Lines      []availability.LineInput `json:"lines"`
 	StartsAt   *time.Time               `json:"starts_at"`
 	Channel    string                   `json:"channel"`
@@ -322,20 +358,25 @@ type CheckoutInput struct {
 	Zone       string                   `json:"zone"`
 }
 
-// CheckoutLine is a planned line of a checkout (stored as JSON).
+// CheckoutLine is a planned line of a checkout (stored as JSON). Bundle
+// names the service bundle the line belongs to (TEC-985); the booking then
+// books the bundle, so its price is split as in the panel.
 type CheckoutLine struct {
 	ServiceUUID uuid.UUID `json:"service_uuid"`
 	StartsAt    time.Time `json:"starts_at"`
 	EndsAt      time.Time `json:"ends_at"`
 	Staff       *Ref      `json:"staff"`
+	Bundle      *Ref      `json:"bundle,omitempty"`
 }
 
-// Checkout is a timed hold of the customer's slot.
+// Checkout is a timed hold of the customer's slot. Bundle is the service
+// bundle the lines belong to (null for single services).
 type Checkout struct {
 	Token     uuid.UUID      `json:"token"`
 	Status    string         `json:"status"`
 	Channel   string         `json:"channel"`
 	Branch    Ref            `json:"branch"`
+	Bundle    *Ref           `json:"bundle"`
 	StartsAt  time.Time      `json:"starts_at"`
 	EndsAt    time.Time      `json:"ends_at"`
 	ExpiresAt *time.Time     `json:"expires_at"`
@@ -423,6 +464,11 @@ type Line struct {
 	// PackageName: the line is paid by a session of this package of the
 	// customer (TEC-984); it is not part of the total.
 	PackageName *string `json:"package_name"`
+	// BundleName: the line was booked as part of this service bundle
+	// (TEC-985); UnitPrice is its share of the bundle price and ListPrice
+	// the price before the bundle discount.
+	BundleName *string      `json:"bundle_name"`
+	ListPrice  *money.Money `json:"list_price"`
 }
 
 // StaffName is the staff member of a line (UUID nil when deleted).

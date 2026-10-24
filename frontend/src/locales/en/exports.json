@@ -76,6 +76,7 @@
   "resources.tenant.staff": "Staff",
   "resources.tenant.resources": "Resources",
   "resources.tenant.services": "Services",
+  "resources.tenant.service_bundles": "Bundles",
   "resources.tenant.customers": "Customers",
   "resources.tenant.reservations": "Reservations",
   "resources.tenant.products": "Products",

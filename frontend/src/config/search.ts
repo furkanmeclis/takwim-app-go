@@ -6,6 +6,7 @@ import { customersSearchSpec } from "@/features/customers/search";
 import { reservationsSearchSpec } from "@/features/reservations/search";
 import { resourcesSearchSpec } from "@/features/resources/search";
 import { productsSearchSpec } from "@/features/products/search";
+import { serviceBundlesSearchSpec } from "@/features/service-bundles/search";
 import { servicesSearchSpec } from "@/features/services/search";
 import { staffSearchSpec } from "@/features/staff/search";
 import {
@@ -30,6 +31,7 @@ export const searchCatalog = defineSearchCatalog({
     staffSearchSpec,
     resourcesSearchSpec,
     servicesSearchSpec,
+    serviceBundlesSearchSpec,
     productsSearchSpec,
     customersSearchSpec,
     reservationsSearchSpec,

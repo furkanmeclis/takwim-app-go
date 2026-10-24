@@ -39,6 +39,19 @@ export function isAnswerError(error: unknown) {
   );
 }
 
+/**
+ * True when the picked bundle is no longer bookable online in the branch,
+ * or the lines no longer match it (TEC-985).
+ */
+export function isBundleGone(error: unknown) {
+  return (
+    isApiError(error) &&
+    error.details.some(
+      (d) => d.field === "bundle_uuid" || d.code === "bundle_mismatch",
+    )
+  );
+}
+
 /** True when the vehicle of a car wash booking was refused (TEC-971). */
 export function isVehicleError(error: unknown) {
   return (
@@ -79,6 +92,10 @@ export function reportBookingError(error: unknown, t: Translate) {
   }
   if (isVehicleError(error)) {
     appToast.error(t("business_page.errors.vehicle"));
+    return;
+  }
+  if (isBundleGone(error)) {
+    appToast.error(t("business_page.bundle.not_found"));
     return;
   }
   if (error.code === "BOOKING_UNAVAILABLE") {

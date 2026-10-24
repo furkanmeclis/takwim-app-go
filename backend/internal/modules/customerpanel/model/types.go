@@ -269,14 +269,18 @@ type Payment struct {
 	At       time.Time   `json:"at"`
 }
 
-// Line is one service of the visit.
+// Line is one service of the visit. BundleName is set when the line was
+// booked as part of a service bundle (TEC-985): UnitPrice is then its share
+// of the bundle price and ListPrice the price before the bundle discount.
 type Line struct {
-	ServiceName     string      `json:"service_name"`
-	StaffName       *string     `json:"staff_name"`
-	StartsAt        time.Time   `json:"starts_at"`
-	EndsAt          time.Time   `json:"ends_at"`
-	DurationMinutes int         `json:"duration_minutes"`
-	UnitPrice       money.Money `json:"unit_price"`
+	ServiceName     string       `json:"service_name"`
+	StaffName       *string      `json:"staff_name"`
+	StartsAt        time.Time    `json:"starts_at"`
+	EndsAt          time.Time    `json:"ends_at"`
+	DurationMinutes int          `json:"duration_minutes"`
+	UnitPrice       money.Money  `json:"unit_price"`
+	BundleName      *string      `json:"bundle_name"`
+	ListPrice       *money.Money `json:"list_price"`
 }
 
 // Branch is the place of the visit.

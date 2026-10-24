@@ -775,6 +775,13 @@ func (s *Service) Availability(ctx context.Context, o Org, in model.Availability
 	if _, err := s.publicBranchID(ctx, o, in.BranchUUID, "branch_uuid"); err != nil {
 		return model.Availability{}, err
 	}
+	if in.BundleUUID != nil {
+		_, lines, err := s.bundleLines(ctx, o, in.BranchUUID, *in.BundleUUID, in.Lines)
+		if err != nil {
+			return model.Availability{}, err
+		}
+		in.Lines = lines
+	}
 	if err := s.checkChoices(ctx, o, in.Lines, in.Zone); err != nil {
 		return model.Availability{}, err
 	}
@@ -832,6 +839,14 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 	if _, err := s.publicBranchID(ctx, o, in.BranchUUID, "branch_uuid"); err != nil {
 		return model.Checkout{}, err
 	}
+	var bundle *model.Ref
+	if in.BundleUUID != nil {
+		b, lines, err := s.bundleLines(ctx, o, in.BranchUUID, *in.BundleUUID, in.Lines)
+		if err != nil {
+			return model.Checkout{}, err
+		}
+		bundle, in.Lines = &model.Ref{UUID: b.UUID, Name: b.Name}, lines
+	}
 	if err := s.checkChoices(ctx, o, in.Lines, in.Zone); err != nil {
 		return model.Checkout{}, err
 	}
@@ -852,7 +867,7 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 		if err := reservationsusecase.CheckDailyLimit(ctx, tx.Q, o.ID, &set, created.Slot.BranchID, created.Slot.StartsAt); err != nil {
 			return err
 		}
-		raw, err := json.Marshal(slotCheckoutLines(created.Slot.Lines))
+		raw, err := json.Marshal(slotCheckoutLines(created.Slot.Lines, bundle))
 		if err != nil {
 			return err
 		}
@@ -873,10 +888,10 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 	return s.Checkout(ctx, o, token)
 }
 
-func slotCheckoutLines(lines []availabilitymodel.SlotLine) []model.CheckoutLine {
+func slotCheckoutLines(lines []availabilitymodel.SlotLine, bundle *model.Ref) []model.CheckoutLine {
 	out := make([]model.CheckoutLine, 0, len(lines))
 	for _, l := range lines {
-		item := model.CheckoutLine{ServiceUUID: l.ServiceUUID, StartsAt: l.StartsAt, EndsAt: l.EndsAt}
+		item := model.CheckoutLine{ServiceUUID: l.ServiceUUID, StartsAt: l.StartsAt, EndsAt: l.EndsAt, Bundle: bundle}
 		if l.Staff != nil {
 			item.Staff = &model.Ref{UUID: l.Staff.UUID, Name: l.Staff.Name}
 		}
@@ -906,6 +921,7 @@ func (s *Service) Checkout(ctx context.Context, o Org, token uuid.UUID) (model.C
 	if err := json.Unmarshal(row.Lines, &out.Lines); err != nil {
 		return model.Checkout{}, err
 	}
+	out.Bundle = checkoutBundle(out.Lines)
 	if row.HoldExpiresAt.Valid {
 		t := row.HoldExpiresAt.Time.UTC()
 		out.ExpiresAt = &t
@@ -1093,6 +1109,13 @@ func (s *Service) book(ctx context.Context, o Org, in model.BookingInput, known 
 	if checkout.Channel == model.ChannelWidget {
 		input.Source = reservationsmodel.SourceEmbed
 	}
+	// A bundle checkout books the bundle (TEC-985): the reservation use case
+	// checks it again with the online rules and splits its price over the
+	// lines exactly as a panel booking does.
+	if b := checkoutBundle(lines); b != nil {
+		id := b.UUID
+		input.BundleUUID = &id
+	}
 	for _, l := range lines {
 		line := availabilitymodel.LineInput{ServiceUUID: l.ServiceUUID}
 		if l.Staff != nil {
@@ -1276,6 +1299,11 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		}
 		if name, ok := onPackage[l.Index]; ok {
 			line.PackageName = &name
+		}
+		if l.Bundle != nil {
+			name := l.Bundle.Name
+			line.BundleName = &name
+			line.ListPrice = l.ListPrice
 		}
 		if l.Staff != nil {
 			line.Staff = &model.StaffName{UUID: l.Staff.UUID, Name: l.Staff.Name}

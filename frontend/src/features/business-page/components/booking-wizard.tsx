@@ -29,6 +29,7 @@ import { SummaryStep } from "@/features/business-page/components/steps/summary-s
 import { VehicleStep } from "@/features/business-page/components/steps/vehicle-step";
 import {
   usePublicAvailability,
+  usePublicBundles,
   usePublicClasses,
   usePublicProducts,
   usePublicServices,
@@ -40,6 +41,7 @@ import {
 } from "@/features/business-page/lib/access";
 import {
   isAnswerError,
+  isBundleGone,
   isDayFull,
   isOutOfStock,
   isSlotTaken,
@@ -49,6 +51,8 @@ import {
 import type { Preselect } from "@/features/business-page/lib/embed";
 import {
   WINDOW_DAYS,
+  activeBundle,
+  bundleServiceUuids,
   checkoutPrices,
   flowHasParty,
   flowHasProducts,
@@ -149,6 +153,8 @@ export function BookingWizard({
   const [zone, setZone] = useState("");
   const [pickedServices, setPickedServices] =
     useState<string[]>(presetServices);
+  // The combined bundle picked instead of single services (TEC-985).
+  const [pickedBundle, setPickedBundle] = useState("");
   const [staffBy, setStaffBy] = useState<Record<string, string | null>>({});
   const [windowStart, setWindowStart] = useState(presetDate || today);
   const [date, setDate] = useState(presetDate);
@@ -164,6 +170,8 @@ export function BookingWizard({
 
   const servicesQuery = usePublicServices(slug, branchUuid);
   const staffQuery = usePublicStaff(slug, branchUuid);
+  const bundlesQuery = usePublicBundles(slug, branchUuid);
+  const bundles = useMemo(() => bundlesQuery.data ?? [], [bundlesQuery.data]);
   const productsQuery = usePublicProducts(
     slug,
     branchUuid,
@@ -182,10 +190,17 @@ export function BookingWizard({
   // A flow without a service step (restaurant) books the branch's only
   // service by itself and asks only when there are several offers.
   const autoService = !flowHasService(business.flow) && services.length === 1;
+  // A picked bundle books its services in its order at the bundle price;
+  // the API applies the same split as the panel (TEC-985).
+  const bundle = pickedBundle
+    ? activeBundle(bundles, pickedBundle, branchUuid)
+    : null;
   // Only services the branch offers online (a pre-selected one may not be).
-  const serviceUuids = autoService
-    ? [services[0]!.uuid]
-    : pickedServices.filter((id) => services.some((s) => s.uuid === id));
+  const serviceUuids = bundle
+    ? bundleServiceUuids(bundle)
+    : autoService
+      ? [services[0]!.uuid]
+      : pickedServices.filter((id) => services.some((s) => s.uuid === id));
   const selected = serviceUuids
     .map((id) => services.find((s) => s.uuid === id))
     .filter((s): s is PublicService => Boolean(s));
@@ -242,7 +257,8 @@ export function BookingWizard({
     productChoice: products.length > 0 || Object.keys(productQty).length > 0,
   });
   const catalogLoading =
-    Boolean(branchUuid) && (servicesQuery.isLoading || staffQuery.isLoading);
+    Boolean(branchUuid) &&
+    (servicesQuery.isLoading || staffQuery.isLoading || bundlesQuery.isLoading);
   // Steps a valid pre-selection already answers; the wizard opens after them
   // (only once the catalog it is checked against has loaded).
   const preset = (s: WizardStep) =>
@@ -276,6 +292,7 @@ export function BookingWizard({
     (!byParty || partySize !== null)
       ? {
           branch_uuid: branchUuid,
+          ...(bundle ? { bundle_uuid: bundle.uuid } : {}),
           lines,
           from: windowStart,
           to: windowEnd,
@@ -330,13 +347,16 @@ export function BookingWizard({
     () => (linked ? (packagesQuery.data?.items ?? []) : []),
     [linked, packagesQuery.data?.items],
   );
-  const choices = checkout
-    ? packageChoices(
-        myPackages,
-        checkout,
-        dateKeyInZone(new Date(checkout.starts_at), business.timezone),
-      )
-    : [];
+  // A bundle is priced as a whole, so its lines are not paid with package
+  // sessions (TEC-984 + TEC-985 do not mix).
+  const choices =
+    checkout && !checkout.bundle
+      ? packageChoices(
+          myPackages,
+          checkout,
+          dateKeyInZone(new Date(checkout.starts_at), business.timezone),
+        )
+      : [];
   const sessions = toPackageSessions(
     Object.fromEntries(
       Object.entries(packageBy).filter(([index, id]) =>
@@ -349,7 +369,10 @@ export function BookingWizard({
 
   const pickedProducts = toProducts(products, productQty);
   const productTotal = sumAmounts(productPrices(products, pickedProducts));
-  const linePrices = checkout ? checkoutPrices(checkout, services) : [];
+  const heldBundle = checkout?.bundle ? bundle : null;
+  const linePrices = checkout
+    ? checkoutPrices(checkout, services, heldBundle)
+    : [];
   const total =
     sumAmounts(linePrices.filter((_, index) => !covered.has(index))) +
     productTotal;
@@ -398,6 +421,16 @@ export function BookingWizard({
     surface.scrollTop();
   };
 
+  // The bundle is no longer bookable online here: back to the services.
+  const dropBundle = () => {
+    setPickedBundle("");
+    setPickedServices([]);
+    setStaffBy({});
+    resetTime();
+    void bundlesQuery.refetch();
+    goTo("service");
+  };
+
   const back = () => {
     if (index <= 0) return;
     const previous = steps[index - 1]!;
@@ -415,6 +448,7 @@ export function BookingWizard({
         slug,
         {
           branch_uuid: branchUuid,
+          ...(bundle ? { bundle_uuid: bundle.uuid } : {}),
           lines,
           starts_at: slot.starts_at,
           channel: surface.channel,
@@ -431,6 +465,8 @@ export function BookingWizard({
       if (isSlotTaken(error)) {
         setSlot(null);
         void (isClass ? classes.refetch() : availability.refetch());
+      } else if (isBundleGone(error)) {
+        dropBundle();
       }
     } finally {
       setBusy(false);
@@ -476,6 +512,9 @@ export function BookingWizard({
       } else if (isVehicleError(error)) {
         releaseCheckout();
         goTo("vehicle");
+      } else if (isBundleGone(error)) {
+        releaseCheckout();
+        dropBundle();
       } else if (isOutOfStock(error)) {
         // Someone took the last units; pick again from what is left.
         void productsQuery.refetch();
@@ -526,6 +565,7 @@ export function BookingWizard({
           setBranchUuid(value);
           setZone("");
           setPickedServices(presetServices);
+          setPickedBundle("");
           setStaffBy({});
           setProductQty({});
           resetTime();
@@ -593,6 +633,14 @@ export function BookingWizard({
         currency={business.currency}
         onChange={(value) => {
           setPickedServices(value);
+          resetTime();
+        }}
+        bundles={bundles.filter((b) => b.branch_uuids.includes(branchUuid))}
+        bundle={bundle?.uuid ?? ""}
+        onBundleChange={(value) => {
+          setPickedBundle(value);
+          setPickedServices([]);
+          setStaffBy({});
           resetTime();
         }}
       />
@@ -714,6 +762,7 @@ export function BookingWizard({
         payment={activePayment}
         onPaymentChange={setPayment}
         vehicle={askVehicle ? toVehicle(vehicleType, plate) : null}
+        bundle={heldBundle}
         packageChoices={choices}
         packageBy={packageBy}
         covered={covered}

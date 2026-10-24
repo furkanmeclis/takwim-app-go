@@ -28,6 +28,11 @@ export const publicBookingKeys = {
     "products",
     branch,
   ],
+  bundles: (slug: string, branch: string) => [
+    ...publicBookingKeys.all(slug),
+    "bundles",
+    branch,
+  ],
   availability: (slug: string, body: PublicAvailabilityRequest | null) => [
     ...publicBookingKeys.all(slug),
     "availability",
@@ -92,6 +97,16 @@ export function usePublicProducts(
     queryFn: () => publicBookingService.products(slug, branchUuid),
     enabled: enabled && Boolean(branchUuid),
     staleTime: 30_000,
+  });
+}
+
+/** Combined bundles of the branch for the service step (TEC-985). */
+export function usePublicBundles(slug: string, branchUuid: string) {
+  return useQuery({
+    queryKey: publicBookingKeys.bundles(slug, branchUuid),
+    queryFn: () => publicBookingService.bundles(slug, branchUuid),
+    enabled: Boolean(branchUuid),
+    staleTime: 60_000,
   });
 }
 

@@ -516,7 +516,18 @@ function LinesCard({ reservation }: { reservation: CustomerReservation }) {
           enableSorting: false,
           gridPrimary: true,
           cell: ({ row }) => (
-            <span className="font-medium">{row.original.service_name}</span>
+            <span className="block">
+              <span className="block font-medium">
+                {row.original.service_name}
+              </span>
+              {row.original.bundle_name ? (
+                <span className="text-muted-foreground block text-xs">
+                  {t("customer_panel.lines.bundle", {
+                    name: row.original.bundle_name,
+                  })}
+                </span>
+              ) : null}
+            </span>
           ),
         }),
         createColumn<Line>({

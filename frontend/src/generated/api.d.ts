@@ -3952,7 +3952,8 @@ export interface paths {
          *     `X-Organization` organization (`tenant.services.read`). A bundle sells
          *     several services as one offer; `duration_minutes`, `list_price`,
          *     `staff_required` and `resource_kinds` follow from its `items`. `q`
-         *     searches name and description.
+         *     searches name and description. Export, import and bulk
+         *     activate / deactivate (TEC-985) use the catalog's permissions.
          */
         get: operations["getTenantServiceBundles"];
         put?: never;
@@ -3966,6 +3967,95 @@ export interface paths {
          *     offer every service of the bundle (`services_not_offered`).
          */
         post: operations["postTenantServiceBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export service bundles
+         * @description Queues an export of the combined service bundles (TEC-985; the
+         *     catalog's `tenant.services.export`). `query` honours `q`, `branch`,
+         *     `is_active` and `show_online`; `services` lists the contents joined
+         *     with ` + `. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantServiceBundlesExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a service bundle import file
+         * @description Creates an import job (`tenant.services.import`). A row whose `name`
+         *     matches a bundle (case-insensitive) updates it, any other row creates
+         *     one. `services` names the contents in serving order, separated by
+         *     ` + `, `;` or `|` (service names of the catalog); `branch_codes` the
+         *     branches that offer the bundle. Unknown names and codes are row
+         *     errors. Continue with `/v1/tenant/imports/{uuid}/mapping`, `/preview`
+         *     and `/confirm`.
+         */
+        post: operations["postTenantServiceBundlesImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a service bundle import sample */
+        get: operations["getTenantServiceBundlesImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on service bundles
+         * @description Actions `activate` (`tenant.services.bulk.activate`) and `deactivate`
+         *     (`tenant.services.bulk.deactivate`), both reversible. Targets are
+         *     resolved inside the organization only; the `query` scope takes the
+         *     list filters (`q`, `branch`, `is_active`, `show_online`).
+         */
+        post: operations["postTenantServiceBundlesBulk"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8420,6 +8510,35 @@ export interface paths {
          *     business's is `400` detail `branch_uuid` / `not_found`.
          */
         get: operations["listPublicServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Combined service bundles bookable online
+         * @description No authentication (TEC-985). Active bundles with `show_online` that a
+         *     public branch offers and whose every service is bookable online there
+         *     (active, shown online, with an active branch offer). With
+         *     `branch_uuid` only that branch's bundles, with the items priced for
+         *     it; otherwise the list prices and every public branch that offers the
+         *     bundle. `allocated_price` is each item's share of the bundle price
+         *     at the shown prices (the same split as the panel: in proportion to
+         *     the prices, the remainder on the last item); the booking splits the
+         *     bundle price again over the final line prices. A hidden branch or
+         *     another business's is `400` detail `branch_uuid` / `not_found`.
+         */
+        get: operations["listPublicBundles"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17109,6 +17228,11 @@ export interface components {
             zone?: string;
             /** Format: uuid */
             branch_uuid: string;
+            /**
+             * Format: uuid
+             * @description A bundle of `GET …/bundles` of the branch (TEC-985). `lines` may then be empty (the bundle's services in order, anyone free) or exactly those services in order, each with the person picked (`lines` / `bundle_mismatch` otherwise). A bundle that is not bookable online in the branch is `400` `bundle_uuid` / `not_found`.
+             */
+            bundle_uuid?: string | null;
             lines: components["schemas"]["PublicLineInput"][];
             /** Format: date */
             from?: string;
@@ -17128,6 +17252,18 @@ export interface components {
             staff: components["schemas"]["PublicRef"] | null;
             /** @description Free seats of a group class session; null for an individual service. */
             seats_left: number | null;
+        };
+        /** @description A held line of a checkout. */
+        PublicCheckoutLine: {
+            /** Format: uuid */
+            service_uuid: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            staff: components["schemas"]["PublicRef"] | null;
+            /** @description The service bundle the line belongs to (TEC-985); absent for a single service. */
+            bundle?: components["schemas"]["PublicRef"] | null;
         };
         PublicAvailability: {
             branch: components["schemas"]["PublicRef"];
@@ -17211,6 +17347,11 @@ export interface components {
             zone?: string;
             /** Format: uuid */
             branch_uuid: string;
+            /**
+             * Format: uuid
+             * @description Books a bundle (TEC-985): the same rules as the availability request. The checkout's lines then carry the bundle and the booking splits the bundle price over them as the panel does.
+             */
+            bundle_uuid?: string | null;
             lines: components["schemas"]["PublicLineInput"][];
             /**
              * Format: date-time
@@ -17233,13 +17374,15 @@ export interface components {
             status: "active" | "expired" | "released" | "booked";
             channel: components["schemas"]["PublicChannel"];
             branch: components["schemas"]["PublicRef"];
+            /** @description The service bundle the lines belong to (TEC-985); null for single services. */
+            bundle: components["schemas"]["PublicRef"] | null;
             /** Format: date-time */
             starts_at: string;
             /** Format: date-time */
             ends_at: string;
             /** Format: date-time */
             expires_at: string | null;
-            lines: components["schemas"]["PublicSlotLine"][];
+            lines: components["schemas"]["PublicCheckoutLine"][];
             /** Format: uuid */
             reservation_uuid: string | null;
         };
@@ -17353,6 +17496,10 @@ export interface components {
                 unit_price: components["schemas"]["MoneyAmount"];
                 /** @description The line is paid by a session of this package (TEC-984); it is not part of the total. */
                 package_name: string | null;
+                /** @description The line was booked as part of this service bundle (TEC-985); `unit_price` is its share of the bundle price. */
+                bundle_name: string | null;
+                /** @description The line's price before the bundle discount (bundle lines only). */
+                list_price: components["schemas"]["MoneyAmount"] | null;
             }[];
             products: {
                 name: string;
@@ -17383,6 +17530,44 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["PublicService"][];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description A combined service bundle a customer may book online (TEC-985). */
+        PublicBundle: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            price: components["schemas"]["MoneyAmount"];
+            /** @description Sum of the item prices. */
+            list_price: components["schemas"]["MoneyAmount"];
+            /** @description What the bundle saves (zero when it costs more). */
+            discount: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** @description Sum of the item durations (the branch's with a branch filter). */
+            duration_minutes: number;
+            /** @description Payment methods every service of the bundle takes. */
+            payment_modes: ("on_site" | "online")[];
+            /** @description The services in serving order. */
+            items: {
+                /** Format: uuid */
+                service_uuid: string;
+                service_name: string;
+                duration_minutes: number;
+                /** @description The branch's with a branch filter, else the list price. */
+                price: components["schemas"]["MoneyAmount"];
+                /** @description The item's share of the bundle price. */
+                allocated_price: components["schemas"]["MoneyAmount"];
+                /** @enum {string} */
+                staff_mode: "required" | "optional" | "none";
+            }[];
+            /** @description Public branches where the bundle is bookable online. */
+            branch_uuids: string[];
+        };
+        EnvelopePublicBundleList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicBundle"][];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopePublicStaffList: {
@@ -18074,6 +18259,10 @@ export interface components {
                 ends_at: string;
                 duration_minutes: number;
                 unit_price: components["schemas"]["MoneyAmount"];
+                /** @description The line was booked as part of this service bundle (TEC-985); `unit_price` is its share of the bundle price. */
+                bundle_name: string | null;
+                /** @description The line's price before the bundle discount (bundle lines only). */
+                list_price: components["schemas"]["MoneyAmount"] | null;
             }[];
             policies: {
                 cancellation: string;
@@ -26134,6 +26323,146 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantServiceBundlesExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantServiceBundlesImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantServiceBundlesImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantServiceBundlesBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantServiceBundle: {
@@ -34478,6 +34807,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopePublicServiceList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPublicBundles: {
+        parameters: {
+            query?: {
+                branch_uuid?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bundles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicBundleList"];
                 };
             };
             400: components["responses"]["BadRequest"];

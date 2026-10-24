@@ -8,7 +8,10 @@ import {
   groupCapacity,
   toggleService,
 } from "@/features/business-page/lib/wizard";
-import type { PublicService } from "@/features/business-page/types";
+import type {
+  PublicBundle,
+  PublicService,
+} from "@/features/business-page/types";
 import { priceLabel } from "@/features/services/lib/format";
 import { useLocale } from "@/providers/locale-provider";
 
@@ -33,17 +36,29 @@ function groupByCategory(services: PublicService[], other: string): Group[] {
  * Service step: one or more services of the branch (a combined visit), with
  * the branch's price and duration. The order of picking is the order of the
  * visit. A group class (gym) shows its seats and is booked on its own.
+ *
+ * A combined bundle (TEC-985) is offered first: picking one books its
+ * services in the bundle's order at the bundle price; picking a single
+ * service drops the bundle, so the two never mix.
  */
 export function ServiceStep({
   services,
   value,
   onChange,
   currency,
+  bundles = [],
+  bundle = "",
+  onBundleChange,
 }: {
   services: PublicService[];
   value: string[];
   onChange: (uuids: string[]) => void;
   currency: string;
+  /** Bundles bookable online in the branch. */
+  bundles?: PublicBundle[];
+  /** The picked bundle's uuid; empty for single services. */
+  bundle?: string;
+  onBundleChange?: (uuid: string) => void;
 }) {
   const { t, locale } = useLocale();
   const groups = groupByCategory(services, t("business_page.service.other"));
@@ -55,12 +70,92 @@ export function ServiceStep({
   const toggle = (uuid: string, checked: boolean) => {
     onChange(toggleService(services, value, uuid, checked));
   };
+  const money = (amount: string, own?: string) =>
+    priceLabel(amount, own || currency, locale);
 
   return (
     <div className="space-y-5">
+      {bundles.length > 0 && onBundleChange ? (
+        <section className="space-y-2">
+          <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            {t("business_page.bundle.title")}
+          </h3>
+          <div className="grid gap-2">
+            {bundles.map((item) => {
+              const id = `bundle-${item.uuid}`;
+              const checked = bundle === item.uuid;
+              const saves = Number(item.discount) > 0;
+              return (
+                <ChoiceCard
+                  key={item.uuid}
+                  id={id}
+                  title={
+                    <span className="flex flex-wrap items-center gap-2">
+                      {item.name}
+                      <Badge variant="secondary">
+                        {t("business_page.bundle.items", {
+                          count: item.items.length,
+                        })}
+                      </Badge>
+                    </span>
+                  }
+                  description={
+                    <>
+                      <span className="block">
+                        {item.items.map((i) => i.service_name).join(" + ")}
+                      </span>
+                      {item.description ? (
+                        <span className="line-clamp-2 block">
+                          {item.description}
+                        </span>
+                      ) : null}
+                      <span className="block">
+                        {t("business_page.minutes", {
+                          count: item.duration_minutes,
+                        })}
+                      </span>
+                    </>
+                  }
+                  aside={
+                    <span className="block">
+                      {saves ? (
+                        <span className="text-muted-foreground block text-xs font-normal line-through">
+                          {money(item.list_price, item.currency)}
+                        </span>
+                      ) : null}
+                      <span className="block">
+                        {money(item.price, item.currency)}
+                      </span>
+                      {saves ? (
+                        <span className="text-primary block text-xs font-normal">
+                          {t("business_page.bundle.save", {
+                            amount: money(item.discount, item.currency),
+                          })}
+                        </span>
+                      ) : null}
+                    </span>
+                  }
+                  control={
+                    <Checkbox
+                      id={id}
+                      checked={checked}
+                      onCheckedChange={(next) =>
+                        onBundleChange(next === true ? item.uuid : "")
+                      }
+                    />
+                  }
+                />
+              );
+            })}
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {t("business_page.bundle.hint")}
+          </p>
+        </section>
+      ) : null}
       {groups.map((group) => (
         <section key={group.key} className="space-y-2">
-          {groups.length > 1 ? (
+          {groups.length > 1 || bundles.length > 0 ? (
             <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {group.name}
             </h3>
@@ -68,11 +163,11 @@ export function ServiceStep({
           <div className="grid gap-2">
             {group.services.map((service) => {
               const id = `service-${service.uuid}`;
-              const checked = value.includes(service.uuid);
+              const checked = !bundle && value.includes(service.uuid);
               const seats = groupCapacity(service);
               // A group class replaces the picks, so the limit never
               // blocks it.
-              const blocked = !checked && full && seats === null;
+              const blocked = !bundle && !checked && full && seats === null;
               return (
                 <ChoiceCard
                   key={service.uuid}
@@ -103,20 +198,22 @@ export function ServiceStep({
                       </span>
                     </>
                   }
-                  aside={priceLabel(
-                    service.price,
-                    service.currency || currency,
-                    locale,
-                  )}
+                  aside={money(service.price, service.currency)}
                   disabled={blocked}
                   control={
                     <Checkbox
                       id={id}
                       checked={checked}
                       disabled={blocked}
-                      onCheckedChange={(next) =>
-                        toggle(service.uuid, next === true)
-                      }
+                      onCheckedChange={(next) => {
+                        // A single service replaces the bundle.
+                        if (bundle) {
+                          onBundleChange?.("");
+                          onChange(next === true ? [service.uuid] : []);
+                          return;
+                        }
+                        toggle(service.uuid, next === true);
+                      }}
                     />
                   }
                 />
@@ -125,12 +222,12 @@ export function ServiceStep({
           </div>
         </section>
       ))}
-      {groupPicked ? (
+      {groupPicked && !bundle ? (
         <p className="text-muted-foreground text-sm">
           {t("business_page.service.group_alone")}
         </p>
       ) : null}
-      {full ? (
+      {full && !bundle ? (
         <p className="text-muted-foreground text-sm">
           {t("business_page.service.max", { count: MAX_LINES })}
         </p>

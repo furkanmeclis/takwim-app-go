@@ -51,6 +51,10 @@ const bulkActionIconCatalog: Record<
     activate: CircleCheck,
     deactivate: CircleOff,
   },
+  "tenant.service_bundles": {
+    activate: CircleCheck,
+    deactivate: CircleOff,
+  },
   "tenant.products": {
     activate: CircleCheck,
     deactivate: CircleOff,

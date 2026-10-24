@@ -1,6 +1,7 @@
 import type {
   PaymentMethod,
   PublicBranch,
+  PublicBundle,
   PublicBusiness,
   PublicCheckout,
   PublicClassSession,
@@ -356,15 +357,39 @@ export function sumAmounts(amounts: string[]) {
   return amounts.reduce((total, amount) => total + Number(amount), 0);
 }
 
-/** Catalog price of each held line (the person's own, else the branch's). */
+/**
+ * Catalog price of each held line (the person's own, else the branch's). A
+ * bundle booking (TEC-985) shows each line's share of the bundle price as
+ * the catalog lists it; the API splits the final price the same way the
+ * panel does (by list price, remainder on the last line).
+ */
 export function checkoutPrices(
   checkout: PublicCheckout,
   services: PublicService[],
+  bundle: PublicBundle | null = null,
 ) {
-  return checkout.lines.map((line) => {
+  return checkout.lines.map((line, index) => {
+    if (bundle && line.bundle?.uuid === bundle.uuid) {
+      return bundle.items[index]?.allocated_price ?? "0";
+    }
     const service = services.find((s) => s.uuid === line.service_uuid);
     return service ? linePrice(service, line.staff?.uuid ?? null).price : "0";
   });
+}
+
+/** The picked bundle, if the branch still offers it online. */
+export function activeBundle(
+  bundles: PublicBundle[],
+  uuid: string,
+  branchUuid: string,
+) {
+  const bundle = bundles.find((b) => b.uuid === uuid);
+  return bundle && bundle.branch_uuids.includes(branchUuid) ? bundle : null;
+}
+
+/** Services of a bundle in serving order (the booking's lines). */
+export function bundleServiceUuids(bundle: PublicBundle) {
+  return bundle.items.map((item) => item.service_uuid);
 }
 
 /**
