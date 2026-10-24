@@ -7,7 +7,7 @@ This repo is a two-app monorepo plus Compose files. Dependencies point inward: H
 ```
 .
 ├── backend/                      Go API + worker
-│   ├── cmd/                      server, worker, create-super-admin
+│   ├── cmd/                      server, worker, create-super-admin, demo-seed
 │   ├── internal/modules/         auth, notifications, exports, imports,
 │   │                             bulk, settings, activity, logs, storage,
 │   │                             access, search, integrations
