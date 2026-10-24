@@ -15,6 +15,10 @@
 //     channel moves on to the next one when the rule allows fallback.
 //   - A channel without an adapter or a ready provider is logged as
 //     skipped, never as sent.
+//   - A channel with delivery reports (WhatsApp, TEC-922) keeps its attempt
+//     open until the report; delivery and read times are recorded apart
+//     from the acceptance. A report that never comes fails the attempt
+//     after the receipt timeout so the next channel runs.
 package usecase
 
 import (
@@ -91,7 +95,14 @@ type Engine struct {
 	// carries a visit link, not a panel link).
 	eventLinks map[string]LinkIssuer
 	guard      DispatchGuard
+	// receiptTimeout fails an accepted attempt whose delivery report never
+	// came.
+	receiptTimeout time.Duration
 }
+
+// DefaultReceiptTimeout is how long an accepted message may wait for its
+// delivery report before the attempt counts as failed.
+const DefaultReceiptTimeout = 30 * time.Minute
 
 // DispatchGuard tells, inside the claim transaction, why a dispatch must
 // not go out any more ("" = send it); another module owns that decision
@@ -106,6 +117,7 @@ func New(pool *pgxpool.Pool, q *db.Queries, panelURL string) *Engine {
 	return &Engine{
 		pool: pool, q: q, channels: map[string]channel.Channel{}, log: slog.Default(), now: time.Now,
 		panelURL: strings.TrimSpace(panelURL), batch: 100, eventLinks: map[string]LinkIssuer{},
+		receiptTimeout: DefaultReceiptTimeout,
 	}
 }
 
@@ -128,6 +140,27 @@ func (e *Engine) Register(chs ...channel.Channel) {
 func (e *Engine) Ready(name string) bool {
 	c, ok := e.channels[name]
 	return ok && c.Ready()
+}
+
+// ReadyFor reports whether a channel can deliver for one business: a
+// channel on the business's own provider account (WhatsApp) also needs a
+// working account.
+func (e *Engine) ReadyFor(ctx context.Context, orgID int64, name string) bool {
+	c, ok := e.channels[name]
+	if !ok || !c.Ready() {
+		return false
+	}
+	if oc, ok := c.(channel.OrganizationChannel); ok {
+		return oc.ReadyFor(ctx, orgID)
+	}
+	return true
+}
+
+// SetReceiptTimeout replaces the receipt timeout (0 keeps the default).
+func (e *Engine) SetReceiptTimeout(d time.Duration) {
+	if d > 0 {
+		e.receiptTimeout = d
+	}
 }
 
 // SetLogger replaces the logger.
@@ -583,8 +616,9 @@ func (e *Engine) send(ctx context.Context, orgID int64, st *step) channel.Result
 			Phone: cust.PhoneE164.String, Email: strings.TrimSpace(cust.Email),
 		},
 		Subject: st.delivery.Subject, Body: st.delivery.Body, BusinessName: st.business, OrganizationID: orgID,
-		ReservationID: st.dispatch.ReservationID.Int64,
+		ReservationID: st.dispatch.ReservationID.Int64, Vars: map[string]string{},
 	}
+	_ = json.Unmarshal(st.dispatch.Vars, &msg.Vars)
 	// A personal link is put in at send time only, and only when the channel
 	// really delivers (a log sender never uses up a link); the stored text keeps
 	// the public panel address.
@@ -649,6 +683,13 @@ func (e *Engine) record(ctx context.Context, orgID int64, st *step, res channel.
 		if n, err := e.q.UpdateCustomerNotificationDelivery(ctx, p); err != nil || n == 0 {
 			return false, err
 		}
+		if res.Outcome == channel.OutcomeDelivered {
+			if err := e.q.MarkCustomerNotificationDeliveryReceipt(ctx, db.MarkCustomerNotificationDeliveryReceiptParams{
+				OrganizationID: orgID, ID: st.delivery.ID, At: ts(now),
+			}); err != nil {
+				return false, err
+			}
+		}
 		return false, e.q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
 			OrganizationID: orgID, ID: st.dispatch.ID, Status: DispatchDelivered, NextChannelIndex: st.dispatch.NextChannelIndex,
 			CompletedAt: ts(now),
@@ -697,8 +738,27 @@ func (e *Engine) advance(ctx context.Context, q *db.Queries, orgID int64, d db.C
 }
 
 // ReportDelivery implements channel.Reporter: the final result of an
-// accepted message. A failure runs the next channel (fallback).
+// accepted message. A failure runs the next channel (fallback) right away.
 func (e *Engine) ReportDelivery(ctx context.Context, r channel.Report) {
+	dispatchID, next, err := e.RecordDelivery(ctx, r)
+	if err != nil {
+		e.log.WarnContext(ctx, "customer_notice_report_failed", "organization", r.OrganizationID, "error", err)
+		return
+	}
+	if next {
+		if err := e.Process(ctx, r.OrganizationID, dispatchID); err != nil {
+			e.log.WarnContext(ctx, "customer_notice_fallback_failed", "dispatch", dispatchID, "error", err)
+		}
+	}
+}
+
+// RecordDelivery records a delivery report without sending anything: next
+// tells that the dispatch went back to pending for its next channel, which
+// the worker's scan sends (a webhook in the API process only records).
+// Delivery and read times are recorded even when the attempt ended before
+// (a late report); they never answer anything. An unknown delivery is no
+// error.
+func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, bool, error) {
 	orgID := r.OrganizationID
 	var (
 		dl  db.CustomerNotificationDelivery
@@ -711,14 +771,31 @@ func (e *Engine) ReportDelivery(ctx context.Context, r channel.Report) {
 			OrganizationID: orgID, Channel: r.Channel, ExternalUuid: pgtype.UUID{Bytes: r.ExternalUUID, Valid: true},
 		})
 	}
-	if err != nil || dl.Channel != r.Channel {
-		return
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && dl.Channel != r.Channel) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	if r.Read {
+		r.Delivered = true
 	}
 	status := DeliveryDelivered
 	if !r.Delivered {
 		status = DeliveryFailed
 	}
 	now := e.clock()
+	at := now
+	if !r.At.IsZero() {
+		at = r.At.UTC().Truncate(time.Microsecond)
+	}
+	if r.Delivered {
+		if err := e.q.MarkCustomerNotificationDeliveryReceipt(ctx, db.MarkCustomerNotificationDeliveryReceiptParams{
+			OrganizationID: orgID, ID: dl.ID, At: ts(at), IsRead: r.Read,
+		}); err != nil {
+			return 0, false, err
+		}
+	}
 	next := false
 	err = e.tx(ctx, func(q *db.Queries) error {
 		d, err := q.LockCustomerNotificationDispatchWait(ctx, db.LockCustomerNotificationDispatchWaitParams{OrganizationID: orgID, ID: dl.DispatchID})
@@ -749,15 +826,35 @@ func (e *Engine) ReportDelivery(ctx context.Context, r channel.Report) {
 		next, err = e.advance(ctx, q, orgID, d, dl.Channel, reason)
 		return err
 	})
-	if err != nil {
-		e.log.WarnContext(ctx, "customer_notice_report_failed", "delivery", dl.Uuid, "error", err)
-		return
-	}
-	if next {
-		if err := e.Process(ctx, orgID, dl.DispatchID); err != nil {
-			e.log.WarnContext(ctx, "customer_notice_fallback_failed", "delivery", dl.Uuid, "error", err)
+	return dl.DispatchID, next, err
+}
+
+// ExpireReceipts fails the accepted attempts whose delivery report did not
+// come within the receipt timeout (the rule's next channel runs) and
+// returns how many it failed. Only channels with reports are looked at.
+func (e *Engine) ExpireReceipts(ctx context.Context) (int, error) {
+	var names []string
+	for name, c := range e.channels {
+		if _, ok := c.(channel.ReportingChannel); ok {
+			names = append(names, name)
 		}
 	}
+	if len(names) == 0 {
+		return 0, nil
+	}
+	rows, err := e.q.ListUnreportedCustomerNotificationDeliveries(ctx, db.ListUnreportedCustomerNotificationDeliveriesParams{
+		Before: ts(e.clock().Add(-e.receiptTimeout)), Channels: names, LimitCount: e.batch,
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range rows {
+		id := r.Uuid
+		e.ReportDelivery(ctx, channel.Report{
+			Channel: r.Channel, OrganizationID: r.OrganizationID, DeliveryUUID: &id, Error: "no delivery report",
+		})
+	}
+	return len(rows), nil
 }
 
 // ProcessDue sends every due dispatch and returns how many were processed.
@@ -926,6 +1023,11 @@ func (e *Engine) sweep(ctx context.Context, reminders bool) {
 			e.log.WarnContext(ctx, "customer_notice_reminders_failed", "error", err)
 		} else if n > 0 {
 			e.log.InfoContext(ctx, "customer_notice_reminders_planned", "count", n)
+		}
+		if n, err := e.ExpireReceipts(ctx); err != nil && ctx.Err() == nil {
+			e.log.WarnContext(ctx, "customer_notice_receipts_failed", "error", err)
+		} else if n > 0 {
+			e.log.InfoContext(ctx, "customer_notice_receipts_expired", "count", n)
 		}
 	}
 	if _, err := e.ProcessDue(ctx); err != nil && ctx.Err() == nil {

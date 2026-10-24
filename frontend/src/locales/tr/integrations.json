@@ -240,5 +240,15 @@
   "toast.updated": "Hesap güncellendi",
   "validation.display_name": "Hesap adı gerekli.",
   "validation.required": "Bu alan gerekli.",
-  "page_description": "Firmanızın kendi sağlayıcı hesapları. Anahtarlar şifreli saklanır ve bir daha gösterilmez."
+  "page_description": "Firmanızın kendi sağlayıcı hesapları. Anahtarlar şifreli saklanır ve bir daha gösterilmez.",
+  "providers.meta": "WhatsApp Cloud API (Meta)",
+  "provider_hints.meta": "Meta Business hesabınızdaki WhatsApp numarasının kimliğini (Phone number ID), kalıcı erişim anahtarını (sistem kullanıcısı), uygulama gizli anahtarını (App secret) ve kendi belirlediğiniz doğrulama anahtarını girin. Teyit isteği için Meta’da üç hızlı yanıt düğmeli (Geleceğim, İptal, Değişiklik) bir şablon onaylatın; şablon adı boş bırakılırsa randevu_teyit kullanılır. Kaydettikten sonra hesabı düzenleyerek webhook adresini görebilirsiniz.",
+  "fields.phone_number_id": "Telefon numarası kimliği (Phone number ID)",
+  "fields.access_token": "Erişim anahtarı (access token)",
+  "fields.app_secret": "Uygulama gizli anahtarı (App secret)",
+  "fields.verify_token": "Webhook doğrulama anahtarı (verify token)",
+  "fields.template_name": "Teyit şablonunun adı",
+  "fields.template_language": "Şablon dili (ör. tr)",
+  "webhook.label": "Webhook adresi",
+  "webhook.hint": "Meta uygulamanızda WhatsApp > Yapılandırma bölümüne bu adresi ve doğrulama anahtarını girin, \"messages\" alanına abone olun. Teslim bilgileri ve müşterinin düğme yanıtları buraya gelir."
 }

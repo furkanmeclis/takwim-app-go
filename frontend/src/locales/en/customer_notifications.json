@@ -97,7 +97,7 @@
   "editor.subject": "Subject",
   "editor.body": "Text",
   "editor.body_count": "{{count}} / {{max}} characters",
-  "editor.whatsapp_note": "WhatsApp sending comes with the customer confirmation module; for now this channel is skipped.",
+  "editor.whatsapp_note": "WhatsApp sends only the confirmation request, with the template the business had approved by Meta; for other notices this channel is skipped and the next channel is tried.",
   "editor.preview_title": "Preview with a sample customer and booking",
   "editor.unknown_variables": "Unknown variables: {{names}}",
   "editor.variables_hint": "Variables you can use in the text:",

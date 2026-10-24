@@ -97,7 +97,7 @@
   "editor.subject": "Konu",
   "editor.body": "Metin",
   "editor.body_count": "{{count}} / {{max}} karakter",
-  "editor.whatsapp_note": "WhatsApp gönderimi müşteri teyit modülüyle gelecek; şimdilik bu kanal atlanır.",
+  "editor.whatsapp_note": "WhatsApp yalnızca teyit isteğini, işletmenin Meta’da onaylattığı şablonla gönderir; diğer bildirimlerde bu kanal atlanır ve sıradaki kanal denenir.",
   "editor.preview_title": "Örnek müşteri ve randevuyla önizleme",
   "editor.unknown_variables": "Tanınmayan değişkenler: {{names}}",
   "editor.variables_hint": "Metinde kullanabileceğiniz değişkenler:",

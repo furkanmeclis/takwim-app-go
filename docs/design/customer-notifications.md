@@ -58,11 +58,11 @@ An attempt that stops between claim and record stays `sending` and is not resent
 
 The `channel.Channel` port (`Name`, `Ready`, `Send`) is the provider layer; adapters are registered on the engine at start, a later one replacing an earlier one of the same name. A channel that reports later implements `ReportingChannel` and gets the engine as its `Reporter`.
 
-| Channel    | Adapter                                                                                                                                                                                         |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sms`      | `adapters.SMS` over `sms.Sender`. `LogSender` (until the provider is chosen, TEC-884) is not ready: the message is logged in development, the attempt is `skipped`. No phone number: `skipped`. |
-| `email`    | `adapters.Email` over the SMTP mailer; ready when `MAIL_DRIVER=smtp` and `SMTP_HOST` is set (another driver: `skipped`); an SMTP error is `failed`. No address: `skipped`.                      |
-| `whatsapp` | a known channel without an adapter yet: always `skipped`. WhatsApp (TEC-922) and voice (TEC-923) adapters register on the same port.                                                            |
+| Channel    | Adapter                                                                                                                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sms`      | `adapters.SMS` over `sms.Sender`. `LogSender` (until the provider is chosen, TEC-884) is not ready: the message is logged in development, the attempt is `skipped`. No phone number: `skipped`.      |
+| `email`    | `adapters.Email` over the SMTP mailer; ready when `MAIL_DRIVER=smtp` and `SMTP_HOST` is set (another driver: `skipped`); an SMTP error is `failed`. No address: `skipped`.                           |
+| `whatsapp` | the business's own WhatsApp Cloud API account (TEC-922, [confirmations.md](./confirmations.md#channels-tec-922)): only the confirmation request (an approved template); other notices are `skipped`. |
 
 The default rule of every event is SMS, then e-mail, with fallback; the reminder defaults to 24 hours before.
 
@@ -98,5 +98,5 @@ Settings → Müşteri bildirimleri. "Olaylar ve metinler" lists the events (on 
 
 ## Not here yet
 
-- A real SMS provider (TEC-884) and delivery reports; WhatsApp (TEC-922) and voice (TEC-923).
+- A real SMS provider (TEC-884) and its delivery reports; voice (TEC-923). WhatsApp arrived with TEC-922 (confirmation requests only).
 - Notices on the reservation and customer detail pages (the history API already filters by `reservation_uuid` / `customer_uuid`).

@@ -145,7 +145,7 @@ func (q *Queries) FinishCustomerNotificationDelivery(ctx context.Context, arg Fi
 }
 
 const getCustomerNotificationDeliveryByExternal = `-- name: GetCustomerNotificationDeliveryByExternal :one
-SELECT id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at FROM customer_notification_deliveries
+SELECT id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at, delivered_at, read_at FROM customer_notification_deliveries
 WHERE organization_id = $1 AND channel = $2 AND external_uuid = $3
 `
 
@@ -177,12 +177,14 @@ func (q *Queries) GetCustomerNotificationDeliveryByExternal(ctx context.Context,
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveredAt,
+		&i.ReadAt,
 	)
 	return i, err
 }
 
 const getCustomerNotificationDeliveryByUUID = `-- name: GetCustomerNotificationDeliveryByUUID :one
-SELECT id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at FROM customer_notification_deliveries
+SELECT id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at, delivered_at, read_at FROM customer_notification_deliveries
 WHERE organization_id = $1 AND uuid = $2
 `
 
@@ -213,6 +215,8 @@ func (q *Queries) GetCustomerNotificationDeliveryByUUID(ctx context.Context, arg
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveredAt,
+		&i.ReadAt,
 	)
 	return i, err
 }
@@ -474,7 +478,7 @@ INSERT INTO customer_notification_deliveries (organization_id, dispatch_id, chan
 VALUES ($1, $2, $3, $4, 'sending',
         $5, $6)
 ON CONFLICT (organization_id, dispatch_id, channel) DO NOTHING
-RETURNING id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at
+RETURNING id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at, delivered_at, read_at
 `
 
 type InsertCustomerNotificationDeliveryParams struct {
@@ -516,6 +520,8 @@ func (q *Queries) InsertCustomerNotificationDelivery(ctx context.Context, arg In
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveredAt,
+		&i.ReadAt,
 	)
 	return i, err
 }
@@ -732,7 +738,7 @@ func (q *Queries) ListCustomerNotificationDeliveries(ctx context.Context, arg Li
 }
 
 const listCustomerNotificationDeliveriesForDispatch = `-- name: ListCustomerNotificationDeliveriesForDispatch :many
-SELECT id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at FROM customer_notification_deliveries
+SELECT id, uuid, organization_id, dispatch_id, channel, attempt_no, status, provider, provider_ref, external_uuid, recipient_masked, subject, body, error, sent_at, finished_at, created_at, updated_at, delivered_at, read_at FROM customer_notification_deliveries
 WHERE organization_id = $1 AND dispatch_id = $2
 ORDER BY attempt_no
 `
@@ -770,6 +776,8 @@ func (q *Queries) ListCustomerNotificationDeliveriesForDispatch(ctx context.Cont
 			&i.FinishedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeliveredAt,
+			&i.ReadAt,
 		); err != nil {
 			return nil, err
 		}

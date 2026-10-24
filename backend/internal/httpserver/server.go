@@ -151,6 +151,9 @@ import (
 	storagehandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/handler"
 	storageusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
+	whatsappmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp"
+	whatsapphandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/handler"
+	whatsappusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/appleauth"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
@@ -429,8 +432,15 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// in (it shows message texts outside production only) and counts as not
 	// ready, so no notice is recorded as sent through it.
 	smsSender := sms.NewLogSender(log, cfg.App.Env != "production")
+	// WhatsApp (TEC-922): the business's own Cloud API account. Registered
+	// here for its readiness and for the webhook, whose delivery reports the
+	// engine records (the worker sends).
+	whatsappClient := whatsappmodule.Client(cfg)
+	whatsappSvc := whatsappusecase.New(deps.Queries, whatsappClient)
+	whatsappSvc.SetLogger(log)
 	notifyEngine.Register(customernotifyadapters.SMS{Sender: smsSender},
-		customernotifyadapters.Email{Mail: mail.NewSMTPSender(cfg.SMTP), Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""})
+		customernotifyadapters.Email{Mail: mail.NewSMTPSender(cfg.SMTP), Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""},
+		whatsappusecase.NewChannel(whatsappSvc))
 	// Customer confirmation (TEC-921, Konfirmasyon add-on): every
 	// reservation change plans or follows its confirmation task in the same
 	// transaction; the requests go out through the notification engine,
@@ -478,10 +488,12 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: field cipher: %w", err)
 	}
-	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log, paymentsmodule.Adapters(cfg)...)
+	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log,
+		append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)...)
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: %w", err)
 	}
+	whatsappSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner)
 	if deps.Queue != nil {
 		integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: deps.Queue})
 	}
@@ -710,6 +722,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	panelH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	panelH.SetResourceEvents(resourceEvents)
 	customerpanelmodule.RegisterRoutes(mux, panelH)
+	// WhatsApp replies (TEC-922) answer like the visit link.
+	whatsappSvc.SetAnswers(panelSvc, confirmEngine)
+	whatsappSvc.SetResourceEvents(resourceEvents)
+	whatsappSvc.SetActivity(activityRec)
+	whatsappH := whatsapphandler.New(whatsappSvc)
+	whatsappH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	whatsappmodule.RegisterRoutes(mux, whatsappH)
 	publicH := publicbookinghandler.New(publicSvc, deps.Storage, activityRec)
 	publicH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	publicH.SetResourceEvents(resourceEvents)

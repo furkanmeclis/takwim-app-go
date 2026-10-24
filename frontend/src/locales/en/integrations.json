@@ -240,5 +240,15 @@
   "toast.updated": "Account updated",
   "validation.display_name": "The account name is required.",
   "validation.required": "This field is required.",
-  "page_description": "Your organization's own provider accounts. Keys are stored encrypted and never shown again."
+  "page_description": "Your organization's own provider accounts. Keys are stored encrypted and never shown again.",
+  "providers.meta": "WhatsApp Cloud API (Meta)",
+  "provider_hints.meta": "Enter the Phone number ID of your WhatsApp number on Meta Business, a permanent access token (system user), the App secret and a verify token of your choice. For the confirmation request, have Meta approve a template with three quick reply buttons (I will come, Cancel, Change); an empty template name uses randevu_teyit. After saving, edit the account to see its webhook address.",
+  "fields.phone_number_id": "Phone number ID",
+  "fields.access_token": "Access token",
+  "fields.app_secret": "App secret",
+  "fields.verify_token": "Webhook verify token",
+  "fields.template_name": "Confirmation template name",
+  "fields.template_language": "Template language (e.g. tr)",
+  "webhook.label": "Webhook address",
+  "webhook.hint": "Enter this address and the verify token in your Meta app under WhatsApp > Configuration and subscribe to the \"messages\" field. Delivery reports and the customer's button replies arrive here."
 }

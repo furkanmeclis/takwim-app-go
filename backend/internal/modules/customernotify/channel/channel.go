@@ -1,6 +1,7 @@
 // Package channel is the contract between the customer notification engine
-// (TEC-911) and the adapters that deliver its messages: SMS and e-mail now,
-// WhatsApp and voice calls with the confirmation module (TEC-921 / 922).
+// (TEC-911) and the adapters that deliver its messages: SMS, e-mail and
+// WhatsApp (TEC-922, the business's own Meta account); voice calls with
+// TEC-923.
 //
 // A new channel is one type implementing Channel, registered on the engine
 // with Engine.Register. The engine never names a provider: rules list
@@ -9,13 +10,17 @@
 // channel runs.
 //
 // Channels whose result arrives later (a delivery report) answer
-// OutcomeAccepted with ExternalUUID set and report the final result through
-// the Reporter handed to them by SetReporter (ReportingChannel).
+// OutcomeAccepted with ProviderRef (or ExternalUUID) set and report the
+// final result through the Reporter handed to them by SetReporter
+// (ReportingChannel). A report that never comes fails the attempt after the
+// engine's receipt timeout, so the next channel runs. A delivery or read
+// report is never an answer to the message.
 package channel
 
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -28,7 +33,7 @@ const (
 )
 
 // Known lists every channel a rule may use, in display order. A known
-// channel may have no adapter yet (WhatsApp until TEC-921).
+// channel may have no adapter in a process (it is then skipped).
 var Known = []string{SMS, WhatsApp, Email}
 
 // IsKnown reports whether name is a known channel.
@@ -63,6 +68,9 @@ type Message struct {
 	BusinessName   string
 	OrganizationID int64
 	ReservationID  int64
+	// Vars are the dispatch variables the text was rendered with (a
+	// provider template fills its own parameters from them).
+	Vars map[string]string
 }
 
 // Outcome is the result of one send.
@@ -118,8 +126,13 @@ type Report struct {
 	DeliveryUUID   *uuid.UUID
 	ExternalUUID   uuid.UUID
 	Delivered      bool
-	ProviderRef    string
-	Error          string
+	// Read: the customer opened the message (implies Delivered). It is
+	// recorded as a receipt time only, never as an answer.
+	Read        bool
+	ProviderRef string
+	Error       string
+	// At is the provider's time of the report (zero = now).
+	At time.Time
 }
 
 // Reporter receives delivery reports (implemented by the engine).
@@ -131,6 +144,14 @@ type Reporter interface {
 type ReportingChannel interface {
 	Channel
 	SetReporter(r Reporter)
+}
+
+// OrganizationChannel is a channel that sends through the business's own
+// provider account (WhatsApp): Ready says the provider is available in this
+// process, ReadyFor whether the business has a working account.
+type OrganizationChannel interface {
+	Channel
+	ReadyFor(ctx context.Context, orgID int64) bool
 }
 
 // MaskEmail keeps the first letter of the local part and the domain.

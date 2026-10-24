@@ -78,7 +78,9 @@ var (
 // Notices writes request dispatches (the customer notification engine).
 type Notices interface {
 	EmitReservation(ctx context.Context, q *db.Queries, orgID, reservationID int64, n customernotifyusecase.ReservationNotice) (bool, error)
-	Ready(name string) bool
+	// ReadyFor reports whether a channel can deliver for the business (its
+	// own WhatsApp account included).
+	ReadyFor(ctx context.Context, orgID int64, name string) bool
 }
 
 // Canceller cancels a booking through its transition (the reservations
@@ -135,7 +137,9 @@ func (e *Engine) SetClock(now func() time.Time) { e.now = now }
 
 func (e *Engine) clock() time.Time { return e.now().UTC().Truncate(time.Microsecond) }
 
-func (e *Engine) ready(ch string) bool { return e.notices != nil && e.notices.Ready(ch) }
+func (e *Engine) readyFor(ctx context.Context, orgID int64, ch string) bool {
+	return e.notices != nil && e.notices.ReadyFor(ctx, orgID, ch)
+}
 
 func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
 
@@ -377,6 +381,25 @@ func (e *Engine) Guard(ctx context.Context, q *db.Queries, d db.CustomerNotifica
 	return "", nil
 }
 
+// RequestCurrent reports whether a confirmation request (its dispatch) is
+// about the booking as it is now: the task's current planning and the same
+// visit start. A reply to an older request (the visit moved since) never
+// acts on the booking (A12). The task may be closed (answered): the answer
+// itself decides what it still takes.
+func (e *Engine) RequestCurrent(ctx context.Context, d db.CustomerNotificationDispatch) (bool, error) {
+	if d.EventCode != Event || !d.ReservationID.Valid || !d.DueAt.Valid {
+		return false, nil
+	}
+	t, err := e.q.GetReservationConfirmation(ctx, db.GetReservationConfirmationParams{OrganizationID: d.OrganizationID, ReservationID: d.ReservationID.Int64})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strings.Contains(d.IdempotencyKey, "|"+roundKey(t.Round)+":a") && t.StartsAt.Time.Equal(d.DueAt.Time), nil
+}
+
 // roundKey names a task round in request keys ("r2").
 func roundKey(round int32) string { return "r" + strconv.Itoa(int(round)) }
 
@@ -543,8 +566,8 @@ func (e *Engine) deadline(ctx context.Context, q *db.Queries, r db.GetConfirmati
 	return nil, st.save(ctx, q)
 }
 
-// AnswerInput is a customer's answer (the customer panel, a visit link;
-// WhatsApp and voice with TEC-922 / TEC-923).
+// AnswerInput is a customer's answer (the customer panel, a visit link, a
+// WhatsApp button; voice with TEC-923).
 type AnswerInput struct {
 	// Answer is model.AnswerConfirm or model.AnswerChange (a cancel goes
 	// through the reservation's cancel under the business's rules).

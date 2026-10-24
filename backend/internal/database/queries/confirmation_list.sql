@@ -129,7 +129,8 @@ GROUP BY 1, 2, 3;
 SELECT d.uuid AS dispatch_uuid, d.idempotency_key, d.status AS dispatch_status, d.last_error AS dispatch_error,
        d.scheduled_at, d.completed_at,
        dl.uuid AS delivery_uuid, dl.channel, dl.attempt_no, dl.status AS delivery_status, dl.provider,
-       dl.recipient_masked, dl.error AS delivery_error, dl.sent_at, dl.finished_at, dl.created_at AS delivery_created_at
+       dl.recipient_masked, dl.error AS delivery_error, dl.sent_at, dl.finished_at, dl.created_at AS delivery_created_at,
+       dl.delivered_at, dl.read_at
 FROM customer_notification_dispatches d
 LEFT JOIN customer_notification_deliveries dl ON dl.organization_id = d.organization_id AND dl.dispatch_id = d.id
 WHERE d.organization_id = sqlc.arg(organization_id) AND d.reservation_id = sqlc.arg(reservation_id)
