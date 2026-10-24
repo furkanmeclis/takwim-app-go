@@ -5,6 +5,13 @@ import { Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ChoiceCard } from "@/features/business-page/components/choice-card";
 import {
@@ -26,7 +33,11 @@ import type {
   PublicService,
   PublicVehicle,
 } from "@/features/business-page/types";
+import type { CustomerPackage } from "@/features/customer-panel/types";
 import { answerText } from "@/features/reservations/lib/custom-fields";
+
+/** Select value for "pay the line" (no package). */
+const NO_PACKAGE = "none";
 import { priceLabel } from "@/features/services/lib/format";
 import { datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -47,6 +58,10 @@ export function SummaryStep({
   payment,
   onPaymentChange,
   vehicle = null,
+  packageChoices = [],
+  packageBy = {},
+  covered = new Set<number>(),
+  onPackageChange,
 }: {
   business: PublicBusiness;
   checkout: PublicCheckout;
@@ -58,6 +73,13 @@ export function SummaryStep({
   payment: PaymentMethod | undefined;
   onPaymentChange: (method: PaymentMethod) => void;
   vehicle?: PublicVehicle | null;
+  /** Per line, the signed-in person's packages that can pay it (TEC-984). */
+  packageChoices?: CustomerPackage[][];
+  /** Line index → picked package. */
+  packageBy?: Record<number, string>;
+  /** Lines a picked package pays. */
+  covered?: Set<number>;
+  onPackageChange?: (line: number, packageUuid: string | null) => void;
 }) {
   const { t, locale } = useLocale();
   const zone = business.timezone;
@@ -66,7 +88,17 @@ export function SummaryStep({
   const byUuid = new Map(services.map((s) => [s.uuid, s]));
   const prices = checkoutPrices(checkout, services);
   const itemPrices = productPrices(products, pickedProducts);
-  const total = sumAmounts(prices) + sumAmounts(itemPrices);
+  const total =
+    sumAmounts(prices.filter((_, index) => !covered.has(index))) +
+    sumAmounts(itemPrices);
+  // A package offered to a line while other lines leave it sessions.
+  const offered = (index: number) =>
+    (packageChoices[index] ?? []).filter((p) => {
+      const others = Object.entries(packageBy).filter(
+        ([line, id]) => Number(line) !== index && id === p.uuid,
+      ).length;
+      return p.remaining > others;
+    });
   const itemName = (item: PublicBookingProduct) => {
     const p = products.find((x) => productKey(x) === productKey(item));
     if (!p) return "";
@@ -118,9 +150,48 @@ export function SummaryStep({
                     {time(line.starts_at)}–{time(line.ends_at)}
                     {line.staff ? ` · ${line.staff.name}` : ""}
                   </span>
+                  {onPackageChange && offered(index).length > 0 ? (
+                    <Select
+                      value={
+                        covered.has(index) && packageBy[index]
+                          ? packageBy[index]
+                          : NO_PACKAGE
+                      }
+                      onValueChange={(next) =>
+                        onPackageChange(
+                          index,
+                          next === NO_PACKAGE ? null : next,
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="mt-2 w-full max-w-72"
+                        aria-label={t("business_page.packages.use")}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_PACKAGE}>
+                          {t("business_page.packages.none")}
+                        </SelectItem>
+                        {offered(index).map((p) => (
+                          <SelectItem key={p.uuid} value={p.uuid}>
+                            {t("business_page.packages.option", {
+                              name: p.name,
+                              remaining: p.remaining,
+                              total: p.total_sessions,
+                            })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                 </span>
                 <span className="shrink-0 tabular-nums">
-                  {money(prices[index] ?? "0")}
+                  {covered.has(index)
+                    ? t("business_page.packages.session")
+                    : money(prices[index] ?? "0")}
                 </span>
               </li>
             ))}

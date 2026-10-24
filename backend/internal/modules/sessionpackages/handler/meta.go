@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourcemeta"
 )
@@ -12,7 +13,7 @@ func PackagesMeta() resourcemeta.ResourceMeta {
 		DefaultSort:   "name",
 		DefaultFields: []string{"name", "service", "total_sessions", "price", "session_value", "validity_days", "branches", "is_active"},
 		Capabilities: resourcemeta.Capabilities{
-			Read: true, Create: true, Update: true, Delete: true, Search: true, Filter: true, Sort: true,
+			Read: true, Create: true, Update: true, Delete: true, Search: true, Filter: true, Sort: true, Bulk: true,
 		},
 		SearchableFields: []string{"name", "service.name"},
 		SortableFields:   []string{"name", "price", "total_sessions", "created_at"},
@@ -34,7 +35,7 @@ func PackagesMeta() resourcemeta.ResourceMeta {
 			{Key: "is_active", LabelKey: "session_packages.columns.is_active", Variant: resourcemeta.FilterVariantFaceted},
 		},
 		Includes:    []string{},
-		BulkActions: nil,
+		BulkActions: adapters.NewBulk(nil).BulkActions(),
 	}
 }
 
@@ -46,7 +47,7 @@ func CustomerPackagesMeta() resourcemeta.ResourceMeta {
 		DefaultSort:   "-sold_on",
 		DefaultFields: []string{"customer", "name", "sessions", "remaining_amount", "price", "sold_on", "expires_on", "state"},
 		Capabilities: resourcemeta.Capabilities{
-			Read: true, Create: true, Search: true, Filter: true, Sort: true,
+			Read: true, Create: true, Search: true, Filter: true, Sort: true, Export: true,
 		},
 		SearchableFields: []string{"name", "service_name", "customer.name", "customer.phone"},
 		SortableFields:   []string{"sold_on", "expires_on", "price", "created_at"},

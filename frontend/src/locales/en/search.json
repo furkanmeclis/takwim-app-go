@@ -31,5 +31,7 @@
   "prefix_reservations": "reservation",
   "specs_reservations": "Reservations",
   "prefix_cash_accounts": "cash",
-  "specs_cash_accounts": "Cash and bank accounts"
+  "specs_cash_accounts": "Cash and bank accounts",
+  "specs_customer_packages": "Sold packages",
+  "prefix_customer_packages": "package"
 }

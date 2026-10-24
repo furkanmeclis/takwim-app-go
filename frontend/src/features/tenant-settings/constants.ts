@@ -73,6 +73,8 @@ export const FIELD_LABEL_KEYS: Record<string, string> = {
   "reservation.max_open_per_customer":
     "tenant_settings.fields.max_open_per_customer",
   "reservation.max_online_per_day": "tenant_settings.fields.max_online_per_day",
+  "reservation.no_show_uses_package_session":
+    "tenant_settings.fields.no_show_uses_package_session",
   "booking.hidden_steps": "tenant_settings.booking.hidden_steps",
   "payment.pay_at_venue": "tenant_settings.fields.pay_at_venue",
   "payment.pay_online": "tenant_settings.fields.pay_online",

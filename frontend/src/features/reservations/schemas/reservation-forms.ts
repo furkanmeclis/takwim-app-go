@@ -97,6 +97,8 @@ export function createBookingSchema(
               .min(1, t("reservations.validation.service_required")),
             /** ANY_STAFF = anyone free. */
             staff_uuid: z.string(),
+            /** NO_PACKAGE or the customer's package paying the line (TEC-984). */
+            package_uuid: z.string(),
           }),
         )
         .min(1, t("reservations.validation.service_required"))
@@ -248,6 +250,18 @@ export const ANY_ZONE = "any";
 
 /** Select value for "no bundle": the services are picked one by one. */
 export const NO_BUNDLE = "none";
+
+/** Select value for "pay the line" (no package session). */
+export const NO_PACKAGE = "none";
+
+/** Lines paid with a package session, for the API (TEC-984). */
+export function toPackageSessions(lines: { package_uuid?: string }[]) {
+  return lines.flatMap((line, index) =>
+    line.package_uuid && line.package_uuid !== NO_PACKAGE
+      ? [{ customer_package_uuid: line.package_uuid, line_index: index }]
+      : [],
+  );
+}
 
 /** Select value for "no vehicle given" (car wash). */
 export const NO_VEHICLE = "none";

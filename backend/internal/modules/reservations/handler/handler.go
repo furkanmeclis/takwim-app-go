@@ -264,12 +264,18 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if len(in.Products) > 0 && !productsAllowed(w, r) {
 		return
 	}
+	if len(in.PackageSessions) > 0 && !packagesAllowed(w, r) {
+		return
+	}
 	out, err := h.svc.Create(r.Context(), scope.ID, in, c, authctx.MustPrincipal(r.Context()).UserInternal)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	h.record(r, "reservations.created", out, nil)
+	for _, ps := range out.PackageSessions {
+		h.packageChanged(r, ps.CustomerPackage.UUID)
+	}
 	response.JSON(w, r, http.StatusCreated, out)
 }
 

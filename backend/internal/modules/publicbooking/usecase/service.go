@@ -979,6 +979,31 @@ func NormalizePhone(raw string) string {
 // an existing record is not changed. A checkout books once: a retry answers
 // the same reservation with replayed = true.
 func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model.Reservation, bool, error) {
+	if len(in.PackageSessions) > 0 {
+		// Using a package needs a proven phone: the customer panel route.
+		return model.Reservation{}, false, invalid("package_sessions", "sign_in_required", "sign in to use a package")
+	}
+	return s.book(ctx, o, in, nil)
+}
+
+// CustomerOf returns the business's customer record of a signed-in
+// customer panel session; uuid.Nil when the business does not know the
+// person.
+type CustomerOf func(ctx context.Context, orgID int64) (uuid.UUID, error)
+
+// BookAs books a checkout for the business's customer record of a
+// signed-in customer panel session (TEC-984): the person proved the phone,
+// so the booking may use sessions of the person's packages. The contact
+// form is not used (the record stays as the business keeps it); a business
+// that does not know the person answers customer / not_linked.
+func (s *Service) BookAs(ctx context.Context, o Org, in model.BookingInput, customer CustomerOf) (model.Reservation, bool, error) {
+	if len(in.PackageSessions) > 0 && !o.modules.Allows(sector.ModulePackages) {
+		return model.Reservation{}, false, invalid("package_sessions", "not_allowed", "the business does not sell packages")
+	}
+	return s.book(ctx, o, in, customer)
+}
+
+func (s *Service) book(ctx context.Context, o Org, in model.BookingInput, known CustomerOf) (model.Reservation, bool, error) {
 	ve := &ValidationError{}
 	if strings.TrimSpace(in.Website) != "" {
 		ve.add("website", "rejected", "the request was rejected")
@@ -987,7 +1012,10 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 	if in.CheckoutToken == uuid.Nil {
 		ve.add("checkout_token", "required", "checkout token is required")
 	}
-	c := validateContact(ve, in.Customer)
+	var c contact
+	if known == nil {
+		c = validateContact(ve, in.Customer)
+	}
 	if err := ve.orNil(); err != nil {
 		return model.Reservation{}, false, err
 	}
@@ -1015,7 +1043,7 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 	input := reservationsmodel.CreateInput{
 		BranchUUID: checkout.BranchUuid, StartsAt: &checkout.StartsAt.Time, Source: reservationsmodel.SourceOnline,
 		Payment: in.Payment, CustomFields: in.CustomFields, CustomerNote: strings.TrimSpace(in.CustomerNote),
-		Zone: checkout.Zone, Vehicle: in.Vehicle,
+		Zone: checkout.Zone, Vehicle: in.Vehicle, PackageSessions: in.PackageSessions,
 	}
 	if checkout.PartySize.Valid {
 		n := int(checkout.PartySize.Int32)
@@ -1065,6 +1093,13 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 			}
 			if err := ignoreInactive(s.holds.ReleaseIn(ctx, tx, locked.HoldID, "checkout_booked")); err != nil {
 				return uuid.Nil, err
+			}
+			if known != nil {
+				id, err := known(ctx, o.ID)
+				if err == nil && id == uuid.Nil {
+					return uuid.Nil, invalid("customer", "not_linked", "the business does not know the signed-in person")
+				}
+				return id, err
 			}
 			id, created, err := findOrCreateCustomer(ctx, tx.Q, o.ID, c)
 			if created {
@@ -1187,10 +1222,19 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		}
 		out.Products = append(out.Products, item)
 	}
+	onPackage := map[int]string{}
+	for _, ps := range r.PackageSessions {
+		if ps.Status != reservationsmodel.SessionReleased {
+			onPackage[ps.LineIndex] = ps.CustomerPackage.Name
+		}
+	}
 	for _, l := range r.Lines {
 		line := model.Line{
 			ServiceUUID: l.ServiceUUID, ServiceName: l.ServiceName, StartsAt: l.StartsAt, EndsAt: l.EndsAt,
 			DurationMinutes: l.DurationMinutes, UnitPrice: l.UnitPrice,
+		}
+		if name, ok := onPackage[l.Index]; ok {
+			line.PackageName = &name
 		}
 		if l.Staff != nil {
 			line.Staff = &model.StaffName{UUID: l.Staff.UUID, Name: l.Staff.Name}

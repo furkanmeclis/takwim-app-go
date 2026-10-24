@@ -142,6 +142,7 @@ import (
 	servicesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
 	servicesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/usecase"
 	sessionpackagesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages"
+	sessionpackagesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/adapters"
 	sessionpackageshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/handler"
 	sessionpackagesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/repository"
 	sessionpackagesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/usecase"
@@ -299,6 +300,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		resourcesadapters.NewSearch(deps.Queries),
 		servicesadapters.NewSearch(deps.Queries),
 		productsadapters.NewSearch(deps.Queries),
+		sessionpackagesadapters.NewSearch(deps.Queries),
 		customersadapters.NewSearch(deps.Queries),
 		reservationsadapters.NewSearch(deps.Queries),
 		cashadapters.NewSearch(deps.Queries),
@@ -491,6 +493,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffSharesSvc := staffsharesusecase.New(staffsharesrepository.NewPostgres(deps.DB, deps.Queries), cashSvc)
 	salesSvc.SetLineHook(staffSharesSvc.RecordLineTx)
 	sessionPackagesSvc := sessionpackagesusecase.New(sessionpackagesrepository.NewPostgres(deps.DB, deps.Queries), salesSvc)
+	sessionPackagesSvc.SetIndexer(searchIndexer)
 	// A product taken back reverses its sale line (TEC-913).
 	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
 	// Income and expense records (TEC-915): each posts its cash movement;
@@ -593,6 +596,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		servicesadapters.NewIO(servicesSvc),
 		productsadapters.NewIO(productsSvc),
 		productsadapters.NewMovementsIO(productsSvc),
+		sessionpackagesadapters.NewIO(sessionPackagesSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
@@ -612,6 +616,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
 		productsadapters.NewBulk(productsSvc),
+		sessionpackagesadapters.NewBulk(sessionPackagesSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
 		cashadapters.NewBulk(cashSvc),
@@ -744,6 +749,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	classesH := classeshandler.New(classesusecase.New(deps.Queries, capacityHolds), activityRec)
 	classesH.SetResourceEvents(resourceEvents)
 	classesmodule.RegisterRoutes(mux, classesH, tokens, loader, tenantResolver)
+	sessionpackagesmodule.RegisterEngineRoutes(mux, sessionpackagesmodule.EngineHandlers{
+		ExportCustomerPackages: exportH.TenantExport(sessionpackagesmodule.CustomerPackagesResource, sessionpackagesmodule.ExportQueryKeys...),
+		BulkPackages:           bulkH.TenantExecute(sessionpackagesmodule.PackagesResource),
+	}, tokens, loader, tenantResolver)
 	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)
@@ -790,6 +799,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	publicH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	publicH.SetResourceEvents(resourceEvents)
 	publicbookingmodule.RegisterRoutes(mux, publicH)
+	// TEC-984: the business page books for a signed-in customer panel
+	// session (package sessions).
+	publicbookingmodule.RegisterCustomerRoutes(mux, publicH, panelH)
 	settingsmodule.RegisterRoutes(mux, settingshandler.New(
 		settingsusecase.New(deps.Queries),
 		deps.Storage,

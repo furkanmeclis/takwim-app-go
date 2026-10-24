@@ -178,5 +178,8 @@
   "labels.tenant.cash.bulk.activate": "Bulk activate accounts",
   "labels.tenant.classes.read": "View the class timetable and sessions",
   "labels.tenant.classes.write": "Manage the class timetable and sessions",
-  "groups.tenant_classes": "Group classes"
+  "groups.tenant_classes": "Group classes",
+  "labels.tenant.session_packages.export": "Export sold packages",
+  "labels.tenant.session_packages.bulk.activate": "Bulk activate package definitions",
+  "labels.tenant.session_packages.bulk.deactivate": "Bulk deactivate package definitions"
 }

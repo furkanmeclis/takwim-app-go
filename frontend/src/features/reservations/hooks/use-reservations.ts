@@ -126,13 +126,20 @@ function useInvalidateReservations() {
 export function useCreateReservation() {
   const { slug } = useTenant();
   const { t } = useLocale();
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateReservations();
   return useMutation({
     mutationFn: (body: ReservationCreateRequest) =>
       reservationsService.create(slug, body),
-    onSuccess: () => {
+    onSuccess: (_, body) => {
       appToast.success(t("reservations.toast.created"));
       void invalidate();
+      // Sessions held by the booking change the packages' balances.
+      if (body.package_sessions?.length) {
+        void queryClient.invalidateQueries({
+          queryKey: sessionPackagesKeys.all(slug),
+        });
+      }
     },
     // A taken time refreshes the slots so the picker shows what is left.
     onError: () => void invalidate(),
@@ -267,6 +274,19 @@ export function useRemoveReservationProduct(uuid: string) {
       reportReservationError(error, t);
       void invalidate();
     },
+  });
+}
+
+/** Packages of a customer usable on a new booking (branch, day), TEC-984. */
+export function useNewBookingPackageOptions(
+  query: { customer_uuid: string; branch_uuid: string; date: string },
+  enabled: boolean,
+) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: [...sessionPackagesKeys.all(slug), "booking-options", query],
+    queryFn: () => reservationsService.newPackageOptions(slug, query),
+    enabled,
   });
 }
 

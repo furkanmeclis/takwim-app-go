@@ -375,6 +375,66 @@ func (h *Handler) CreateReservation(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusCreated, out)
 }
 
+// CustomerSession authenticates a customer panel session (the customer
+// panel handler) and finds the person's record in a business.
+type CustomerSession interface {
+	Authenticate(next http.HandlerFunc) http.HandlerFunc
+	// CustomerOf returns the business's customer record of the request's
+	// session (uuid.Nil when the business does not know the person).
+	CustomerOf(r *http.Request, orgID int64) (uuid.UUID, error)
+}
+
+// CreateCustomerReservation serves POST
+// /v1/customer/businesses/{slug}/reservations (TEC-984): the business
+// page books for the signed-in customer panel session, which may use the
+// person's package sessions. The route sits under /v1/customer so the
+// customer cookie reaches it; the contact form is ignored.
+func (h *Handler) CreateCustomerReservation(session CustomerSession) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		o, ok := h.business(w, r, "booking", h.limits.Booking)
+		if !ok {
+			return
+		}
+		var in model.BookingInput
+		if !decodeJSON(w, r, &in) {
+			return
+		}
+		out, replayed, err := h.svc.BookAs(r.Context(), o, in, func(_ context.Context, orgID int64) (uuid.UUID, error) {
+			return session.CustomerOf(r, orgID)
+		})
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if replayed {
+			w.Header().Set("Idempotent-Replayed", "true")
+			response.JSON(w, r, http.StatusOK, out)
+			return
+		}
+		h.record(r, o, out)
+		h.packagesChanged(r, o, out)
+		response.JSON(w, r, http.StatusCreated, out)
+	}
+}
+
+// packagesChanged refreshes the business's package lists after a booking
+// used package sessions.
+func (h *Handler) packagesChanged(r *http.Request, o usecase.Org, res model.Reservation) {
+	if h.events == nil {
+		return
+	}
+	for _, l := range res.Lines {
+		if l.PackageName != nil {
+			ctx := orgctx.WithScope(r.Context(), o.Scope())
+			h.events.Publish(ctx, customerPackagesResource, resourceevents.ActionUpdated)
+			return
+		}
+	}
+}
+
+// customerPackagesResource is the live channel of the sold packages.
+const customerPackagesResource = "tenant.customer_packages"
+
 // GetReservation serves GET /v1/public/businesses/{slug}/reservations/{uuid}
 // with the X-Reservation-Token header.
 func (h *Handler) GetReservation(w http.ResponseWriter, r *http.Request) {

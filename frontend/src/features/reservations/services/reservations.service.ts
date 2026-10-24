@@ -178,6 +178,22 @@ export const reservationsService = {
     );
   },
 
+  /**
+   * Packages of a customer that can pay lines of a new booking in a branch
+   * on a day (TEC-984); match a line by `service_uuid`.
+   */
+  newPackageOptions(
+    slug: string,
+    query: { customer_uuid: string; branch_uuid: string; date: string },
+  ) {
+    return tenantRequest<{ items: ReservationPackageOption[] }>(
+      slug,
+      "GET",
+      `${BASE}/package-options`,
+      { query },
+    );
+  },
+
   /** The customer's packages that can give a session to the visit's lines. */
   packageOptions(slug: string, uuid: string) {
     return tenantRequest<{ items: ReservationPackageOption[] }>(

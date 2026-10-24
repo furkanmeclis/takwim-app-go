@@ -89,6 +89,7 @@ type Querier interface {
 	// Distinct phones that asked for a code from one address (abuse limit).
 	CountCustomerOTPPhonesFromIPSince(ctx context.Context, arg CountCustomerOTPPhonesFromIPSinceParams) (int64, error)
 	CountCustomerPackages(ctx context.Context, arg CountCustomerPackagesParams) (int64, error)
+	CountCustomerPanelPackages(ctx context.Context, arg CountCustomerPanelPackagesParams) (int64, error)
 	CountCustomerPanelReservations(ctx context.Context, arg CountCustomerPanelReservationsParams) (int64, error)
 	CountCustomers(ctx context.Context, arg CountCustomersParams) (int64, error)
 	// Live branches and staff seats of a business: members, open invitations
@@ -414,6 +415,10 @@ type Querier interface {
 	GetCustomerPackage(ctx context.Context, arg GetCustomerPackageParams) (GetCustomerPackageRow, error)
 	GetCustomerPackageByIdempotencyKey(ctx context.Context, arg GetCustomerPackageByIdempotencyKeyParams) (GetCustomerPackageByIdempotencyKeyRow, error)
 	GetCustomerPackageRow(ctx context.Context, arg GetCustomerPackageRowParams) (CustomerPackage, error)
+	GetCustomerPackageSearchDocument(ctx context.Context, arg GetCustomerPackageSearchDocumentParams) (GetCustomerPackageSearchDocumentRow, error)
+	// The business's customer record a signed-in identity books as: its
+	// current link (a link closed by a number change is not used).
+	GetCustomerPanelLinkedCustomer(ctx context.Context, arg GetCustomerPanelLinkedCustomerParams) (GetCustomerPanelLinkedCustomerRow, error)
 	// One reservation of the identity: its business and branch context. Any
 	// uuid outside the identity's links answers no rows.
 	GetCustomerPanelReservation(ctx context.Context, arg GetCustomerPanelReservationParams) (GetCustomerPanelReservationRow, error)
@@ -471,6 +476,7 @@ type Querier interface {
 	GetOrganizationMember(ctx context.Context, arg GetOrganizationMemberParams) (GetOrganizationMemberRow, error)
 	GetOrganizationMemberByUserUUID(ctx context.Context, arg GetOrganizationMemberByUserUUIDParams) (GetOrganizationMemberByUserUUIDRow, error)
 	GetOrganizationSettingsVersion(ctx context.Context, arg GetOrganizationSettingsVersionParams) (GetOrganizationSettingsVersionRow, error)
+	GetPackageBranchByUUID(ctx context.Context, arg GetPackageBranchByUUIDParams) (GetPackageBranchByUUIDRow, error)
 	// Time zone (branch override, else the business) and currency of a branch.
 	GetPackageClock(ctx context.Context, arg GetPackageClockParams) (GetPackageClockRow, error)
 	GetPackageCustomerByUUID(ctx context.Context, arg GetPackageCustomerByUUIDParams) (GetPackageCustomerByUUIDRow, error)
@@ -824,6 +830,8 @@ type Querier interface {
 	ListCustomerNotificationDeliveriesForDispatch(ctx context.Context, arg ListCustomerNotificationDeliveriesForDispatchParams) ([]CustomerNotificationDelivery, error)
 	ListCustomerNotificationRules(ctx context.Context, organizationID int64) ([]CustomerNotificationRule, error)
 	ListCustomerNotificationTemplates(ctx context.Context, organizationID int64) ([]CustomerNotificationTemplate, error)
+	// Cmd+K documents of the sold packages (TEC-984).
+	ListCustomerPackageSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerPackageSearchDocumentsRow, error)
 	// ---------------------------------------------------------------- sessions
 	ListCustomerPackageSessions(ctx context.Context, arg ListCustomerPackageSessionsParams) ([]ListCustomerPackageSessionsRow, error)
 	// state: active (sessions left, valid), used_up (every session consumed),
@@ -834,6 +842,17 @@ type Querier interface {
 	// A link whose older history was hidden (number reassigned) shows no name:
 	// the name may be the previous holder's.
 	ListCustomerPanelBusinesses(ctx context.Context, identityID int64) ([]ListCustomerPanelBusinessesRow, error)
+	// The sessions of one package that were booked or used (released ones are
+	// left out), latest visit first.
+	ListCustomerPanelPackageSessions(ctx context.Context, arg ListCustomerPanelPackageSessionsParams) ([]ListCustomerPanelPackageSessionsRow, error)
+	// Customer panel "Paketlerim" and bookings with a package (TEC-984). Like
+	// customer_panel.sql, every read starts from the identity's verified links
+	// (customer_identity_links) and joins each tenant table on the link's
+	// organization_id.
+	// The person's session packages in every business, under the same
+	// visibility window as the visits (on the sale time). state is the state
+	// on the business day in the business's time zone.
+	ListCustomerPanelPackages(ctx context.Context, arg ListCustomerPanelPackagesParams) ([]ListCustomerPanelPackagesRow, error)
 	ListCustomerPanelReservations(ctx context.Context, arg ListCustomerPanelReservationsParams) ([]ListCustomerPanelReservationsRow, error)
 	// What the customer panel shows of a visit's refunds.
 	ListCustomerRefunds(ctx context.Context, arg ListCustomerRefundsParams) ([]ListCustomerRefundsRow, error)
@@ -1367,6 +1386,8 @@ type Querier interface {
 	SetServiceActive(ctx context.Context, arg SetServiceActiveParams) error
 	// Returns the previous key so the caller can remove the old object.
 	SetServiceImage(ctx context.Context, arg SetServiceImageParams) (pgtype.Text, error)
+	// Bulk activate / deactivate (TEC-984).
+	SetSessionPackageActive(ctx context.Context, arg SetSessionPackageActiveParams) (int64, error)
 	SetStaffActive(ctx context.Context, arg SetStaffActiveParams) error
 	SetStockLevelOnHand(ctx context.Context, arg SetStockLevelOnHandParams) error
 	SetStockLevelReserved(ctx context.Context, arg SetStockLevelReservedParams) error

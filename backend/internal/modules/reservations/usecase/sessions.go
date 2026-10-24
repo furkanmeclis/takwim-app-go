@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
@@ -94,76 +96,166 @@ func reconcileSessions(ctx context.Context, q *db.Queries, orgID, reservationID 
 // line of an open visit; the visit's total leaves the line out.
 func (s *Service) ApplyPackage(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64, in model.ApplyPackageInput) (model.Reservation, error) {
 	return s.changeProducts(ctx, orgID, id, caller, actorID, in.ExpectedVersion, "package_applied", func(tx *availabilityusecase.Tx, row db.Reservation) (string, error) {
-		q := tx.Q
-		ve := &ValidationError{}
-		line, err := q.GetPackageLine(ctx, db.GetPackageLineParams{OrganizationID: orgID, ReservationID: row.ID, LineIndex: int32(in.LineIndex)})
-		if errors.Is(err, pgx.ErrNoRows) {
-			ve.add("line_index", "not_found", "the visit has no such line")
-			return "", ve
-		}
-		if err != nil {
-			return "", err
-		}
-		pkg, err := q.GetCustomerPackageRow(ctx, db.GetCustomerPackageRowParams{OrganizationID: orgID, Uuid: in.CustomerPackageUUID})
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && pkg.CustomerID != row.CustomerID) {
-			ve.add("customer_package_uuid", "not_found", "package not found")
-			return "", ve
-		}
-		if err != nil {
-			return "", err
-		}
-		// Serialize the sessions of one package.
-		pkg, err = q.LockCustomerPackage(ctx, db.LockCustomerPackageParams{OrganizationID: orgID, ID: pkg.ID})
-		if err != nil {
-			return "", err
-		}
-		day, err := q.GetPackageVisitDay(ctx, db.GetPackageVisitDayParams{OrganizationID: orgID, ReservationID: row.ID})
-		if err != nil {
-			return "", err
-		}
-		live, err := q.LivePackageSessionNumbers(ctx, db.LivePackageSessionNumbersParams{OrganizationID: orgID, CustomerPackageID: pkg.ID})
-		if err != nil {
-			return "", err
-		}
-		switch {
-		case pkg.Status != "active":
-			ve.add("customer_package_uuid", "refunded", "the package was refunded")
-		case pkg.ExpiresOn.Valid && day.Time.After(pkg.ExpiresOn.Time):
-			ve.add("customer_package_uuid", "expired", "the package is not valid on the visit day")
-		case pkg.BranchIds != nil && !slices.Contains(pkg.BranchIds, row.BranchID):
-			ve.add("customer_package_uuid", "branch_not_allowed", "the package cannot be used in this branch")
-		case !line.ServiceID.Valid || !pkg.ServiceID.Valid || line.ServiceID.Int64 != pkg.ServiceID.Int64:
-			ve.add("line_index", "service_mismatch", "the package is for another service")
-		case len(live) >= int(pkg.TotalSessions):
-			ve.add("customer_package_uuid", "no_sessions_left", "the package has no session left")
-		}
-		if err := ve.orNil(); err != nil {
-			return "", err
-		}
-		no := int32(1)
-		for _, n := range live {
-			if n != no {
-				break
-			}
-			no++
-		}
-		amount := model.SessionValue(money.FromNumericOrZero(pkg.Price), int(pkg.TotalSessions), int(no))
-		if _, err := q.InsertPackageSession(ctx, db.InsertPackageSessionParams{
-			OrganizationID: orgID, CustomerPackageID: pkg.ID, ReservationID: row.ID, LineIndex: line.LineIndex,
-			SessionNo: no, Amount: amount.Numeric(), CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
-		}); err != nil {
-			if isUnique(err, "uq_package_sessions_line") {
-				ve.add("line_index", "already_on_package", "the line already uses a package session")
-				return "", ve
-			}
-			if isUnique(err, "uq_package_sessions_slot") {
-				ve.add("customer_package_uuid", "no_sessions_left", "the package has no session left")
-				return "", ve
-			}
-			return "", err
-		}
-		return fmt.Sprintf("%s · %s %d/%d", line.ServiceName, pkg.Name, no, pkg.TotalSessions), nil
+		return holdSession(ctx, tx.Q, orgID, row, in.CustomerPackageUUID, in.LineIndex, actorID, "")
 	})
+}
+
+// holdSession holds the next free session of a package of the visit's
+// customer for one line (the panel's "Paketten kullan", and a new booking
+// that names package sessions, TEC-984). The package row is locked first,
+// so the last session is never given to two visits. field prefixes the
+// validation fields ("package_sessions.0." on a new booking). It answers
+// the history note.
+func holdSession(ctx context.Context, q *db.Queries, orgID int64, row db.Reservation, pkgUUID uuid.UUID, lineIndex int, actorID int64, field string) (string, error) {
+	ve := &ValidationError{}
+	pkgField, lineField := field+"customer_package_uuid", field+"line_index"
+	line, err := q.GetPackageLine(ctx, db.GetPackageLineParams{OrganizationID: orgID, ReservationID: row.ID, LineIndex: int32(lineIndex)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		ve.add(lineField, "not_found", "the visit has no such line")
+		return "", ve
+	}
+	if err != nil {
+		return "", err
+	}
+	pkg, err := q.GetCustomerPackageRow(ctx, db.GetCustomerPackageRowParams{OrganizationID: orgID, Uuid: pkgUUID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && pkg.CustomerID != row.CustomerID) {
+		ve.add(pkgField, "not_found", "package not found")
+		return "", ve
+	}
+	if err != nil {
+		return "", err
+	}
+	// Serialize the sessions of one package.
+	pkg, err = q.LockCustomerPackage(ctx, db.LockCustomerPackageParams{OrganizationID: orgID, ID: pkg.ID})
+	if err != nil {
+		return "", err
+	}
+	day, err := q.GetPackageVisitDay(ctx, db.GetPackageVisitDayParams{OrganizationID: orgID, ReservationID: row.ID})
+	if err != nil {
+		return "", err
+	}
+	live, err := q.LivePackageSessionNumbers(ctx, db.LivePackageSessionNumbersParams{OrganizationID: orgID, CustomerPackageID: pkg.ID})
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case pkg.Status != "active":
+		ve.add(pkgField, "refunded", "the package was refunded")
+	case pkg.ExpiresOn.Valid && day.Time.After(pkg.ExpiresOn.Time):
+		ve.add(pkgField, "expired", "the package is not valid on the visit day")
+	case pkg.BranchIds != nil && !slices.Contains(pkg.BranchIds, row.BranchID):
+		ve.add(pkgField, "branch_not_allowed", "the package cannot be used in this branch")
+	case !line.ServiceID.Valid || !pkg.ServiceID.Valid || line.ServiceID.Int64 != pkg.ServiceID.Int64:
+		ve.add(lineField, "service_mismatch", "the package is for another service")
+	case len(live) >= int(pkg.TotalSessions):
+		ve.add(pkgField, "no_sessions_left", "the package has no session left")
+	}
+	if err := ve.orNil(); err != nil {
+		return "", err
+	}
+	no := int32(1)
+	for _, n := range live {
+		if n != no {
+			break
+		}
+		no++
+	}
+	amount := model.SessionValue(money.FromNumericOrZero(pkg.Price), int(pkg.TotalSessions), int(no))
+	if _, err := q.InsertPackageSession(ctx, db.InsertPackageSessionParams{
+		OrganizationID: orgID, CustomerPackageID: pkg.ID, ReservationID: row.ID, LineIndex: line.LineIndex,
+		SessionNo: no, Amount: amount.Numeric(), CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
+	}); err != nil {
+		if isUnique(err, "uq_package_sessions_line") {
+			ve.add(lineField, "already_on_package", "the line already uses a package session")
+			return "", ve
+		}
+		if isUnique(err, "uq_package_sessions_slot") {
+			ve.add(pkgField, "no_sessions_left", "the package has no session left")
+			return "", ve
+		}
+		return "", err
+	}
+	return fmt.Sprintf("%s · %s %d/%d", line.ServiceName, pkg.Name, no, pkg.TotalSessions), nil
+}
+
+// holdBookingSessions holds the package sessions a new booking names
+// (TEC-984) and answers the history note. The same rules apply as on the
+// visit detail; the first problem fails the booking.
+func holdBookingSessions(ctx context.Context, q *db.Queries, orgID int64, row db.Reservation, items []model.PackageSessionInput, actorID int64) (string, error) {
+	notes := make([]string, 0, len(items))
+	for i, it := range items {
+		field := fmt.Sprintf("package_sessions.%d.", i)
+		if it.CustomerPackageUUID == uuid.Nil {
+			ve := &ValidationError{}
+			ve.add(field+"customer_package_uuid", "required", "customer_package_uuid is required")
+			return "", ve
+		}
+		note, err := holdSession(ctx, q, orgID, row, it.CustomerPackageUUID, it.LineIndex, actorID, field)
+		if err != nil {
+			return "", err
+		}
+		notes = append(notes, note)
+	}
+	return strings.Join(notes, "; "), nil
+}
+
+// PackageOptionsFor lists the customer's packages that can give a session
+// to a new booking in a branch on a day (the panel's booking form,
+// TEC-984): active, valid on the day, usable in the branch, with sessions
+// left. LineIndexes is empty: the form matches the lines by service.
+func (s *Service) PackageOptionsFor(ctx context.Context, orgID int64, customerUUID, branchUUID uuid.UUID, day time.Time) ([]model.PackageOption, error) {
+	out := []model.PackageOption{}
+	ve := &ValidationError{}
+	customer, err := s.q.GetReservationCustomer(ctx, db.GetReservationCustomerParams{OrganizationID: orgID, Uuid: customerUUID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		ve.add("customer_uuid", "not_found", "customer not found")
+		return nil, ve
+	}
+	if err != nil {
+		return nil, err
+	}
+	branch, err := s.q.GetPackageBranchByUUID(ctx, db.GetPackageBranchByUUIDParams{OrganizationID: orgID, Uuid: branchUUID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && orgctx.CheckBranch(ctx, branch.ID) != nil) {
+		ve.add("branch_uuid", "not_found", "branch not found")
+		return nil, ve
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ReservationPackageOptions(ctx, db.ReservationPackageOptionsParams{
+		OrganizationID: orgID, CustomerID: customer.ID, BranchID: branch.ID, VisitDay: pgtype.Date{Time: day, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if o, ok := packageOption(r); ok {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+// packageOption maps an option row; false when no session is left.
+func packageOption(r db.ReservationPackageOptionsRow) (model.PackageOption, bool) {
+	left := int(r.TotalSessions) - int(r.LiveCount)
+	if left <= 0 {
+		return model.PackageOption{}, false
+	}
+	o := model.PackageOption{
+		CustomerPackageUUID: r.Uuid, Name: r.Name, ServiceName: r.ServiceName, TotalSessions: int(r.TotalSessions),
+		Remaining: left, LineIndexes: []int{},
+		NextValue: model.SessionValue(money.FromNumericOrZero(r.Price), int(r.TotalSessions), int(r.LiveCount)+1),
+	}
+	if r.ServiceUuid.Valid {
+		u := uuid.UUID(r.ServiceUuid.Bytes)
+		o.ServiceUUID = &u
+	}
+	if r.ExpiresOn.Valid {
+		d := r.ExpiresOn.Time.Format("2006-01-02")
+		o.ExpiresOn = &d
+	}
+	return o, true
 }
 
 // RemovePackageSession takes a held session off the visit; the line is
@@ -227,22 +319,9 @@ func (s *Service) PackageOptions(ctx context.Context, orgID int64, id uuid.UUID,
 		}
 	}
 	for _, r := range rows {
-		left := int(r.TotalSessions) - int(r.LiveCount)
-		if left <= 0 {
+		o, ok := packageOption(r)
+		if !ok {
 			continue
-		}
-		o := model.PackageOption{
-			CustomerPackageUUID: r.Uuid, Name: r.Name, ServiceName: r.ServiceName, TotalSessions: int(r.TotalSessions),
-			Remaining: left, LineIndexes: []int{},
-			NextValue: model.SessionValue(money.FromNumericOrZero(r.Price), int(r.TotalSessions), int(r.LiveCount)+1),
-		}
-		if r.ServiceUuid.Valid {
-			u := uuid.UUID(r.ServiceUuid.Bytes)
-			o.ServiceUUID = &u
-		}
-		if r.ExpiresOn.Valid {
-			d := r.ExpiresOn.Time.Format("2006-01-02")
-			o.ExpiresOn = &d
 		}
 		for _, l := range lines {
 			if !covered[l.LineIndex] && r.ServiceID.Valid && l.ServiceID.Valid && l.ServiceID.Int64 == r.ServiceID.Int64 {

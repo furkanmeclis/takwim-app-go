@@ -282,11 +282,35 @@ func (s *Service) NoShow(ctx context.Context, orgID int64, id uuid.UUID, caller 
 			return ErrInvalidTransition
 		}
 		next.status = model.StatusNoShow
-		if err := releaseSessions(ctx, tx.Q, orgID, row.ID, "no_show"); err != nil {
+		// The business decides what a no-show costs a package (TEC-984):
+		// by default the session goes back to the package; with
+		// no_show_uses_package_session it is used (forfeited, no sale line).
+		forfeit, err := s.noShowUsesSession(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		if forfeit {
+			if err := consumeSessions(ctx, tx.Q, orgID, row.ID, tx.Now); err != nil {
+				return err
+			}
+		} else if err := releaseSessions(ctx, tx.Q, orgID, row.ID, "no_show"); err != nil {
 			return err
 		}
 		return releaseProducts(ctx, tx.Q, orgID, row.ID, "no_show")
 	})
+}
+
+// noShowUsesSession reads the business setting that a no-show uses the
+// visit's package sessions (false without a settings reader).
+func (s *Service) noShowUsesSession(ctx context.Context, orgID int64) (bool, error) {
+	if s.settings == nil {
+		return false, nil
+	}
+	set, err := s.settings.Current(ctx, orgID)
+	if err != nil {
+		return false, err
+	}
+	return set.Settings.Reservation.NoShowUsesPackageSession, nil
 }
 
 // MarkPaid records a successful online payment (the payments module calls

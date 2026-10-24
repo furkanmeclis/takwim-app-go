@@ -35,6 +35,8 @@ All under **`/v1/customer`**; the browser calls `/api/v1/customer/…` on the sa
 | `POST phone/start`, `POST phone/verify`  | number change: a code to the new number, then the profile moves                                 |
 | `POST phone/reassigned`                  | `{keep_businesses}`: "this number was recently given to me"                                     |
 | `POST visit`, `POST visit/cancel`        | `{token}` of a visit link: one reservation, no session                                          |
+| `GET packages`, `GET packages/{uuid}`    | "Paketlerim" (TEC-984): `business`, `state`, `limit` / `offset`; the detail adds usage history  |
+| `POST businesses/{slug}/reservations`    | online booking as the signed-in person, with `package_sessions` (TEC-984)                       |
 
 Another person's visit, an unknown uuid and a malformed uuid all answer `404`.
 
@@ -69,6 +71,10 @@ There is no payment ledger yet (TEC-912). The amounts come from the visit total 
 The visit detail answers `refunds` (TEC-913): each refund's amount, its status (`requested` in progress, `succeeded` paid back, or `failed`, shown as "being followed up" by the business) and its dates. When the visit has refunds, `money.refunded` on the detail is the sum of the succeeded ones. The list amounts stay as above until TEC-967.
 
 The visit detail also answers `products` (TEC-977): the products taken with the visit (name, variant, quantity, unit price, amount) and their state: `held` (set aside for the visit), `delivered` (handed over at the visit) or `released` (the visit was cancelled, rejected, expired or missed). A line the business removed is left out; stock codes, costs and the seller are never shown. The visit total already includes held and delivered products.
+
+## Packages ("Paketlerim", TEC-984)
+
+The session packages the person bought from the businesses that know them, inside each link's visibility window: remaining sessions, last day, state and the visits that used a session (released sessions are left out). Another person's package is `404`. A signed-in person can pay booking lines with these packages on the business page; that booking goes through `POST /v1/customer/businesses/{slug}/reservations` so the session's cookie reaches it, and the customer is the business's linked record (`customer` / `not_linked` otherwise). Rules and money: [session-packages.md](./session-packages.md).
 
 ## Panel link by SMS
 
@@ -128,6 +134,5 @@ References: OWASP Authentication and Authorization cheat sheets. Acceptance: A25
 ## Not in this issue
 
 - **TEC-972**: reassignment notices processed from Takwim management, and an extra ownership check for numbers not verified for a long time (a recycled number nobody reported).
-- **Packages** ("Paketlerim"): there is no packages module yet (TEC-895).
 - **Payment amounts** from a ledger: TEC-912.
 - **Confirmation** (teyit): the confirmation module drives `confirmation_status` (confirmations.md); the panel shows it and offers the answers.

@@ -27,6 +27,10 @@ func RegisterRoutes(mux *http.ServeMux, h *customerpanelhandler.Handler) {
 	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/change-request", h.Authenticate(h.RequestChange))
 	mux.HandleFunc("GET /v1/customer/payments", h.Authenticate(h.Payments))
 	mux.HandleFunc("GET /v1/customer/payments/summary", h.Authenticate(h.PaymentSummary))
+	// TEC-984: "Paketlerim" (the booking with a package is mounted by the
+	// public booking module).
+	mux.HandleFunc("GET /v1/customer/packages", h.Authenticate(h.Packages))
+	mux.HandleFunc("GET /v1/customer/packages/{uuid}", h.Authenticate(h.Package))
 	// TEC-910: panel links, devices, number change, reassigned numbers.
 	mux.HandleFunc("POST /v1/customer/auth/link", h.Link)
 	mux.HandleFunc("GET /v1/customer/sessions", h.Authenticate(h.Sessions))

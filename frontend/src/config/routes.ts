@@ -21,6 +21,9 @@ export const routes = {
     visit: "/panel/v",
     reservation: (uuid: string) => `/panel/reservations/${uuid}`,
     payments: "/panel/payments",
+    /** "Paketlerim": session packages across businesses (TEC-984). */
+    packages: "/panel/packages",
+    package: (uuid: string) => `/panel/packages/${uuid}`,
     profile: "/panel/profile",
   },
   guest: {

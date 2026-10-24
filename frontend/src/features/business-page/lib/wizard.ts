@@ -11,6 +11,7 @@ import type {
   WizardStep,
 } from "@/features/business-page/types";
 import { vehicleLabel } from "@/features/reservations/lib/labels";
+import type { CustomerPackage } from "@/features/customer-panel/types";
 
 /** Sector flow steps that pick the service lines (`sectors.steps.*`). */
 const SERVICE_STEPS = ["service", "appointment_type", "session_type", "class"];
@@ -329,5 +330,42 @@ export function checkoutPrices(
   return checkout.lines.map((line) => {
     const service = services.find((s) => s.uuid === line.service_uuid);
     return service ? linePrice(service, line.staff?.uuid ?? null).price : "0";
+  });
+}
+
+/**
+ * The signed-in person's packages that can pay each line of the checkout
+ * (TEC-984): same service, a branch the package is used in, sessions left
+ * and the visit day not after the last day. The API checks it again.
+ */
+export function packageChoices(
+  packages: CustomerPackage[],
+  checkout: PublicCheckout,
+  visitDay: string,
+): CustomerPackage[][] {
+  return checkout.lines.map((line) =>
+    packages.filter(
+      (p) =>
+        p.state === "active" &&
+        p.remaining > 0 &&
+        p.service_uuid === line.service_uuid &&
+        (p.all_branches ||
+          p.branches.some((b) => b.uuid === checkout.branch.uuid)) &&
+        (!p.expires_on || p.expires_on >= visitDay),
+    ),
+  );
+}
+
+/** Picked packages as `package_sessions` (a package once per session left). */
+export function toPackageSessions(
+  picked: Record<number, string>,
+  packages: CustomerPackage[],
+) {
+  const left = new Map(packages.map((p) => [p.uuid, p.remaining]));
+  return Object.entries(picked).flatMap(([index, uuid]) => {
+    const remaining = left.get(uuid) ?? 0;
+    if (remaining <= 0) return [];
+    left.set(uuid, remaining - 1);
+    return [{ customer_package_uuid: uuid, line_index: Number(index) }];
   });
 }

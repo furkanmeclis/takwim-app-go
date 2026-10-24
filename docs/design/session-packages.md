@@ -43,7 +43,7 @@ The visit's `total_price` counts only the lines without a live session (plus pro
 | reschedule                         | a session stays when its line keeps the service and the new day is not after `expires_on`; otherwise it is released (`rescheduled`) |
 | `DELETE …/package-sessions/{uuid}` | the held session is released (`removed`); the line is charged at its price again                                                    |
 
-A no-show releases the session: the customer keeps the right; a no-show fee is a separate decision of the business.
+By default a no-show releases the session: the customer keeps the right; a no-show fee is a separate decision of the business. With the business setting `reservation.no_show_uses_package_session` (TEC-984, in the versioned settings JSON, default off) a no-show consumes the held sessions instead: the right is forfeited, `consumed_on` is the visit day and no sale line is written, because the service was not given (no revenue, no staff share). The setting is read when the no-show is recorded.
 
 ## API
 
@@ -57,6 +57,12 @@ A no-show releases the session: the customer keeps the right; a no-show fee is a
 | `GET /v1/tenant/reservations/{uuid}/package-options`                             | reservation read or own                                                       |
 | `POST /v1/tenant/reservations/{uuid}/package-sessions`                           | reservation write or own                                                      |
 | `DELETE /v1/tenant/reservations/{uuid}/package-sessions/{sessionUuid}`           | reservation write or own                                                      |
+| `GET /v1/tenant/reservations/package-options?customer_uuid&branch_uuid&date`     | reservation write or own (new booking form, TEC-984)                          |
+| `POST /v1/tenant/reservations` with `package_sessions`                           | reservation write or own                                                      |
+| `POST /v1/tenant/customer-packages/export`                                       | `.read` + `.export`                                                           |
+| `POST /v1/tenant/session-packages/bulk`                                          | `.read` + the action's slug (`.bulk.activate` / `.bulk.deactivate`)           |
+| `GET /v1/customer/packages` (+ `/{uuid}`)                                        | customer panel session ("Paketlerim")                                         |
+| `POST /v1/customer/businesses/{slug}/reservations` with `package_sessions`       | customer panel session (online booking with a package)                        |
 
 Every route needs the `packages` module. Using a session is front-desk work, so the reservation slugs are enough there. A package is usable on a visit when it is not refunded, the visit day is not after `expires_on`, the visit's branch is allowed and the line's service is the package's service; the validation codes are `customer_package_uuid` / `not_found`, `refunded`, `expired`, `branch_not_allowed`, `no_sessions_left` and `line_index` / `not_found`, `service_mismatch`, `already_on_package`.
 
@@ -84,6 +90,14 @@ Queries: `ReportPackageSales`, `ReportPackageUsage`, `ReportPackageRefunds`, `Re
 | `tenant.session_packages.write` | owner, admin                                  |
 | `tenant.session_packages.sell`  | owner, admin, `sube_yoneticisi`, `resepsiyon` |
 
+Migration 000074 (TEC-984):
+
+| Slug                                      | Granted to                      |
+| ----------------------------------------- | ------------------------------- |
+| `tenant.session_packages.export`          | owner, admin, `sube_yoneticisi` |
+| `tenant.session_packages.bulk.activate`   | owner, admin                    |
+| `tenant.session_packages.bulk.deactivate` | owner, admin                    |
+
 ## Activity and live lists
 
 `session_packages.created` / `.updated` / `.deleted`, `customer_packages.sold` / `.refunded`, `reservations.package_applied` / `.package_released`. The live resources `tenant.session_packages` and `tenant.customer_packages` refresh the lists.
@@ -95,10 +109,27 @@ Queries: `ReportPackageSales`, `ReportPackageUsage`, `ReportPackageRefunds`, `Re
 - **Müşteri detayı → Paketler**: the customer's packages and "Paket sat".
 - **Randevu detayı → Paket seansları**: the visit's sessions, "Paketten kullan" (package and line) and "Paketten çıkar" for held sessions.
 
-## Not yet
+## Sessions at booking (TEC-984)
 
-Follow-up TEC-984: using a session from the booking form and the public booking page, the customer panel's "Paketlerim", and the export / bulk / search engines for packages.
+`package_sessions: [{customer_package_uuid, line_index}]` (at most 20) on a new booking holds sessions inside the booking transaction, with the same checks and the same row lock as "Paketten kullan" (same service, allowed branch, not expired, not refunded, sessions left; a line takes at most one session). Errors carry the item: `package_sessions.0.customer_package_uuid` / `not_found`, `line_index` / `service_mismatch`, … and nothing is booked. The visit total leaves the covered lines out.
+
+- **Panel booking form**: once a customer, branch and day are picked, `GET /v1/tenant/reservations/package-options` lists the customer's usable packages; each line offers the packages of its service ("Paket kullanma" by default). A package that no longer fits after a change goes back to "pay the line".
+- **Online booking**: the anonymous route refuses `package_sessions` (`sign_in_required`). A person with a customer panel session (phone verified by code) books through `POST /v1/customer/businesses/{slug}/reservations`: the route sits under `/v1/customer` so the path-scoped customer cookie reaches it, and the customer is the business's record linked to that person (`customer` / `not_linked` when the business does not know them); the contact form is not checked. The business page shows, in the summary, the person's active packages (`GET /v1/customer/packages?business&state=active`) that fit each line; the API checks them again.
+- **Payment**: a visit the sessions cover completely has nothing to pay, so it is booked as `on_site` even when the business only takes online payment; `online` with nothing left to pay, or `on_site` without pay-at-venue while something is left, answers `payment` / `not_allowed`. Money movements are the same as for a session applied later.
+- The public reservation line has `package_name` (the package paying it, or null), shown on the status page.
+
+## Customer panel "Paketlerim" (TEC-984, part of TEC-967)
+
+`GET /v1/customer/packages?business&state&limit&offset` lists the packages of every business that linked the person, inside each link's visibility window (a package sold before a reassigned number was taken over stays hidden, as visits do), active first. `GET /v1/customer/packages/{uuid}` adds the usage history: the sessions held or consumed with their visit (date in the branch's time zone, service, staff, branch, status). Released sessions are not shown: they went back to the package. Another person's or an unknown package answers 404. Fields: remaining, used, held, last day, state (as the business computes it), branches, price. The panel has a "Paketlerim" tab (list with grid view on phones) and a detail page.
+
+## Engines (TEC-984)
+
+| Engine      | Resource                   | What                                                                                                                                                      |
+| ----------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| export      | `tenant.customer_packages` | the sold packages with the list's filters (`q`, `state`, `package`, `branch`, `customer`, dates); no import (a sale moves money)                          |
+| bulk        | `tenant.session_packages`  | activate / deactivate definitions (every branch needed, like editing); sold packages keep their terms                                                     |
+| search (⌘K) | `customer_packages`        | sold packages by customer name, phone, package and service; branch-scoped; opens the package detail; indexed after a sale or refund and by search-reindex |
 
 ## Tests
 
-`backend/internal/modules/sessionpackages/sessionpackages_db_test.go`: session value rounding, definitions, sale and idempotency, customer balance, apply, cancel, no-show, reschedule, remove, completion (sale line 500, no visit debit, staff share on 500), concurrent last session, expiry, report figures, refund, immutability triggers and another organization. RT-A01 in `isolation_test.go` covers every new route.
+`backend/internal/modules/sessionpackages/sessionpackages_db_test.go`: session value rounding, definitions, sale and idempotency, customer balance, apply, cancel, no-show, reschedule, remove, completion (sale line 500, no visit debit, staff share on 500), concurrent last session, expiry, report figures, refund, immutability triggers and another organization; sessions chosen at booking (options for a new visit, service mismatch, unknown and expired package, covered total), the forfeiting no-show setting and the definition switch. `customerpanel/packages_db_test.go` covers "Paketlerim" and `publicbooking/packages_db_test.go` the signed-in online booking. RT-A01 in `isolation_test.go` covers every new route.

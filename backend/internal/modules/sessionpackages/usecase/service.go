@@ -99,9 +99,10 @@ func invalid(field, code, msg string) error {
 
 // Service implements the session package use cases.
 type Service struct {
-	repo  *repository.Postgres
-	sales *salesusecase.Service
-	now   func() time.Time
+	repo    *repository.Postgres
+	sales   *salesusecase.Service
+	now     func() time.Time
+	indexer SearchIndexer
 }
 
 // New builds the service. sales posts the money and the ledger entries.

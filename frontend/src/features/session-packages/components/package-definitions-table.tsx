@@ -12,14 +12,21 @@ import {
   EntityToolbar,
   useServerListState,
 } from "@/components/entity";
-import { createColumn } from "@/components/tables";
+import { createColumn, createSelectColumnDef } from "@/components/tables";
 import { permissions } from "@/config/permissions";
+import {
+  BulkActionMenu,
+  SelectionBanner,
+  resolveBulkActionsWithIcons,
+  useBulkSelection,
+} from "@/features/bulk-engine";
 import { useCashAmount } from "@/features/cash/lib/format";
 import { PackageDialog } from "@/features/session-packages/components/package-dialog";
 import { SESSION_PACKAGES_RESOURCE } from "@/features/session-packages/constants";
 import {
   useDeleteSessionPackage,
   useSessionPackages,
+  useSessionPackagesMeta,
 } from "@/features/session-packages/hooks/use-session-packages";
 import type {
   ListSessionPackagesParams,
@@ -231,10 +238,33 @@ export function PackageDefinitionsTable({
   }, [listState.columnFilters, listState.params]);
 
   const query = useSessionPackages(params);
-  const columns = usePackageColumns(
+  const metaQuery = useSessionPackagesMeta();
+  const baseColumns = usePackageColumns(
     canWrite ? { onEdit: setEditing, onDelete: setDeleting } : {},
   );
+  const columns = useMemo(
+    () => [createSelectColumnDef<SessionPackage>(), ...baseColumns],
+    [baseColumns],
+  );
   const total = query.data?.total ?? 0;
+  // Same filters for the "all matching" bulk scope (TEC-984).
+  const engineQuery = useMemo(
+    () => ({ q: params.q, is_active: params.is_active, sort: params.sort }),
+    [params.is_active, params.q, params.sort],
+  );
+  const bulkSelection = useBulkSelection({
+    listQueryKey: params,
+    bulkQuery: engineQuery,
+    total,
+  });
+  const bulkActions = useMemo(
+    () =>
+      resolveBulkActionsWithIcons(
+        SESSION_PACKAGES_RESOURCE,
+        metaQuery.data?.bulk_actions ?? [],
+      ),
+    [metaQuery.data?.bulk_actions],
+  );
   const pageCount = Math.max(
     1,
     Math.ceil(total / (listState.pagination.pageSize || 20)),
@@ -243,6 +273,14 @@ export function PackageDefinitionsTable({
 
   return (
     <>
+      <SelectionBanner
+        selectedCount={bulkSelection.selectedCount}
+        total={total}
+        showSelectAll={bulkSelection.showSelectAllBanner}
+        allMatchingSelected={bulkSelection.scope.mode === "all"}
+        onSelectAllMatching={bulkSelection.selectAllMatching}
+        onClearSelection={bulkSelection.clearSelection}
+      />
       <EntityTable
         columns={columns}
         data={query.data?.items ?? []}
@@ -264,17 +302,33 @@ export function PackageDefinitionsTable({
             : t("session_packages.empty_description")
         }
         pageCount={pageCount}
-        state={listState.tableState}
+        state={{
+          ...listState.tableState,
+          rowSelection: bulkSelection.rowSelection,
+          onRowSelectionChange: bulkSelection.onRowSelectionChange,
+        }}
         features={{
           persistKey: "tenant-session-packages-v1",
-          rowSelection: false,
+          rowSelection: true,
           viewMode: true,
         }}
         toolbarExtra={
-          <EntityToolbar
-            onRefresh={() => void query.refetch()}
-            refreshDisabled={query.isFetching}
-          />
+          <>
+            <BulkActionMenu
+              resource={SESSION_PACKAGES_RESOURCE}
+              actions={bulkActions}
+              scope={bulkSelection.scope}
+              selectedCount={bulkSelection.selectedCount}
+              onComplete={() => {
+                bulkSelection.clearSelection();
+                void query.refetch();
+              }}
+            />
+            <EntityToolbar
+              onRefresh={() => void query.refetch()}
+              refreshDisabled={query.isFetching}
+            />
+          </>
         }
       />
       <PackageDialog

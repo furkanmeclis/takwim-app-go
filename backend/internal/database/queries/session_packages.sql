@@ -24,6 +24,31 @@ WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND dele
 UPDATE session_packages SET deleted_at = NOW()
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL;
 
+-- name: SetSessionPackageActive :execrows
+-- Bulk activate / deactivate (TEC-984).
+UPDATE session_packages SET is_active = sqlc.arg(is_active)
+WHERE organization_id = sqlc.arg(organization_id) AND uuid = sqlc.arg(uuid) AND deleted_at IS NULL;
+
+-- name: ListCustomerPackageSearchDocuments :many
+-- Cmd+K documents of the sold packages (TEC-984).
+SELECT cp.id, cp.uuid, cp.organization_id, cp.branch_id, cp.name, cp.service_name, cp.sold_on,
+    c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone,
+    o.slug AS organization_slug
+FROM customer_packages cp
+JOIN customers c ON c.organization_id = cp.organization_id AND c.id = cp.customer_id
+JOIN organizations o ON o.id = cp.organization_id
+WHERE cp.organization_id = sqlc.arg(organization_id)
+ORDER BY cp.id;
+
+-- name: GetCustomerPackageSearchDocument :one
+SELECT cp.id, cp.uuid, cp.organization_id, cp.branch_id, cp.name, cp.service_name, cp.sold_on,
+    c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone,
+    o.slug AS organization_slug
+FROM customer_packages cp
+JOIN customers c ON c.organization_id = cp.organization_id AND c.id = cp.customer_id
+JOIN organizations o ON o.id = cp.organization_id
+WHERE cp.organization_id = sqlc.arg(organization_id) AND cp.uuid = sqlc.arg(uuid);
+
 -- name: DeleteSessionPackageBranches :exec
 DELETE FROM session_package_branches
 WHERE organization_id = sqlc.arg(organization_id) AND package_id = sqlc.arg(package_id);
@@ -100,6 +125,10 @@ WHERE s.organization_id = sqlc.arg(organization_id) AND s.uuid = ANY(sqlc.arg(uu
 -- name: ListPackageBranchesByUUID :many
 SELECT b.id, b.uuid, b.name FROM branches b
 WHERE b.organization_id = sqlc.arg(organization_id) AND b.uuid = ANY(sqlc.arg(uuids)::uuid[]) AND b.deleted_at IS NULL;
+
+-- name: GetPackageBranchByUUID :one
+SELECT b.id, b.uuid, b.name FROM branches b
+WHERE b.organization_id = sqlc.arg(organization_id) AND b.uuid = sqlc.arg(uuid) AND b.deleted_at IS NULL;
 
 -- name: GetPackageCustomerByUUID :one
 SELECT c.id, c.uuid FROM customers c

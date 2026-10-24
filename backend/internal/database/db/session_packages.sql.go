@@ -431,6 +431,77 @@ func (q *Queries) GetCustomerPackageRow(ctx context.Context, arg GetCustomerPack
 	return i, err
 }
 
+const getCustomerPackageSearchDocument = `-- name: GetCustomerPackageSearchDocument :one
+SELECT cp.id, cp.uuid, cp.organization_id, cp.branch_id, cp.name, cp.service_name, cp.sold_on,
+    c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone,
+    o.slug AS organization_slug
+FROM customer_packages cp
+JOIN customers c ON c.organization_id = cp.organization_id AND c.id = cp.customer_id
+JOIN organizations o ON o.id = cp.organization_id
+WHERE cp.organization_id = $1 AND cp.uuid = $2
+`
+
+type GetCustomerPackageSearchDocumentParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type GetCustomerPackageSearchDocumentRow struct {
+	ID                int64       `json:"id"`
+	Uuid              uuid.UUID   `json:"uuid"`
+	OrganizationID    int64       `json:"organization_id"`
+	BranchID          int64       `json:"branch_id"`
+	Name              string      `json:"name"`
+	ServiceName       string      `json:"service_name"`
+	SoldOn            pgtype.Date `json:"sold_on"`
+	CustomerFirstName string      `json:"customer_first_name"`
+	CustomerLastName  string      `json:"customer_last_name"`
+	CustomerPhone     pgtype.Text `json:"customer_phone"`
+	OrganizationSlug  string      `json:"organization_slug"`
+}
+
+func (q *Queries) GetCustomerPackageSearchDocument(ctx context.Context, arg GetCustomerPackageSearchDocumentParams) (GetCustomerPackageSearchDocumentRow, error) {
+	row := q.db.QueryRow(ctx, getCustomerPackageSearchDocument, arg.OrganizationID, arg.Uuid)
+	var i GetCustomerPackageSearchDocumentRow
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.BranchID,
+		&i.Name,
+		&i.ServiceName,
+		&i.SoldOn,
+		&i.CustomerFirstName,
+		&i.CustomerLastName,
+		&i.CustomerPhone,
+		&i.OrganizationSlug,
+	)
+	return i, err
+}
+
+const getPackageBranchByUUID = `-- name: GetPackageBranchByUUID :one
+SELECT b.id, b.uuid, b.name FROM branches b
+WHERE b.organization_id = $1 AND b.uuid = $2 AND b.deleted_at IS NULL
+`
+
+type GetPackageBranchByUUIDParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type GetPackageBranchByUUIDRow struct {
+	ID   int64     `json:"id"`
+	Uuid uuid.UUID `json:"uuid"`
+	Name string    `json:"name"`
+}
+
+func (q *Queries) GetPackageBranchByUUID(ctx context.Context, arg GetPackageBranchByUUIDParams) (GetPackageBranchByUUIDRow, error) {
+	row := q.db.QueryRow(ctx, getPackageBranchByUUID, arg.OrganizationID, arg.Uuid)
+	var i GetPackageBranchByUUIDRow
+	err := row.Scan(&i.ID, &i.Uuid, &i.Name)
+	return i, err
+}
+
 const getPackageClock = `-- name: GetPackageClock :one
 SELECT COALESCE(NULLIF(b.timezone, ''), o.timezone)::text AS timezone, o.currency::text AS currency
 FROM organizations o
@@ -875,6 +946,64 @@ func (q *Queries) ListBranchRefsByIDs(ctx context.Context, arg ListBranchRefsByI
 	for rows.Next() {
 		var i ListBranchRefsByIDsRow
 		if err := rows.Scan(&i.ID, &i.Uuid, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCustomerPackageSearchDocuments = `-- name: ListCustomerPackageSearchDocuments :many
+SELECT cp.id, cp.uuid, cp.organization_id, cp.branch_id, cp.name, cp.service_name, cp.sold_on,
+    c.first_name AS customer_first_name, c.last_name AS customer_last_name, c.phone_e164 AS customer_phone,
+    o.slug AS organization_slug
+FROM customer_packages cp
+JOIN customers c ON c.organization_id = cp.organization_id AND c.id = cp.customer_id
+JOIN organizations o ON o.id = cp.organization_id
+WHERE cp.organization_id = $1
+ORDER BY cp.id
+`
+
+type ListCustomerPackageSearchDocumentsRow struct {
+	ID                int64       `json:"id"`
+	Uuid              uuid.UUID   `json:"uuid"`
+	OrganizationID    int64       `json:"organization_id"`
+	BranchID          int64       `json:"branch_id"`
+	Name              string      `json:"name"`
+	ServiceName       string      `json:"service_name"`
+	SoldOn            pgtype.Date `json:"sold_on"`
+	CustomerFirstName string      `json:"customer_first_name"`
+	CustomerLastName  string      `json:"customer_last_name"`
+	CustomerPhone     pgtype.Text `json:"customer_phone"`
+	OrganizationSlug  string      `json:"organization_slug"`
+}
+
+// Cmd+K documents of the sold packages (TEC-984).
+func (q *Queries) ListCustomerPackageSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerPackageSearchDocumentsRow, error) {
+	rows, err := q.db.Query(ctx, listCustomerPackageSearchDocuments, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCustomerPackageSearchDocumentsRow{}
+	for rows.Next() {
+		var i ListCustomerPackageSearchDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.BranchID,
+			&i.Name,
+			&i.ServiceName,
+			&i.SoldOn,
+			&i.CustomerFirstName,
+			&i.CustomerLastName,
+			&i.CustomerPhone,
+			&i.OrganizationSlug,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2028,6 +2157,26 @@ func (q *Queries) SetCustomerPackageEntries(ctx context.Context, arg SetCustomer
 		arg.ID,
 	)
 	return err
+}
+
+const setSessionPackageActive = `-- name: SetSessionPackageActive :execrows
+UPDATE session_packages SET is_active = $1
+WHERE organization_id = $2 AND uuid = $3 AND deleted_at IS NULL
+`
+
+type SetSessionPackageActiveParams struct {
+	IsActive       bool      `json:"is_active"`
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+// Bulk activate / deactivate (TEC-984).
+func (q *Queries) SetSessionPackageActive(ctx context.Context, arg SetSessionPackageActiveParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSessionPackageActive, arg.IsActive, arg.OrganizationID, arg.Uuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const softDeleteSessionPackage = `-- name: SoftDeleteSessionPackage :execrows

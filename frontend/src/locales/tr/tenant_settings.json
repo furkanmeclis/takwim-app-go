@@ -226,5 +226,7 @@
   "booking.types.text": "Kısa metin",
   "booking.types.number": "Sayı",
   "booking.types.select": "Seçim",
-  "booking.types.checkbox": "Onay kutusu"
+  "booking.types.checkbox": "Onay kutusu",
+  "fields.no_show_uses_package_session": "Gelmeyen müşterinin paket seansı yansın",
+  "fields.no_show_uses_package_session_hint": "Açıkken \"gelmedi\" işaretlenen randevunun paket seansı kullanılmış sayılır (gelir yazılmaz). Kapalıyken seans pakete geri döner."
 }

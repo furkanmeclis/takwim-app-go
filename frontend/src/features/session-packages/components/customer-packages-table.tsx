@@ -13,6 +13,7 @@ import {
 import { createColumn } from "@/components/tables";
 import { routes } from "@/config/routes";
 import { useCashAmount } from "@/features/cash/lib/format";
+import { ResourceIOToolbar } from "@/features/io";
 import {
   CUSTOMER_PACKAGE_STATES,
   CUSTOMER_PACKAGES_RESOURCE,
@@ -21,6 +22,7 @@ import {
 } from "@/features/session-packages/constants";
 import {
   useCustomerPackageFacets,
+  useCustomerPackagesMeta,
   useCustomerPackages,
 } from "@/features/session-packages/hooks/use-session-packages";
 import { sessionsLabel } from "@/features/session-packages/lib/format";
@@ -234,6 +236,18 @@ export function CustomerPackagesTable({
   }, [customerUuid, listState.columnFilters, listState.params]);
 
   const query = useCustomerPackages(params);
+  const meta = useCustomerPackagesMeta();
+  // The list's filters for the export (TEC-984).
+  const exportQuery = useMemo(
+    () => ({
+      q: params.q,
+      sort: params.sort,
+      state: params.state,
+      package: params.package,
+      branch: params.branch,
+    }),
+    [params.branch, params.package, params.q, params.sort, params.state],
+  );
   const columns = useCustomerPackageColumns({
     showCustomer: !customerUuid,
     facets: facets.data,
@@ -279,13 +293,22 @@ export function CustomerPackagesTable({
       state={listState.tableState}
       features={{ persistKey, rowSelection: false, viewMode: true }}
       toolbarExtra={
-        <EntityToolbar
-          onRefresh={() => {
-            void query.refetch();
-            void facets.refetch();
-          }}
-          refreshDisabled={query.isFetching}
-        />
+        <>
+          {customerUuid ? null : (
+            <ResourceIOToolbar
+              resource={CUSTOMER_PACKAGES_RESOURCE}
+              query={exportQuery}
+              capabilities={meta.data?.capabilities}
+            />
+          )}
+          <EntityToolbar
+            onRefresh={() => {
+              void query.refetch();
+              void facets.refetch();
+            }}
+            refreshDisabled={query.isFetching}
+          />
+        </>
       }
     />
   );

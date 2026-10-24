@@ -13,6 +13,8 @@ import {
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
+import { PACKAGES_MODULE } from "@/features/session-packages/constants";
 import {
   INVOICE_ITEM_LABEL_KEYS,
   INVOICE_ITEM_TYPES,
@@ -95,6 +97,7 @@ export function CompanySection({ disabled }: SectionProps) {
  */
 export function ReservationSection({ disabled }: SectionProps) {
   const { t } = useLocale();
+  const hasModule = useNavModules();
   const approval = useWatch<SettingsFormValues, "reservation.approval_mode">({
     name: "reservation.approval_mode",
   });
@@ -200,6 +203,17 @@ export function ReservationSection({ disabled }: SectionProps) {
           description={t("tenant_settings.fields.max_online_per_day_hint")}
           disabled={disabled}
         />
+        {hasModule(PACKAGES_MODULE) ? (
+          <AppSwitch
+            name="reservation.no_show_uses_package_session"
+            label={t("tenant_settings.fields.no_show_uses_package_session")}
+            description={t(
+              "tenant_settings.fields.no_show_uses_package_session_hint",
+            )}
+            className="sm:col-span-2"
+            disabled={disabled}
+          />
+        ) : null}
       </FormSection>
       <FormSection
         title={t("tenant_settings.sections.payment")}
