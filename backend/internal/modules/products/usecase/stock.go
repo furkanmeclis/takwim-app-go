@@ -256,6 +256,15 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 		StaffID: staffID, Reason: reason, Note: note, Source: SourceManual,
 		OccurredAt: pgtype.Timestamptz{Time: occurred, Valid: true}, CreatedBy: actor,
 	}
+	// An undated movement is stamped once its level rows are locked, so
+	// concurrent movements of one item get occurred_at in the order they
+	// were applied and the ledger (occurred_at, id) matches balance_after.
+	stamp := func() {
+		if in.OccurredAt == nil {
+			occurred = time.Now().UTC()
+			base.OccurredAt = pgtype.Timestamptz{Time: occurred, Valid: true}
+		}
+	}
 	var created []uuid.UUID
 	err = s.repo.InTx(ctx, func(tx *db.Queries) error {
 		switch in.Kind {
@@ -275,6 +284,7 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 				}
 				levels[b] = l
 			}
+			stamp()
 			src, dst := levels[branchID], levels[toBranchID]
 			if int64(src.OnHand)-int64(src.Reserved) < int64(quantity) {
 				return insufficient(src)
@@ -301,6 +311,7 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 			if err != nil {
 				return err
 			}
+			stamp()
 			p := base
 			p.BranchID, p.Kind = branchID, in.Kind
 			switch in.Kind {
