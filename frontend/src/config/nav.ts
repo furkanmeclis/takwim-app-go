@@ -1,6 +1,7 @@
 import {
   Armchair,
   BadgePercent,
+  BookOpenText,
   HandCoins,
   ArrowLeftRight,
   ArrowDownUp,
@@ -448,6 +449,14 @@ export function tenantNav(slug: string): NavCatalog {
             titleKey: "layout.nav_finance",
             href: routes.tenant.finance.root(slug),
             icon: ArrowDownUp,
+            permission: permissions.tenant.finance.read,
+            module: "finance",
+          },
+          {
+            id: "sales-ledger",
+            titleKey: "layout.nav_sales_ledger",
+            href: routes.tenant.salesLedger(slug),
+            icon: BookOpenText,
             permission: permissions.tenant.finance.read,
             module: "finance",
           },

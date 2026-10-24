@@ -516,6 +516,9 @@ func (h *Handler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 			payload["reason"] = m.Reason
 		}
 		h.record(r, "products.stock_moved", res.Product, payload, nil)
+		if in.Kind == model.KindSale {
+			h.salesChanged(r)
+		}
 	}
 	response.JSON(w, r, http.StatusCreated, map[string]any{"items": res.Movements, "product": res.Product})
 }
@@ -549,6 +552,7 @@ func (h *Handler) ReturnMovement(w http.ResponseWriter, r *http.Request) {
 		payload["variant"] = m.Variant.Name
 	}
 	h.record(r, "products.sale_returned", res.Product, payload, nil)
+	h.salesChanged(r)
 	response.JSON(w, r, http.StatusCreated, map[string]any{"items": res.Movements, "product": res.Product})
 }
 
@@ -625,6 +629,22 @@ func (h *Handler) publish(r *http.Request, action string, id uuid.UUID) {
 	}
 	h.events.Publish(r.Context(), model.Slug, ev, id.String())
 }
+
+// salesChanged tells the open sale line and ledger lists that a stock sale
+// or its return posted (or reversed) revenue in the movement's transaction.
+func (h *Handler) salesChanged(r *http.Request) {
+	if h.events == nil {
+		return
+	}
+	h.events.Publish(r.Context(), saleLinesResource, resourceevents.ActionUpdated)
+	h.events.Publish(r.Context(), ledgerEntriesResource, resourceevents.ActionUpdated)
+}
+
+// Live channels of the sales ledger (TEC-916).
+const (
+	saleLinesResource     = "tenant.sale_lines"
+	ledgerEntriesResource = "tenant.ledger_entries"
+)
 
 func pathUUID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue(name))

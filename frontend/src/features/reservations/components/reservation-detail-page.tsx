@@ -30,6 +30,7 @@ import {
 import { ReservationConfirmationCard } from "@/features/reservations/components/reservation-confirmation-card";
 import { ReservationPaymentsCard } from "@/features/reservations/components/reservation-payments-card";
 import { ReservationProductsCard } from "@/features/reservations/components/reservation-products-card";
+import { ReservationBalanceCard } from "@/features/sales";
 import { ReservationPackageSessionsCard } from "@/features/session-packages";
 import { ACTION_ICONS } from "@/features/reservations/components/reservation-row-actions";
 import {
@@ -327,6 +328,8 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
           />
 
           <ReservationPaymentsCard uuid={reservation.uuid} />
+
+          <ReservationBalanceCard uuid={reservation.uuid} />
 
           <ReservationNotesCard reservation={reservation} editable={canWrite} />
 
