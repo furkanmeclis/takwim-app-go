@@ -28,7 +28,7 @@ ORDER BY i.branch_id, i.sort_order, i.id;
 -- name: ListPublicServices :many
 -- Active services shown online, with their category.
 SELECT s.id, s.uuid, s.name, s.description, s.duration_minutes, s.price, s.payment_mode,
-       s.staff_mode, s.sort_order, s.image_uuid,
+       s.staff_mode, s.sort_order, s.image_uuid, s.group_capacity,
        c.uuid AS category_uuid, c.name AS category_name, c.sort_order AS category_sort_order
 FROM services s
 LEFT JOIN service_categories c

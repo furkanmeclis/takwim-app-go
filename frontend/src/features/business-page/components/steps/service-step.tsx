@@ -2,7 +2,12 @@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChoiceCard } from "@/features/business-page/components/choice-card";
-import { MAX_LINES } from "@/features/business-page/lib/wizard";
+import { Badge } from "@/components/ui/badge";
+import {
+  MAX_LINES,
+  groupCapacity,
+  toggleService,
+} from "@/features/business-page/lib/wizard";
 import type { PublicService } from "@/features/business-page/types";
 import { priceLabel } from "@/features/services/lib/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -27,7 +32,7 @@ function groupByCategory(services: PublicService[], other: string): Group[] {
 /**
  * Service step: one or more services of the branch (a combined visit), with
  * the branch's price and duration. The order of picking is the order of the
- * visit.
+ * visit. A group class (gym) shows its seats and is booked on its own.
  */
 export function ServiceStep({
   services,
@@ -43,13 +48,12 @@ export function ServiceStep({
   const { t, locale } = useLocale();
   const groups = groupByCategory(services, t("business_page.service.other"));
   const full = value.length >= MAX_LINES;
+  const groupPicked = value.some(
+    (id) => groupCapacity(services.find((s) => s.uuid === id)) !== null,
+  );
 
   const toggle = (uuid: string, checked: boolean) => {
-    if (checked) {
-      if (!value.includes(uuid) && !full) onChange([...value, uuid]);
-    } else {
-      onChange(value.filter((v) => v !== uuid));
-    }
+    onChange(toggleService(services, value, uuid, checked));
   };
 
   return (
@@ -65,11 +69,26 @@ export function ServiceStep({
             {group.services.map((service) => {
               const id = `service-${service.uuid}`;
               const checked = value.includes(service.uuid);
+              const seats = groupCapacity(service);
+              // A group class replaces the picks, so the limit never
+              // blocks it.
+              const blocked = !checked && full && seats === null;
               return (
                 <ChoiceCard
                   key={service.uuid}
                   id={id}
-                  title={service.name}
+                  title={
+                    seats !== null ? (
+                      <span className="flex flex-wrap items-center gap-2">
+                        {service.name}
+                        <Badge variant="secondary">
+                          {t("business_page.service.group", { count: seats })}
+                        </Badge>
+                      </span>
+                    ) : (
+                      service.name
+                    )
+                  }
                   description={
                     <>
                       {service.description ? (
@@ -89,12 +108,12 @@ export function ServiceStep({
                     service.currency || currency,
                     locale,
                   )}
-                  disabled={!checked && full}
+                  disabled={blocked}
                   control={
                     <Checkbox
                       id={id}
                       checked={checked}
-                      disabled={!checked && full}
+                      disabled={blocked}
                       onCheckedChange={(next) =>
                         toggle(service.uuid, next === true)
                       }
@@ -106,6 +125,11 @@ export function ServiceStep({
           </div>
         </section>
       ))}
+      {groupPicked ? (
+        <p className="text-muted-foreground text-sm">
+          {t("business_page.service.group_alone")}
+        </p>
+      ) : null}
       {full ? (
         <p className="text-muted-foreground text-sm">
           {t("business_page.service.max", { count: MAX_LINES })}

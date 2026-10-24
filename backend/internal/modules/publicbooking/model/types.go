@@ -210,18 +210,21 @@ type ServiceStaff struct {
 // Service is a bookable service. With a branch filter Price and
 // DurationMinutes are the branch's; otherwise the list values.
 type Service struct {
-	UUID            uuid.UUID      `json:"uuid"`
-	Name            string         `json:"name"`
-	Description     string         `json:"description"`
-	Category        *Ref           `json:"category"`
-	DurationMinutes int            `json:"duration_minutes"`
-	Price           money.Money    `json:"price"`
-	Currency        string         `json:"currency"`
-	PaymentMode     string         `json:"payment_mode"`
-	StaffMode       string         `json:"staff_mode"`
-	ImageURL        *string        `json:"image_url"`
-	Branches        []ServiceOffer `json:"branches"`
-	Staff           []ServiceStaff `json:"staff"`
+	UUID            uuid.UUID   `json:"uuid"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description"`
+	Category        *Ref        `json:"category"`
+	DurationMinutes int         `json:"duration_minutes"`
+	Price           money.Money `json:"price"`
+	Currency        string      `json:"currency"`
+	PaymentMode     string      `json:"payment_mode"`
+	StaffMode       string      `json:"staff_mode"`
+	ImageURL        *string     `json:"image_url"`
+	// GroupCapacity: seats of a group class session (TEC-904); null for
+	// an individual service. A group class is booked on its own.
+	GroupCapacity *int           `json:"group_capacity"`
+	Branches      []ServiceOffer `json:"branches"`
+	Staff         []ServiceStaff `json:"staff"`
 }
 
 // Staff is a person shown on the customer screens.

@@ -159,5 +159,20 @@
   "status.close_tab": "Close this tab",
   "errors.day_full": "No online bookings are left for this day. Please pick another day.",
   "errors.open_limit": "You reached this business's limit of open bookings. Wait for your current booking to be completed or contact the business.",
-  "errors.answers": "Please check the questions on the contact step."
+  "errors.answers": "Please check the questions on the contact step.",
+  "steps.vehicle": "Your vehicle",
+  "vehicle.type": "Vehicle type",
+  "vehicle.plate": "Licence plate (optional)",
+  "vehicle.plate_hint": "E.g. 34 ABC 123. The business recognises your vehicle by its plate when you arrive.",
+  "vehicle.plate_invalid": "Use letters, digits and spaces only; at most {{max}} characters.",
+  "seats.title": "How many places?",
+  "seats.hint": "The class has {{capacity}} places in total; only sessions with enough free places are listed.",
+  "seats.decrease": "One place less",
+  "seats.increase": "One place more",
+  "seats.count": "{{count}} place(s)",
+  "seats.left": "{{count}} places left",
+  "seats.left_short": "{{count}} left",
+  "service.group": "Group class · {{count}} places",
+  "service.group_alone": "A group class is booked on its own; picking another service removes the class.",
+  "errors.vehicle": "Please check your vehicle details."
 }

@@ -17,6 +17,7 @@ import {
   ContactStep,
 } from "@/features/business-page/components/steps/contact-step";
 import { LargePartyHint } from "@/features/business-page/components/large-party-hint";
+import { SeatsPicker } from "@/features/business-page/components/seats-picker";
 import { AreaStep } from "@/features/business-page/components/steps/area-step";
 import { DatetimeStep } from "@/features/business-page/components/steps/datetime-step";
 import { PartyStep } from "@/features/business-page/components/steps/party-step";
@@ -24,6 +25,7 @@ import { ProductStep } from "@/features/business-page/components/steps/product-s
 import { ServiceStep } from "@/features/business-page/components/steps/service-step";
 import { StaffStep } from "@/features/business-page/components/steps/staff-step";
 import { SummaryStep } from "@/features/business-page/components/steps/summary-step";
+import { VehicleStep } from "@/features/business-page/components/steps/vehicle-step";
 import {
   usePublicAvailability,
   usePublicProducts,
@@ -39,6 +41,7 @@ import {
   isDayFull,
   isOutOfStock,
   isSlotTaken,
+  isVehicleError,
   reportBookingError,
 } from "@/features/business-page/lib/errors";
 import type { Preselect } from "@/features/business-page/lib/embed";
@@ -49,6 +52,8 @@ import {
   flowHasProducts,
   flowHasService,
   flowHasStaff,
+  flowHasVehicle,
+  groupCapacity,
   hasAreaChoice,
   paymentChoices,
   productPrices,
@@ -57,7 +62,10 @@ import {
   sumAmounts,
   toLines,
   toProducts,
+  toVehicle,
   validParty,
+  validPlate,
+  validSeats,
   wizardSteps,
 } from "@/features/business-page/lib/wizard";
 import { toBookingRequest } from "@/features/business-page/schemas/contact-form";
@@ -71,6 +79,7 @@ import type {
   PublicCheckout,
   PublicService,
   PublicSlot,
+  PublicVehicle,
   WizardStep,
 } from "@/features/business-page/types";
 import { addDays } from "@/features/reservations/lib/calendar-time";
@@ -78,8 +87,9 @@ import { dateKeyInZone, uuid } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
 /**
- * Booking wizard of the business page: branch → service(s) → person →
- * day and time → products (optional) → contact → summary. The steps follow the sector's flow
+ * Booking wizard of the business page: branch → vehicle (car wash) →
+ * service(s) → person → day and time (with the seats of a group class) →
+ * products (optional) → contact → summary. The steps follow the sector's flow
  * (`business.flow`); every rule (availability, prices, approval, payment)
  * is the API's. Picking a time holds it (`checkouts`) for the minutes of
  * `booking.checkout_minutes`; going back frees it.
@@ -120,6 +130,11 @@ export function BookingWizard({
     branches.length === 1 ? branches[0]!.uuid : presetBranch,
   );
   const [partyText, setPartyText] = useState("2");
+  const [vehicleType, setVehicleType] = useState<PublicVehicle["type"] | "">(
+    "",
+  );
+  const [plate, setPlate] = useState("");
+  const [seats, setSeats] = useState(1);
   const [zone, setZone] = useState("");
   const [pickedServices, setPickedServices] =
     useState<string[]>(presetServices);
@@ -184,6 +199,13 @@ export function BookingWizard({
           : null;
   }
   const byParty = flowHasParty(business.flow);
+  const askVehicle = flowHasVehicle(business.flow);
+  // A group class is booked on its own (TEC-904); the booking takes
+  // `party_size` seats of the session, 1 up to the class's capacity.
+  const classCapacity =
+    !byParty && selected.length === 1 ? groupCapacity(selected[0]) : null;
+  const activeSeats =
+    classCapacity !== null ? (validSeats(seats, classCapacity) ?? 1) : null;
   const branch = branches.find((b) => b.uuid === branchUuid);
   // The area step of the flow (hidden by the business: any area).
   const areaChoice = business.flow.includes("area") && hasAreaChoice(branch);
@@ -193,6 +215,7 @@ export function BookingWizard({
     byParty && areaChoice && branch?.zones.includes(zone) ? zone : "";
   const steps = wizardSteps({
     branchCount: branches.length,
+    vehicle: askVehicle,
     partySize: byParty,
     areaChoice,
     serviceChoice: !autoService,
@@ -219,11 +242,13 @@ export function BookingWizard({
   const index = steps.indexOf(current);
 
   const lines = toLines(serviceUuids, staffFor);
-  // Party and area of a party sector; the checkout keeps them for the
-  // booking.
+  // Party and area of a party sector, or the seats of a group class; the
+  // checkout keeps them for the booking.
   const seating = byParty
     ? { party_size: partySize, ...(activeZone ? { zone: activeZone } : {}) }
-    : {};
+    : activeSeats !== null
+      ? { party_size: activeSeats }
+      : {};
   const windowEnd = addDays(windowStart, WINDOW_DAYS - 1);
   const availabilityBody: PublicAvailabilityRequest | null =
     current === "datetime" &&
@@ -337,6 +362,7 @@ export function BookingWizard({
           activePayment,
           pickedProducts,
           business.booking.fields,
+          askVehicle ? toVehicle(vehicleType, plate) : null,
         ),
         bookingKey.current,
       );
@@ -353,6 +379,9 @@ export function BookingWizard({
         goTo("datetime");
       } else if (isAnswerError(error)) {
         goTo("contact");
+      } else if (isVehicleError(error)) {
+        releaseCheckout();
+        goTo("vehicle");
       } else if (isOutOfStock(error)) {
         // Someone took the last units; pick again from what is left.
         void productsQuery.refetch();
@@ -365,15 +394,17 @@ export function BookingWizard({
   const canContinue =
     current === "branch"
       ? Boolean(branchUuid)
-      : current === "party_size"
-        ? partySize !== null
-        : current === "service"
-          ? serviceUuids.length > 0
-          : current === "datetime"
-            ? Boolean(slot)
-            : current === "summary"
-              ? Boolean(checkout && contact)
-              : true;
+      : current === "vehicle"
+        ? Boolean(vehicleType) && validPlate(plate)
+        : current === "party_size"
+          ? partySize !== null
+          : current === "service"
+            ? serviceUuids.length > 0
+            : current === "datetime"
+              ? Boolean(slot)
+              : current === "summary"
+                ? Boolean(checkout && contact)
+                : true;
 
   const next = () => {
     if (current === "datetime") {
@@ -401,6 +432,15 @@ export function BookingWizard({
           setProductQty({});
           resetTime();
         }}
+      />
+    );
+  } else if (current === "vehicle") {
+    body = (
+      <VehicleStep
+        type={vehicleType}
+        plate={plate}
+        onTypeChange={setVehicleType}
+        onPlateChange={setPlate}
       />
     );
   } else if (current === "party_size") {
@@ -495,6 +535,18 @@ export function BookingWizard({
           setWindowStart(addDays(windowStart, WINDOW_DAYS));
           resetTime();
         }}
+        header={
+          classCapacity !== null && activeSeats !== null ? (
+            <SeatsPicker
+              value={activeSeats}
+              capacity={classCapacity}
+              onChange={(value) => {
+                setSeats(value);
+                setSlot(null);
+              }}
+            />
+          ) : undefined
+        }
         noSlotsHint={
           byParty && partySize !== null ? (
             <LargePartyHint
@@ -537,6 +589,7 @@ export function BookingWizard({
         payments={payments}
         payment={activePayment}
         onPaymentChange={setPayment}
+        vehicle={askVehicle ? toVehicle(vehicleType, plate) : null}
       />
     );
   } else {

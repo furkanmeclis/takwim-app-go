@@ -9,10 +9,12 @@ import { Separator } from "@/components/ui/separator";
 import { ChoiceCard } from "@/features/business-page/components/choice-card";
 import {
   checkoutPrices,
+  flowHasParty,
   productKey,
   productPrices,
   seatingLabel,
   sumAmounts,
+  vehicleText,
 } from "@/features/business-page/lib/wizard";
 import type {
   ContactValues,
@@ -22,6 +24,7 @@ import type {
   PublicCheckout,
   PublicProduct,
   PublicService,
+  PublicVehicle,
 } from "@/features/business-page/types";
 import { answerText } from "@/features/reservations/lib/custom-fields";
 import { priceLabel } from "@/features/services/lib/format";
@@ -30,7 +33,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 /**
  * Summary step: the held time, the services with their people and prices,
- * the picked products, the contact, how the customer pays and the business's rules. The prices
+ * the picked products, the vehicle (car wash), the contact, how the customer pays and the business's rules. The prices
  * are the catalog's; the API sets the final amount on the booking.
  */
 export function SummaryStep({
@@ -43,6 +46,7 @@ export function SummaryStep({
   payments,
   payment,
   onPaymentChange,
+  vehicle = null,
 }: {
   business: PublicBusiness;
   checkout: PublicCheckout;
@@ -53,6 +57,7 @@ export function SummaryStep({
   payments: PaymentMethod[];
   payment: PaymentMethod | undefined;
   onPaymentChange: (method: PaymentMethod) => void;
+  vehicle?: PublicVehicle | null;
 }) {
   const { t, locale } = useLocale();
   const zone = business.timezone;
@@ -86,7 +91,13 @@ export function SummaryStep({
           <p className="text-muted-foreground text-sm">
             {[
               checkout.branch.name,
-              seatingLabel(t, checkout.party_size, checkout.zone),
+              seatingLabel(
+                t,
+                checkout.party_size,
+                checkout.zone,
+                flowHasParty(business.flow),
+              ),
+              vehicleText(t, vehicle),
             ]
               .filter(Boolean)
               .join(" · ")}

@@ -15643,6 +15643,8 @@ export interface components {
             /** @enum {string} */
             staff_mode: "required" | "optional" | "none";
             image_url: string | null;
+            /** @description Seats of a group class session (TEC-904); null = individual. A group class is booked on its own (`lines.N.service_uuid` `group_alone`); `party_size` of the availability, checkout and booking is the seats taken. */
+            group_capacity: number | null;
             branches: {
                 /** Format: uuid */
                 branch_uuid: string;

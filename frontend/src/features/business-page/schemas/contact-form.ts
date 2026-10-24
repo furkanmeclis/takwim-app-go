@@ -6,6 +6,7 @@ import type {
   PublicBookingField,
   PublicBookingProduct,
   PublicBookingRequest,
+  PublicVehicle,
 } from "@/features/business-page/types";
 import {
   customDefaults,
@@ -99,6 +100,7 @@ export function toBookingRequest(
   payment: PaymentMethod | undefined,
   products: PublicBookingProduct[] = [],
   fields: PublicBookingField[] = [],
+  vehicle: PublicVehicle | null = null,
 ): PublicBookingRequest {
   const answers = toCustomFields(fields, values.custom_fields);
   return {
@@ -116,5 +118,6 @@ export function toBookingRequest(
     ...(Object.keys(answers).length > 0 ? { custom_fields: answers } : {}),
     website: values.website,
     ...(products.length > 0 ? { products } : {}),
+    ...(vehicle ? { vehicle } : {}),
   };
 }

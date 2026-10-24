@@ -22821,7 +22821,7 @@ components:
 
     PublicService:
       type: object
-      required: [uuid, name, description, category, duration_minutes, price, currency, payment_mode, staff_mode, image_url, branches, staff]
+      required: [uuid, name, description, category, duration_minutes, price, currency, payment_mode, staff_mode, image_url, group_capacity, branches, staff]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
@@ -22836,6 +22836,9 @@ components:
         payment_mode: { type: string, enum: [on_site, online, both] }
         staff_mode: { type: string, enum: [required, optional, none] }
         image_url: { type: [string, "null"] }
+        group_capacity:
+          type: [integer, "null"]
+          description: "Seats of a group class session (TEC-904); null = individual. A group class is booked on its own (`lines.N.service_uuid` `group_alone`); `party_size` of the availability, checkout and booking is the seats taken."
         branches:
           type: array
           items:

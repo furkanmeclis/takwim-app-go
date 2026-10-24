@@ -28,10 +28,16 @@ const DAY_STATUS_KEYS: Record<string, string> = {
   full: "business_page.datetime.full",
 };
 
+/** Free seats of a group class start (TEC-904); null for an individual one. */
+function seatsLeft(slot: PublicSlot) {
+  return slot.lines.find((l) => l.seats_left != null)?.seats_left ?? null;
+}
+
 /**
  * Day and time step. The strip shows the days of the window the slot
  * engine answered (online channel); a day without free starts is greyed
- * out. The browser never computes availability itself.
+ * out. A group class start shows its free seats; a full session is not
+ * offered (API). The browser never computes availability itself.
  */
 export function DatetimeStep({
   query,
@@ -44,6 +50,7 @@ export function DatetimeStep({
   onPrevWindow,
   onNextWindow,
   noSlotsHint,
+  header,
 }: {
   query: UseQueryResult<PublicAvailability>;
   /** Picked day ("yyyy-MM-dd"). */
@@ -57,6 +64,8 @@ export function DatetimeStep({
   onNextWindow: () => void;
   /** Shown under a day that is full for the request (large parties). */
   noSlotsHint?: ReactNode;
+  /** Shown above the days (the seats of a group class). */
+  header?: ReactNode;
 }) {
   const { t, locale } = useLocale();
   const data = query.data;
@@ -86,6 +95,7 @@ export function DatetimeStep({
 
   return (
     <div className="space-y-4">
+      {header}
       <div className="flex items-center justify-between gap-2">
         <Button
           type="button"
@@ -180,15 +190,28 @@ export function DatetimeStep({
               className="grid w-full grid-cols-4 gap-2 sm:grid-cols-6"
               aria-label={t("business_page.datetime.time")}
             >
-              {day.slots.map((s) => (
-                <ToggleGroupItem
-                  key={s.starts_at}
-                  value={s.starts_at}
-                  className="w-full tabular-nums"
-                >
-                  {time(s.starts_at)}
-                </ToggleGroupItem>
-              ))}
+              {day.slots.map((s) => {
+                const seats = seatsLeft(s);
+                return (
+                  <ToggleGroupItem
+                    key={s.starts_at}
+                    value={s.starts_at}
+                    className={cn(
+                      "w-full tabular-nums",
+                      seats !== null && "h-auto flex-col gap-0 py-1.5",
+                    )}
+                  >
+                    {time(s.starts_at)}
+                    {seats !== null ? (
+                      <span className="text-muted-foreground text-[10px] font-normal">
+                        {t("business_page.seats.left_short", {
+                          count: seats,
+                        })}
+                      </span>
+                    ) : null}
+                  </ToggleGroupItem>
+                );
+              })}
             </ToggleGroup>
           </div>
         ) : (
@@ -223,8 +246,17 @@ export function DatetimeStep({
                 </span>{" "}
                 {data.lines[index]?.service_name ?? ""}
               </span>
-              <span className="text-muted-foreground">
-                {line.staff?.name ?? ""}
+              <span className="text-muted-foreground text-end">
+                {[
+                  line.staff?.name,
+                  line.seats_left != null
+                    ? t("business_page.seats.left", {
+                        count: line.seats_left,
+                      })
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
             </li>
           ))}

@@ -7,8 +7,10 @@ import type {
   PublicLineInput,
   PublicProduct,
   PublicService,
+  PublicVehicle,
   WizardStep,
 } from "@/features/business-page/types";
+import { vehicleLabel } from "@/features/reservations/lib/labels";
 
 /** Sector flow steps that pick the service lines (`sectors.steps.*`). */
 const SERVICE_STEPS = ["service", "appointment_type", "session_type", "class"];
@@ -42,16 +44,93 @@ export function flowHasStaff(flow: string[]) {
   return flow.some((step) => STAFF_STEPS.includes(step));
 }
 
-/** "4 kişi · Teras" for a party booking; empty without a party. */
+/**
+ * "4 kişi · Teras" for a party booking, "2 kişilik yer" for the seats of a
+ * group class (a sector that does not book by party); empty without one.
+ */
 export function seatingLabel(
   t: (key: string, params?: Record<string, string | number>) => string,
   partySize: number | null | undefined,
   zone: string | null | undefined,
+  byParty = true,
 ) {
   if (!partySize) return "";
+  if (!byParty) return t("business_page.seats.count", { count: partySize });
   return [t("business_page.party.count", { count: partySize }), zone]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Whether the sector's flow asks for the vehicle (car wash, TEC-971). */
+export function flowHasVehicle(flow: string[]) {
+  return flow.includes("vehicle");
+}
+
+/** Longest licence plate the API stores (letters, digits and spaces). */
+export const MAX_PLATE = 16;
+
+/** A plate as the API stores it: upper case with single spaces. */
+export function normalizePlate(plate: string) {
+  return plate
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleUpperCase("tr");
+}
+
+/** Whether a typed plate is acceptable (empty = not given). */
+export function validPlate(plate: string) {
+  const value = normalizePlate(plate);
+  return value.length <= MAX_PLATE && /^[\p{L}\p{N} ]*$/u.test(value);
+}
+
+/** The vehicle for the booking body (null until a type is picked). */
+export function toVehicle(
+  type: PublicVehicle["type"] | "",
+  plate: string,
+): PublicVehicle | null {
+  return type ? { type, plate: normalizePlate(plate) } : null;
+}
+
+/** "SUV · 34 ABC 123"; empty without a vehicle. */
+export function vehicleText(
+  t: (key: string) => string,
+  vehicle: PublicVehicle | null | undefined,
+) {
+  return vehicleLabel(t, { vehicle });
+}
+
+/** Seats of a group class session; null for an individual service. */
+export function groupCapacity(service: PublicService | undefined) {
+  return service?.group_capacity ?? null;
+}
+
+/**
+ * The service picks after a toggle. A group class (TEC-904) is booked on
+ * its own (API `group_alone`): picking one replaces the other services,
+ * picking another service drops a picked group class.
+ */
+export function toggleService(
+  services: PublicService[],
+  picked: string[],
+  uuid: string,
+  checked: boolean,
+): string[] {
+  if (!checked) return picked.filter((v) => v !== uuid);
+  if (picked.includes(uuid)) return picked;
+  const isGroup = (id: string) =>
+    groupCapacity(services.find((s) => s.uuid === id)) !== null;
+  if (isGroup(uuid)) return [uuid];
+  const rest = picked.filter((v) => !isGroup(v));
+  return rest.length >= MAX_LINES ? rest : [...rest, uuid];
+}
+
+/** Seats a customer may take in a session: 1 up to the class's capacity. */
+export function validSeats(value: number, capacity: number) {
+  return Number.isInteger(value) && value >= 1 && value <= capacity
+    ? value
+    : null;
 }
 
 /** Whether the sector's flow offers products with the visit (TEC-919). */
@@ -137,10 +216,14 @@ export function validParty(value: number) {
  * - The product step (TEC-919) follows the time, as in the sector flow,
  *   when the sector sells products with a visit and the branch has some
  *   online; it is optional.
- * The vehicle step has no public API yet and is not shown.
+ * - The vehicle step (car wash, TEC-971) follows the branch, before the
+ *   service, as in the sector flow; the vehicle goes with the booking.
+ * - A group class (gym) has no own step for the seats: the day step asks
+ *   how many seats to take, because the free seats are per session.
  */
 export function wizardSteps({
   branchCount,
+  vehicle = false,
   partySize,
   areaChoice,
   serviceChoice,
@@ -148,6 +231,7 @@ export function wizardSteps({
   productChoice = false,
 }: {
   branchCount: number;
+  vehicle?: boolean;
   partySize: boolean;
   areaChoice: boolean;
   serviceChoice: boolean;
@@ -156,6 +240,7 @@ export function wizardSteps({
 }): WizardStep[] {
   const steps: WizardStep[] = [];
   if (branchCount > 1) steps.push("branch");
+  if (vehicle) steps.push("vehicle");
   if (partySize) steps.push("party_size");
   if (partySize && areaChoice) steps.push("area");
   if (serviceChoice) steps.push("service");

@@ -39,6 +39,14 @@ export function isAnswerError(error: unknown) {
   );
 }
 
+/** True when the vehicle of a car wash booking was refused (TEC-971). */
+export function isVehicleError(error: unknown) {
+  return (
+    isApiError(error) &&
+    error.details.some((d) => d.field?.startsWith("vehicle."))
+  );
+}
+
 /**
  * Toasts a booking error in the customer's words: a taken time, closed
  * bookings and rate limits (with the wait of `Retry-After`); anything else
@@ -67,6 +75,10 @@ export function reportBookingError(error: unknown, t: Translate) {
   }
   if (isAnswerError(error)) {
     appToast.error(t("business_page.errors.answers"));
+    return;
+  }
+  if (isVehicleError(error)) {
+    appToast.error(t("business_page.errors.vehicle"));
     return;
   }
   if (error.code === "BOOKING_UNAVAILABLE") {
