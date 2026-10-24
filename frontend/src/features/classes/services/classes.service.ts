@@ -2,8 +2,11 @@ import type {
   ClassFacets,
   ClassFormOptions,
   ClassSchedule,
+  BulkJob,
   ClassScheduleInput,
   ClassSchedulePage,
+  ClassSessionCancelInput,
+  ClassSessionCancelResult,
   ClassSessionChangeInput,
   ClassSessionDetail,
   ClassSessionPage,
@@ -14,6 +17,7 @@ import { tenantRequest } from "@/lib/api/tenant-request";
 
 const CLASSES = "/v1/tenant/classes";
 const SESSIONS = "/v1/tenant/class-sessions";
+const BULK = "/v1/tenant/bulk";
 
 /**
  * Group class timetable (TEC-970). A class is a group service taught on
@@ -82,5 +86,31 @@ export const classesService = {
       `${CLASSES}/${uuid}/sessions/${date}`,
       { body, silent: true },
     );
+  },
+
+  /**
+   * Cancels a session with its bookings in one bulk run (TEC-989): the
+   * customers get the cancellation notice, seats and package sessions are
+   * freed. The run can be rolled back with `undoCancel`.
+   */
+  cancelSession(
+    slug: string,
+    uuid: string,
+    date: string,
+    body: ClassSessionCancelInput,
+  ) {
+    return tenantRequest<ClassSessionCancelResult>(
+      slug,
+      "POST",
+      `${CLASSES}/${uuid}/sessions/${date}/cancel`,
+      { body, silent: true },
+    );
+  },
+
+  /** Rolls a session cancel back: the session opens with its bookings. */
+  undoCancel(slug: string, jobUuid: string) {
+    return tenantRequest<BulkJob>(slug, "POST", `${BULK}/${jobUuid}/rollback`, {
+      silent: true,
+    });
   },
 };

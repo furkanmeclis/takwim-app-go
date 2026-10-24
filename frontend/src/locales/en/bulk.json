@@ -68,5 +68,6 @@
   "confirm.cash_accounts.archive": "Archive {{count}} selected accounts? Accounts with a non-zero balance are skipped.",
   "actions.session_packages.activate": "Activate packages",
   "actions.session_packages.deactivate": "Deactivate packages",
-  "confirm.session_packages.deactivate": "Deactivate {{count}} selected package definitions? They can no longer be sold; sold packages are not affected."
+  "confirm.session_packages.deactivate": "Deactivate {{count}} selected package definitions? They can no longer be sold; sold packages are not affected.",
+  "actions.class_sessions.cancel_bookings": "Cancel session bookings"
 }

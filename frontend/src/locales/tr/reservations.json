@@ -507,5 +507,7 @@
   "slots.no_class": "Bu gün ders programında seans yok",
   "fields.package": "Paket",
   "fields.package_hint": "Müşterinin bu hizmet için paketi var; seçerseniz satır paketten düşer ve ücret alınmaz.",
-  "fields.package_none": "Paket kullanma (ücretli)"
+  "fields.package_none": "Paket kullanma (ücretli)",
+  "cancel_reasons.class_cancelled": "Ders seansı iptal edildi",
+  "events.reinstated": "İptal geri alındı"
 }

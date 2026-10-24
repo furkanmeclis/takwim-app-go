@@ -68,5 +68,6 @@
   "confirm.cash_accounts.archive": "Seçili {{count}} hesap arşivlensin mi? Bakiyesi sıfır olmayan hesaplar atlanır.",
   "actions.session_packages.activate": "Paketleri aktifleştir",
   "actions.session_packages.deactivate": "Paketleri pasifleştir",
-  "confirm.session_packages.deactivate": "Seçili {{count}} paket tanımı pasifleştirilsin mi? Yeni satışta seçilemezler; satılmış paketler etkilenmez."
+  "confirm.session_packages.deactivate": "Seçili {{count}} paket tanımı pasifleştirilsin mi? Yeni satışta seçilemezler; satılmış paketler etkilenmez.",
+  "actions.class_sessions.cancel_bookings": "Seans rezervasyonlarını iptal et"
 }

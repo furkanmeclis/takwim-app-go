@@ -384,5 +384,6 @@
   "fields.tenant.classes.seats": "Kontenjan",
   "fields.tenant.classes.valid_from": "Başlangıç tarihi",
   "fields.tenant.classes.valid_until": "Bitiş tarihi",
-  "fields.tenant.classes.is_active": "Aktif"
+  "fields.tenant.classes.is_active": "Aktif",
+  "resources.tenant.class_sessions": "Ders seansları"
 }

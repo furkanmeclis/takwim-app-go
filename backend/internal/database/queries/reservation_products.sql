@@ -100,6 +100,21 @@ UPDATE reservation_products
 SET status = 'released', release_reason = sqlc.arg(release_reason), released_at = NOW()
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND status = 'held';
 
+-- name: CopyReleasedReservationProduct :one
+-- A cancelled visit taken back (TEC-989): a product line it released is
+-- held again as a new line with the same price snapshot (a released line
+-- stays final). The caller reserves the units.
+INSERT INTO reservation_products (
+    organization_id, reservation_id, branch_id, product_id, variant_id, product_name, variant_name, sku,
+    quantity, unit_price, unit_cost, staff_id, source, created_by
+)
+SELECT rp.organization_id, rp.reservation_id, rp.branch_id, rp.product_id, rp.variant_id, rp.product_name,
+    rp.variant_name, rp.sku, rp.quantity, rp.unit_price, rp.unit_cost, rp.staff_id, rp.source, sqlc.narg(created_by)
+FROM reservation_products rp
+WHERE rp.organization_id = sqlc.arg(organization_id) AND rp.reservation_id = sqlc.arg(reservation_id)
+  AND rp.uuid = sqlc.arg(uuid) AND rp.status = 'released'
+RETURNING *;
+
 -- name: DeliverReservationProduct :exec
 UPDATE reservation_products
 SET status = 'delivered', stock_movement_uuid = sqlc.arg(stock_movement_uuid), delivered_at = sqlc.arg(delivered_at)

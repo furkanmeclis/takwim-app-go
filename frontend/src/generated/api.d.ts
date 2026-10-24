@@ -9472,11 +9472,41 @@ export interface paths {
          * Cancel a session or change its seats
          * @description `tenant.classes.write`. Sets how the session differs from its class: `cancelled` (not offered, its trainer
          *     and area are free) and / or `capacity` (null = the class's seats). Both off restores the session. Runs under
-         *     the booking lock. A session with bookings is not cancelled (`409` `sessions` / `has_bookings`), seats below
+         *     the booking lock. A session with bookings is not cancelled here (`409` `sessions` / `has_bookings`; cancel it
+         *     with its bookings through `POST .../sessions/{date}/cancel`), seats below
          *     the booked seats are `409` `capacity` / `below_booked`, a session that already started is `409` `date` /
          *     `past`.
          */
         patch: operations["patchTenantClassSession"];
+        trace?: never;
+    };
+    "/v1/tenant/classes/{uuid}/sessions/{date}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a session with its bookings
+         * @description `tenant.classes.write` and `tenant.reservations.write` (TEC-989). Under the booking lock the session is
+         *     cancelled (no booking slips in), then its open bookings (requests and active bookings) are cancelled in one
+         *     bulk run (`tenant.class_sessions` / `cancel_bookings`), each through the reservation's own cancel with the
+         *     reason `class_cancelled`: seats, package sessions and products are freed, a payment waits for its refund and
+         *     the customer gets the cancellation notice. The run keeps a bulk job also when it runs inline, so it can be
+         *     rolled back in the bulk window with `POST /v1/tenant/bulk/{uuid}/rollback`: the session opens again and each
+         *     booking is taken back (`reinstated`) unless it changed since, its time is no longer free, a package has no
+         *     session left or a product is out of stock. A session already cancelled is fine (its remaining bookings are
+         *     cancelled); without bookings `cancellation` is null. A session that already started is `409` `date` /
+         *     `past`.
+         */
+        post: operations["postTenantClassSessionCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/tenant/class-sessions": {
@@ -16305,7 +16335,7 @@ export interface components {
             events: {
                 version: number;
                 /** @enum {string} */
-                type: "created" | "accepted" | "rejected" | "cancelled" | "started" | "completed" | "no_show" | "paid" | "expired" | "rescheduled" | "notes_updated" | "payment_recorded" | "late_payment" | "product_added" | "product_removed" | "confirmation_scheduled" | "confirmation_requested" | "confirmation_confirmed" | "confirmation_declined" | "confirmation_change_requested" | "confirmation_expired" | "confirmation_dropped";
+                type: "created" | "accepted" | "rejected" | "cancelled" | "started" | "completed" | "no_show" | "paid" | "expired" | "rescheduled" | "notes_updated" | "payment_recorded" | "late_payment" | "product_added" | "product_removed" | "confirmation_scheduled" | "confirmation_requested" | "confirmation_confirmed" | "confirmation_declined" | "confirmation_change_requested" | "confirmation_expired" | "confirmation_dropped" | "reinstated";
                 from_status: string | null;
                 to_status: string | null;
                 actor: string | null;
@@ -17819,6 +17849,42 @@ export interface components {
         };
         ClassSessionDetail: components["schemas"]["ClassSession"] & {
             attendees: components["schemas"]["ClassAttendee"][];
+            /** @description The caller's run that cancelled the session's bookings while it can be rolled back. */
+            cancellation: components["schemas"]["ClassSessionCancellation"] | null;
+        };
+        ClassSessionCancelInput: {
+            reason?: string;
+            /** @description Language of the run's report (tr when empty) */
+            locale?: string;
+        };
+        ClassSessionCancellation: {
+            /**
+             * Format: uuid
+             * @description The bulk job (rollback: POST /v1/tenant/bulk/{uuid}/rollback)
+             */
+            job_uuid: string;
+            total: number;
+            succeeded: number;
+            failed: number;
+            skipped: number;
+            /**
+             * Format: date-time
+             * @description End of the undo window; null = nothing to undo
+             */
+            rollback_until: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ClassSessionCancelResult: {
+            session: components["schemas"]["ClassSessionDetail"];
+            /** @description The run over the session's bookings (null when it had none open). */
+            cancellation: components["schemas"]["ClassSessionCancellation"] | null;
+        };
+        EnvelopeClassSessionCancelResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassSessionCancelResult"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         ClassSessionChangeInput: {
             cancelled: boolean;
@@ -35349,6 +35415,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeClassSessionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantClassSessionCancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                /** @description Local date of the class session (branch time zone) */
+                date: components["parameters"]["ClassSessionDate"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassSessionCancelInput"];
+            };
+        };
+        responses: {
+            /** @description The session and the run over its bookings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSessionCancelResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

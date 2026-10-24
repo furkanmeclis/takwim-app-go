@@ -162,5 +162,20 @@
   "session_dialog.restore_description": "The session can be booked again. If the trainer or area is busy at that time, it cannot be booked.",
   "columns.start_time": "Start",
   "columns.note": "Note",
-  "columns.uuid": "ID"
+  "columns.uuid": "ID",
+  "actions.cancel_with_bookings": "Cancel session and bookings",
+  "actions.cancel_remaining": "Cancel remaining bookings",
+  "actions.undo_cancel": "Undo cancellation",
+  "session_dialog.cancel_bookings_title": "Cancel session and bookings",
+  "session_dialog.cancel_bookings_description": "The session is cancelled and its {{count}} bookings are cancelled in one step. Customers get the cancellation notice; seats and package sessions are freed and payments taken wait for their refund. You can undo it on this page within 24 hours.",
+  "session_dialog.cancel_bookings_description_seats": "The session is cancelled and the bookings of its {{booked}} booked seats are cancelled in one step. Customers get the cancellation notice; seats and package sessions are freed and payments taken wait for their refund. You can undo it on the session page within 24 hours.",
+  "session_dialog.undo_title": "Undo cancellation",
+  "session_dialog.undo_description": "The session opens again and the cancelled bookings are taken back; customers are told their booking stands. Bookings changed meanwhile, whose time is taken, whose package has no session left or whose product is out of stock stay cancelled.",
+  "toast.session_cancelled_with_bookings": "Session and {{count}} bookings cancelled",
+  "toast.session_cancelled_partial": "Session cancelled; {{succeeded}} of {{total}} bookings cancelled. You can cancel the rest on the session page.",
+  "toast.cancel_undone": "Cancellation undone; the session and its bookings are open again",
+  "toast.cancel_undone_partial": "Cancellation partly undone; some bookings stay cancelled",
+  "fields.cancelled_bookings": "Cancelled bookings",
+  "fields.undo_until": "Undo until",
+  "session.cancelled_bookings_value": "{{succeeded}} of {{total}}"
 }

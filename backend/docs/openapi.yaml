@@ -15021,7 +15021,8 @@ paths:
       description: |
         `tenant.classes.write`. Sets how the session differs from its class: `cancelled` (not offered, its trainer
         and area are free) and / or `capacity` (null = the class's seats). Both off restores the session. Runs under
-        the booking lock. A session with bookings is not cancelled (`409` `sessions` / `has_bookings`), seats below
+        the booking lock. A session with bookings is not cancelled here (`409` `sessions` / `has_bookings`; cancel it
+        with its bookings through `POST .../sessions/{date}/cancel`), seats below
         the booked seats are `409` `capacity` / `below_booked`, a session that already started is `409` `date` /
         `past`.
       security:
@@ -15043,6 +15044,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeClassSessionDetail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/classes/{uuid}/sessions/{date}/cancel:
+    post:
+      tags: [Tenant]
+      operationId: postTenantClassSessionCancel
+      summary: Cancel a session with its bookings
+      description: |
+        `tenant.classes.write` and `tenant.reservations.write` (TEC-989). Under the booking lock the session is
+        cancelled (no booking slips in), then its open bookings (requests and active bookings) are cancelled in one
+        bulk run (`tenant.class_sessions` / `cancel_bookings`), each through the reservation's own cancel with the
+        reason `class_cancelled`: seats, package sessions and products are freed, a payment waits for its refund and
+        the customer gets the cancellation notice. The run keeps a bulk job also when it runs inline, so it can be
+        rolled back in the bulk window with `POST /v1/tenant/bulk/{uuid}/rollback`: the session opens again and each
+        booking is taken back (`reinstated`) unless it changed since, its time is no longer free, a package has no
+        session left or a product is out of stock. A session already cancelled is fine (its remaining bookings are
+        cancelled); without bookings `cancellation` is null. A session that already started is `409` `date` /
+        `past`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/ClassSessionDate"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassSessionCancelInput"
+      responses:
+        "200":
+          description: The session and the run over its bookings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSessionCancelResult"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
@@ -23840,7 +23882,7 @@ components:
                 enum: [created, accepted, rejected, cancelled, started, completed, no_show, paid, expired, rescheduled, notes_updated,
                   payment_recorded, late_payment, product_added, product_removed,
                   confirmation_scheduled, confirmation_requested, confirmation_confirmed, confirmation_declined,
-                  confirmation_change_requested, confirmation_expired, confirmation_dropped]
+                  confirmation_change_requested, confirmation_expired, confirmation_dropped, reinstated]
               from_status: { type: [string, "null"] }
               to_status: { type: [string, "null"] }
               actor: { type: [string, "null"] }
@@ -25622,11 +25664,53 @@ components:
       allOf:
         - $ref: "#/components/schemas/ClassSession"
         - type: object
-          required: [attendees]
+          required: [attendees, cancellation]
           properties:
             attendees:
               type: array
               items: { $ref: "#/components/schemas/ClassAttendee" }
+            cancellation:
+              description: The caller's run that cancelled the session's bookings while it can be rolled back.
+              oneOf:
+                - $ref: "#/components/schemas/ClassSessionCancellation"
+                - type: "null"
+
+    ClassSessionCancelInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 500 }
+        locale: { type: string, description: "Language of the run's report (tr when empty)" }
+
+    ClassSessionCancellation:
+      type: object
+      required: [job_uuid, total, succeeded, failed, skipped, rollback_until, created_at]
+      properties:
+        job_uuid: { type: string, format: uuid, description: "The bulk job (rollback: POST /v1/tenant/bulk/{uuid}/rollback)" }
+        total: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        rollback_until: { type: [string, "null"], format: date-time, description: "End of the undo window; null = nothing to undo" }
+        created_at: { type: string, format: date-time }
+
+    ClassSessionCancelResult:
+      type: object
+      required: [session, cancellation]
+      properties:
+        session: { $ref: "#/components/schemas/ClassSessionDetail" }
+        cancellation:
+          description: The run over the session's bookings (null when it had none open).
+          oneOf:
+            - $ref: "#/components/schemas/ClassSessionCancellation"
+            - type: "null"
+
+    EnvelopeClassSessionCancelResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassSessionCancelResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     ClassSessionChangeInput:
       type: object

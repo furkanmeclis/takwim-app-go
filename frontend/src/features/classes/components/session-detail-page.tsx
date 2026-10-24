@@ -6,6 +6,7 @@ import {
   Check,
   ExternalLink,
   RotateCcw,
+  Undo2,
   UserX,
   Users,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import {
 import {
   useChangeClassSession,
   useClassSession,
+  useUndoClassSessionCancel,
 } from "@/features/classes/hooks/use-classes";
 import type { ClassAttendee } from "@/features/classes/types";
 import { PAYMENT, STATUS } from "@/features/reservations/constants";
@@ -52,11 +54,15 @@ import type {
   ReservationStatus,
 } from "@/features/reservations/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
+import { datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
 /** Attendance is open for visits that are booked or in progress. */
 const MARKABLE: ReservationStatus[] = ["active", "in_service"];
+
+/** Bookings a session cancel takes down (requests and active bookings). */
+const OPEN: ReservationStatus[] = ["requested", "active"];
 
 /**
  * One session of a class: seats, the bookings in it and attendance.
@@ -70,7 +76,7 @@ export function SessionDetailPage({
   uuid: string;
   date: string;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { slug } = useTenant();
   const { can } = usePermission();
   const router = useRouter();
@@ -78,8 +84,10 @@ export function SessionDetailPage({
   const query = useClassSession(uuid, date);
   const action = useReservationAction();
   const change = useChangeClassSession();
+  const undo = useUndoClassSessionCancel();
   const [mode, setMode] = useState<SessionChangeMode | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const session = query.data;
   const canWrite = can(permissions.tenant.classes.write);
   const canMark = can(permissions.tenant.reservations.write);
@@ -226,6 +234,15 @@ export function SessionDetailPage({
   const attendees = session?.attendees ?? [];
   const attended = attendees.filter((a) => a.status === "completed").length;
   const noShow = attendees.filter((a) => a.status === "no_show").length;
+  const openBookings = attendees.filter((a) =>
+    OPEN.includes(a.status as ReservationStatus),
+  ).length;
+  // Cancelling bookings with the session also needs the reservations
+  // permission; so does the undo, which takes the bookings back.
+  const booked = (session?.booked ?? 0) > 0 || openBookings > 0;
+  const cancellation = session?.cancellation ?? null;
+  const canUndo =
+    canMark && cancellation != null && cancellation.rollback_until != null;
 
   return (
     <EntityPage
@@ -255,7 +272,18 @@ export function SessionDetailPage({
               <Users className="size-4" />
               {t("classes.actions.change_seats")}
             </Button>
-            {session.cancelled ? (
+            {session.cancelled && canUndo ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setUndoing(true)}
+              >
+                <Undo2 className="size-4" />
+                {t("classes.actions.undo_cancel")}
+              </Button>
+            ) : null}
+            {session.cancelled && !canUndo ? (
               <Button
                 type="button"
                 size="sm"
@@ -265,7 +293,8 @@ export function SessionDetailPage({
                 <RotateCcw className="size-4" />
                 {t("classes.actions.restore_session")}
               </Button>
-            ) : (
+            ) : null}
+            {session.cancelled && openBookings > 0 && canMark ? (
               <Button
                 type="button"
                 size="sm"
@@ -274,9 +303,23 @@ export function SessionDetailPage({
                 onClick={() => setMode("cancel")}
               >
                 <Ban className="size-4" />
-                {t("classes.actions.cancel_session")}
+                {t("classes.actions.cancel_remaining")}
               </Button>
-            )}
+            ) : null}
+            {!session.cancelled && (!booked || canMark) ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setMode("cancel")}
+              >
+                <Ban className="size-4" />
+                {booked
+                  ? t("classes.actions.cancel_with_bookings")
+                  : t("classes.actions.cancel_session")}
+              </Button>
+            ) : null}
           </EntityActions>
         ) : null
       }
@@ -358,6 +401,39 @@ export function SessionDetailPage({
                       label: t("classes.fields.reason"),
                       value: session.reason || "—",
                     },
+                    ...(cancellation
+                      ? [
+                          {
+                            key: "cancelled_bookings",
+                            label: t("classes.fields.cancelled_bookings"),
+                            value: t(
+                              "classes.session.cancelled_bookings_value",
+                              {
+                                succeeded: cancellation.succeeded,
+                                total: cancellation.total,
+                              },
+                            ),
+                          },
+                          {
+                            key: "undo_until",
+                            label: t("classes.fields.undo_until"),
+                            value: cancellation.rollback_until
+                              ? datetimeInZone(
+                                  cancellation.rollback_until,
+                                  session.timezone,
+                                  locale,
+                                  {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )
+                              : "—",
+                          },
+                        ]
+                      : []),
                   ],
                 },
               ]}
@@ -399,12 +475,28 @@ export function SessionDetailPage({
             <SessionChangeDialog
               session={session}
               mode={mode}
+              openBookings={openBookings}
               open
               onOpenChange={(open) => {
                 if (!open) setMode(null);
               }}
             />
           ) : null}
+          <ConfirmDialog
+            open={undoing}
+            title={t("classes.session_dialog.undo_title")}
+            description={t("classes.session_dialog.undo_description")}
+            confirmLabel={t("classes.actions.undo_cancel")}
+            isPending={undo.isPending}
+            onCancel={() => setUndoing(false)}
+            onConfirm={() => {
+              if (!cancellation) return;
+              undo.mutate(
+                { jobUuid: cancellation.job_uuid },
+                { onSettled: () => setUndoing(false) },
+              );
+            }}
+          />
           <ConfirmDialog
             open={restoring}
             title={t("classes.session_dialog.restore_title")}

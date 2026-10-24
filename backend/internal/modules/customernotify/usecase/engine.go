@@ -379,6 +379,15 @@ func (e *Engine) ReservationChanged(ctx context.Context, q *db.Queries, c reserv
 		code = catalog.ReservationCancelled
 	case "rescheduled":
 		code, key = catalog.ReservationRescheduled, "v"+strconv.Itoa(int(c.Version))
+	case "reinstated":
+		// A cancellation taken back (the rollback of a class session
+		// cancel, TEC-989): the customer hears that the visit stands again,
+		// with the accepted (or, for a request, the received) text; the
+		// version keeps it apart from the first notice of the visit.
+		code, key = catalog.ReservationAccepted, "reinstated:v"+strconv.Itoa(int(c.Version))
+		if c.To == "requested" {
+			code = catalog.ReservationRequested
+		}
 	}
 	if code == "" {
 		return nil

@@ -507,5 +507,7 @@
   "slots.no_class": "No class session on this day",
   "fields.package": "Package",
   "fields.package_hint": "The customer has a package for this service; pick it and the line is paid by a session.",
-  "fields.package_none": "No package (charged)"
+  "fields.package_none": "No package (charged)",
+  "cancel_reasons.class_cancelled": "Class session cancelled",
+  "events.reinstated": "Cancellation undone"
 }

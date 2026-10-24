@@ -44,6 +44,7 @@ import (
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
 	classesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes"
+	classesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/adapters"
 	classeshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/handler"
 	classesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/usecase"
 	confirmationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations"
@@ -616,6 +617,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
 	importSvc := importusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
+	// The class timetable (TEC-970); its session cancel is a bulk run.
+	classesSvc := classesusecase.New(deps.Queries, capacityHolds)
 	bulkReg := bulkengine.NewRegistry(
 		bulkadapters.NewUsers(deps.Queries),
 		bulkadapters.NewRoles(deps.Queries),
@@ -627,6 +630,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		sessionpackagesadapters.NewBulk(sessionPackagesSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
+		classesadapters.NewSessionBulk(classesSvc, reservationsSvc),
 		cashadapters.NewBulk(cashSvc),
 		orgadapters.NewBulk(orgSvc),
 	)
@@ -754,8 +758,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	sessionpackagesmodule.RegisterRoutes(mux, sessionPackagesH, tokens, loader, tenantResolver)
 	// Class timetable (TEC-970): changes run under the capacity lock of the
 	// booking writers.
-	classesH := classeshandler.New(classesusecase.New(deps.Queries, capacityHolds), activityRec)
+	classesH := classeshandler.New(classesSvc, activityRec)
 	classesH.SetResourceEvents(resourceEvents)
+	classesH.SetBulk(bulkSvc)
 	classesmodule.RegisterRoutes(mux, classesH, tokens, loader, tenantResolver)
 	sessionpackagesmodule.RegisterEngineRoutes(mux, sessionpackagesmodule.EngineHandlers{
 		ExportCustomerPackages: exportH.TenantExport(sessionpackagesmodule.CustomerPackagesResource, sessionpackagesmodule.ExportQueryKeys...),

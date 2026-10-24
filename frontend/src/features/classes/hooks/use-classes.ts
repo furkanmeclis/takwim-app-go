@@ -123,6 +123,85 @@ export function useDeleteClass() {
   });
 }
 
+/**
+ * Cancels a session with its bookings (TEC-989). The answer carries the
+ * session as it is now, with the run that can be rolled back.
+ */
+export function useCancelClassSession() {
+  const { slug } = useTenant();
+  const { t, locale } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateClasses();
+  return useMutation({
+    mutationFn: async ({
+      uuid,
+      date,
+      reason,
+    }: {
+      uuid: string;
+      date: string;
+      reason: string;
+    }) => {
+      try {
+        return await classesService.cancelSession(slug, uuid, date, {
+          reason,
+          locale,
+        });
+      } catch (error) {
+        throw localizeClassError(error, t);
+      }
+    },
+    onSuccess: (result, { uuid, date }) => {
+      queryClient.setQueryData(
+        classesKeys.session(slug, uuid, date),
+        result.session,
+      );
+      const run = result.cancellation;
+      if (!run) {
+        appToast.success(t("classes.toast.session_cancelled"));
+      } else if (run.failed + run.skipped > 0) {
+        appToast.warning(
+          t("classes.toast.session_cancelled_partial", {
+            succeeded: run.succeeded,
+            total: run.total,
+          }),
+        );
+      } else {
+        appToast.success(
+          t("classes.toast.session_cancelled_with_bookings", {
+            count: run.succeeded,
+          }),
+        );
+      }
+      void invalidate();
+    },
+    onError: (error) => reportClassError(error, t),
+  });
+}
+
+/**
+ * Rolls a session cancel back: the session opens again and its bookings
+ * are taken back (a booking changed since stays cancelled).
+ */
+export function useUndoClassSessionCancel() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateClasses();
+  return useMutation({
+    mutationFn: ({ jobUuid }: { jobUuid: string }) =>
+      classesService.undoCancel(slug, jobUuid),
+    onSuccess: (job) => {
+      if (job.status === "rolled_back") {
+        appToast.success(t("classes.toast.cancel_undone"));
+      } else {
+        appToast.warning(t("classes.toast.cancel_undone_partial"));
+      }
+      void invalidate();
+    },
+    onError: (error) => reportClassError(error, t),
+  });
+}
+
 export function useChangeClassSession() {
   const { slug } = useTenant();
   const { t } = useLocale();
