@@ -47,14 +47,15 @@ func Meta() resourcemeta.ResourceMeta {
 }
 
 // MovementMeta is the table contract of GET /v1/tenant/stock-movements
-// (the append-only ledger: no update, delete, export or bulk).
+// (the append-only ledger: no update, delete or bulk; export and the
+// count import are mounted by routes.go).
 func MovementMeta() resourcemeta.ResourceMeta {
 	return resourcemeta.ResourceMeta{
-		Resource:      "tenant.stock_movements",
+		Resource:      model.MovementsSlug,
 		DefaultSort:   "-occurred_at",
 		DefaultFields: []string{"uuid", "occurred_at", "kind", "product", "branch", "quantity", "balance_after"},
 		Capabilities: resourcemeta.Capabilities{
-			Create: true, Read: true, Search: true, Filter: true, Sort: true,
+			Create: true, Read: true, Search: true, Filter: true, Sort: true, Export: true, Import: true,
 		},
 		SearchableFields: []string{"product.name", "product.sku", "variant.sku", "reason", "note"},
 		SortableFields:   []string{"occurred_at", "quantity", "kind"},

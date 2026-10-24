@@ -25,6 +25,10 @@ type EngineHandlers struct {
 	Import http.HandlerFunc
 	Sample http.HandlerFunc
 	Bulk   http.HandlerFunc
+	// Stock ledger export and count import (TEC-964).
+	ExportMovements http.HandlerFunc
+	ImportMovements http.HandlerFunc
+	SampleMovements http.HandlerFunc
 }
 
 // RegisterRoutes mounts /v1/tenant/products and /v1/tenant/stock-movements.
@@ -89,6 +93,17 @@ func RegisterRoutes(
 	route("GET /v1/tenant/stock-movements/meta", h.MovementMeta, read)
 	route("GET /v1/tenant/stock-movements/facets", h.MovementFacets, read)
 	route("GET /v1/tenant/stock-movements", h.ListMovements, read)
+	if engines.ExportMovements != nil {
+		route("POST /v1/tenant/stock-movements/export", engines.ExportMovements, read, perm(rbac.PermTenantProductsExport))
+	}
+	// A count import writes adjustments: the stock permission, like a count
+	// entered on the panel.
+	if engines.ImportMovements != nil {
+		route("POST /v1/tenant/stock-movements/import", engines.ImportMovements, read, perm(rbac.PermTenantProductsStock))
+	}
+	if engines.SampleMovements != nil {
+		route("GET /v1/tenant/stock-movements/import/sample", engines.SampleMovements, read, perm(rbac.PermTenantProductsStock))
+	}
 	route("POST /v1/tenant/stock-movements", h.CreateMovement, read)
 	// Taking back a product handed over is a manager's operation: stock and
 	// refund permissions (TEC-913).
@@ -99,8 +114,14 @@ func RegisterRoutes(
 // ExportQueryKeys are the list filters an export honours.
 var ExportQueryKeys = []string{"branch", "stock_status", "is_active", "show_online"}
 
+// ExportMovementQueryKeys are the movement list filters an export honours.
+var ExportMovementQueryKeys = []string{"kind", "branch", "product", "staff", "from", "to"}
+
 // Resource is the engine slug of products.
 const Resource = adapters.Resource
+
+// MovementsResource is the engine slug of the stock ledger.
+const MovementsResource = adapters.MovementsResource
 
 // RegisterLiveResources declares the product list channel
 // (org:{org_uuid}:resource:tenant.products) and its tenant read

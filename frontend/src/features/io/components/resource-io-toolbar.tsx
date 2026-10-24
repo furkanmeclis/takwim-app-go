@@ -30,6 +30,7 @@ const EXPORT_PERM: Partial<Record<IoResource, string>> = {
   "tenant.reservations": permissions.tenant.reservations.export,
   "tenant.cash_accounts": permissions.tenant.cash.export,
   "tenant.cash_movements": permissions.tenant.cash.export,
+  "tenant.stock_movements": permissions.tenant.products.export,
   "tenant.finance_entries": permissions.tenant.report.export,
   "tenant.staff_share_lines": permissions.tenant.report.export,
   "tenant.staff_share_payouts": permissions.tenant.report.export,
@@ -44,6 +45,8 @@ const IMPORT_PERM: Partial<Record<IoResource, string>> = {
   "tenant.services": permissions.tenant.services.import,
   "tenant.products": permissions.tenant.products.import,
   "tenant.customers": permissions.tenant.customers.import,
+  // A count import writes adjustments: the stock permission (API rule).
+  "tenant.stock_movements": permissions.tenant.products.stock,
 };
 
 export function ResourceIOToolbar({

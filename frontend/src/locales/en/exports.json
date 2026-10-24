@@ -81,6 +81,7 @@
   "resources.tenant.products": "Products",
   "resources.tenant.cash_accounts": "Cash and bank accounts",
   "resources.tenant.cash_movements": "Cash movements",
+  "resources.tenant.stock_movements": "Stock movements",
   "resources.tenant.finance_entries": "Income and expense records",
   "resources.tenant.staff_share_lines": "Staff shares",
   "resources.tenant.staff_share_payouts": "Share payouts"

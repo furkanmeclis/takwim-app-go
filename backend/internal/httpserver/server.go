@@ -592,6 +592,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
 		productsadapters.NewIO(productsSvc),
+		productsadapters.NewMovementsIO(productsSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
@@ -698,6 +699,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Import: importH.TenantUpload(productsmodule.Resource),
 		Sample: importH.TenantSample(productsmodule.Resource),
 		Bulk:   bulkH.TenantExecute(productsmodule.Resource),
+
+		ExportMovements: exportH.TenantExport(productsmodule.MovementsResource, productsmodule.ExportMovementQueryKeys...),
+		ImportMovements: importH.TenantUpload(productsmodule.MovementsResource),
+		SampleMovements: importH.TenantSample(productsmodule.MovementsResource),
 	}, tokens, loader, tenantResolver)
 	customersH := customershandler.New(customersSvc, activityRec)
 	customersH.SetResourceEvents(resourceEvents)

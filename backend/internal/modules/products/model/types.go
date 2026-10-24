@@ -14,6 +14,10 @@ import (
 // live lists). Stock movements are recorded under the product.
 const Slug = "tenant.products"
 
+// MovementsSlug is the engine slug of the stock ledger (export, count
+// import; TEC-964).
+const MovementsSlug = "tenant.stock_movements"
+
 // Units a product is counted in.
 var Units = []string{"piece", "bottle", "box", "pack", "tube", "set"}
 
@@ -276,6 +280,9 @@ type MovementInput struct {
 	Reason          *string      `json:"reason"`
 	Note            *string      `json:"note"`
 	OccurredAt      *time.Time   `json:"occurred_at"`
+	// Source marks what produced the movement (not part of the body):
+	// empty is a panel entry ("manual"), SourceImport a count import.
+	Source string `json:"-"`
 }
 
 // MovementFilter selects ledger rows.
@@ -320,6 +327,14 @@ type ActivityEntry struct {
 // SourceSaleReturn marks the return movement of a sale (its source_uuid is
 // the sale movement).
 const SourceSaleReturn = "sale_return"
+
+// SourceImport marks a count written by a stock count import (TEC-964);
+// SourceImportRollback the adjustment that undid it (its source_uuid is
+// the imported count).
+const (
+	SourceImport         = "import"
+	SourceImportRollback = "import_rollback"
+)
 
 // ReturnInput takes back the product of a stock sale (a manager's
 // operation): the units come back to the branch's stock and the sale's

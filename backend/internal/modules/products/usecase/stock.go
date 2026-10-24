@@ -247,13 +247,17 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 		return MovementResult{}, err
 	}
 
+	source := SourceManual
+	if in.Source != "" {
+		source = in.Source
+	}
 	actor := pgtype.Int8{}
 	if actorID > 0 {
 		actor = pgtype.Int8{Int64: actorID, Valid: true}
 	}
 	base := db.InsertStockMovementParams{
 		OrganizationID: orgID, ProductID: product.ID, VariantID: variantID, UnitPrice: unitPrice, UnitCost: unitCost,
-		StaffID: staffID, Reason: reason, Note: note, Source: SourceManual,
+		StaffID: staffID, Reason: reason, Note: note, Source: source,
 		OccurredAt: pgtype.Timestamptz{Time: occurred, Valid: true}, CreatedBy: actor,
 	}
 	// An undated movement is stamped once its level rows are locked, so

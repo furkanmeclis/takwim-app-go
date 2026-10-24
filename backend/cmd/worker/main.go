@@ -249,6 +249,7 @@ func main() {
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
 		productsadapters.NewIO(productsSvc),
+		productsadapters.NewMovementsIO(productsSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),

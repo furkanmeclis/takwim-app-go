@@ -250,6 +250,7 @@
   "actions.reservations.updated": "Rezervasyon notları güncellendi",
   "resources.tenant.cash_accounts": "Kasa ve banka hesapları",
   "resources.tenant.cash_movements": "Kasa hareketleri",
+  "resources.tenant.stock_movements": "Stok hareketleri",
   "actions.cash_accounts.created": "Hesap eklendi",
   "actions.cash_accounts.updated": "Hesap güncellendi",
   "actions.cash_accounts.movement_created": "Kasa hareketi girildi",

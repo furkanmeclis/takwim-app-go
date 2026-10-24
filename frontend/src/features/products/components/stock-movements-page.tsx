@@ -1,5 +1,6 @@
 "use client";
 
+import { addDays, isValid, parseISO } from "date-fns";
 import { ArrowLeftRight } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -11,15 +12,21 @@ import {
   useServerListState,
 } from "@/components/entity";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { useMovementColumns } from "@/features/products/components/movement-columns";
 import { SaleReturnDialog } from "@/features/products/components/sale-return-dialog";
 import { StockMovementDialog } from "@/features/products/components/stock-movement-dialog";
-import { PRODUCTS_RESOURCE } from "@/features/products/constants";
+import { ResourceIOToolbar } from "@/features/io";
+import {
+  PRODUCTS_RESOURCE,
+  STOCK_MOVEMENTS_RESOURCE,
+} from "@/features/products/constants";
 import {
   useStockMovementsFacets,
   useStockMovementsList,
+  useStockMovementsMeta,
 } from "@/features/products/hooks/use-products";
 import type {
   ListStockMovementsParams,
@@ -41,6 +48,17 @@ function joined(values: string[]) {
 }
 
 /**
+ * A picked day (`yyyy-MM-dd`) as the RFC 3339 instant of its local
+ * midnight, `days` later: `from` is the start of the first day, `to` the
+ * start of the day after the last (the API range is half-open).
+ */
+function dayStart(day: string, days = 0): string | undefined {
+  if (!day) return undefined;
+  const parsed = parseISO(day);
+  return isValid(parsed) ? addDays(parsed, days).toISOString() : undefined;
+}
+
+/**
  * The append-only stock ledger of the member's branches: every receipt,
  * sale, return, count and transfer with the balance right after it.
  * Rows are never edited; a correction is a new count or movement.
@@ -51,6 +69,8 @@ export function StockMovementsPage() {
   const { can } = usePermission();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [returning, setReturning] = useState<StockMovement | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   // Movements publish on the products channel (stock changed).
   const listState = useServerListState({
@@ -69,11 +89,14 @@ export function StockMovementsPage() {
       kind: joined(column("kind")),
       branch: joined(column("branch")),
       staff: joined(column("staff")),
+      from: dayStart(dateFrom),
+      to: dayStart(dateTo, 1),
     };
-  }, [listState.columnFilters, listState.params]);
+  }, [dateFrom, dateTo, listState.columnFilters, listState.params]);
 
   const listQuery = useStockMovementsList(listParams);
   const facetsQuery = useStockMovementsFacets();
+  const metaQuery = useStockMovementsMeta();
   // A return needs both the stock and the refund permission (API rule).
   const canReturn =
     can(permissions.tenant.products.stock) &&
@@ -89,11 +112,33 @@ export function StockMovementsPage() {
     return Math.max(1, Math.ceil(total / size));
   }, [listState.pagination.pageSize, total]);
 
-  const hasFilters =
-    Boolean(listParams.q) ||
-    Boolean(listParams.kind) ||
-    Boolean(listParams.branch) ||
-    Boolean(listParams.staff);
+  // Exports honour the same filters as the list.
+  const engineQuery = useMemo(
+    () => ({
+      q: listParams.q,
+      kind: listParams.kind,
+      branch: listParams.branch,
+      product: listParams.product,
+      staff: listParams.staff,
+      from: listParams.from,
+      to: listParams.to,
+      sort: listParams.sort,
+    }),
+    [
+      listParams.branch,
+      listParams.from,
+      listParams.kind,
+      listParams.product,
+      listParams.q,
+      listParams.sort,
+      listParams.staff,
+      listParams.to,
+    ],
+  );
+
+  const hasFilters = Object.entries(engineQuery).some(
+    ([key, value]) => key !== "sort" && Boolean(value),
+  );
 
   const canMove =
     can(permissions.tenant.products.stock) ||
@@ -161,10 +206,32 @@ export function StockMovementsPage() {
           viewMode: true,
         }}
         toolbarExtra={
-          <EntityToolbar
-            onRefresh={refresh}
-            refreshDisabled={listQuery.isFetching}
-          />
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <DatePicker
+                className="w-full sm:w-40"
+                value={dateFrom}
+                onChange={setDateFrom}
+                placeholder={t("products.movements.date_from")}
+              />
+              <DatePicker
+                className="w-full sm:w-40"
+                value={dateTo}
+                onChange={setDateTo}
+                placeholder={t("products.movements.date_to")}
+              />
+            </div>
+            <ResourceIOToolbar
+              resource={STOCK_MOVEMENTS_RESOURCE}
+              query={engineQuery}
+              capabilities={metaQuery.data?.capabilities}
+              onImportComplete={refresh}
+            />
+            <EntityToolbar
+              onRefresh={refresh}
+              refreshDisabled={listQuery.isFetching}
+            />
+          </>
         }
       />
 
