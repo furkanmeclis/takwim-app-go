@@ -8206,6 +8206,40 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/reservations/product-options:
+    get:
+      tags: [Tenant]
+      operationId: listTenantBranchProductOptions
+      summary: Products of a branch for a new reservation
+      description: |
+        Stock items sold in `branch_uuid` (active products offered there; one row per active variant) with the units
+        available (on hand - reserved), for the products section of the panel's new reservation form (TEC-977); the
+        picked items go in the `products` of `POST /v1/tenant/reservations` and are reserved with the booking. `q`
+        matches name, SKU or barcode; at most 50 rows. An unknown branch, one of another business or outside the
+        caller's branch scope is `400` `branch_uuid` / `not_found`. Needs the products module and
+        `tenant.products.sell` besides reservation read or own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: branch_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservationProductOptions"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/reservations/{uuid}:
     get:
       tags: [Tenant]
@@ -23744,7 +23778,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/CustomerReservationItem"
         - type: object
-          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history, refunds]
+          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history, refunds, products]
           properties:
             branch:
               type: object
@@ -23821,6 +23855,23 @@ components:
                   status: { type: string, enum: [requested, succeeded, failed] }
                   requested_at: { type: string, format: date-time }
                   refunded_at: { type: [string, "null"], format: date-time }
+            products:
+              type: array
+              description: |
+                Products taken with the visit (TEC-977): `held` (reserved for the visit), `delivered` (handed over when
+                the visit was completed) or `released` (the visit was cancelled, rejected, expired or missed). Lines the
+                business removed are left out. The visit total includes held and delivered products.
+              items:
+                type: object
+                required: [uuid, name, variant_name, quantity, unit_price, total, status]
+                properties:
+                  uuid: { type: string, format: uuid }
+                  name: { type: string }
+                  variant_name: { type: [string, "null"] }
+                  quantity: { type: integer }
+                  unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+                  total: { $ref: "#/components/schemas/MoneyAmount" }
+                  status: { type: string, enum: [held, delivered, released] }
 
     CustomerReservationPage:
       type: object

@@ -22,6 +22,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { CustomerConfirmationCard } from "@/features/customer-panel/components/customer-confirmation-card";
+import { CustomerProductsCard } from "@/features/customer-panel/components/customer-products-card";
 import { METHOD_KEYS } from "@/features/customer-panel/components/customer-reservation-columns";
 import { CustomerRescheduleDialog } from "@/features/customer-panel/components/customer-reschedule-dialog";
 import {
@@ -343,6 +344,8 @@ export function CustomerReservationBody({
       </EntitySectionCard>
 
       <LinesCard reservation={reservation} />
+
+      <CustomerProductsCard reservation={reservation} />
 
       <EntitySectionCard title={t("customer_panel.detail.payment")}>
         <EntityDetail

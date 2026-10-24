@@ -7,6 +7,7 @@ import {
   ListChecks,
   MapPin,
   MessageSquareText,
+  PackagePlus,
   Plus,
   Trash2,
   UserRound,
@@ -39,6 +40,14 @@ import { customersService } from "@/features/customers/services/customers.servic
 import type { Customer } from "@/features/customers/types";
 import { CustomFieldInputs } from "@/features/reservations/components/custom-field-inputs";
 import { CustomerQuickCreateDialog } from "@/features/reservations/components/customer-quick-create-dialog";
+import {
+  ReservationCreateProducts,
+  productErrorsOf,
+  toProductInputs,
+  useBookingProductsEnabled,
+  type BookingProduct,
+  type BookingProductErrors,
+} from "@/features/reservations/components/reservation-create-products";
 import { SlotPicker } from "@/features/reservations/components/slot-picker";
 import {
   MAX_LINES,
@@ -121,6 +130,21 @@ export function ReservationCreatePage() {
     [t, party, fields],
   );
   const zone = organization?.timezone ?? undefined;
+  // Optional products reserved with the booking (TEC-977).
+  // A refused line (products[i].…) is marked until the products change.
+  const [products, setProducts] = useState<BookingProduct[]>([]);
+  const productErrors = useMemo<BookingProductErrors>(
+    () => productErrorsOf(create.error, t) ?? {},
+    [create.error, t],
+  );
+  const resetCreate = create.reset;
+  const changeProducts = useCallback(
+    (next: BookingProduct[]) => {
+      setProducts(next);
+      resetCreate();
+    },
+    [resetCreate],
+  );
 
   // From the calendar: ?branch=&date=&at=HH:MM&staff= (free space clicked).
   const search = useSearchParams();
@@ -215,6 +239,8 @@ export function ReservationCreatePage() {
                 lines: toLineInputs(values.lines),
                 party_size: toPartySize(values.party_size),
                 zone: toZone(values.zone),
+                // Reserved with the booking (TEC-977).
+                products: toProductInputs(products),
                 vehicle: toVehicle(values.vehicle_type, values.vehicle_plate),
                 starts_at: values.starts_at,
                 customer_note: values.customer_note || undefined,
@@ -232,6 +258,9 @@ export function ReservationCreatePage() {
                 party={party}
                 vehicle={vehicle}
                 preferredTime={preset.at}
+                products={products}
+                onProductsChange={changeProducts}
+                productErrors={productErrors}
                 branchOptions={(branches.data?.items ?? []).map((branch) => ({
                   value: branch.uuid,
                   label: branch.name,
@@ -257,6 +286,9 @@ function BookingFields({
   branchOptions,
   isSubmitting,
   onCancel,
+  products,
+  onProductsChange,
+  productErrors,
 }: {
   /** Booking questions asked in the panel (TEC-905). */
   fields: ReservationFormField[];
@@ -269,6 +301,10 @@ function BookingFields({
   branchOptions: { value: string; label: string }[];
   isSubmitting: boolean;
   onCancel: () => void;
+  /** Products reserved with the booking (TEC-977). */
+  products: BookingProduct[];
+  onProductsChange: (next: BookingProduct[]) => void;
+  productErrors: BookingProductErrors;
 }) {
   const { t, locale } = useLocale();
   const { slug, organization } = useTenant();
@@ -292,6 +328,7 @@ function BookingFields({
   const partySize = toPartySize(partyInput);
   const areaZone = toZone(zoneInput);
   const zoneOptions = useZoneOptions(party);
+  const sellsProducts = useBookingProductsEnabled();
   const [customerDialog, setCustomerDialog] = useState(false);
   const [createdCustomers, setCreatedCustomers] = useState<ComboboxOption[]>(
     [],
@@ -451,6 +488,15 @@ function BookingFields({
           label: t("reservations.form.section_time"),
           icon: CalendarClock,
         },
+        ...(sellsProducts
+          ? [
+              {
+                key: "products",
+                label: t("reservations.form.section_products"),
+                icon: PackagePlus,
+              },
+            ]
+          : []),
         ...(fields.length > 0
           ? [
               {
@@ -466,7 +512,7 @@ function BookingFields({
           icon: MessageSquareText,
         },
       ]),
-    [t, vehicle, fields.length],
+    [t, vehicle, fields.length, sellsProducts],
   );
 
   return (
@@ -673,6 +719,16 @@ function BookingFields({
           }
         />
       </FormSection>
+
+      {sellsProducts ? (
+        <ReservationCreateProducts
+          id={sections.id("products")}
+          branchUuid={branchUuid}
+          value={products}
+          onChange={onProductsChange}
+          errors={productErrors}
+        />
+      ) : null}
 
       {fields.length > 0 ? (
         <FormSection

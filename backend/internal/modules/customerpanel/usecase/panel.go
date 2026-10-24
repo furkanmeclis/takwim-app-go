@@ -341,6 +341,7 @@ func (s *Service) view(o owned) model.Reservation {
 		Confirmation: confirmationView(r),
 		History:      []model.HistoryEntry{},
 		Refunds:      []model.Refund{},
+		Products:     productsView(r.Products),
 	}
 	for _, l := range r.Lines {
 		line := model.Line{

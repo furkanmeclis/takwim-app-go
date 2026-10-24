@@ -68,6 +68,8 @@ There is no payment ledger yet (TEC-912). The amounts come from the visit total 
 
 The visit detail answers `refunds` (TEC-913): each refund's amount, its status (`requested` in progress, `succeeded` paid back, or `failed`, shown as "being followed up" by the business) and its dates. When the visit has refunds, `money.refunded` on the detail is the sum of the succeeded ones. The list amounts stay as above until TEC-967.
 
+The visit detail also answers `products` (TEC-977): the products taken with the visit (name, variant, quantity, unit price, amount) and their state: `held` (set aside for the visit), `delivered` (handed over at the visit) or `released` (the visit was cancelled, rejected, expired or missed). A line the business removed is left out; stock codes, costs and the seller are never shown. The visit total already includes held and delivered products.
+
 ## Panel link by SMS
 
 The customer notification engine sends it ([customer-notifications.md](./customer-notifications.md), TEC-911). Every reservation notice (received, accepted, rejected, changed, cancelled, reminder) carries `{{link}}`, so a new public booking gets "your request was received" or "your booking was accepted" with the link to see and manage all bookings (A28). On SMS, `PanelLink` puts a single-use panel link (below) into the text at send time; past 5 links a day for the phone, on other channels, or while the channel is not ready, it is the plain `takwim.link/panel` address, which asks for a code. Stored texts never hold a token.

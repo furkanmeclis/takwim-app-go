@@ -5014,6 +5014,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/product-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Products of a branch for a new reservation
+         * @description Stock items sold in `branch_uuid` (active products offered there; one row per active variant) with the units
+         *     available (on hand - reserved), for the products section of the panel's new reservation form (TEC-977); the
+         *     picked items go in the `products` of `POST /v1/tenant/reservations` and are reserved with the booking. `q`
+         *     matches name, SKU or barcode; at most 50 rows. An unknown branch, one of another business or outside the
+         *     caller's branch scope is `400` `branch_uuid` / `not_found`. Needs the products module and
+         *     `tenant.products.sell` besides reservation read or own.
+         */
+        get: operations["listTenantBranchProductOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations/{uuid}": {
         parameters: {
             query?: never;
@@ -16506,6 +16531,22 @@ export interface components {
                 /** Format: date-time */
                 refunded_at: string | null;
             }[];
+            /**
+             * @description Products taken with the visit (TEC-977): `held` (reserved for the visit), `delivered` (handed over when
+             *     the visit was completed) or `released` (the visit was cancelled, rejected, expired or missed). Lines the
+             *     business removed are left out. The visit total includes held and delivered products.
+             */
+            products: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                variant_name: string | null;
+                quantity: number;
+                unit_price: components["schemas"]["MoneyAmount"];
+                total: components["schemas"]["MoneyAmount"];
+                /** @enum {string} */
+                status: "held" | "delivered" | "released";
+            }[];
         };
         CustomerReservationPage: {
             items: components["schemas"]["CustomerReservationItem"][];
@@ -26194,6 +26235,38 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantBranchProductOptions: {
+        parameters: {
+            query: {
+                branch_uuid: string;
+                q?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationProductOptions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantReservation: {

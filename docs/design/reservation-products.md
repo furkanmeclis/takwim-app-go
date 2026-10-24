@@ -38,6 +38,7 @@ Completing fails with `products / insufficient_stock` when a count brought `on_h
 | Route                                                          | Permission                                  |
 | -------------------------------------------------------------- | ------------------------------------------- |
 | `GET /v1/tenant/reservations/{uuid}/product-options?q`         | reservations read + products module + sell  |
+| `GET /v1/tenant/reservations/product-options?branch_uuid&q`    | reservations read + products module + sell  |
 | `POST /v1/tenant/reservations/{uuid}/products`                 | reservations write + `tenant.products.sell` |
 | `DELETE /v1/tenant/reservations/{uuid}/products/{productUuid}` | reservations write + `tenant.products.sell` |
 | `POST /v1/tenant/reservations` with `products`                 | as above                                    |
@@ -50,9 +51,8 @@ Changes take `expected_version`, raise `version` and write a `product_added` / `
 - The reservation detail has a **Products** card (EntityTable: product, quantity, unit price, amount, seller, status) with add (combobox of the branch's stock with available units) and remove for held lines while the visit is open.
 - The business page shows an optional product step after the time, when the sector flow has `products` and the branch sells products online ([business-page.md](./business-page.md)). The step is minimal: a list with quantities, no images or categories.
 
-## Not in this issue
-
-- The customer panel and the panel's new reservation form do not show products yet (TEC-977).
+- The panel's new reservation form has an optional **Products** section (TEC-977) when the products module is on and the member has `tenant.products.sell`: a combobox of the branch's stock (`GET /v1/tenant/reservations/product-options?branch_uuid`, with the sellable units) and an EntityTable of the picked items with quantity steppers (at most the sellable units, 99). The items go in the booking's `products` and are reserved in its transaction; a refused line (`products[i].…`) is marked in the table. Changing the branch clears them.
+- The customer panel shows the visit's products (TEC-977, [customer-panel.md](./customer-panel.md)): held, delivered and released lines; lines the business removed are hidden.
 
 ## Tests
 
