@@ -154,6 +154,8 @@ import (
 	settingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings"
 	settingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings/handler"
 	settingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings/usecase"
+	smsprovidermodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/smsprovider"
+	smsproviderusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/smsprovider/usecase"
 	staffmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff"
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
 	staffhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/handler"
@@ -454,10 +456,17 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// are registered here for their readiness on the settings page.
 	panelURL := strings.TrimRight(cfg.Auth.FrontendURL, "/") + "/panel"
 	notifyEngine := customernotifyusecase.New(deps.DB, deps.Queries, panelURL)
-	// The SMS provider is not chosen yet (TEC-884): the log sender stands
-	// in (it shows message texts outside production only) and counts as not
-	// ready, so no notice is recorded as sent through it.
+	// Sign-in codes go through the platform's log sender until TEC-884 names
+	// the platform's own SMS account (it shows message texts outside
+	// production only and counts as not ready).
 	smsSender := sms.NewLogSender(log, cfg.App.Env != "production")
+	// SMS notices (TEC-982): the business's own Netgsm account. Registered
+	// here for its readiness on the settings pages; the worker sends and
+	// reads the delivery reports. Without the provider the log sender stands
+	// in (never recorded as sent).
+	smsClient := smsprovidermodule.Client(cfg)
+	smsSvc := smsproviderusecase.New(deps.Queries, smsClient)
+	smsSvc.SetLogger(log)
 	// WhatsApp (TEC-922): the business's own Cloud API account. Registered
 	// here for its readiness and for the webhook, whose delivery reports the
 	// engine records (the worker sends).
@@ -469,7 +478,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	voiceClient := voicecallmodule.Client(cfg)
 	voiceSvc := voicecallusecase.New(deps.Queries, voiceClient, voicecallmodule.WebhookBase(cfg))
 	voiceSvc.SetLogger(log)
-	notifyEngine.Register(customernotifyadapters.SMS{Sender: smsSender},
+	notifyEngine.Register(smsproviderusecase.NewChannel(smsSvc, customernotifyadapters.SMS{Sender: smsSender}),
 		customernotifyadapters.Email{Mail: mail.NewSMTPSender(cfg.SMTP), Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""},
 		whatsappusecase.NewChannel(whatsappSvc), voicecallusecase.NewChannel(voiceSvc))
 	// Customer confirmation (TEC-921, Konfirmasyon add-on): every
@@ -526,12 +535,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		return nil, fmt.Errorf("httpserver: field cipher: %w", err)
 	}
 	integrationAdapters := append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)
+	integrationAdapters = append(integrationAdapters, voicecallmodule.Adapters(voiceClient)...)
 	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log,
-		append(integrationAdapters, voicecallmodule.Adapters(voiceClient)...)...)
+		append(integrationAdapters, smsprovidermodule.Adapters(smsClient)...)...)
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: %w", err)
 	}
 	whatsappSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner)
+	smsSvc.SetAccounts(integrationKit.Accounts)
 	voiceSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner, fieldCipher)
 	if deps.Queue != nil {
 		integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: deps.Queue})

@@ -1,4 +1,4 @@
-# Customer confirmations (TEC-921, TEC-922, TEC-923, TEC-924, TEC-979, TEC-981)
+# Customer confirmations (TEC-921, TEC-922, TEC-923, TEC-924, TEC-979, TEC-981, TEC-982)
 
 The Konfirmasyon add-on: before a visit the business asks the customer to confirm it, on its channels in order, a set number of times, and cancels or flags the booking when no answer comes by the deadline. The customer answers in the customer panel or on the single-visit link of the message: "Geleceğim", "Değişiklik iste" or cancel. Everything is gated by the `confirmation` module (`sector.ModuleConfirmation`, an add-on, entitlements.md); without it no task is planned, no request is sent and no answer is offered.
 
@@ -159,14 +159,14 @@ The request goes out on the rule's channels in order (fallback on). What the pro
 
 ### Receipt times
 
-| Column (`customer_notification_deliveries`) | Means                                                                      |
-| ------------------------------------------- | -------------------------------------------------------------------------- |
-| `sent_at`                                   | the provider accepted the message (SMTP took it, the Cloud API gave an id) |
-| `delivered_at`                              | the provider reported it delivered (WhatsApp `delivered`)                  |
-| `read_at`                                   | the customer opened it (WhatsApp `read`)                                   |
-| `finished_at` / `status`                    | the attempt ended: `sent`, `delivered`, `failed`, `skipped`                |
+| Column (`customer_notification_deliveries`) | Means                                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `sent_at`                                   | the provider accepted the message (SMTP took it, the Cloud API gave an id, Netgsm gave a job id) |
+| `delivered_at`                              | the provider reported it delivered (WhatsApp `delivered`, Netgsm status `1`)                     |
+| `read_at`                                   | the customer opened it (WhatsApp `read`)                                                         |
+| `finished_at` / `status`                    | the attempt ended: `sent`, `delivered`, `failed`, `skipped`                                      |
 
-A channel with delivery reports keeps its attempt open (`sent`, the dispatch `sending`) until the report. A `failed` report sends the request on the next channel; no report within 30 minutes (`DefaultReceiptTimeout`, the worker's minute sweep) fails the attempt as `no delivery report` and the next channel runs too. A late report still records its time and changes nothing else.
+A channel with delivery reports (WhatsApp, the voice call, SMS) keeps its attempt open (`sent`, the dispatch `sending`) until the report. A `failed` report sends the request on the next channel; no report within 30 minutes (`DefaultReceiptTimeout`, the worker's minute sweep) fails the attempt as `no delivery report` and the next channel runs too. A late report still records its time and changes nothing else.
 
 ### WhatsApp
 
@@ -193,11 +193,28 @@ The customer gets a short Turkish answer in the chat (allowed inside the service
 
 ### SMS and e-mail
 
-Both carry the single-visit link (`/panel/v#<token>`, issued at send time). The token is in the URL fragment, so a link preview (a messenger or mail scanner fetching the URL) never even sends it to the server; opening the page only shows the visit (`POST /v1/customer/visit`), and every answer is a separate explicit request from a button (A21, `customerpanel/confirm_db_test.go`). E-mails have no open tracking. The SMS provider is chosen in TEC-884 (the log sender counts as not ready, so nothing is recorded as sent through it); its delivery reports will use the same receipt columns.
+Both carry the single-visit link (`/panel/v#<token>`, issued at send time). The token is in the URL fragment, so a link preview (a messenger or mail scanner fetching the URL) never even sends it to the server; opening the page only shows the visit (`POST /v1/customer/visit`), and every answer is a separate explicit request from a button (A21, `customerpanel/confirm_db_test.go`). E-mails have no open tracking and no delivery report (SMTP acceptance is the final `sent`; a transactional e-mail provider with reports is not chosen).
+
+#### SMS through the business's Netgsm account (TEC-982)
+
+| Area              | Path                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Netgsm adapter    | `backend/internal/platform/sms/netgsm` (integration adapter, REST send, report query, `Sender` for the `sms.Sender` port)         |
+| Channel, poll     | `backend/internal/modules/smsprovider` (`usecase/channel.go`, `usecase/service.go`)                                               |
+| Receipts, timeout | `customernotify/usecase/engine.go` (`RecordDelivery`, `ExpireReceipts`), query `ListOpenCustomerNotificationDeliveriesByProvider` |
+| Tests             | `customerpanel/sms_db_test.go`, `platform/sms/netgsm/netgsm_test.go` (`TestLiveSend`: the real-account test, A09)                 |
+| Web               | Ayarlar → Entegrasyonlar (Netgsm · SMS account: user code, API password, message header)                                          |
+
+- **Account.** The business connects its own Netgsm account in Ayarlar → Entegrasyonlar (`kind = sms`, provider `netgsm`, registered when `SMS_NETGSM_ENABLED=true`): user code, API password and the message header (sender name) approved on the account. The same Netgsm credentials serve the voice call as a separate `voice_call` account. The connection check lists the account's message headers (`GET /sms/rest/v2/msgheader`) and refuses a header that is not among them. Without an account the channel is not ready for the business and every text is `skipped` (`SMS account not connected`); a `log` account (development) logs the text and is `skipped` too. With the provider off (`SMS_NETGSM_ENABLED=false`) the platform's log sender stands in, which is never recorded as sent.
+- **Send.** Every notice goes out on SMS, not only the confirmation request (`POST /sms/rest/v2/send`, HTTP basic auth, `encoding: TR`, one recipient per call). Only Turkish numbers are sent (`no Turkish phone number` is `skipped`). Netgsm's answer code `00` / `01` / `02` with a job id is `accepted`: the attempt stays open with `provider_ref` = the job id. Any other code (`30` credentials, `40` header, `50` IYS consent filter, `80` limits …) is `failed` and the next channel runs.
+- **Delivery reports.** Netgsm pushes no SMS report, so the worker asks the report query (`POST /sms/rest/v2/report`, `jobids`) every minute (`smsprovider.Service.PollReports`, `Run`) for the open SMS attempts of every business: one call per business, up to 100 job ids each. Status `1` → `delivered` (`delivered_at` = Netgsm's `deliveredDate`, in Turkey time); `0` → still waiting; `2` timed out, `3` invalid number, `4` operator not served, `11` refused, `12` send error, `13` blocked (or any other code) → `failed` with that text, and the rule's next channel runs. No report within the receipt timeout (30 minutes) fails the attempt as `no delivery report`. A delivered text is never an answer: the customer answers only through the single-visit link. A business whose account was removed or whose query fails is skipped by the poll (its attempts end with the timeout).
+- **Not here.** A provider webhook with its own signature check (TEC-987) is not needed for Netgsm; should another SMS provider push reports, TEC-987 adds the public route (`/v1/public/sms/{provider}/{account}/webhook`), signature or keyed-address check and the `integration_jobs` dedup on top of `RecordDelivery`. The platform's own SMS account for the customer panel sign-in codes (`netgsm.Sender` over the `sms.Sender` port) waits for TEC-884; until then the panel uses the log sender.
 
 ### Real integration test (A09)
 
-`TestLiveTemplate` in `platform/whatsapp/meta` sends the confirmation template from a real number when `WHATSAPP_IT_PHONE_NUMBER_ID`, `WHATSAPP_IT_ACCESS_TOKEN` and `WHATSAPP_IT_TO` (and `WHATSAPP_IT_TEMPLATE` / `WHATSAPP_IT_LANGUAGE` if not the defaults) are set; the end-to-end check is then a booking of a test business with the account connected: the request arrives, the status reaches `delivered` / `read` in the attempts table, and each button gives its answer. SMS and e-mail follow with their providers (TEC-884).
+- **WhatsApp.** `TestLiveTemplate` in `platform/whatsapp/meta` sends the confirmation template from a real number when `WHATSAPP_IT_PHONE_NUMBER_ID`, `WHATSAPP_IT_ACCESS_TOKEN` and `WHATSAPP_IT_TO` (and `WHATSAPP_IT_TEMPLATE` / `WHATSAPP_IT_LANGUAGE` if not the defaults) are set; the end-to-end check is then a booking of a test business with the account connected: the request arrives, the status reaches `delivered` / `read` in the attempts table, and each button gives its answer.
+- **SMS.** `TestLiveSend` in `platform/sms/netgsm` runs the connection check, sends one text with a visit-link-shaped URL and polls its report for 90 seconds when `SMS_IT_USERCODE`, `SMS_IT_PASSWORD`, `SMS_IT_HEADER` and `SMS_IT_TO` (and `SMS_IT_BASE_URL` if not the default) are set: `cd backend && SMS_IT_USERCODE=… SMS_IT_PASSWORD=… SMS_IT_HEADER=… SMS_IT_TO=+905… go test -run TestLiveSend -v ./internal/platform/sms/netgsm`. It proves the request and answer shapes (job id, report fields `jobid` / `number` / `status` / `deliveredDate`); if Netgsm's answer differs from the documented shape, `netgsm.go` is the one place to adjust. The end-to-end check is then a booking of a test business with `SMS_NETGSM_ENABLED=true` and the account connected: the request arrives as a text with the visit link, the attempts table shows `delivered` with its time within a few minutes (the worker's poll), a text to an unreachable number ends `failed` and the e-mail runs, and the link's buttons answer. Neither run can happen without real credentials; they wait for the accounts of TEC-884 and are tracked under TEC-929.
+- **E-mail.** SMTP has no report: the end-to-end check is the e-mail arriving with the visit link and the buttons answering.
 
 ## Voice call (TEC-923)
 
@@ -242,4 +259,5 @@ The automatic call with keys (K-006, A10): `voice_call` is a channel of the conf
 ## Not here yet
 
 - Live list events for delivery failures and provider reports (TEC-981).
-- Twilio as a second voice provider (TEC-986); polling Netgsm's report when a result never arrives (the receipt timeout runs the next channel).
+- Twilio as a second voice provider (TEC-986); polling Netgsm's call report when a result never arrives (the receipt timeout runs the next channel).
+- The real-account A09 runs for WhatsApp, SMS and e-mail (TEC-929, once TEC-884 provides the accounts); an SMS provider webhook with signature check for a provider that pushes reports (TEC-987); the platform's own SMS account for sign-in codes (TEC-884).

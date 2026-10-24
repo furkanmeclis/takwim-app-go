@@ -28,6 +28,7 @@ export const INTEGRATION_FIELD_LABEL_KEYS: Record<string, string> = {
   template_name: "integrations.fields.template_name",
   template_language: "integrations.fields.template_language",
   usercode: "integrations.fields.usercode",
+  msgheader: "integrations.fields.msgheader",
 };
 
 export const INTEGRATION_PROVIDER_LABEL_KEYS: Record<string, string> = {
@@ -46,14 +47,33 @@ export const INTEGRATION_KIND_LABEL_KEYS: Record<string, string> = {
   voice_call: "integrations.kinds.voice_call",
 };
 
-/** Connect form hint per provider (where the organization finds its keys). */
+/**
+ * Connect form hint per provider (where the organization finds its keys).
+ * A provider that serves several kinds (Netgsm: SMS and voice calls) has
+ * one hint per `kind/provider`; see `providerHintKey`.
+ */
 export const INTEGRATION_PROVIDER_HINT_KEYS: Record<string, string> = {
   log: "integrations.provider_hints.log",
   testpay: "integrations.provider_hints.testpay",
   paytr: "integrations.provider_hints.paytr",
   meta: "integrations.provider_hints.meta",
   netgsm: "integrations.provider_hints.netgsm",
+  "sms/netgsm": "integrations.provider_hints.netgsm_sms",
+  "voice_call/netgsm": "integrations.provider_hints.netgsm_voice_call",
 };
+
+/** The connect option of a provider under one kind ("sms/netgsm"). */
+export function providerOptionKey(kind: string | undefined, provider: string) {
+  return kind ? `${kind}/${provider}` : provider;
+}
+
+/** Hint key of a provider under a kind, else the provider's own. */
+export function providerHintKey(kind: string | undefined, provider: string) {
+  const scoped = kind
+    ? INTEGRATION_PROVIDER_HINT_KEYS[`${kind}/${provider}`]
+    : undefined;
+  return scoped ?? INTEGRATION_PROVIDER_HINT_KEYS[provider];
+}
 
 /**
  * Webhook address of an account whose provider posts its events to an

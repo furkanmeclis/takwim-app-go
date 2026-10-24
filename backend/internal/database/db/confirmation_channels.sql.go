@@ -202,6 +202,58 @@ func (q *Queries) ListConfirmationResponses(ctx context.Context, arg ListConfirm
 	return items, nil
 }
 
+const listOpenCustomerNotificationDeliveriesByProvider = `-- name: ListOpenCustomerNotificationDeliveriesByProvider :many
+SELECT id, organization_id, uuid, provider_ref, sent_at
+FROM customer_notification_deliveries
+WHERE status = 'sent' AND finished_at IS NULL AND channel = $1 AND provider = $2
+  AND provider_ref <> ''
+ORDER BY organization_id, sent_at
+LIMIT $3
+`
+
+type ListOpenCustomerNotificationDeliveriesByProviderParams struct {
+	Channel    string `json:"channel"`
+	Provider   string `json:"provider"`
+	LimitCount int32  `json:"limit_count"`
+}
+
+type ListOpenCustomerNotificationDeliveriesByProviderRow struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	ProviderRef    string             `json:"provider_ref"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+}
+
+// Accepted attempts of one channel and provider still waiting for their
+// delivery report (every business), oldest first: a provider without a
+// webhook (Netgsm SMS, TEC-982) is asked for them.
+func (q *Queries) ListOpenCustomerNotificationDeliveriesByProvider(ctx context.Context, arg ListOpenCustomerNotificationDeliveriesByProviderParams) ([]ListOpenCustomerNotificationDeliveriesByProviderRow, error) {
+	rows, err := q.db.Query(ctx, listOpenCustomerNotificationDeliveriesByProvider, arg.Channel, arg.Provider, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenCustomerNotificationDeliveriesByProviderRow{}
+	for rows.Next() {
+		var i ListOpenCustomerNotificationDeliveriesByProviderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Uuid,
+			&i.ProviderRef,
+			&i.SentAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnreportedCustomerNotificationDeliveries = `-- name: ListUnreportedCustomerNotificationDeliveries :many
 SELECT organization_id, uuid, channel
 FROM customer_notification_deliveries

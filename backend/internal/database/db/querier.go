@@ -984,6 +984,10 @@ type Querier interface {
 	ListOAuthAccountsByUserID(ctx context.Context, userID int64) ([]ListOAuthAccountsByUserIDRow, error)
 	ListOAuthAccountsForUserIDs(ctx context.Context, userIds []int64) ([]ListOAuthAccountsForUserIDsRow, error)
 	ListOAuthProviderSettings(ctx context.Context) ([]OauthProviderSetting, error)
+	// Accepted attempts of one channel and provider still waiting for their
+	// delivery report (every business), oldest first: a provider without a
+	// webhook (Netgsm SMS, TEC-982) is asked for them.
+	ListOpenCustomerNotificationDeliveriesByProvider(ctx context.Context, arg ListOpenCustomerNotificationDeliveriesByProviderParams) ([]ListOpenCustomerNotificationDeliveriesByProviderRow, error)
 	ListOrganizationBranchOptions(ctx context.Context, organizationID int64) ([]ListOrganizationBranchOptionsRow, error)
 	ListOrganizationMembersByOrg(ctx context.Context, arg ListOrganizationMembersByOrgParams) ([]ListOrganizationMembersByOrgRow, error)
 	ListOrganizationMembershipsByUser(ctx context.Context, userID int64) ([]ListOrganizationMembershipsByUserRow, error)

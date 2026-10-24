@@ -251,9 +251,12 @@
   "fields.template_language": "Template language (e.g. tr)",
   "webhook.label": "Webhook address",
   "webhook.hint": "Enter this address and the verify token in your Meta app under WhatsApp > Configuration and subscribe to the \"messages\" field. Delivery reports and the customer's button replies arrive here.",
-  "providers.netgsm": "Netgsm voice message",
-  "provider_hints.netgsm": "Enter the user code (subscriber number) and the API password of your Netgsm account; voice messages with key presses must be enabled on it. Takwim places the confirmation calls with this account; the address for each call's result is sent with the call, nothing else needs setting up at Netgsm.",
+  "providers.netgsm": "Netgsm",
+  "provider_hints.netgsm": "Enter the user code (subscriber number) and the API password of your Netgsm account.",
   "fields.usercode": "User code (subscriber number)",
   "kinds.voice_call": "Voice call",
-  "jobs.kinds.voice_call_result": "Call result"
+  "jobs.kinds.voice_call_result": "Call result",
+  "provider_hints.netgsm_sms": "Enter the user code (subscriber number), the API password and the approved message header (sender name) of your Netgsm account. Customer notices and confirmation requests go out as texts through this account; delivery reports are read from Netgsm automatically, nothing else needs setting up.",
+  "provider_hints.netgsm_voice_call": "Enter the user code (subscriber number) and the API password of your Netgsm account; voice messages with key presses must be enabled on it. Takwim places the confirmation calls with this account; the address for each call's result is sent with the call, nothing else needs setting up at Netgsm.",
+  "fields.msgheader": "Message header (sender name)"
 }

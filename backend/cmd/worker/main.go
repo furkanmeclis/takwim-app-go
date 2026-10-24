@@ -69,6 +69,8 @@ import (
 	sessionpackagesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/adapters"
 	sessionpackagesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/repository"
 	sessionpackagesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/usecase"
+	smsprovidermodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/smsprovider"
+	smsproviderusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/smsprovider/usecase"
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
@@ -197,11 +199,15 @@ func main() {
 	voiceClient := voicecallmodule.Client(cfg)
 	voiceSvc := voicecallusecase.New(queries, voiceClient, voicecallmodule.WebhookBase(cfg))
 	voiceSvc.SetLogger(log)
+	// SMS (TEC-982): every notice through the business's own Netgsm account;
+	// this process asks the provider for the delivery reports. Without the
+	// provider the log sender stands in (never recorded as sent).
+	smsClient := smsprovidermodule.Client(cfg)
+	smsSvc := smsproviderusecase.New(queries, smsClient)
+	smsSvc.SetLogger(log)
 	notifyEngine.SetLogger(log)
 	notifyEngine.Register(
-		// The SMS provider is not chosen yet (TEC-884): the log sender
-		// counts as not ready, so nothing is recorded as sent through it.
-		customernotifyadapters.SMS{Sender: sms.NewLogSender(log, cfg.App.Env != "production")},
+		smsproviderusecase.NewChannel(smsSvc, customernotifyadapters.SMS{Sender: sms.NewLogSender(log, cfg.App.Env != "production")}),
 		customernotifyadapters.Email{Mail: mailer, Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""},
 		// WhatsApp (TEC-922): the confirmation request through the business's
 		// own Cloud API account (accounts plugged in with the integration kit).
@@ -353,13 +359,15 @@ func main() {
 	// ask for a change), issued at send time.
 	notifyEngine.SetLinkIssuerFor(customernotifycatalog.ConfirmationRequest, customernotifyadapters.VisitLinks(panelLinks))
 	integrationAdapters := append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)
+	integrationAdapters = append(integrationAdapters, voicecallmodule.Adapters(voiceClient)...)
 	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log,
-		append(integrationAdapters, voicecallmodule.Adapters(voiceClient)...)...)
+		append(integrationAdapters, smsprovidermodule.Adapters(smsClient)...)...)
 	if err != nil {
 		log.Error("integrations_failed", "error", err)
 		exit(1)
 	}
 	whatsappSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner)
+	smsSvc.SetAccounts(integrationKit.Accounts)
 	voiceSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner, fieldCipher)
 	integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: queueClient})
 	integrationKit.Runner.SetResourceEvents(resourceEvents)
@@ -437,6 +445,7 @@ func main() {
 
 	go notifyEngine.Run(ctx, customernotifyusecase.DefaultSendInterval, customernotifyusecase.DefaultReminderInterval)
 	go confirmEngine.Run(ctx, confirmationsusecase.DefaultInterval)
+	go smsSvc.Run(ctx, smsproviderusecase.DefaultPollInterval)
 	go paymentsSvc.RunRefundChecks(ctx, paymentsusecase.DefaultRefundCheckInterval)
 
 	errCh := make(chan error, 1)
