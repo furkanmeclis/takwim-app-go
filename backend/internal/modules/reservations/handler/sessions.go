@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -40,6 +42,43 @@ func (h *Handler) PackageOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := h.svc.PackageOptions(r.Context(), scope.ID, id, c)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
+}
+
+// NewPackageOptions serves GET /v1/tenant/reservations/package-options
+// (?customer_uuid=&branch_uuid=&date=YYYY-MM-DD, TEC-984): the packages of
+// the customer a new booking in the branch on the day can use.
+func (h *Handler) NewPackageOptions(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	if !packagesAllowed(w, r) {
+		return
+	}
+	if _, ok := caller(w, r, rbac.PermTenantReservationsWrite); !ok {
+		return
+	}
+	values := r.URL.Query()
+	var details []response.Detail
+	customer, err := uuid.Parse(strings.TrimSpace(values.Get("customer_uuid")))
+	if err != nil {
+		details = append(details, response.Detail{Field: "customer_uuid", Message: "customer_uuid must be a uuid", Code: "invalid"})
+	}
+	branch, err := uuid.Parse(strings.TrimSpace(values.Get("branch_uuid")))
+	if err != nil {
+		details = append(details, response.Detail{Field: "branch_uuid", Message: "branch_uuid must be a uuid", Code: "invalid"})
+	}
+	day, err := time.Parse("2006-01-02", strings.TrimSpace(values.Get("date")))
+	if err != nil {
+		details = append(details, response.Detail{Field: "date", Message: "date must be YYYY-MM-DD", Code: "invalid"})
+	}
+	if len(details) > 0 {
+		response.ValidationError(w, r, details)
+		return
+	}
+	items, err := h.svc.PackageOptionsFor(r.Context(), scope.ID, customer, branch, day)
 	if err != nil {
 		writeError(w, r, err)
 		return

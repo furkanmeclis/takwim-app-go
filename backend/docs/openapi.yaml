@@ -13783,6 +13783,109 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /v1/customer/packages:
+    get:
+      tags: [Customer panel]
+      operationId: listCustomerPackages
+      summary: Session packages (Paketlerim)
+      description: |
+        The person's session packages in every business (TEC-984), under the same visibility window as the visits
+        (by sale time): sessions used, booked and left, the last day, where they can be used and the state on the
+        business day (`active`, `used_up`, `expired`, `refunded`). Valid packages first, soonest to expire first. No
+        cash, ledger or staff data.
+      security:
+        - customerAuth: []
+      parameters:
+        - name: business
+          in: query
+          schema: { type: string, format: uuid }
+        - name: state
+          in: query
+          description: "States; comma-separate (`active`, `used_up`, `expired`, `refunded`)."
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Packages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPanelPackagePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /v1/customer/packages/{uuid}:
+    get:
+      tags: [Customer panel]
+      operationId: getCustomerPackage
+      summary: One package with its usage history
+      description: |
+        `sessions` are the visits that booked or used a session of the package (released ones are left out), latest
+        visit first. Another person's package, an unknown or a malformed uuid answer `404`.
+      security:
+        - customerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPanelPackage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/customer/businesses/{slug}/reservations:
+    post:
+      tags: [Customer panel]
+      operationId: postCustomerBusinessReservation
+      summary: Book a checkout as the signed-in person
+      description: |
+        The business page books for the signed-in customer panel session (TEC-984), so the booking may use sessions
+        of the person's packages (`package_sessions`: line index of the checkout and the package; the rules of the
+        panel apply: same service, allowed branch, valid on the visit day, sessions left). The booking is made for
+        the business's customer record linked to the person's proven phone (`400` `customer` / `not_linked` when the
+        business does not know the person); `customer` of the body is ignored. Lines paid by a package leave the
+        total; a booking paid in full by packages is `payment: on_site` (nothing to collect, accepted even when the
+        business takes online payment only; `400` `payment` / `not_allowed` when something is left to pay, or when
+        `online` has nothing left to pay). The package module must be on (`package_sessions` / `not_allowed`).
+        Otherwise the same as `POST /v1/public/businesses/{slug}/reservations`; the anonymous route refuses
+        `package_sessions` (`sign_in_required`).
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicBookingRequest"
+      responses:
+        "200":
+          description: The reservation the checkout already became (replay)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicReservation"
+        "201":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/customer/payments/summary:
     get:
       tags: [Customer panel]
@@ -14105,6 +14208,45 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/tenant/reservations/package-options:
+    get:
+      tags: [Tenant]
+      operationId: listTenantNewReservationPackageOptions
+      summary: Packages a new booking can use
+      description: |
+        The customer's packages (TEC-984) a new booking in the branch on the day can use: not refunded, valid on the
+        day, usable in the branch, with sessions left. The booking form matches them to its lines by `service_uuid`
+        and sends the choice as `package_sessions` of `POST /v1/tenant/reservations`; `line_indexes` is empty here.
+        An unknown customer or a branch outside the caller's scope is `400` `not_found`. Needs the packages module
+        and reservation write or own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: customer_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: branch_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          required: true
+          description: The visit day (business day), `YYYY-MM-DD`.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservationPackageOptions"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
 
   /v1/tenant/reservations/{uuid}/package-options:
     get:
@@ -14533,6 +14675,76 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeClassSessionPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/session-packages/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantSessionPackagesBulk
+      summary: Run a bulk action on package definitions
+      description: |
+        Actions `activate` (`tenant.session_packages.bulk.activate`) and `deactivate`
+        (`tenant.session_packages.bulk.deactivate`), both reversible (TEC-984). Like every definition change they
+        need access to every branch (an item fails otherwise). `query` honours `q`, `is_active`, `service` and
+        `branch`. Targets are resolved inside the organization only. Needs the packages module and
+        `tenant.session_packages.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/customer-packages/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomerPackagesExport
+      summary: Export sold packages
+      description: |
+        Queues an export of the sold packages with their balance (TEC-984): customer, package, sessions used / booked
+        / left, price, used and remaining value, sale and last day, state, refund. The caller's branch scope applies
+        (selling branch). `query` honours `q`, `sort`, `state`, `package`, `branch`, `customer`, `date_from` and
+        `date_to`. Needs the packages module, `tenant.session_packages.read` and `tenant.session_packages.export`.
+        Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
@@ -20299,6 +20511,14 @@ components:
             Most online bookings (page, widget, API) a branch takes per local
             day; cancelled and rejected ones do not count (`starts_at` /
             `daily_limit`). null = no limit.
+        no_show_uses_package_session:
+          type: boolean
+          default: false
+          description: >-
+            A visit marked as a no-show uses the package sessions booked on it
+            (the right is forfeited; no sale line is written) instead of giving
+            them back to the package (TEC-984). Default false: the session goes
+            back.
 
     OrganizationBookingField:
       type: object
@@ -22485,6 +22705,16 @@ components:
           items: { $ref: "#/components/schemas/TenantReservationLineInput" }
         starts_at: { type: string, format: date-time }
         source: { type: string, enum: [panel], description: Always panel on this route. }
+        package_sessions:
+          type: array
+          maxItems: 20
+          description: |
+            Lines paid by sessions of the customer's packages (TEC-984), held in the booking's transaction with the
+            rules of `POST …/{uuid}/package-sessions` (`package_sessions.<i>.customer_package_uuid` / `not_found`,
+            `refunded`, `expired`, `branch_not_allowed`, `no_sessions_left`; `package_sessions.<i>.line_index` /
+            `not_found`, `service_mismatch`, `already_on_package`). Those lines leave the total. Needs the packages
+            module. Options: `GET /v1/tenant/reservations/package-options`.
+          items: { $ref: "#/components/schemas/ReservationPackageSessionInput" }
         payment: { type: string, enum: [on_site], description: The panel collects at the business. }
         custom_fields:
           type: object
@@ -23620,6 +23850,14 @@ components:
               product_uuid: { type: string, format: uuid }
               variant_uuid: { type: [string, "null"], format: uuid }
               quantity: { type: integer, minimum: 1, maximum: 10 }
+        package_sessions:
+          type: array
+          maxItems: 20
+          description: >-
+            Lines of the checkout (by index) paid by sessions of the person's packages (TEC-984). Only on
+            `POST /v1/customer/businesses/{slug}/reservations`; the anonymous route answers `400` `package_sessions` /
+            `sign_in_required`.
+          items: { $ref: "#/components/schemas/ReservationPackageSessionInput" }
 
     PublicReservation:
       type: object
@@ -23655,7 +23893,7 @@ components:
           type: array
           items:
             type: object
-            required: [service_uuid, service_name, staff, starts_at, ends_at, duration_minutes, unit_price]
+            required: [service_uuid, service_name, staff, starts_at, ends_at, duration_minutes, unit_price, package_name]
             properties:
               service_uuid: { type: [string, "null"], format: uuid }
               service_name: { type: string }
@@ -23671,6 +23909,9 @@ components:
               ends_at: { type: string, format: date-time }
               duration_minutes: { type: integer }
               unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+              package_name:
+                type: [string, "null"]
+                description: The line is paid by a session of this package (TEC-984); it is not part of the total.
         products:
           type: array
           items:
@@ -24667,6 +24908,94 @@ components:
         data: { $ref: "#/components/schemas/ClassSessionDetail" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
+    CustomerPanelPackage:
+      type: object
+      required: [uuid, business, name, service_name, service_uuid, total_sessions, used, held, remaining, price, currency, sold_on, expires_on, state, refunded_on, branch, all_branches, branches, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        business:
+          type: object
+          required: [uuid, slug, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            slug: { type: string }
+            name: { type: string }
+        name: { type: string }
+        service_name: { type: string }
+        service_uuid: { type: [string, "null"], format: uuid }
+        total_sessions: { type: integer }
+        used: { type: integer }
+        held: { type: integer, description: Sessions booked on visits not completed yet. }
+        remaining: { type: integer, description: Sessions neither used nor booked (0 once refunded). }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        sold_on: { type: string, format: date }
+        expires_on: { type: [string, "null"], format: date, description: The last day it can be used; null = no end. }
+        state: { type: string, enum: [active, used_up, expired, refunded] }
+        refunded_on: { type: [string, "null"], format: date }
+        branch: { $ref: "#/components/schemas/CustomerPanelPackageRef" }
+        all_branches: { type: boolean }
+        branches:
+          type: array
+          description: Branches it can be used in (empty with `all_branches`).
+          items: { $ref: "#/components/schemas/CustomerPanelPackageRef" }
+        created_at: { type: string, format: date-time }
+        sessions:
+          type: array
+          description: Detail only.
+          items: { $ref: "#/components/schemas/CustomerPanelPackageSession" }
+
+    CustomerPanelPackageRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    CustomerPanelPackageSession:
+      type: object
+      required: [uuid, session_no, status, consumed_on, reservation_uuid, reservation_number, starts_at, reservation_status, service_name, staff_name, branch_name, timezone]
+      properties:
+        uuid: { type: string, format: uuid }
+        session_no: { type: integer }
+        status: { type: string, enum: [held, consumed] }
+        consumed_on: { type: [string, "null"], format: date }
+        reservation_uuid: { type: string, format: uuid }
+        reservation_number: { type: integer, format: int64 }
+        starts_at: { type: string, format: date-time }
+        reservation_status: { type: string }
+        service_name: { type: [string, "null"] }
+        staff_name: { type: [string, "null"] }
+        branch_name: { type: string }
+        timezone: { type: string, example: Europe/Istanbul }
+
+    CustomerPanelPackagePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerPanelPackage" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeCustomerPanelPackagePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPanelPackagePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPanelPackage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPanelPackage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     SessionPackage:
       type: object
       description: A multi-session package of the business (TEC-920).
@@ -24962,6 +25291,14 @@ components:
         customer_package_uuid: { type: string, format: uuid }
         line_index: { type: integer, minimum: 0 }
         expected_version: { type: [integer, "null"] }
+
+    ReservationPackageSessionInput:
+      type: object
+      additionalProperties: false
+      required: [customer_package_uuid, line_index]
+      properties:
+        customer_package_uuid: { type: string, format: uuid }
+        line_index: { type: integer, minimum: 0, description: "0-based index of the booking's line." }
 
     TenantReservationPackageOption:
       type: object

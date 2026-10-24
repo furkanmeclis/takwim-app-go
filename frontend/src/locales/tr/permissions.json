@@ -178,5 +178,8 @@
   "labels.tenant.cash.bulk.activate": "Hesapları toplu aktifleştir",
   "labels.tenant.classes.read": "Ders programını ve seansları görüntüle",
   "labels.tenant.classes.write": "Ders programını ve seansları yönet",
-  "groups.tenant_classes": "Grup dersleri"
+  "groups.tenant_classes": "Grup dersleri",
+  "labels.tenant.session_packages.export": "Satılan paketleri dışa aktar",
+  "labels.tenant.session_packages.bulk.activate": "Paket tanımlarını toplu aktifleştir",
+  "labels.tenant.session_packages.bulk.deactivate": "Paket tanımlarını toplu pasifleştir"
 }

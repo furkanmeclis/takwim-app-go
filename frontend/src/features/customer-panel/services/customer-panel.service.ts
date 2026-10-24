@@ -2,8 +2,13 @@ import { apiConfig } from "@/config/api";
 import type {
   CustomerAvailability,
   CustomerDeviceList,
+  CustomerBookingRequest,
   CustomerListParams,
+  CustomerPackage,
+  CustomerPackagePage,
+  CustomerPackageParams,
   CustomerPaymentSummary,
+  PublicReservation,
   CustomerProfile,
   CustomerReservation,
   CustomerReservationPage,
@@ -26,6 +31,8 @@ type Options = {
   body?: unknown;
   /** Sends an Idempotency-Key, so a retried change runs once. */
   idempotent?: boolean;
+  /** A caller-kept Idempotency-Key (a retried booking replays). */
+  idempotencyKey?: string;
 };
 
 let onUnauthorized: (() => void) | null = null;
@@ -51,7 +58,9 @@ async function customerRequest<T>(
   }
   const headers: Record<string, string> = { Accept: "application/json" };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
-  if (options.idempotent) headers["Idempotency-Key"] = newKey();
+  if (options.idempotencyKey)
+    headers["Idempotency-Key"] = options.idempotencyKey;
+  else if (options.idempotent) headers["Idempotency-Key"] = newKey();
 
   const response = await fetch(url, {
     method,
@@ -133,6 +142,24 @@ export const customerPanelService = {
     }),
   paymentSummary: () =>
     customerRequest<CustomerPaymentSummary>("GET", "/payments/summary"),
+  /** "Paketlerim" (TEC-984): packages bought from the person's businesses. */
+  packages: (params: CustomerPackageParams) =>
+    customerRequest<CustomerPackagePage>("GET", "/packages", {
+      query: params,
+    }),
+  package: (uuid: string) =>
+    customerRequest<CustomerPackage>("GET", `/packages/${uuid}`),
+  /**
+   * Books a checkout as the signed-in person, optionally paying lines with
+   * package sessions (TEC-984). The business's record of the person is the
+   * customer; the contact details are not needed.
+   */
+  book: (slug: string, body: CustomerBookingRequest, idempotencyKey: string) =>
+    customerRequest<PublicReservation>(
+      "POST",
+      `/businesses/${encodeURIComponent(slug)}/reservations`,
+      { body, idempotencyKey },
+    ),
   sessions: () => customerRequest<CustomerDeviceList>("GET", "/sessions"),
   revokeSession: (uuid: string) =>
     customerRequest<void>("DELETE", `/sessions/${uuid}`),

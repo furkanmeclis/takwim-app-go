@@ -10,6 +10,7 @@ import {
 import { customerPanelService } from "@/features/customer-panel/services/customer-panel.service";
 import type {
   CustomerListParams,
+  CustomerPackageParams,
   CustomerProfile,
 } from "@/features/customer-panel/types";
 
@@ -27,6 +28,10 @@ export const customerPanelKeys = {
   paymentSummary: () =>
     [...customerPanelKeys.all, "payments", "summary"] as const,
   sessions: () => [...customerPanelKeys.all, "sessions"] as const,
+  packages: (params: CustomerPackageParams) =>
+    [...customerPanelKeys.all, "packages", params] as const,
+  package: (uuid: string) =>
+    [...customerPanelKeys.all, "package", uuid] as const,
 };
 
 /** The signed-in person; a 401 means there is no customer session. */
@@ -80,6 +85,29 @@ export function useCustomerPaymentSummary() {
   return useQuery({
     queryKey: customerPanelKeys.paymentSummary(),
     queryFn: customerPanelService.paymentSummary,
+    retry: false,
+  });
+}
+
+/** "Paketlerim": the person's packages across businesses (TEC-984). */
+export function useCustomerPackages(
+  params: CustomerPackageParams,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: customerPanelKeys.packages(params),
+    queryFn: () => customerPanelService.packages(params),
+    placeholderData: keepPreviousData,
+    retry: false,
+    enabled: options.enabled ?? true,
+  });
+}
+
+/** One package with its usage history. */
+export function useCustomerPackage(uuid: string) {
+  return useQuery({
+    queryKey: customerPanelKeys.package(uuid),
+    queryFn: () => customerPanelService.package(uuid),
     retry: false,
   });
 }

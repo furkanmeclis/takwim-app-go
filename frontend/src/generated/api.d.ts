@@ -8592,6 +8592,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customer/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session packages (Paketlerim)
+         * @description The person's session packages in every business (TEC-984), under the same visibility window as the visits
+         *     (by sale time): sessions used, booked and left, the last day, where they can be used and the state on the
+         *     business day (`active`, `used_up`, `expired`, `refunded`). Valid packages first, soonest to expire first. No
+         *     cash, ledger or staff data.
+         */
+        get: operations["listCustomerPackages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/packages/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One package with its usage history
+         * @description `sessions` are the visits that booked or used a session of the package (released ones are left out), latest
+         *     visit first. Another person's package, an unknown or a malformed uuid answer `404`.
+         */
+        get: operations["getCustomerPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/businesses/{slug}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a checkout as the signed-in person
+         * @description The business page books for the signed-in customer panel session (TEC-984), so the booking may use sessions
+         *     of the person's packages (`package_sessions`: line index of the checkout and the package; the rules of the
+         *     panel apply: same service, allowed branch, valid on the visit day, sessions left). The booking is made for
+         *     the business's customer record linked to the person's proven phone (`400` `customer` / `not_linked` when the
+         *     business does not know the person); `customer` of the body is ignored. Lines paid by a package leave the
+         *     total; a booking paid in full by packages is `payment: on_site` (nothing to collect, accepted even when the
+         *     business takes online payment only; `400` `payment` / `not_allowed` when something is left to pay, or when
+         *     `online` has nothing left to pay). The package module must be on (`package_sessions` / `not_allowed`).
+         *     Otherwise the same as `POST /v1/public/businesses/{slug}/reservations`; the anonymous route refuses
+         *     `package_sessions` (`sign_in_required`).
+         */
+        post: operations["postCustomerBusinessReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customer/payments/summary": {
         parameters: {
             query?: never;
@@ -8844,6 +8917,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/package-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Packages a new booking can use
+         * @description The customer's packages (TEC-984) a new booking in the branch on the day can use: not refunded, valid on the
+         *     day, usable in the branch, with sessions left. The booking form matches them to its lines by `service_uuid`
+         *     and sends the choice as `package_sessions` of `POST /v1/tenant/reservations`; `line_indexes` is empty here.
+         *     An unknown customer or a branch outside the caller's scope is `400` `not_found`. Needs the packages module
+         *     and reservation write or own.
+         */
+        get: operations["listTenantNewReservationPackageOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations/{uuid}/package-options": {
         parameters: {
             query?: never;
@@ -9087,6 +9184,54 @@ export interface paths {
         get: operations["getTenantClassSessions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/session-packages/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bulk action on package definitions
+         * @description Actions `activate` (`tenant.session_packages.bulk.activate`) and `deactivate`
+         *     (`tenant.session_packages.bulk.deactivate`), both reversible (TEC-984). Like every definition change they
+         *     need access to every branch (an item fails otherwise). `query` honours `q`, `is_active`, `service` and
+         *     `branch`. Targets are resolved inside the organization only. Needs the packages module and
+         *     `tenant.session_packages.read`.
+         */
+        post: operations["postTenantSessionPackagesBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-packages/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export sold packages
+         * @description Queues an export of the sold packages with their balance (TEC-984): customer, package, sessions used / booked
+         *     / left, price, used and remaining value, sale and last day, state, refund. The caller's branch scope applies
+         *     (selling branch). `query` honours `q`, `sort`, `state`, `package`, `branch`, `customer`, `date_from` and
+         *     `date_to`. Needs the packages module, `tenant.session_packages.read` and `tenant.session_packages.export`.
+         *     Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantCustomerPackagesExport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13642,6 +13787,11 @@ export interface components {
             max_open_per_customer: number | null;
             /** @description Most online bookings (page, widget, API) a branch takes per local day; cancelled and rejected ones do not count (`starts_at` / `daily_limit`). null = no limit. */
             max_online_per_day: number | null;
+            /**
+             * @description A visit marked as a no-show uses the package sessions booked on it (the right is forfeited; no sale line is written) instead of giving them back to the package (TEC-984). Default false: the session goes back.
+             * @default false
+             */
+            no_show_uses_package_session: boolean;
         };
         /** @description A booking form question (TEC-905). The answer is stored in the reservation's `custom_fields` under `key`; the reservation keeps the question as answered. */
         OrganizationBookingField: {
@@ -15282,6 +15432,14 @@ export interface components {
              */
             source?: "panel";
             /**
+             * @description Lines paid by sessions of the customer's packages (TEC-984), held in the booking's transaction with the
+             *     rules of `POST …/{uuid}/package-sessions` (`package_sessions.<i>.customer_package_uuid` / `not_found`,
+             *     `refunded`, `expired`, `branch_not_allowed`, `no_sessions_left`; `package_sessions.<i>.line_index` /
+             *     `not_found`, `service_mismatch`, `already_on_package`). Those lines leave the total. Needs the packages
+             *     module. Options: `GET /v1/tenant/reservations/package-options`.
+             */
+            package_sessions?: components["schemas"]["ReservationPackageSessionInput"][];
+            /**
              * @description The panel collects at the business.
              * @enum {string}
              */
@@ -16165,6 +16323,8 @@ export interface components {
                 variant_uuid?: string | null;
                 quantity: number;
             }[];
+            /** @description Lines of the checkout (by index) paid by sessions of the person's packages (TEC-984). Only on `POST /v1/customer/businesses/{slug}/reservations`; the anonymous route answers `400` `package_sessions` / `sign_in_required`. */
+            package_sessions?: components["schemas"]["ReservationPackageSessionInput"][];
         };
         PublicReservation: {
             /** @description Answers to the booking form questions asked online (TEC-905). */
@@ -16218,6 +16378,8 @@ export interface components {
                 ends_at: string;
                 duration_minutes: number;
                 unit_price: components["schemas"]["MoneyAmount"];
+                /** @description The line is paid by a session of this package (TEC-984); it is not part of the total. */
+                package_name: string | null;
             }[];
             products: {
                 name: string;
@@ -17104,6 +17266,92 @@ export interface components {
             data: components["schemas"]["ClassSessionDetail"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        CustomerPanelPackage: {
+            /** Format: uuid */
+            uuid: string;
+            business: {
+                /** Format: uuid */
+                uuid: string;
+                slug: string;
+                name: string;
+            };
+            name: string;
+            service_name: string;
+            /** Format: uuid */
+            service_uuid: string | null;
+            total_sessions: number;
+            used: number;
+            /** @description Sessions booked on visits not completed yet. */
+            held: number;
+            /** @description Sessions neither used nor booked (0 once refunded). */
+            remaining: number;
+            price: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** Format: date */
+            sold_on: string;
+            /**
+             * Format: date
+             * @description The last day it can be used; null = no end.
+             */
+            expires_on: string | null;
+            /** @enum {string} */
+            state: "active" | "used_up" | "expired" | "refunded";
+            /** Format: date */
+            refunded_on: string | null;
+            branch: components["schemas"]["CustomerPanelPackageRef"];
+            all_branches: boolean;
+            /** @description Branches it can be used in (empty with `all_branches`). */
+            branches: components["schemas"]["CustomerPanelPackageRef"][];
+            /** Format: date-time */
+            created_at: string;
+            /** @description Detail only. */
+            sessions?: components["schemas"]["CustomerPanelPackageSession"][];
+        };
+        CustomerPanelPackageRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+        };
+        CustomerPanelPackageSession: {
+            /** Format: uuid */
+            uuid: string;
+            session_no: number;
+            /** @enum {string} */
+            status: "held" | "consumed";
+            /** Format: date */
+            consumed_on: string | null;
+            /** Format: uuid */
+            reservation_uuid: string;
+            /** Format: int64 */
+            reservation_number: number;
+            /** Format: date-time */
+            starts_at: string;
+            reservation_status: string;
+            service_name: string | null;
+            staff_name: string | null;
+            branch_name: string;
+            /** @example Europe/Istanbul */
+            timezone: string;
+        };
+        CustomerPanelPackagePage: {
+            items: components["schemas"]["CustomerPanelPackage"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeCustomerPanelPackagePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPanelPackagePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPanelPackage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPanelPackage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         /** @description A multi-session package of the business (TEC-920). */
         SessionPackage: {
             /** Format: uuid */
@@ -17408,6 +17656,12 @@ export interface components {
             customer_package_uuid: string;
             line_index: number;
             expected_version?: number | null;
+        };
+        ReservationPackageSessionInput: {
+            /** Format: uuid */
+            customer_package_uuid: string;
+            /** @description 0-based index of the booking's line. */
+            line_index: number;
         };
         TenantReservationPackageOption: {
             /** Format: uuid */
@@ -33186,6 +33440,109 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
         };
     };
+    listCustomerPackages: {
+        parameters: {
+            query?: {
+                business?: string;
+                /** @description States; comma-separate (`active`, `used_up`, `expired`, `refunded`). */
+                state?: string;
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Packages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPanelPackagePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getCustomerPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPanelPackage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postCustomerBusinessReservation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Client-generated key (a UUID) for an unsafe request the client may
+                 *     retry. Scoped to the caller, `X-Organization`, method and path; kept
+                 *     24 hours. Same key + same body replays the first response with
+                 *     `Idempotent-Replayed: true`; same key + another body is `422
+                 *     IDEMPOTENCY_KEY_REUSED`; while the first request runs a retry gets
+                 *     `409 IDEMPOTENCY_IN_PROGRESS`. 5xx outcomes are not kept.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicBookingRequest"];
+            };
+        };
+        responses: {
+            /** @description The reservation the checkout already became (replay) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicReservation"];
+                };
+            };
+            /** @description Reservation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     getCustomerPaymentSummary: {
         parameters: {
             query?: never;
@@ -33485,6 +33842,40 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTenantNewReservationPackageOptions: {
+        parameters: {
+            query: {
+                customer_uuid: string;
+                branch_uuid: string;
+                /** @description The visit day (business day), `YYYY-MM-DD`. */
+                date: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationPackageOptions"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     listTenantReservationPackageOptions: {
@@ -33970,6 +34361,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeClassSessionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantSessionPackagesBulk: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync bulk result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkSyncResult"];
+                };
+            };
+            /** @description Async bulk job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBulkJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCustomerPackagesExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
                 };
             };
             400: components["responses"]["BadRequest"];

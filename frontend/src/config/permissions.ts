@@ -97,6 +97,10 @@ export const Permission = {
   TenantSessionPackagesSell: "tenant.session_packages.sell",
   TenantClassesRead: "tenant.classes.read",
   TenantClassesWrite: "tenant.classes.write",
+  TenantSessionPackagesExport: "tenant.session_packages.export",
+  TenantSessionPackagesBulkActivate: "tenant.session_packages.bulk.activate",
+  TenantSessionPackagesBulkDeactivate:
+    "tenant.session_packages.bulk.deactivate",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantActivityRead: "tenant.activity.read",
@@ -296,6 +300,9 @@ export const permissions = {
       read: Permission.TenantSessionPackagesRead,
       write: Permission.TenantSessionPackagesWrite,
       sell: Permission.TenantSessionPackagesSell,
+      export: Permission.TenantSessionPackagesExport,
+      bulkActivate: Permission.TenantSessionPackagesBulkActivate,
+      bulkDeactivate: Permission.TenantSessionPackagesBulkDeactivate,
     },
     /** Group class timetable (TEC-970). */
     classes: {

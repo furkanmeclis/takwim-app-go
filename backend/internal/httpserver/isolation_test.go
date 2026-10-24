@@ -695,6 +695,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/class-sessions": {"?from=2030-01-07&to=2030-01-13", "?from=2030-01-07&to=2030-01-13&branch=" + orgB.ids["branch"],
 			"?from=2030-01-07&to=2030-01-13&service=" + orgB.ids["classService"], "?from=2030-01-07&to=2030-01-13&staff=" + orgB.ids["staff"],
 			"?from=2030-01-07&to=2030-01-13&q=" + orgB.marker},
+		"GET /v1/tenant/reservations/package-options": {
+			"?customer_uuid=" + orgB.ids["customer"] + "&branch_uuid=" + orgA.ids["branch"] + "&date=2030-01-07",
+			"?customer_uuid=" + orgA.ids["customer"] + "&branch_uuid=" + orgB.ids["branch"] + "&date=2030-01-07",
+		},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -762,6 +766,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/cash/accounts/bulk", map[string]any{"action": "archive", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["cashAccount"]}}}, nil},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgA.ids["cashAccount"], "to_account_uuid": orgB.ids["cashAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgB.ids["cashAccount"], "to_account_uuid": orgA.ids["cashAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/session-packages/bulk", bulkIDs("sessionPackage"), nil},
+		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgA.ids["branch"], "customer_uuid": orgA.ids["customer"],
+			"lines": []map[string]any{{"service_uuid": orgA.ids["service"]}}, "starts_at": "2030-01-07T15:00:00+03:00",
+			"package_sessions": []map[string]any{{"customer_package_uuid": orgB.ids["customerPackage"], "line_index": 0}}}, reject},
 		{"POST /v1/tenant/session-packages", map[string]any{"name": "X1", "service_uuid": orgB.ids["service"], "total_sessions": 5,
 			"price": "1", "branch_uuids": []string{orgA.ids["branch"]}}, reject},
 		{"POST /v1/tenant/session-packages", map[string]any{"name": "X2", "service_uuid": orgA.ids["service"], "total_sessions": 5,

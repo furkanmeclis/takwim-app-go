@@ -107,6 +107,9 @@ type plan struct {
 	status         string
 	holdReason     string
 	confirm        bool
+	// coveredOnly: paid on site only because package sessions pay the
+	// whole booking; anything left to pay fails it.
+	coveredOnly bool
 }
 
 // planFor decides the plan; set is the current settings (nil without a
@@ -140,7 +143,10 @@ func (s *Service) planFor(set *orgsettings.Version, in model.CreateInput, ve *Va
 			method = model.MethodOnline
 		}
 	case model.MethodOnSite:
-		if !pay.PayAtVenue {
+		// A booking paid in full by package sessions (TEC-984) has nothing
+		// to collect: it books "on site" even when the business takes
+		// online payment only. Checked once the sessions are held.
+		if !pay.PayAtVenue && len(in.PackageSessions) == 0 {
 			ve.add("payment", "not_allowed", "the business does not take payment on site")
 		}
 	case model.MethodOnline:
@@ -150,7 +156,7 @@ func (s *Service) planFor(set *orgsettings.Version, in model.CreateInput, ve *Va
 	default:
 		ve.add("payment", "invalid", "payment must be on_site or online")
 	}
-	p := plan{payment: model.PaymentOnSite, method: method}
+	p := plan{payment: model.PaymentOnSite, method: method, coveredOnly: method == model.MethodOnSite && !pay.PayAtVenue}
 	if method == model.MethodOnline {
 		p.payment = model.PaymentOnlinePending
 	}
@@ -208,6 +214,9 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 	}
 	if len(in.InternalNote) > MaxNoteLength {
 		ve.add("internal_note", "too_long", "note is too long")
+	}
+	if len(in.PackageSessions) > model.MaxPackageSessions {
+		ve.add("package_sessions", "too_many", "too many package sessions")
 	}
 	in.Zone = strings.TrimSpace(in.Zone)
 	vehicleType, plate := checkVehicle(ve, in.Vehicle)
@@ -279,7 +288,12 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 				return err
 			}
 		}
-		lines, total, err := s.priceLines(ctx, tx, created.Slot, p.method, bundle)
+		method := p.method
+		if p.coveredOnly {
+			// Nothing is collected: no service's payment mode applies.
+			method = ""
+		}
+		lines, total, err := s.priceLines(ctx, tx, created.Slot, method, bundle)
 		if err != nil {
 			return err
 		}
@@ -331,7 +345,27 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 				return err
 			}
 		}
-		if err := s.event(ctx, tx.Q, row, "created", "", row.Status, actorID, ""); err != nil {
+		note := ""
+		if len(in.PackageSessions) > 0 {
+			// Lines paid by package sessions (TEC-984) leave the total.
+			if note, err = holdBookingSessions(ctx, tx.Q, orgID, row, in.PackageSessions, actorID); err != nil {
+				return err
+			}
+			left, err := visitTotal(ctx, tx.Q, orgID, row.ID)
+			if err != nil {
+				return err
+			}
+			if (p.coveredOnly && !left.IsZero()) || (p.method == model.MethodOnline && left.IsZero()) {
+				ve.add("payment", "not_allowed", "the payment method does not fit what is left to pay")
+				return ve
+			}
+			if err := tx.Q.SetReservationTotal(ctx, db.SetReservationTotalParams{
+				OrganizationID: orgID, ID: row.ID, TotalPrice: left.Numeric(),
+			}); err != nil {
+				return err
+			}
+		}
+		if err := s.event(ctx, tx.Q, row, "created", "", row.Status, actorID, note); err != nil {
 			return err
 		}
 		if p.confirm {

@@ -65,5 +65,8 @@
   "confirm.reservations.cancel": "Seçili {{count}} rezervasyon iptal edilsin mi? Saatleri serbest kalır; talep ve aktif rezervasyonlar dışındakiler atlanır. Geri alınamaz.",
   "actions.cash_accounts.archive": "Hesapları arşivle",
   "actions.cash_accounts.activate": "Hesapları aktifleştir",
-  "confirm.cash_accounts.archive": "Seçili {{count}} hesap arşivlensin mi? Bakiyesi sıfır olmayan hesaplar atlanır."
+  "confirm.cash_accounts.archive": "Seçili {{count}} hesap arşivlensin mi? Bakiyesi sıfır olmayan hesaplar atlanır.",
+  "actions.session_packages.activate": "Paketleri aktifleştir",
+  "actions.session_packages.deactivate": "Paketleri pasifleştir",
+  "confirm.session_packages.deactivate": "Seçili {{count}} paket tanımı pasifleştirilsin mi? Yeni satışta seçilemezler; satılmış paketler etkilenmez."
 }

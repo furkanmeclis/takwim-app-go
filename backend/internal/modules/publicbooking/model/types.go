@@ -354,6 +354,11 @@ type BookingInput struct {
 	// Products: optional products taken with the visit (TEC-919), from
 	// GET …/products of the checkout's branch.
 	Products []BookingProduct `json:"products"`
+	// PackageSessions pay lines of the checkout (by index) with sessions of
+	// the customer's packages (TEC-984). Only a signed-in customer panel
+	// session may name them (POST /v1/customer/businesses/{slug}/reservations);
+	// the anonymous route refuses them.
+	PackageSessions []reservations.PackageSessionInput `json:"package_sessions"`
 }
 
 // BookingProduct is one product of a booking.
@@ -399,6 +404,9 @@ type Line struct {
 	EndsAt          time.Time   `json:"ends_at"`
 	DurationMinutes int         `json:"duration_minutes"`
 	UnitPrice       money.Money `json:"unit_price"`
+	// PackageName: the line is paid by a session of this package of the
+	// customer (TEC-984); it is not part of the total.
+	PackageName *string `json:"package_name"`
 }
 
 // StaffName is the staff member of a line (UUID nil when deleted).

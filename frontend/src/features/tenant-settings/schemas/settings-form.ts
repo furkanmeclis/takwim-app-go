@@ -159,6 +159,8 @@ export function createSettingsSchema(t: Translate) {
         slot_step_minutes: stepField(t),
         max_open_per_customer: countField(t, 1, 100),
         max_online_per_day: countField(t, 1, 10000),
+        /** A no-show uses the visit's package sessions (TEC-984). */
+        no_show_uses_package_session: z.boolean(),
       }),
       booking: z.object({
         show_staff: z.boolean(),
@@ -302,6 +304,9 @@ export function settingsToForm(s: OrganizationSettings): SettingsFormValues {
         s.reservation.max_open_per_customer,
       ),
       max_online_per_day: minutesToField(s.reservation.max_online_per_day),
+      no_show_uses_package_session: Boolean(
+        s.reservation.no_show_uses_package_session,
+      ),
     },
     booking: {
       show_staff: !s.booking.hidden_steps.includes("staff"),
@@ -375,6 +380,8 @@ export function formToSaveRequest(
         max_online_per_day: fieldToMinutes(
           values.reservation.max_online_per_day,
         ),
+        no_show_uses_package_session:
+          values.reservation.no_show_uses_package_session,
       },
       booking: {
         hidden_steps: [

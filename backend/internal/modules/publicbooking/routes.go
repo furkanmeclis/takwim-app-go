@@ -27,3 +27,10 @@ func RegisterRoutes(mux *http.ServeMux, h *publicbookinghandler.Handler) {
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/reservations/{uuid}", h.GetReservation)
 	mux.HandleFunc("POST /v1/public/businesses/{slug}/reservations/{uuid}/payment", h.StartPayment)
 }
+
+// RegisterCustomerRoutes mounts the booking of a signed-in customer panel
+// session (TEC-984). It sits under /v1/customer so the customer cookie and
+// token reach it; session authenticates it.
+func RegisterCustomerRoutes(mux *http.ServeMux, h *publicbookinghandler.Handler, session publicbookinghandler.CustomerSession) {
+	mux.HandleFunc("POST /v1/customer/businesses/{slug}/reservations", session.Authenticate(h.CreateCustomerReservation(session)))
+}

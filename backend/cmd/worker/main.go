@@ -61,6 +61,9 @@ import (
 	servicesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/adapters"
 	servicesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
 	servicesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/usecase"
+	sessionpackagesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/adapters"
+	sessionpackagesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/repository"
+	sessionpackagesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/usecase"
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
@@ -230,6 +233,9 @@ func main() {
 	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
 	// Income and expense records (TEC-915): the export of the list.
 	financeSvc := financeusecase.New(financerepository.NewPostgres(pool, queries), cashSvc, salesSvc)
+	// Session packages (TEC-984): export of the sold packages and bulk
+	// activate / deactivate of the definitions.
+	sessionPackagesSvc := sessionpackagesusecase.New(sessionpackagesrepository.NewPostgres(pool, queries), salesSvc)
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
@@ -250,6 +256,7 @@ func main() {
 		servicesadapters.NewIO(servicesSvc),
 		productsadapters.NewIO(productsSvc),
 		productsadapters.NewMovementsIO(productsSvc),
+		sessionpackagesadapters.NewIO(sessionPackagesSvc),
 		customersadapters.NewIO(customersSvc),
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
@@ -269,6 +276,7 @@ func main() {
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
 		productsadapters.NewBulk(productsSvc),
+		sessionpackagesadapters.NewBulk(sessionPackagesSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
 		cashadapters.NewBulk(cashSvc),
@@ -289,6 +297,7 @@ func main() {
 		resourcesadapters.NewSearch(queries),
 		servicesadapters.NewSearch(queries),
 		productsadapters.NewSearch(queries),
+		sessionpackagesadapters.NewSearch(queries),
 		customersadapters.NewSearch(queries),
 		reservationsadapters.NewSearch(queries),
 		cashadapters.NewSearch(queries),

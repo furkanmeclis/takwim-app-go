@@ -21,6 +21,7 @@ import (
 	orgmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/model"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	orgsettingsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/model"
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	reservationsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
@@ -53,6 +54,20 @@ func on(day, hour, minute int) time.Time {
 func ptr[T any](v T) *T { return &v }
 
 func m(s string) money.Money { return money.MustParse(s) }
+
+// noShowSettings turns no_show_uses_package_session on while on is set.
+type noShowSettings struct {
+	availabilityusecase.SettingsReader
+	on bool
+}
+
+func (n *noShowSettings) Current(ctx context.Context, orgID int64) (orgsettingsmodel.Version, error) {
+	v, err := n.SettingsReader.Current(ctx, orgID)
+	if err == nil && n.on {
+		v.Settings.Reservation.NoShowUsesPackageSession = true
+	}
+	return v, err
+}
 
 func TestSessionValue(t *testing.T) {
 	// 5 × 2.500,00 = 500,00 each; 1.000,00 / 3 = 333,33 + 333,33 + 333,34.
@@ -182,7 +197,8 @@ func TestSessionPackages(t *testing.T) {
 	holds := availabilityusecase.NewHolds(pool, q, settings)
 	holds.SetClock(func() time.Time { return on(7, 8, 0) })
 	holds.SetExpiryHook(reservationsusecase.ExpireRequests)
-	resSvc := reservationsusecase.New(holds, q, settings)
+	forfeit := &noShowSettings{SettingsReader: settings}
+	resSvc := reservationsusecase.New(holds, q, forfeit)
 	resSvc.SetCompletionHook(sales.RecordReservationTx)
 	all := orgctx.WithScope(ctx, orgctx.Scope{ID: org.ID, Timezone: "Europe/Istanbul", Currency: "TRY"})
 	none := availabilityusecase.Caller{}
@@ -531,6 +547,89 @@ func TestSessionPackages(t *testing.T) {
 	// A sold package keeps its terms.
 	if _, err := pool.Exec(ctx, `UPDATE customer_packages SET price = 1 WHERE organization_id = $1 AND uuid = $2`, org.ID, otherCP.UUID); err == nil {
 		t.Fatal("price change of a sold package accepted")
+	}
+
+	// --- Sessions chosen at booking (TEC-984).
+	fresh, _, err := sell(laser.UUID, customerUUID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts, err = resSvc.PackageOptionsFor(all, org.ID, customerUUID, branchUUID, on(9, 0, 0))
+	if err != nil || len(opts) != 1 || opts[0].CustomerPackageUUID != fresh.UUID || opts[0].Remaining != 5 {
+		t.Fatalf("options for a new visit = %+v %v", opts, err)
+	}
+	if _, err := resSvc.PackageOptionsFor(all, org.ID, uuid.New(), branchUUID, on(9, 0, 0)); field(err) != "customer_uuid/not_found" {
+		t.Fatalf("options for an unknown customer = %v", err)
+	}
+	if _, err := resSvc.PackageOptionsFor(all, org.ID, customerUUID, uuid.New(), on(9, 0, 0)); field(err) != "branch_uuid/not_found" {
+		t.Fatalf("options for an unknown branch = %v", err)
+	}
+	bookWith := func(start time.Time, sessions []reservationsmodel.PackageSessionInput, services ...uuid.UUID) (reservationsmodel.Reservation, error) {
+		lines := []availabilitymodel.LineInput{}
+		for _, s := range services {
+			lines = append(lines, availabilitymodel.LineInput{ServiceUUID: s, StaffUUID: &staffUUID})
+		}
+		return resSvc.Create(ctx, org.ID, reservationsmodel.CreateInput{
+			BranchUUID: branchUUID, CustomerUUID: customerUUID, StartsAt: &start, Source: reservationsmodel.SourcePanel,
+			Lines: lines, PackageSessions: sessions,
+		}, none, owner.ID)
+	}
+	on0 := func(pkg uuid.UUID) []reservationsmodel.PackageSessionInput {
+		return []reservationsmodel.PackageSessionInput{{CustomerPackageUUID: pkg, LineIndex: 0}}
+	}
+	if _, err := bookWith(on(9, 10, 0), on0(fresh.UUID), massageUUID); field(err) != "package_sessions.0.line_index/service_mismatch" {
+		t.Fatalf("booking on another service's package = %v", err)
+	}
+	if _, err := bookWith(on(9, 10, 0), on0(uuid.New()), laserUUID); field(err) != "package_sessions.0.customer_package_uuid/not_found" {
+		t.Fatalf("booking on an unknown package = %v", err)
+	}
+	if _, err := bookWith(on(9, 10, 0), on0(bp.UUID), laserUUID); field(err) != "package_sessions.0.customer_package_uuid/expired" {
+		t.Fatalf("booking on an expired package = %v", err)
+	}
+	if n := count(`SELECT count(*) FROM reservations WHERE organization_id = $1 AND starts_at = $2`, org.ID, on(9, 10, 0)); n != 0 {
+		t.Fatalf("refused bookings left %d visits", n)
+	}
+	both, err := bookWith(on(9, 10, 0), on0(fresh.UUID), laserUUID, massageUUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(both.PackageSessions) != 1 || both.PackageSessions[0].Status != reservationsmodel.SessionHeld || both.PackageSessions[0].LineIndex != 0 {
+		t.Fatalf("booked session = %+v", both.PackageSessions)
+	}
+	eq("booked with a session", both.TotalPrice, "600.00")
+	covered, err := bookWith(on(9, 12, 0), on0(fresh.UUID), laserUUID)
+	if err != nil || covered.PackageSessions[0].SessionNo != 2 {
+		t.Fatalf("second booked session = %+v %v", covered.PackageSessions, err)
+	}
+	eq("covered booking", covered.TotalPrice, "0.00")
+
+	// --- No-show with no_show_uses_package_session: the session is used,
+	// without revenue (it is forfeited, not served).
+	forfeit.on = true
+	covered, err = resSvc.NoShow(ctx, org.ID, covered.UUID, none, owner.ID, reservationsusecase.ChangeInput{})
+	forfeit.on = false
+	if err != nil || covered.PackageSessions[0].Status != reservationsmodel.SessionConsumed {
+		t.Fatalf("forfeited no-show = %+v %v", covered.PackageSessions, err)
+	}
+	if n := count(`SELECT count(*) FROM sale_lines WHERE organization_id = $1 AND reservation_id = (SELECT id FROM reservations WHERE uuid = $2)`, org.ID, covered.UUID); n != 0 {
+		t.Fatalf("forfeited no-show sale lines = %d", n)
+	}
+	if got, err := svc.GetCustomerPackage(all, org.ID, fresh.UUID); err != nil || got.Used != 1 || got.Held != 1 || got.Remaining != 3 {
+		t.Fatalf("after forfeit = %+v %v", got, err)
+	}
+
+	// --- Engines: the definition switch and the export.
+	if prev, err := svc.SetPackageActive(narrow, org.ID, laser.UUID, false); !errors.Is(err, usecase.ErrAllBranches) {
+		t.Fatalf("branch-limited switch = %v %v", prev, err)
+	}
+	if prev, err := svc.SetPackageActive(all, org.ID, laser.UUID, false); err != nil || !prev {
+		t.Fatalf("deactivate = %v %v", prev, err)
+	}
+	if prev, err := svc.SetPackageActive(all, org.ID, laser.UUID, true); err != nil || prev {
+		t.Fatalf("activate = %v %v", prev, err)
+	}
+	if _, err := svc.SetPackageActive(orgctx.WithScope(ctx, orgctx.Scope{ID: org2.ID}), org2.ID, laser.UUID, false); !errors.Is(err, usecase.ErrPackageNotFound) {
+		t.Fatalf("other business switch = %v", err)
 	}
 
 	// --- Isolation and branch scope.

@@ -175,5 +175,10 @@
   "service.group": "Grup dersi · {{count}} kişi",
   "service.group_alone": "Grup dersi tek başına rezerve edilir; başka bir hizmet seçerseniz ders seçimden çıkar.",
   "errors.vehicle": "Araç bilgilerini kontrol edin.",
-  "datetime.no_class": "Bu gün ders yok"
+  "datetime.no_class": "Bu gün ders yok",
+  "packages.use": "Paketimi kullan",
+  "packages.none": "Paket kullanma",
+  "packages.option": "{{name}} · kalan {{remaining}}/{{total}}",
+  "packages.session": "Paket seansı",
+  "packages.paid_with": "{{name}} paketinden"
 }

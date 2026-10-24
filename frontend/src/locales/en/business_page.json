@@ -175,5 +175,10 @@
   "service.group": "Group class · {{count}} places",
   "service.group_alone": "A group class is booked on its own; picking another service removes the class.",
   "errors.vehicle": "Please check your vehicle details.",
-  "datetime.no_class": "No class on this day"
+  "datetime.no_class": "No class on this day",
+  "packages.use": "Use my package",
+  "packages.none": "Don't use a package",
+  "packages.option": "{{name}} · {{remaining}}/{{total}} left",
+  "packages.session": "Package session",
+  "packages.paid_with": "From {{name}}"
 }

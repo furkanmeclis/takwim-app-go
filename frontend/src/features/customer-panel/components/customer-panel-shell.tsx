@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, LogOut, UserRound, Wallet } from "lucide-react";
+import { CalendarDays, LogOut, Package, UserRound, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -39,6 +39,12 @@ const NAV = [
     match: (path: string) => path.startsWith(routes.customer.payments),
   },
   {
+    href: routes.customer.packages,
+    labelKey: "customer_panel.nav.packages",
+    icon: Package,
+    match: (path: string) => path.startsWith(routes.customer.packages),
+  },
+  {
     href: routes.customer.profile,
     labelKey: "customer_panel.nav.profile",
     icon: UserRound,
@@ -47,7 +53,7 @@ const NAV = [
 ] as const;
 
 /**
- * Frame of the customer panel (takwim.link/panel): top bar and a three-tab
+ * Frame of the customer panel (takwim.link/panel): top bar and a four-tab
  * navigation, no staff sidebar. It needs a customer session; without one
  * (or when it ends) the person goes to the panel's own sign-in.
  */
@@ -146,7 +152,7 @@ export function CustomerPanelShell({ children }: { children: ReactNode }) {
         {body}
       </main>
       <nav
-        className="bg-background/95 fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="bg-background/95 fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         aria-label={t("customer_panel.nav.label")}
       >
         {NAV.map((item) => {

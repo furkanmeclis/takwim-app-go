@@ -366,9 +366,18 @@ function ReservationView({
                     {time(line.starts_at)}–{time(line.ends_at)}
                     {line.staff ? ` · ${line.staff.name}` : ""}
                   </span>
+                  {line.package_name ? (
+                    <span className="text-muted-foreground block text-xs">
+                      {t("business_page.packages.paid_with", {
+                        name: line.package_name,
+                      })}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="shrink-0 tabular-nums">
-                  {money(line.unit_price)}
+                  {line.package_name
+                    ? t("business_page.packages.session")
+                    : money(line.unit_price)}
                 </span>
               </li>
             ))}

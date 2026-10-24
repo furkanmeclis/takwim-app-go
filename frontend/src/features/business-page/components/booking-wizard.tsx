@@ -55,12 +55,14 @@ import {
   flowHasVehicle,
   groupCapacity,
   hasAreaChoice,
+  packageChoices,
   paymentChoices,
   productPrices,
   serviceStepKey,
   staffCandidates,
   sumAmounts,
   toLines,
+  toPackageSessions,
   toProducts,
   toVehicle,
   validParty,
@@ -82,6 +84,11 @@ import type {
   PublicVehicle,
   WizardStep,
 } from "@/features/business-page/types";
+import {
+  useCustomerPackages,
+  useCustomerProfile,
+} from "@/features/customer-panel/hooks/use-customer-panel";
+import { customerPanelService } from "@/features/customer-panel/services/customer-panel.service";
 import { addDays } from "@/features/reservations/lib/calendar-time";
 import { dateKeyInZone, uuid } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -146,6 +153,8 @@ export function BookingWizard({
   const [productQty, setProductQty] = useState<Record<string, number>>({});
   const [contact, setContact] = useState<ContactValues | null>(null);
   const [payment, setPayment] = useState<PaymentMethod | undefined>();
+  // Line index → the customer's package paying it (TEC-984).
+  const [packageBy, setPackageBy] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const bookingKey = useRef("");
 
@@ -276,14 +285,60 @@ export function BookingWizard({
     "";
   const latest = availability.data?.latest_date ?? null;
 
+  // A signed-in customer panel session that this business knows can pay
+  // lines with package sessions (TEC-984); the API checks every rule again.
+  const profile = useCustomerProfile();
+  const linked = Boolean(
+    profile.data?.businesses.some((b) => b.uuid === business.uuid),
+  );
+  const packagesQuery = useCustomerPackages(
+    { limit: 50, offset: 0, business: business.uuid, state: "active" },
+    { enabled: linked && Boolean(checkout) },
+  );
+  const myPackages = useMemo(
+    () => (linked ? (packagesQuery.data?.items ?? []) : []),
+    [linked, packagesQuery.data?.items],
+  );
+  const choices = checkout
+    ? packageChoices(
+        myPackages,
+        checkout,
+        dateKeyInZone(new Date(checkout.starts_at), business.timezone),
+      )
+    : [];
+  const sessions = toPackageSessions(
+    Object.fromEntries(
+      Object.entries(packageBy).filter(([index, id]) =>
+        choices[Number(index)]?.some((p) => p.uuid === id),
+      ),
+    ),
+    myPackages,
+  );
+  const covered = new Set(sessions.map((s) => s.line_index));
+
   const pickedProducts = toProducts(products, productQty);
   const productTotal = sumAmounts(productPrices(products, pickedProducts));
-  const total = checkout
-    ? sumAmounts(checkoutPrices(checkout, services)) + productTotal
-    : 0;
-  const payments = paymentChoices(business, selected, total);
+  const linePrices = checkout ? checkoutPrices(checkout, services) : [];
+  const total =
+    sumAmounts(linePrices.filter((_, index) => !covered.has(index))) +
+    productTotal;
+  const payments = paymentChoices(
+    business,
+    selected.filter((service) =>
+      checkout?.lines.some(
+        (line, index) =>
+          line.service_uuid === service.uuid && !covered.has(index),
+      ),
+    ),
+    total,
+  );
+  // A visit the packages cover entirely has nothing to pay: at the venue.
   const activePayment =
-    payment && payments.includes(payment) ? payment : payments[0];
+    sessions.length > 0 && total === 0
+      ? "on_site"
+      : payment && payments.includes(payment)
+        ? payment
+        : payments[0];
 
   const staffTerm = t(`sectors.terms.${business.terms.staff ?? "staff"}`);
   const stepTitle = (s: WizardStep) =>
@@ -337,6 +392,7 @@ export function BookingWizard({
         uuid(),
       );
       setCheckout(held);
+      setPackageBy({});
       bookingKey.current = uuid();
       goTo(steps[index + 1]!);
     } catch (error) {
@@ -354,18 +410,24 @@ export function BookingWizard({
     if (!checkout || !contact) return;
     setBusy(true);
     try {
-      const reservation = await publicBookingService.book(
-        slug,
-        toBookingRequest(
-          checkout.token,
-          contact,
-          activePayment,
-          pickedProducts,
-          business.booking.fields,
-          askVehicle ? toVehicle(vehicleType, plate) : null,
-        ),
-        bookingKey.current,
+      const request = toBookingRequest(
+        checkout.token,
+        contact,
+        activePayment,
+        pickedProducts,
+        business.booking.fields,
+        askVehicle ? toVehicle(vehicleType, plate) : null,
       );
+      // Package sessions need the signed-in route (the session names the
+      // customer); everything else books as before.
+      const reservation =
+        sessions.length > 0
+          ? await customerPanelService.book(
+              slug,
+              { ...request, package_sessions: sessions },
+              bookingKey.current,
+            )
+          : await publicBookingService.book(slug, request, bookingKey.current);
       const token = reservation.access_token ?? "";
       rememberAccessToken(reservation.uuid, token);
       router.push(
@@ -386,6 +448,10 @@ export function BookingWizard({
         // Someone took the last units; pick again from what is left.
         void productsQuery.refetch();
         goTo("products");
+      } else if (sessions.length > 0) {
+        // A package changed meanwhile (used elsewhere, expired): pick again.
+        setPackageBy({});
+        void packagesQuery.refetch();
       }
       setBusy(false);
     }
@@ -586,10 +652,21 @@ export function BookingWizard({
         products={products}
         pickedProducts={pickedProducts}
         contact={contact}
-        payments={payments}
+        payments={sessions.length > 0 && total === 0 ? [] : payments}
         payment={activePayment}
         onPaymentChange={setPayment}
         vehicle={askVehicle ? toVehicle(vehicleType, plate) : null}
+        packageChoices={choices}
+        packageBy={packageBy}
+        covered={covered}
+        onPackageChange={(index, id) =>
+          setPackageBy((prev) => {
+            const nextPicks = { ...prev };
+            if (id) nextPicks[index] = id;
+            else delete nextPicks[index];
+            return nextPicks;
+          })
+        }
       />
     );
   } else {

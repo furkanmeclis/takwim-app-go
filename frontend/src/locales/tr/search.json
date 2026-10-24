@@ -31,5 +31,7 @@
   "prefix_reservations": "rezervasyon",
   "specs_reservations": "Rezervasyonlar",
   "prefix_cash_accounts": "kasa",
-  "specs_cash_accounts": "Kasa ve banka hesapları"
+  "specs_cash_accounts": "Kasa ve banka hesapları",
+  "specs_customer_packages": "Satılan paketler",
+  "prefix_customer_packages": "paket"
 }

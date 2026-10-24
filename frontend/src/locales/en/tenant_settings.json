@@ -226,5 +226,7 @@
   "booking.types.text": "Short text",
   "booking.types.number": "Number",
   "booking.types.select": "Choice",
-  "booking.types.checkbox": "Checkbox"
+  "booking.types.checkbox": "Checkbox",
+  "fields.no_show_uses_package_session": "A no-show uses the package session",
+  "fields.no_show_uses_package_session_hint": "When on, a visit marked as no-show uses its package session (no revenue is recorded). When off, the session goes back to the package."
 }

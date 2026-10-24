@@ -84,5 +84,6 @@
   "resources.tenant.stock_movements": "Stok hareketleri",
   "resources.tenant.finance_entries": "Gelir ve gider kayıtları",
   "resources.tenant.staff_share_lines": "Çalışan payları",
-  "resources.tenant.staff_share_payouts": "Pay ödemeleri"
+  "resources.tenant.staff_share_payouts": "Pay ödemeleri",
+  "resources.tenant.customer_packages": "Satılan paketler"
 }

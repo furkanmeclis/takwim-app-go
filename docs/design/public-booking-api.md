@@ -114,7 +114,7 @@ It has composite foreign keys to branches, capacity holds and reservations, and 
 
 - **Pages.** The business page ([business-page.md](./business-page.md), TEC-907) and the widget (TEC-908).
 - **Phone verification and the customer panel** (TEC-909 / TEC-910): see above.
-- **Packages in the public catalog.** They come with bundles (TEC-895). Products are in: `GET …/products?branch_uuid` lists what the branch sells online and `products` on the booking reserves them ([reservation-products.md](./reservation-products.md), TEC-919).
+- **Selling packages online.** Packages are sold at the desk. Using one is in (TEC-984): the anonymous `POST …/reservations` refuses `package_sessions` (`sign_in_required`); a signed-in customer panel session books with them through `POST /v1/customer/businesses/{slug}/reservations` (same body, contact optional), and each reservation line answers `package_name` ([session-packages.md](./session-packages.md)). Products are in: `GET …/products?branch_uuid` lists what the branch sells online and `products` on the booking reserves them ([reservation-products.md](./reservation-products.md), TEC-919).
 - **Refunds.** Online payment (TEC-912) is in [payments.md](./payments.md): `booking.online_payment_ready`, `can_pay_online` and `POST …/reservations/{uuid}/payment`. A paid booking cancelled later waits for the refund flow (TEC-913).
 - **Customer actions.** Cancellation and rescheduling live in the customer panel ([customer-panel.md](./customer-panel.md), TEC-909), which also sends the panel link by SMS after a new booking. Booking form questions, hidden steps and online limits: [booking-rules.md](./booking-rules.md) (TEC-905).
 

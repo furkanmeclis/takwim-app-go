@@ -54,8 +54,10 @@ import {
   VEHICLE_TYPE_KEYS,
   VEHICLE_TYPES,
 } from "@/features/reservations/constants";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
 import {
   useCreateReservation,
+  useNewBookingPackageOptions,
   useReservationForm,
 } from "@/features/reservations/hooks/use-reservations";
 import { useSlotSearch } from "@/features/reservations/hooks/use-slot-search";
@@ -73,8 +75,10 @@ import {
   ANY_ZONE,
   createBookingSchema,
   NO_BUNDLE,
+  NO_PACKAGE,
   NO_VEHICLE,
   toLineInputs,
+  toPackageSessions,
   toPartySize,
   toVehicle,
   toZone,
@@ -82,17 +86,22 @@ import {
 } from "@/features/reservations/schemas/reservation-forms";
 import type { ReservationFormField } from "@/features/reservations/types";
 import { useSector } from "@/features/sectors/hooks/use-sector";
+import { PACKAGES_MODULE } from "@/features/session-packages/constants";
 import { useServiceBundlesList } from "@/features/service-bundles/hooks/use-service-bundles";
 import { priceLabel } from "@/features/services/lib/format";
 import { useServicesList } from "@/features/services/hooks/use-services";
 import { useAccessibleBranches } from "@/features/staff/hooks/use-staff";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { useSelectedBranch } from "@/features/tenant/hooks/use-selected-branch";
-import { dateKeyInZone } from "@/lib/utils/format";
+import { amount, date as formatDate, dateKeyInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
-const EMPTY_LINE = { service_uuid: "", staff_uuid: ANY_STAFF };
+const EMPTY_LINE = {
+  service_uuid: "",
+  staff_uuid: ANY_STAFF,
+  package_uuid: NO_PACKAGE,
+};
 
 function customerOption(customer: Customer): ComboboxOption {
   return {
@@ -237,6 +246,8 @@ export function ReservationCreatePage() {
                     ? values.bundle_uuid
                     : undefined,
                 lines: toLineInputs(values.lines),
+                // Lines paid with the customer's package sessions (TEC-984).
+                package_sessions: toPackageSessions(values.lines),
                 party_size: toPartySize(values.party_size),
                 zone: toZone(values.zone),
                 // Reserved with the booking (TEC-977).
@@ -312,19 +323,28 @@ function BookingFields({
   const form = useFormContext<BookingFormValues>();
   const { control, setValue } = form;
   const lineArray = useFieldArray({ control, name: "lines" });
-  const [branchUuid, lines, date, startsAt, partyInput, zoneInput, bundleUuid] =
-    useWatch({
-      control,
-      name: [
-        "branch_uuid",
-        "lines",
-        "date",
-        "starts_at",
-        "party_size",
-        "zone",
-        "bundle_uuid",
-      ],
-    });
+  const [
+    branchUuid,
+    customerUuid,
+    lines,
+    date,
+    startsAt,
+    partyInput,
+    zoneInput,
+    bundleUuid,
+  ] = useWatch({
+    control,
+    name: [
+      "branch_uuid",
+      "customer_uuid",
+      "lines",
+      "date",
+      "starts_at",
+      "party_size",
+      "zone",
+      "bundle_uuid",
+    ],
+  });
   const partySize = toPartySize(partyInput);
   const areaZone = toZone(zoneInput);
   const zoneOptions = useZoneOptions(party);
@@ -387,10 +407,47 @@ function BookingFields({
       bundle.items.map((item) => ({
         service_uuid: item.service_uuid,
         staff_uuid: ANY_STAFF,
+        package_uuid: NO_PACKAGE,
       })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- replace is stable per field array
   }, [bundle, bundleUuid]);
+
+  // The customer's packages that can pay a line on the picked day
+  // (TEC-984): same service, allowed branch, not expired, sessions left.
+  const hasModule = useNavModules();
+  const packagesOn =
+    hasModule(PACKAGES_MODULE) &&
+    can(permissions.tenant.sessionPackages.read) &&
+    Boolean(customerUuid && branchUuid && date);
+  const packageOptions = useNewBookingPackageOptions(
+    { customer_uuid: customerUuid, branch_uuid: branchUuid, date },
+    packagesOn,
+  );
+  const packages = useMemo(
+    () => (packagesOn ? (packageOptions.data?.items ?? []) : []),
+    [packagesOn, packageOptions.data?.items],
+  );
+  const packagesFor = useCallback(
+    (serviceUuid: string) =>
+      packages.filter(
+        (option) => serviceUuid && option.service_uuid === serviceUuid,
+      ),
+    [packages],
+  );
+  // A package that no longer fits the line (customer, service, day changed)
+  // goes back to "pay the line".
+  useEffect(() => {
+    lines.forEach((line, index) => {
+      if (!line.package_uuid || line.package_uuid === NO_PACKAGE) return;
+      const fits = packagesFor(line.service_uuid).some(
+        (option) => option.customer_package_uuid === line.package_uuid,
+      );
+      if (!fits && !packageOptions.isFetching) {
+        setValue(`lines.${index}.package_uuid`, NO_PACKAGE);
+      }
+    });
+  }, [lines, packagesFor, packageOptions.isFetching, setValue]);
 
   // A group class (gym) books seats of a session: how many people.
   const group = (services.data?.items ?? []).some(
@@ -586,36 +643,86 @@ function BookingFields({
               ]}
             />
           ) : null}
-          {lineArray.fields.map((field, index) => (
-            <div
-              key={field.id}
-              className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
-            >
-              <AppCombobox
-                name={`lines.${index}.service_uuid`}
-                label={t("reservations.fields.service")}
-                placeholder={t("reservations.fields.service_placeholder")}
-                options={serviceOptions}
-                disabled={!branchUuid || bundled}
-              />
-              <AppSelect
-                name={`lines.${index}.staff_uuid`}
-                label={t("reservations.fields.staff")}
-                options={staffOptions(t, query.data, index)}
-                disabled={!lines[index]?.service_uuid}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={t("reservations.actions.remove_line")}
-                disabled={lineArray.fields.length === 1 || bundled}
-                onClick={() => lineArray.remove(index)}
+          {lineArray.fields.map((field, index) => {
+            const linePackages = packagesFor(lines[index]?.service_uuid ?? "");
+            const picked = linePackages.find(
+              (option) =>
+                option.customer_package_uuid === lines[index]?.package_uuid,
+            );
+            return (
+              <div
+                key={field.id}
+                className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
               >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          ))}
+                <AppCombobox
+                  name={`lines.${index}.service_uuid`}
+                  label={t("reservations.fields.service")}
+                  placeholder={t("reservations.fields.service_placeholder")}
+                  options={serviceOptions}
+                  disabled={!branchUuid || bundled}
+                />
+                <AppSelect
+                  name={`lines.${index}.staff_uuid`}
+                  label={t("reservations.fields.staff")}
+                  options={staffOptions(t, query.data, index)}
+                  disabled={!lines[index]?.service_uuid}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("reservations.actions.remove_line")}
+                  disabled={lineArray.fields.length === 1 || bundled}
+                  onClick={() => lineArray.remove(index)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+                {linePackages.length > 0 ? (
+                  <div className="sm:col-span-2">
+                    <AppSelect
+                      name={`lines.${index}.package_uuid`}
+                      label={t("reservations.fields.package")}
+                      description={
+                        picked
+                          ? t(
+                              "session_packages.reservation.fields.package_hint",
+                              {
+                                value: amount(
+                                  picked.next_value,
+                                  organization?.currency || "TRY",
+                                  locale,
+                                ),
+                                expires: picked.expires_on
+                                  ? formatDate(
+                                      picked.expires_on,
+                                      undefined,
+                                      locale,
+                                    )
+                                  : t("session_packages.validity_none"),
+                              },
+                            )
+                          : t("reservations.fields.package_hint")
+                      }
+                      options={[
+                        {
+                          value: NO_PACKAGE,
+                          label: t("reservations.fields.package_none"),
+                        },
+                        ...linePackages.map((option) => ({
+                          value: option.customer_package_uuid,
+                          label: t("session_packages.reservation.option", {
+                            name: option.name,
+                            remaining: option.remaining,
+                            total: option.total_sessions,
+                          }),
+                        })),
+                      ]}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
           <Button
             type="button"
             variant="outline"

@@ -105,6 +105,10 @@ type Reservation struct {
 	// day (page, widget and API; cancelled and rejected ones do not count);
 	// nil = no limit.
 	MaxOnlinePerDay *int `json:"max_online_per_day"`
+	// NoShowUsesPackageSession: a visit marked as a no-show uses the
+	// package sessions booked on it (the right is forfeited) instead of
+	// giving them back to the package (TEC-984; default false).
+	NoShowUsesPackageSession bool `json:"no_show_uses_package_session"`
 }
 
 // Payment says how customers may pay. Online payment is always the full

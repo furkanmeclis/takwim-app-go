@@ -65,5 +65,8 @@
   "confirm.reservations.cancel": "Cancel the {{count}} selected reservations? Their times are freed; anything that is not a request or an active booking is skipped. This cannot be undone.",
   "actions.cash_accounts.archive": "Archive accounts",
   "actions.cash_accounts.activate": "Activate accounts",
-  "confirm.cash_accounts.archive": "Archive {{count}} selected accounts? Accounts with a non-zero balance are skipped."
+  "confirm.cash_accounts.archive": "Archive {{count}} selected accounts? Accounts with a non-zero balance are skipped.",
+  "actions.session_packages.activate": "Activate packages",
+  "actions.session_packages.deactivate": "Deactivate packages",
+  "confirm.session_packages.deactivate": "Deactivate {{count}} selected package definitions? They can no longer be sold; sold packages are not affected."
 }

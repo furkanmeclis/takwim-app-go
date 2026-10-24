@@ -69,6 +69,10 @@ const bulkActionIconCatalog: Record<
     archive: Archive,
     activate: ArchiveRestore,
   },
+  "tenant.session_packages": {
+    activate: CircleCheck,
+    deactivate: CircleOff,
+  },
 };
 
 export function resolveBulkActionIcon(

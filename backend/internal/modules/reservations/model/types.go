@@ -134,7 +134,21 @@ type CreateInput struct {
 	// its services in order (empty lines = the bundle's services with any
 	// free staff member) and the bundle price is spread over them.
 	BundleUUID *uuid.UUID `json:"bundle_uuid"`
+	// PackageSessions pay lines of the booking with sessions of the
+	// customer's packages (TEC-984): the same rules as "Paketten kullan" on
+	// the visit, in the booking's transaction.
+	PackageSessions []PackageSessionInput `json:"package_sessions"`
 }
+
+// PackageSessionInput uses one session of a package of the booking's
+// customer for the line at LineIndex (0-based, in the order of Lines).
+type PackageSessionInput struct {
+	CustomerPackageUUID uuid.UUID `json:"customer_package_uuid"`
+	LineIndex           int       `json:"line_index"`
+}
+
+// MaxPackageSessions caps the package sessions of one booking.
+const MaxPackageSessions = 20
 
 // States of a product of a visit (TEC-919).
 const (

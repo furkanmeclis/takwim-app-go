@@ -10,6 +10,7 @@ import {
   HardDrive,
   KeyRound,
   LayoutDashboard,
+  Package,
   ScrollText,
   Settings2,
   Shield,
@@ -43,6 +44,7 @@ const ICONS: Record<string, LucideIcon> = {
   customers: UserRound,
   reservations: CalendarClock,
   cash: Wallet,
+  packages: Package,
 };
 
 export function resolveSearchIcon(name?: string): LucideIcon {

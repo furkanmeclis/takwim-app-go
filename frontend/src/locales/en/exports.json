@@ -84,5 +84,6 @@
   "resources.tenant.stock_movements": "Stock movements",
   "resources.tenant.finance_entries": "Income and expense records",
   "resources.tenant.staff_share_lines": "Staff shares",
-  "resources.tenant.staff_share_payouts": "Share payouts"
+  "resources.tenant.staff_share_payouts": "Share payouts",
+  "resources.tenant.customer_packages": "Sold packages"
 }

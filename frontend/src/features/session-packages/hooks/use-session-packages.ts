@@ -51,6 +51,26 @@ export function useCustomerPackage(uuid: string) {
   });
 }
 
+/** Engine capabilities of the definitions (bulk actions, TEC-984). */
+export function useSessionPackagesMeta() {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: sessionPackagesKeys.packagesMeta(slug),
+    queryFn: () => sessionPackagesService.packagesMeta(slug),
+    staleTime: 60_000,
+  });
+}
+
+/** Engine capabilities of the sold packages (export, TEC-984). */
+export function useCustomerPackagesMeta() {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: [...sessionPackagesKeys.all(slug), "sold-meta"],
+    queryFn: () => sessionPackagesService.soldMeta(slug),
+    staleTime: 60_000,
+  });
+}
+
 export function useCustomerPackageFacets() {
   const { slug } = useTenant();
   return useQuery({

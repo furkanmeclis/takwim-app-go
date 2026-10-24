@@ -421,6 +421,7 @@ func (s *Service) Sell(ctx context.Context, orgID int64, userID *int64, in model
 		}
 		return model.CustomerPackage{}, false, err
 	}
+	s.index(ctx, orgID, id)
 	out, err := s.GetCustomerPackage(ctx, orgID, id)
 	return out, false, err
 }
@@ -540,6 +541,7 @@ func (s *Service) Refund(ctx context.Context, orgID int64, id uuid.UUID, userID 
 	if err != nil {
 		return model.CustomerPackage{}, err
 	}
+	s.index(ctx, orgID, id)
 	return s.GetCustomerPackage(ctx, orgID, id)
 }
 
