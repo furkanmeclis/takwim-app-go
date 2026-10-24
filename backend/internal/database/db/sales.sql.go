@@ -1837,6 +1837,68 @@ func (q *Queries) SalesCollectionsByDay(ctx context.Context, arg SalesCollection
 	return items, nil
 }
 
+const salesFinanceByDay = `-- name: SalesFinanceByDay :many
+SELECT e.entry_date, e.currency::text AS currency,
+    COALESCE(SUM(e.amount) FILTER (WHERE e.kind = 'income'), 0)::numeric AS income,
+    COALESCE(SUM(e.amount) FILTER (WHERE e.kind = 'expense'), 0)::numeric AS expenses
+FROM finance_entries e
+WHERE e.organization_id = $1
+  AND e.entry_date BETWEEN $2::date AND $3::date
+  AND ($4::bigint[] IS NULL OR e.branch_id = ANY($4::bigint[]))
+  AND ($5::bigint[] IS NULL OR e.branch_id = ANY($5::bigint[]))
+GROUP BY e.entry_date, e.currency
+ORDER BY e.entry_date, e.currency
+`
+
+type SalesFinanceByDayParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	DateFrom        pgtype.Date `json:"date_from"`
+	DateTo          pgtype.Date `json:"date_to"`
+	BranchIds       []int64     `json:"branch_ids"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+}
+
+type SalesFinanceByDayRow struct {
+	EntryDate pgtype.Date    `json:"entry_date"`
+	Currency  string         `json:"currency"`
+	Income    pgtype.Numeric `json:"income"`
+	Expenses  pgtype.Numeric `json:"expenses"`
+}
+
+// Income and expenses entered outside sales (TEC-915) per day and
+// currency; a reversal is a negative row on the day it was posted. Neither
+// includes staff payouts or transfers, which have their own figures.
+func (q *Queries) SalesFinanceByDay(ctx context.Context, arg SalesFinanceByDayParams) ([]SalesFinanceByDayRow, error) {
+	rows, err := q.db.Query(ctx, salesFinanceByDay,
+		arg.OrganizationID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.BranchIds,
+		arg.FilterBranchIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SalesFinanceByDayRow{}
+	for rows.Next() {
+		var i SalesFinanceByDayRow
+		if err := rows.Scan(
+			&i.EntryDate,
+			&i.Currency,
+			&i.Income,
+			&i.Expenses,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const salesRevenueByDay = `-- name: SalesRevenueByDay :many
 
 SELECT s.sale_date, s.currency::text AS currency,

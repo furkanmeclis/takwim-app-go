@@ -453,6 +453,48 @@ type ExportJob struct {
 	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
+type FinanceCategory struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Kind           string             `json:"kind"`
+	Code           pgtype.Text        `json:"code"`
+	Name           string             `json:"name"`
+	IsSystem       bool               `json:"is_system"`
+	Status         string             `json:"status"`
+	SortOrder      int32              `json:"sort_order"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FinanceEntry struct {
+	ID                  int64              `json:"id"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	OrganizationID      int64              `json:"organization_id"`
+	EntryType           string             `json:"entry_type"`
+	Kind                string             `json:"kind"`
+	CategoryID          int64              `json:"category_id"`
+	BranchID            pgtype.Int8        `json:"branch_id"`
+	StaffID             pgtype.Int8        `json:"staff_id"`
+	CashAccountID       int64              `json:"cash_account_id"`
+	CashMovementID      int64              `json:"cash_movement_id"`
+	Amount              pgtype.Numeric     `json:"amount"`
+	Currency            string             `json:"currency"`
+	EntryDate           pgtype.Date        `json:"entry_date"`
+	Description         string             `json:"description"`
+	ReversesEntryID     pgtype.Int8        `json:"reverses_entry_id"`
+	ReplacesEntryID     pgtype.Int8        `json:"replaces_entry_id"`
+	Reason              string             `json:"reason"`
+	DocumentKey         pgtype.Text        `json:"document_key"`
+	DocumentName        string             `json:"document_name"`
+	DocumentContentType string             `json:"document_content_type"`
+	DocumentSizeBytes   int64              `json:"document_size_bytes"`
+	IdempotencyKey      pgtype.Text        `json:"idempotency_key"`
+	CreatedBy           pgtype.Int8        `json:"created_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type GithubAppSetting struct {
 	ID              int16              `json:"id"`
 	Enabled         bool               `json:"enabled"`

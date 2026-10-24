@@ -91,6 +91,8 @@ type Querier interface {
 	// member's seat).
 	CountEntitlementUsage(ctx context.Context, organizationID int64) (CountEntitlementUsageRow, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
+	CountFinanceCategories(ctx context.Context, arg CountFinanceCategoriesParams) (int64, error)
+	CountFinanceLedger(ctx context.Context, arg CountFinanceLedgerParams) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountInvitations(ctx context.Context, arg CountInvitationsParams) (int64, error)
 	CountLedgerEntries(ctx context.Context, arg CountLedgerEntriesParams) (int64, error)
@@ -243,6 +245,8 @@ type Querier interface {
 	DeleteCustomerNotificationRule(ctx context.Context, arg DeleteCustomerNotificationRuleParams) error
 	DeleteCustomerNotificationTemplate(ctx context.Context, arg DeleteCustomerNotificationTemplateParams) error
 	DeleteCustomerNotificationTemplates(ctx context.Context, arg DeleteCustomerNotificationTemplatesParams) error
+	// Removes a business category no entry uses (seeded ones are archived).
+	DeleteFinanceCategory(ctx context.Context, arg DeleteFinanceCategoryParams) (int64, error)
 	DeleteLogPurgeRule(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteMemberBranches(ctx context.Context, arg DeleteMemberBranchesParams) error
 	DeleteMemberRoles(ctx context.Context, arg DeleteMemberRolesParams) error
@@ -286,6 +290,11 @@ type Querier interface {
 	ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHoldParams) (CapacityHold, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
 	FailPayment(ctx context.Context, arg FailPaymentParams) (int64, error)
+	FinanceEntryReversed(ctx context.Context, arg FinanceEntryReversedParams) (bool, error)
+	// ----------------------------------------------------------------- summary
+	// The records of a period per kind, category and currency (reversals
+	// netted on the day they were posted).
+	FinanceTotalsByCategory(ctx context.Context, arg FinanceTotalsByCategoryParams) ([]FinanceTotalsByCategoryRow, error)
 	// The receivable account of the provider for a branch: the branch's own
 	// online account before a business-wide one, an account naming the
 	// provider before one naming none.
@@ -366,6 +375,11 @@ type Querier interface {
 	GetEffectiveConfirmationSettings(ctx context.Context, arg GetEffectiveConfirmationSettingsParams) (ConfirmationSetting, error)
 	GetExportJobByID(ctx context.Context, id int64) (ExportJob, error)
 	GetExportJobByUUID(ctx context.Context, argUuid uuid.UUID) (ExportJob, error)
+	GetFinanceCashMovement(ctx context.Context, arg GetFinanceCashMovementParams) (GetFinanceCashMovementRow, error)
+	GetFinanceCategory(ctx context.Context, arg GetFinanceCategoryParams) (GetFinanceCategoryRow, error)
+	GetFinanceEntry(ctx context.Context, arg GetFinanceEntryParams) (GetFinanceEntryRow, error)
+	GetFinanceEntryByIdempotencyKey(ctx context.Context, arg GetFinanceEntryByIdempotencyKeyParams) (GetFinanceEntryByIdempotencyKeyRow, error)
+	GetFinanceStaffByUUID(ctx context.Context, arg GetFinanceStaffByUUIDParams) (GetFinanceStaffByUUIDRow, error)
 	GetGitHubAppSettings(ctx context.Context) (GithubAppSetting, error)
 	GetImportJobByID(ctx context.Context, id int64) (ImportJob, error)
 	GetImportJobByUUID(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
@@ -539,6 +553,9 @@ type Querier interface {
 	InsertCustomerNotificationDelivery(ctx context.Context, arg InsertCustomerNotificationDeliveryParams) (CustomerNotificationDelivery, error)
 	// No row when the idempotency key was already used (the notice exists).
 	InsertCustomerNotificationDispatch(ctx context.Context, arg InsertCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
+	InsertFinanceCategory(ctx context.Context, arg InsertFinanceCategoryParams) (InsertFinanceCategoryRow, error)
+	// ----------------------------------------------------------------- entries
+	InsertFinanceEntry(ctx context.Context, arg InsertFinanceEntryParams) (InsertFinanceEntryRow, error)
 	InsertImportChange(ctx context.Context, arg InsertImportChangeParams) (ImportChange, error)
 	// Integration accounts and jobs (TEC-880). Accounts are organization-owned
 	// (every query filters by organization_id); jobs are mixed scope
@@ -706,6 +723,25 @@ type Querier interface {
 	ListDueRunnerJobs(ctx context.Context, limitCount int32) ([]ListDueRunnerJobsRow, error)
 	ListEnabledLogPurgeRules(ctx context.Context) ([]LogPurgeRule, error)
 	ListExportJobsForActor(ctx context.Context, arg ListExportJobsForActorParams) ([]ExportJob, error)
+	ListFinanceAccountIDsByUUIDs(ctx context.Context, arg ListFinanceAccountIDsByUUIDsParams) ([]ListFinanceAccountIDsByUUIDsRow, error)
+	// Branches with records (manual and sales); NULL = business-wide records.
+	ListFinanceBranchFacets(ctx context.Context, arg ListFinanceBranchFacetsParams) ([]ListFinanceBranchFacetsRow, error)
+	// Income and expense records (TEC-915). Every query takes the organization
+	// id and filters by it; branch-bound reads take the caller's branch scope
+	// (NULL = every branch; business-wide rows need every branch).
+	// -------------------------------------------------------------- categories
+	ListFinanceCategories(ctx context.Context, arg ListFinanceCategoriesParams) ([]ListFinanceCategoriesRow, error)
+	// Categories with the number of records using them (inside the scope).
+	ListFinanceCategoryFacets(ctx context.Context, arg ListFinanceCategoryFacetsParams) ([]ListFinanceCategoryFacetsRow, error)
+	ListFinanceCategoryIDsByUUIDs(ctx context.Context, arg ListFinanceCategoryIDsByUUIDsParams) ([]ListFinanceCategoryIDsByUUIDsRow, error)
+	// ------------------------------------------------------------------ ledger
+	// The income / expense list: the business's own records (source manual)
+	// and the sale lines as automatic income (source sale), reversals as
+	// negative rows. Filters apply to both sides; a filter that only manual
+	// records have (account, category uuid) leaves the sale rows out.
+	ListFinanceLedger(ctx context.Context, arg ListFinanceLedgerParams) ([]ListFinanceLedgerRow, error)
+	ListFinanceStaffFacets(ctx context.Context, arg ListFinanceStaffFacetsParams) ([]ListFinanceStaffFacetsRow, error)
+	ListFinanceStaffIDsByUUIDs(ctx context.Context, arg ListFinanceStaffIDsByUUIDsParams) ([]ListFinanceStaffIDsByUUIDsRow, error)
 	// TEC-904: the bookings of group sessions of the given services in a
 	// branch starting in [since, until): active holds that have not lapsed and
 	// confirmed bookings, with the seats each takes and what it holds (the
@@ -927,6 +963,7 @@ type Querier interface {
 	// Another worker holding the row: no row (it sends it).
 	LockCustomerNotificationDispatch(ctx context.Context, arg LockCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
 	LockCustomerNotificationDispatchWait(ctx context.Context, arg LockCustomerNotificationDispatchWaitParams) (CustomerNotificationDispatch, error)
+	LockFinanceEntry(ctx context.Context, arg LockFinanceEntryParams) (int64, error)
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
 	// Serializes the refunds and the reversal of one collection.
 	LockLedgerEntry(ctx context.Context, arg LockLedgerEntryParams) (int64, error)
@@ -1026,6 +1063,10 @@ type Querier interface {
 	// Money taken and paid back per day and currency; reversals of either are
 	// netted on the day they were posted.
 	SalesCollectionsByDay(ctx context.Context, arg SalesCollectionsByDayParams) ([]SalesCollectionsByDayRow, error)
+	// Income and expenses entered outside sales (TEC-915) per day and
+	// currency; a reversal is a negative row on the day it was posted. Neither
+	// includes staff payouts or transfers, which have their own figures.
+	SalesFinanceByDay(ctx context.Context, arg SalesFinanceByDayParams) ([]SalesFinanceByDayRow, error)
 	// ------------------------------------------------------------------ summary
 	// Revenue per business day and currency: sales at their gross price, the
 	// discounts, the reversals (negative) and the net.
@@ -1044,6 +1085,7 @@ type Querier interface {
 	SetCustomerIdentityPhone(ctx context.Context, arg SetCustomerIdentityPhoneParams) (int64, error)
 	SetCustomerSessionPhone(ctx context.Context, arg SetCustomerSessionPhoneParams) error
 	SetCustomerTags(ctx context.Context, arg SetCustomerTagsParams) error
+	SetFinanceEntryDocument(ctx context.Context, arg SetFinanceEntryDocumentParams) (int64, error)
 	SetIntegrationAccountCheck(ctx context.Context, arg SetIntegrationAccountCheckParams) error
 	SetIntegrationAccountStatus(ctx context.Context, arg SetIntegrationAccountStatusParams) (int64, error)
 	SetMemberBranchScope(ctx context.Context, arg SetMemberBranchScopeParams) error
@@ -1126,6 +1168,8 @@ type Querier interface {
 	// The send result of an attempt still in flight.
 	UpdateCustomerNotificationDelivery(ctx context.Context, arg UpdateCustomerNotificationDeliveryParams) (int64, error)
 	UpdateCustomerNotificationDispatchState(ctx context.Context, arg UpdateCustomerNotificationDispatchStateParams) error
+	UpdateFinanceCategory(ctx context.Context, arg UpdateFinanceCategoryParams) (int64, error)
+	UpdateFinanceEntryClassification(ctx context.Context, arg UpdateFinanceEntryClassificationParams) (int64, error)
 	UpdateGitHubAppSettings(ctx context.Context, arg UpdateGitHubAppSettingsParams) (GithubAppSetting, error)
 	UpdateImportJobFileKey(ctx context.Context, arg UpdateImportJobFileKeyParams) (ImportJob, error)
 	UpdateImportJobMapping(ctx context.Context, arg UpdateImportJobMappingParams) (ImportJob, error)

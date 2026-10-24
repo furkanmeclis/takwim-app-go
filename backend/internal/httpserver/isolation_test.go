@@ -81,6 +81,7 @@ var isolationAllowlist = map[string]string{
 	"PUT /v1/tenant/customer-notifications/settings":        "rule and texts of the caller's organization (event code, channel names); no ids",
 	"POST /v1/tenant/customer-notifications/settings/reset": "resets an event code of the caller's organization; no ids",
 	"POST /v1/tenant/customer-notifications/preview":        "renders the body's text with sample values and the caller's business name; no ids",
+	"POST /v1/tenant/finance/categories":                    "body has no foreign references (kind, name, status, sort order)",
 }
 
 type isoOrg struct {
@@ -389,6 +390,16 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["sharePayout"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff-shares/payouts", map[string]any{
 			"staff_uuid": ids["shareStaff"], "cash_account_uuid": ids["bankAccount"], "amount": "5", "note": m,
 		}), http.StatusCreated, "share payout"), "uuid")
+		// Income / expense (TEC-915): an income record from the bank account
+		// (the till's day is closed) with a staff member and a document.
+		financeCats := must(call(o, http.MethodGet, "/v1/tenant/finance/categories?kind=income&sort=name", nil), http.StatusOK, "finance categories")
+		ids["financeCategory"] = financeCats.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
+		ids["financeEntry"] = str(must(call(o, http.MethodPost, "/v1/tenant/finance/entries", map[string]any{
+			"kind": "income", "category_uuid": ids["financeCategory"], "cash_account_uuid": ids["bankAccount"],
+			"staff_uuid": ids["shareStaff"], "amount": "3", "description": m + " gelir",
+		}), http.StatusCreated, "finance entry"), "uuid")
+		must(upload(o, http.MethodPut, "/v1/tenant/finance/entries/"+ids["financeEntry"]+"/document", "file", "fis.png", png, nil),
+			http.StatusOK, "finance document")
 		// The stock sale above is a product sale line with its ledger debit.
 		saleLines := must(call(o, http.MethodGet, "/v1/tenant/sales/lines", nil), http.StatusOK, "sale lines")
 		ids["saleLine"] = saleLines.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
@@ -483,7 +494,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	}
 	bodyFor := func(pattern string) (string, io.Reader) {
 		method, path, _ := strings.Cut(pattern, " ")
-		if strings.HasSuffix(path, "/file") && method == http.MethodPut || strings.HasSuffix(path, "/images") && method == http.MethodPost ||
+		if (strings.HasSuffix(path, "/file") || strings.HasSuffix(path, "/document")) && method == http.MethodPut || strings.HasSuffix(path, "/images") && method == http.MethodPost ||
 			strings.HasSuffix(path, "/image") && method == http.MethodPut {
 			var form bytes.Buffer
 			mw := multipart.NewWriter(&form)
@@ -617,6 +628,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/confirmations": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker,
 			"?q=" + orgB.ids["customerPhone"][3:], "?state=pending,scheduled,change_requested", "?attention=true"},
 		"GET /v1/tenant/confirmations/facets": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.ids["customerPhone"][3:]},
+		"GET /v1/tenant/finance/categories":   {"?q=" + orgB.marker},
+		"GET /v1/tenant/finance/entries": {"?branch=" + orgB.ids["branch"], "?category=" + orgB.ids["financeCategory"],
+			"?staff=" + orgB.ids["shareStaff"], "?account=" + orgB.ids["bankAccount"], "?q=" + orgB.marker},
+		"GET /v1/tenant/finance/summary": {"?branch=" + orgB.ids["branch"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -687,6 +702,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"cash_account_uuid": orgA.ids["bankAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/staff-shares/payouts", map[string]any{"staff_uuid": orgA.ids["shareStaff"],
 			"cash_account_uuid": orgB.ids["bankAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/finance/entries", map[string]any{"kind": "income", "category_uuid": orgB.ids["financeCategory"],
+			"cash_account_uuid": orgA.ids["bankAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/finance/entries", map[string]any{"kind": "income", "category_uuid": orgA.ids["financeCategory"],
+			"cash_account_uuid": orgB.ids["bankAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/finance/entries", map[string]any{"kind": "income", "category_uuid": orgA.ids["financeCategory"],
+			"cash_account_uuid": orgA.ids["bankAccount"], "branch_uuid": orgB.ids["branch"], "amount": "1"}, reject},
+		{"POST /v1/tenant/finance/entries", map[string]any{"kind": "income", "category_uuid": orgA.ids["financeCategory"],
+			"cash_account_uuid": orgA.ids["bankAccount"], "staff_uuid": orgB.ids["shareStaff"], "amount": "1"}, reject},
 		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
 		{"POST /v1/tenant/reservations/bulk", map[string]any{"action": "cancel", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["reservation"]}}}, nil},
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}},
@@ -735,6 +758,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/resources/" + orgA.ids["resource"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
 		{"PATCH /v1/tenant/cash/accounts/" + orgA.ids["cashAccount"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
 		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
+		{"PATCH /v1/tenant/finance/entries/" + orgA.ids["financeEntry"], map[string]any{"category_uuid": orgB.ids["financeCategory"]}, reject},
+		{"PATCH /v1/tenant/finance/entries/" + orgA.ids["financeEntry"], map[string]any{"staff_uuid": orgB.ids["shareStaff"]}, reject},
+		{"POST /v1/tenant/finance/entries/" + orgA.ids["financeEntry"] + "/correct", map[string]any{
+			"cash_account_uuid": orgB.ids["bankAccount"], "reason": "isolation"}, reject},
+		{"POST /v1/tenant/finance/entries/" + orgA.ids["financeEntry"] + "/correct", map[string]any{
+			"category_uuid": orgB.ids["financeCategory"], "reason": "isolation"}, reject},
+		{"POST /v1/tenant/finance/entries/" + orgA.ids["financeEntry"] + "/correct", map[string]any{
+			"staff_uuid": orgB.ids["shareStaff"], "reason": "isolation"}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
 		{"PUT /v1/tenant/services/" + orgA.ids["service"] + "/staff", map[string]any{"staff": []map[string]any{{"staff_uuid": orgB.ids["staff"]}}}, reject},
 		{"PUT /v1/tenant/products/" + orgA.ids["product"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
@@ -950,6 +981,10 @@ func paramKey(prev, name string) string {
 		return "stockMovement"
 	case "refunds/uuid":
 		return "refund"
+	case "categories/categoryUuid":
+		return "financeCategory"
+	case "entries/entryUuid":
+		return "financeEntry"
 	}
 	return ""
 }

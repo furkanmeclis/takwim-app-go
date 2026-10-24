@@ -62,6 +62,11 @@ import (
 	exportmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports"
 	exporthandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/handler"
 	exportusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/usecase"
+	financemodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance"
+	financeadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/adapters"
+	financehandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/handler"
+	financerepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/repository"
+	financeusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/finance/usecase"
 	importmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports"
 	importhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/handler"
 	importusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/usecase"
@@ -451,6 +456,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	salesSvc.SetLineHook(staffSharesSvc.RecordLineTx)
 	// A product taken back reverses its sale line (TEC-913).
 	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
+	// Income and expense records (TEC-915): each posts its cash movement;
+	// the summary keeps them apart from revenue and staff payouts.
+	financeSvc := financeusecase.New(financerepository.NewPostgres(deps.DB, deps.Queries), cashSvc, salesSvc)
+	financeSvc.SetStorage(deps.Storage)
 	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
 	availabilitySvc.SetBusySource(capacityHolds.Busy())
 	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
@@ -497,6 +506,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	cashmodule.RegisterLiveResources(tenantLive)
 	salesmodule.RegisterLiveResources(tenantLive)
 	staffsharesmodule.RegisterLiveResources(tenantLive)
+	financemodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
@@ -537,6 +547,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
 		cashadapters.NewMovementsIO(cashSvc),
+		financeadapters.NewEntriesIO(financeSvc),
 		orgadapters.NewIO(orgSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
@@ -657,6 +668,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffSharesH := staffshareshandler.New(staffSharesSvc, activityRec)
 	staffSharesH.SetResourceEvents(resourceEvents)
 	staffsharesmodule.RegisterRoutes(mux, staffSharesH, tokens, loader, tenantResolver)
+	financeH := financehandler.New(financeSvc, activityRec)
+	financeH.SetResourceEvents(resourceEvents)
+	financemodule.RegisterRoutes(mux, financeH, financemodule.EngineHandlers{
+		ExportEntries: exportH.TenantExport(financemodule.EntriesResource, financemodule.ExportQueryKeys...),
+	}, tokens, loader, tenantResolver)
 	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)
