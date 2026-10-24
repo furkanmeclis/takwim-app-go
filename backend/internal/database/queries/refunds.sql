@@ -59,7 +59,8 @@ WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id);
 -- name: ListReservationRefunds :many
 SELECT f.uuid, f.channel, f.provider, f.method, f.amount, f.currency, f.status, f.provider_status,
     f.provider_refund_id, f.failure_reason, f.reason, f.provider_answered_at, f.reflected_at, f.resolution_note,
-    f.created_at, c.uuid AS collection_uuid, a.uuid AS cash_account_uuid, a.name AS cash_account_name,
+    f.created_at, f.provider_checks, f.provider_checked_at, f.next_check_at,
+    c.uuid AS collection_uuid, a.uuid AS cash_account_uuid, a.name AS cash_account_name,
     le.uuid AS ledger_entry_uuid, u.uuid AS requested_by_uuid, u.name AS requested_by_name,
     u.surname AS requested_by_surname
 FROM refunds f
@@ -146,6 +147,12 @@ WITH money AS (
     FROM refunds f
     WHERE f.organization_id = sqlc.arg(organization_id)
     GROUP BY f.reservation_id
+), kept AS (
+    -- The last time a person closed the visit without a refund (TEC-978).
+    SELECT ev.reservation_id, MAX(ev.created_at)::timestamptz AS kept_at
+    FROM reservation_events ev
+    WHERE ev.organization_id = sqlc.arg(organization_id) AND ev.type = 'payment_kept'
+    GROUP BY ev.reservation_id
 ), base AS (
     SELECT r.id, r.uuid, r.number, r.status, r.payment_status, r.starts_at, r.currency, r.cancel_reason, r.updated_at,
         b.uuid AS branch_uuid, b.name AS branch_name,
@@ -160,7 +167,8 @@ WITH money AS (
         )::boolean AS late,
         (CASE
             WHEN COALESCE(rs.open_count, 0) > 0 THEN 'refund_unverified'
-            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0 THEN 'refund_failed'
+            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0
+                AND (r.payment_status <> 'kept' OR k.kept_at IS NULL OR rs.last_at > k.kept_at) THEN 'refund_failed'
             WHEN r.payment_status = 'refund_pending' THEN 'refund_pending'
             WHEN r.status = 'completed'
                 AND COALESCE(m.charged, 0) - COALESCE(m.collected, 0) + COALESCE(m.refunded, 0) > 0 THEN 'unpaid'
@@ -171,6 +179,7 @@ WITH money AS (
     LEFT JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
     LEFT JOIN money m ON m.reservation_id = r.id
     LEFT JOIN refund_state rs ON rs.reservation_id = r.id
+    LEFT JOIN kept k ON k.reservation_id = r.id
     WHERE r.organization_id = sqlc.arg(organization_id)
       AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
       AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
@@ -220,14 +229,22 @@ WITH money AS (
 ), refund_state AS (
     SELECT f.reservation_id,
         COUNT(*) FILTER (WHERE f.status = 'requested')::bigint AS open_count,
-        (array_agg(f.status ORDER BY f.created_at DESC, f.id DESC))[1]::text AS last_status
+        (array_agg(f.status ORDER BY f.created_at DESC, f.id DESC))[1]::text AS last_status,
+        MAX(f.created_at)::timestamptz AS last_at
     FROM refunds f
     WHERE f.organization_id = sqlc.arg(organization_id)
     GROUP BY f.reservation_id
+), kept AS (
+    -- The last time a person closed the visit without a refund (TEC-978).
+    SELECT ev.reservation_id, MAX(ev.created_at)::timestamptz AS kept_at
+    FROM reservation_events ev
+    WHERE ev.organization_id = sqlc.arg(organization_id) AND ev.type = 'payment_kept'
+    GROUP BY ev.reservation_id
 ), base AS (
     SELECT (CASE
             WHEN COALESCE(rs.open_count, 0) > 0 THEN 'refund_unverified'
-            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0 THEN 'refund_failed'
+            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0
+                AND (r.payment_status <> 'kept' OR k.kept_at IS NULL OR rs.last_at > k.kept_at) THEN 'refund_failed'
             WHEN r.payment_status = 'refund_pending' THEN 'refund_pending'
             WHEN r.status = 'completed'
                 AND COALESCE(m.charged, 0) - COALESCE(m.collected, 0) + COALESCE(m.refunded, 0) > 0 THEN 'unpaid'
@@ -237,6 +254,7 @@ WITH money AS (
     LEFT JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
     LEFT JOIN money m ON m.reservation_id = r.id
     LEFT JOIN refund_state rs ON rs.reservation_id = r.id
+    LEFT JOIN kept k ON k.reservation_id = r.id
     WHERE r.organization_id = sqlc.arg(organization_id)
       AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
       AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
@@ -254,3 +272,48 @@ SELECT kind, COUNT(*)::bigint AS count FROM base
 WHERE kind <> ''
 GROUP BY kind
 ORDER BY kind;
+
+-- name: LastPaymentKept :one
+-- When and why a person last closed the visit's refund without paying it
+-- back (TEC-978); no row when never.
+SELECT ev.created_at, ev.note, u.uuid AS actor_uuid, u.name AS actor_name, u.surname AS actor_surname
+FROM reservation_events ev
+LEFT JOIN users u ON u.id = ev.actor_id
+WHERE ev.organization_id = sqlc.arg(organization_id) AND ev.reservation_id = sqlc.arg(reservation_id)
+  AND ev.type = 'payment_kept'
+ORDER BY ev.created_at DESC, ev.id DESC
+LIMIT 1;
+
+-- name: ListUncertainRefundsDue :many
+-- Provider refunds whose result is unknown and whose next status query is
+-- due, every business (the worker's refund check sweep, TEC-978).
+SELECT f.organization_id, f.id FROM refunds f
+WHERE f.status = 'requested' AND f.provider_status = 'uncertain' AND f.channel = 'provider'
+  AND (f.next_check_at IS NULL OR f.next_check_at <= sqlc.arg(now_at))
+ORDER BY f.next_check_at NULLS FIRST, f.id
+LIMIT sqlc.arg(limit_count);
+
+-- name: ClaimRefundCheck :one
+-- Takes one due status query: it is counted and the next one moves to
+-- lease_until, so another worker skips the refund meanwhile. No row when
+-- the refund was settled or another worker took it.
+UPDATE refunds
+SET provider_checks = provider_checks + 1, provider_checked_at = sqlc.arg(now_at), next_check_at = sqlc.arg(lease_until)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND status = 'requested'
+  AND provider_status = 'uncertain' AND channel = 'provider'
+  AND (next_check_at IS NULL OR next_check_at <= sqlc.arg(now_at))
+RETURNING *;
+
+-- name: ScheduleRefundCheck :exec
+-- When the next status query of an open refund is due.
+UPDATE refunds SET next_check_at = sqlc.arg(next_check_at)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND status = 'requested';
+
+-- name: GetRefundCheckTarget :one
+-- What a status query needs of a refund: the provider references of the
+-- online payment it pays back and its visit.
+SELECT p.order_ref, p.provider_payment_id, r.uuid AS reservation_uuid
+FROM refunds f
+JOIN payments p ON p.organization_id = f.organization_id AND p.id = f.payment_id
+JOIN reservations r ON r.organization_id = f.organization_id AND r.id = f.reservation_id
+WHERE f.organization_id = sqlc.arg(organization_id) AND f.id = sqlc.arg(id);

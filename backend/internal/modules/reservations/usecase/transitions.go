@@ -490,8 +490,9 @@ const (
 // the payment state follows:
 //
 //   - nothing paid any more: refunded;
-//   - a cancelled or rejected visit, a refund waiting or one done before,
-//     or an open visit now paid less than its total: partially_refunded;
+//   - a cancelled or rejected visit, a refund waiting or one done before
+//     (or closed without one), or an open visit now paid less than its
+//     total: partially_refunded;
 //   - otherwise (an overpayment paid back) the state stays.
 //
 // The visit itself never changes: a refund does not reopen or cancel it.
@@ -513,7 +514,7 @@ func (s *Service) RecordRefund(ctx context.Context, orgID int64, id uuid.UUID, a
 		case !paid.IsPositive():
 			next.payment, outcome = model.PaymentRefunded, RefundAll
 		case closed, row.PaymentStatus == model.PaymentRefundPending, row.PaymentStatus == model.PaymentRefunded,
-			row.PaymentStatus == model.PaymentPartiallyRefunded,
+			row.PaymentStatus == model.PaymentPartiallyRefunded, row.PaymentStatus == model.PaymentKept,
 			row.PaymentStatus == model.PaymentPaid && paid.Cmp(total) < 0:
 			next.payment, outcome = model.PaymentPartiallyRefunded, RefundPart
 		default:
@@ -533,4 +534,37 @@ func (s *Service) RecordRefund(ctx context.Context, orgID int64, id uuid.UUID, a
 	}
 	out, err := s.get(ctx, orgID, id)
 	return out, outcome, err
+}
+
+// KeepCheck tells, inside the visit's transaction (the record locked),
+// whether the money of a visit may be kept (nil) or why not.
+type KeepCheck func(ctx context.Context, q *db.Queries, row db.Reservation) error
+
+// KeepPayment closes a refund to make without paying the money back
+// (TEC-978): check confirms, under the lock, that there is one; the
+// payment state becomes kept and the reason goes into the history
+// (payment_kept). The visit itself never changes.
+func (s *Service) KeepPayment(ctx context.Context, orgID int64, id uuid.UUID, actorID int64, reason string, check KeepCheck) (model.Reservation, error) {
+	err := s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
+		row, err := s.visible(ctx, tx.Q, orgID, id, availabilityusecase.Caller{}, true)
+		if err != nil {
+			return err
+		}
+		if err := check(ctx, tx.Q, row); err != nil {
+			return err
+		}
+		next := stateOf(row)
+		updated, err := tx.Q.UpdateReservationState(ctx, db.UpdateReservationStateParams{
+			OrganizationID: orgID, ID: row.ID, Status: next.status, ApprovalStatus: next.approval,
+			PaymentStatus: model.PaymentKept, CancelReason: pgtype.Text{String: next.cancelReason, Valid: next.cancelReason != ""},
+		})
+		if err != nil {
+			return err
+		}
+		return s.event(ctx, tx.Q, updated, "payment_kept", row.Status, updated.Status, actorID, reason)
+	})
+	if err != nil {
+		return model.Reservation{}, err
+	}
+	return s.get(ctx, orgID, id)
 }

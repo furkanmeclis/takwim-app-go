@@ -41,6 +41,8 @@ const (
 	CodeRefundKeyReused  = "REFUND_IDEMPOTENCY_REUSED"
 	CodeRefundNotOpen    = "REFUND_NOT_OPEN"
 	CodeRefundReversed   = "REFUND_COLLECTION_REVERSED"
+	CodeNothingToClose   = "REFUND_NOTHING_TO_CLOSE"
+	CodeRefundInProgress = "REFUND_IN_PROGRESS"
 )
 
 // maxNotificationBytes bounds a provider notification body.
@@ -287,6 +289,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.Error(w, r, http.StatusConflict, CodeRefundKeyReused, err.Error())
 	case errors.Is(err, usecase.ErrRefundNotOpen):
 		response.Error(w, r, http.StatusConflict, CodeRefundNotOpen, err.Error())
+	case errors.Is(err, usecase.ErrNothingToClose):
+		response.Error(w, r, http.StatusConflict, CodeNothingToClose, err.Error())
+	case errors.Is(err, usecase.ErrRefundOpen):
+		response.Error(w, r, http.StatusConflict, CodeRefundInProgress, err.Error())
 	case errors.Is(err, salesusecase.ErrAlreadyReversed):
 		response.Error(w, r, http.StatusConflict, CodeRefundReversed, err.Error())
 	case errors.Is(err, salesusecase.ErrRefundTooLarge):

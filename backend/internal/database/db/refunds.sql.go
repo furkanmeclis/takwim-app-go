@@ -12,6 +12,69 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimRefundCheck = `-- name: ClaimRefundCheck :one
+UPDATE refunds
+SET provider_checks = provider_checks + 1, provider_checked_at = $1, next_check_at = $2
+WHERE organization_id = $3 AND id = $4 AND status = 'requested'
+  AND provider_status = 'uncertain' AND channel = 'provider'
+  AND (next_check_at IS NULL OR next_check_at <= $1)
+RETURNING id, uuid, organization_id, branch_id, reservation_id, collection_entry_id, payment_id, integration_account_id, channel, provider, cash_account_id, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, provider_answered_at, ledger_entry_id, reflected_at, reason, idempotency_key, requested_by, resolved_by, resolution_note, created_at, updated_at, provider_checks, provider_checked_at, next_check_at
+`
+
+type ClaimRefundCheckParams struct {
+	NowAt          pgtype.Timestamptz `json:"now_at"`
+	LeaseUntil     pgtype.Timestamptz `json:"lease_until"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// Takes one due status query: it is counted and the next one moves to
+// lease_until, so another worker skips the refund meanwhile. No row when
+// the refund was settled or another worker took it.
+func (q *Queries) ClaimRefundCheck(ctx context.Context, arg ClaimRefundCheckParams) (Refund, error) {
+	row := q.db.QueryRow(ctx, claimRefundCheck,
+		arg.NowAt,
+		arg.LeaseUntil,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	var i Refund
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.BranchID,
+		&i.ReservationID,
+		&i.CollectionEntryID,
+		&i.PaymentID,
+		&i.IntegrationAccountID,
+		&i.Channel,
+		&i.Provider,
+		&i.CashAccountID,
+		&i.Method,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.ProviderStatus,
+		&i.ProviderRefundID,
+		&i.FailureReason,
+		&i.ProviderAnsweredAt,
+		&i.LedgerEntryID,
+		&i.ReflectedAt,
+		&i.Reason,
+		&i.IdempotencyKey,
+		&i.RequestedBy,
+		&i.ResolvedBy,
+		&i.ResolutionNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ProviderChecks,
+		&i.ProviderCheckedAt,
+		&i.NextCheckAt,
+	)
+	return i, err
+}
+
 const countPaymentFollowUps = `-- name: CountPaymentFollowUps :many
 WITH money AS (
     SELECT e.reservation_id,
@@ -28,14 +91,22 @@ WITH money AS (
 ), refund_state AS (
     SELECT f.reservation_id,
         COUNT(*) FILTER (WHERE f.status = 'requested')::bigint AS open_count,
-        (array_agg(f.status ORDER BY f.created_at DESC, f.id DESC))[1]::text AS last_status
+        (array_agg(f.status ORDER BY f.created_at DESC, f.id DESC))[1]::text AS last_status,
+        MAX(f.created_at)::timestamptz AS last_at
     FROM refunds f
     WHERE f.organization_id = $1
     GROUP BY f.reservation_id
+), kept AS (
+    -- The last time a person closed the visit without a refund (TEC-978).
+    SELECT ev.reservation_id, MAX(ev.created_at)::timestamptz AS kept_at
+    FROM reservation_events ev
+    WHERE ev.organization_id = $1 AND ev.type = 'payment_kept'
+    GROUP BY ev.reservation_id
 ), base AS (
     SELECT (CASE
             WHEN COALESCE(rs.open_count, 0) > 0 THEN 'refund_unverified'
-            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0 THEN 'refund_failed'
+            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0
+                AND (r.payment_status <> 'kept' OR k.kept_at IS NULL OR rs.last_at > k.kept_at) THEN 'refund_failed'
             WHEN r.payment_status = 'refund_pending' THEN 'refund_pending'
             WHEN r.status = 'completed'
                 AND COALESCE(m.charged, 0) - COALESCE(m.collected, 0) + COALESCE(m.refunded, 0) > 0 THEN 'unpaid'
@@ -45,6 +116,7 @@ WITH money AS (
     LEFT JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
     LEFT JOIN money m ON m.reservation_id = r.id
     LEFT JOIN refund_state rs ON rs.reservation_id = r.id
+    LEFT JOIN kept k ON k.reservation_id = r.id
     WHERE r.organization_id = $1
       AND ($2::bigint[] IS NULL OR r.branch_id = ANY($2::bigint[]))
       AND ($3::bigint[] IS NULL OR r.branch_id = ANY($3::bigint[]))
@@ -154,7 +226,7 @@ func (q *Queries) GetRefundAccount(ctx context.Context, arg GetRefundAccountPara
 }
 
 const getRefundByIdempotencyKey = `-- name: GetRefundByIdempotencyKey :one
-SELECT f.id, f.uuid, f.organization_id, f.branch_id, f.reservation_id, f.collection_entry_id, f.payment_id, f.integration_account_id, f.channel, f.provider, f.cash_account_id, f.method, f.amount, f.currency, f.status, f.provider_status, f.provider_refund_id, f.failure_reason, f.provider_answered_at, f.ledger_entry_id, f.reflected_at, f.reason, f.idempotency_key, f.requested_by, f.resolved_by, f.resolution_note, f.created_at, f.updated_at, r.uuid AS reservation_uuid FROM refunds f
+SELECT f.id, f.uuid, f.organization_id, f.branch_id, f.reservation_id, f.collection_entry_id, f.payment_id, f.integration_account_id, f.channel, f.provider, f.cash_account_id, f.method, f.amount, f.currency, f.status, f.provider_status, f.provider_refund_id, f.failure_reason, f.provider_answered_at, f.ledger_entry_id, f.reflected_at, f.reason, f.idempotency_key, f.requested_by, f.resolved_by, f.resolution_note, f.created_at, f.updated_at, f.provider_checks, f.provider_checked_at, f.next_check_at, r.uuid AS reservation_uuid FROM refunds f
 JOIN reservations r ON r.organization_id = f.organization_id AND r.id = f.reservation_id
 WHERE f.organization_id = $1 AND f.idempotency_key = $2
 `
@@ -193,6 +265,9 @@ type GetRefundByIdempotencyKeyRow struct {
 	ResolutionNote       string             `json:"resolution_note"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ProviderChecks       int32              `json:"provider_checks"`
+	ProviderCheckedAt    pgtype.Timestamptz `json:"provider_checked_at"`
+	NextCheckAt          pgtype.Timestamptz `json:"next_check_at"`
 	ReservationUuid      uuid.UUID          `json:"reservation_uuid"`
 }
 
@@ -228,13 +303,16 @@ func (q *Queries) GetRefundByIdempotencyKey(ctx context.Context, arg GetRefundBy
 		&i.ResolutionNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderChecks,
+		&i.ProviderCheckedAt,
+		&i.NextCheckAt,
 		&i.ReservationUuid,
 	)
 	return i, err
 }
 
 const getRefundByUUID = `-- name: GetRefundByUUID :one
-SELECT f.id, f.uuid, f.organization_id, f.branch_id, f.reservation_id, f.collection_entry_id, f.payment_id, f.integration_account_id, f.channel, f.provider, f.cash_account_id, f.method, f.amount, f.currency, f.status, f.provider_status, f.provider_refund_id, f.failure_reason, f.provider_answered_at, f.ledger_entry_id, f.reflected_at, f.reason, f.idempotency_key, f.requested_by, f.resolved_by, f.resolution_note, f.created_at, f.updated_at, r.uuid AS reservation_uuid FROM refunds f
+SELECT f.id, f.uuid, f.organization_id, f.branch_id, f.reservation_id, f.collection_entry_id, f.payment_id, f.integration_account_id, f.channel, f.provider, f.cash_account_id, f.method, f.amount, f.currency, f.status, f.provider_status, f.provider_refund_id, f.failure_reason, f.provider_answered_at, f.ledger_entry_id, f.reflected_at, f.reason, f.idempotency_key, f.requested_by, f.resolved_by, f.resolution_note, f.created_at, f.updated_at, f.provider_checks, f.provider_checked_at, f.next_check_at, r.uuid AS reservation_uuid FROM refunds f
 JOIN reservations r ON r.organization_id = f.organization_id AND r.id = f.reservation_id
 WHERE f.organization_id = $1 AND f.uuid = $2
 `
@@ -273,6 +351,9 @@ type GetRefundByUUIDRow struct {
 	ResolutionNote       string             `json:"resolution_note"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ProviderChecks       int32              `json:"provider_checks"`
+	ProviderCheckedAt    pgtype.Timestamptz `json:"provider_checked_at"`
+	NextCheckAt          pgtype.Timestamptz `json:"next_check_at"`
 	ReservationUuid      uuid.UUID          `json:"reservation_uuid"`
 }
 
@@ -308,8 +389,39 @@ func (q *Queries) GetRefundByUUID(ctx context.Context, arg GetRefundByUUIDParams
 		&i.ResolutionNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderChecks,
+		&i.ProviderCheckedAt,
+		&i.NextCheckAt,
 		&i.ReservationUuid,
 	)
+	return i, err
+}
+
+const getRefundCheckTarget = `-- name: GetRefundCheckTarget :one
+SELECT p.order_ref, p.provider_payment_id, r.uuid AS reservation_uuid
+FROM refunds f
+JOIN payments p ON p.organization_id = f.organization_id AND p.id = f.payment_id
+JOIN reservations r ON r.organization_id = f.organization_id AND r.id = f.reservation_id
+WHERE f.organization_id = $1 AND f.id = $2
+`
+
+type GetRefundCheckTargetParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type GetRefundCheckTargetRow struct {
+	OrderRef          string    `json:"order_ref"`
+	ProviderPaymentID string    `json:"provider_payment_id"`
+	ReservationUuid   uuid.UUID `json:"reservation_uuid"`
+}
+
+// What a status query needs of a refund: the provider references of the
+// online payment it pays back and its visit.
+func (q *Queries) GetRefundCheckTarget(ctx context.Context, arg GetRefundCheckTargetParams) (GetRefundCheckTargetRow, error) {
+	row := q.db.QueryRow(ctx, getRefundCheckTarget, arg.OrganizationID, arg.ID)
+	var i GetRefundCheckTargetRow
+	err := row.Scan(&i.OrderRef, &i.ProviderPaymentID, &i.ReservationUuid)
 	return i, err
 }
 
@@ -324,7 +436,7 @@ INSERT INTO refunds (
     $9, $10, $11, $12, $13,
     $14, $15
 )
-RETURNING id, uuid, organization_id, branch_id, reservation_id, collection_entry_id, payment_id, integration_account_id, channel, provider, cash_account_id, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, provider_answered_at, ledger_entry_id, reflected_at, reason, idempotency_key, requested_by, resolved_by, resolution_note, created_at, updated_at
+RETURNING id, uuid, organization_id, branch_id, reservation_id, collection_entry_id, payment_id, integration_account_id, channel, provider, cash_account_id, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, provider_answered_at, ledger_entry_id, reflected_at, reason, idempotency_key, requested_by, resolved_by, resolution_note, created_at, updated_at, provider_checks, provider_checked_at, next_check_at
 `
 
 type InsertRefundParams struct {
@@ -394,6 +506,47 @@ func (q *Queries) InsertRefund(ctx context.Context, arg InsertRefundParams) (Ref
 		&i.ResolutionNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderChecks,
+		&i.ProviderCheckedAt,
+		&i.NextCheckAt,
+	)
+	return i, err
+}
+
+const lastPaymentKept = `-- name: LastPaymentKept :one
+SELECT ev.created_at, ev.note, u.uuid AS actor_uuid, u.name AS actor_name, u.surname AS actor_surname
+FROM reservation_events ev
+LEFT JOIN users u ON u.id = ev.actor_id
+WHERE ev.organization_id = $1 AND ev.reservation_id = $2
+  AND ev.type = 'payment_kept'
+ORDER BY ev.created_at DESC, ev.id DESC
+LIMIT 1
+`
+
+type LastPaymentKeptParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ReservationID  int64 `json:"reservation_id"`
+}
+
+type LastPaymentKeptRow struct {
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	Note         string             `json:"note"`
+	ActorUuid    pgtype.UUID        `json:"actor_uuid"`
+	ActorName    pgtype.Text        `json:"actor_name"`
+	ActorSurname pgtype.Text        `json:"actor_surname"`
+}
+
+// When and why a person last closed the visit's refund without paying it
+// back (TEC-978); no row when never.
+func (q *Queries) LastPaymentKept(ctx context.Context, arg LastPaymentKeptParams) (LastPaymentKeptRow, error) {
+	row := q.db.QueryRow(ctx, lastPaymentKept, arg.OrganizationID, arg.ReservationID)
+	var i LastPaymentKeptRow
+	err := row.Scan(
+		&i.CreatedAt,
+		&i.Note,
+		&i.ActorUuid,
+		&i.ActorName,
+		&i.ActorSurname,
 	)
 	return i, err
 }
@@ -472,6 +625,12 @@ WITH money AS (
     FROM refunds f
     WHERE f.organization_id = $6
     GROUP BY f.reservation_id
+), kept AS (
+    -- The last time a person closed the visit without a refund (TEC-978).
+    SELECT ev.reservation_id, MAX(ev.created_at)::timestamptz AS kept_at
+    FROM reservation_events ev
+    WHERE ev.organization_id = $6 AND ev.type = 'payment_kept'
+    GROUP BY ev.reservation_id
 ), base AS (
     SELECT r.id, r.uuid, r.number, r.status, r.payment_status, r.starts_at, r.currency, r.cancel_reason, r.updated_at,
         b.uuid AS branch_uuid, b.name AS branch_name,
@@ -486,7 +645,8 @@ WITH money AS (
         )::boolean AS late,
         (CASE
             WHEN COALESCE(rs.open_count, 0) > 0 THEN 'refund_unverified'
-            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0 THEN 'refund_failed'
+            WHEN rs.last_status = 'failed' AND COALESCE(m.collected, 0) - COALESCE(m.refunded, 0) > 0
+                AND (r.payment_status <> 'kept' OR k.kept_at IS NULL OR rs.last_at > k.kept_at) THEN 'refund_failed'
             WHEN r.payment_status = 'refund_pending' THEN 'refund_pending'
             WHEN r.status = 'completed'
                 AND COALESCE(m.charged, 0) - COALESCE(m.collected, 0) + COALESCE(m.refunded, 0) > 0 THEN 'unpaid'
@@ -497,6 +657,7 @@ WITH money AS (
     LEFT JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
     LEFT JOIN money m ON m.reservation_id = r.id
     LEFT JOIN refund_state rs ON rs.reservation_id = r.id
+    LEFT JOIN kept k ON k.reservation_id = r.id
     WHERE r.organization_id = $6
       AND ($7::bigint[] IS NULL OR r.branch_id = ANY($7::bigint[]))
       AND ($8::bigint[] IS NULL OR r.branch_id = ANY($8::bigint[]))
@@ -772,7 +933,8 @@ func (q *Queries) ListRefundableCollections(ctx context.Context, arg ListRefunda
 const listReservationRefunds = `-- name: ListReservationRefunds :many
 SELECT f.uuid, f.channel, f.provider, f.method, f.amount, f.currency, f.status, f.provider_status,
     f.provider_refund_id, f.failure_reason, f.reason, f.provider_answered_at, f.reflected_at, f.resolution_note,
-    f.created_at, c.uuid AS collection_uuid, a.uuid AS cash_account_uuid, a.name AS cash_account_name,
+    f.created_at, f.provider_checks, f.provider_checked_at, f.next_check_at,
+    c.uuid AS collection_uuid, a.uuid AS cash_account_uuid, a.name AS cash_account_name,
     le.uuid AS ledger_entry_uuid, u.uuid AS requested_by_uuid, u.name AS requested_by_name,
     u.surname AS requested_by_surname
 FROM refunds f
@@ -806,6 +968,9 @@ type ListReservationRefundsRow struct {
 	ReflectedAt        pgtype.Timestamptz `json:"reflected_at"`
 	ResolutionNote     string             `json:"resolution_note"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	ProviderChecks     int32              `json:"provider_checks"`
+	ProviderCheckedAt  pgtype.Timestamptz `json:"provider_checked_at"`
+	NextCheckAt        pgtype.Timestamptz `json:"next_check_at"`
 	CollectionUuid     uuid.UUID          `json:"collection_uuid"`
 	CashAccountUuid    uuid.UUID          `json:"cash_account_uuid"`
 	CashAccountName    string             `json:"cash_account_name"`
@@ -840,6 +1005,9 @@ func (q *Queries) ListReservationRefunds(ctx context.Context, arg ListReservatio
 			&i.ReflectedAt,
 			&i.ResolutionNote,
 			&i.CreatedAt,
+			&i.ProviderChecks,
+			&i.ProviderCheckedAt,
+			&i.NextCheckAt,
 			&i.CollectionUuid,
 			&i.CashAccountUuid,
 			&i.CashAccountName,
@@ -858,8 +1026,48 @@ func (q *Queries) ListReservationRefunds(ctx context.Context, arg ListReservatio
 	return items, nil
 }
 
+const listUncertainRefundsDue = `-- name: ListUncertainRefundsDue :many
+SELECT f.organization_id, f.id FROM refunds f
+WHERE f.status = 'requested' AND f.provider_status = 'uncertain' AND f.channel = 'provider'
+  AND (f.next_check_at IS NULL OR f.next_check_at <= $1)
+ORDER BY f.next_check_at NULLS FIRST, f.id
+LIMIT $2
+`
+
+type ListUncertainRefundsDueParams struct {
+	NowAt      pgtype.Timestamptz `json:"now_at"`
+	LimitCount int32              `json:"limit_count"`
+}
+
+type ListUncertainRefundsDueRow struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+// Provider refunds whose result is unknown and whose next status query is
+// due, every business (the worker's refund check sweep, TEC-978).
+func (q *Queries) ListUncertainRefundsDue(ctx context.Context, arg ListUncertainRefundsDueParams) ([]ListUncertainRefundsDueRow, error) {
+	rows, err := q.db.Query(ctx, listUncertainRefundsDue, arg.NowAt, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUncertainRefundsDueRow{}
+	for rows.Next() {
+		var i ListUncertainRefundsDueRow
+		if err := rows.Scan(&i.OrganizationID, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockRefund = `-- name: LockRefund :one
-SELECT id, uuid, organization_id, branch_id, reservation_id, collection_entry_id, payment_id, integration_account_id, channel, provider, cash_account_id, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, provider_answered_at, ledger_entry_id, reflected_at, reason, idempotency_key, requested_by, resolved_by, resolution_note, created_at, updated_at FROM refunds
+SELECT id, uuid, organization_id, branch_id, reservation_id, collection_entry_id, payment_id, integration_account_id, channel, provider, cash_account_id, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, provider_answered_at, ledger_entry_id, reflected_at, reason, idempotency_key, requested_by, resolved_by, resolution_note, created_at, updated_at, provider_checks, provider_checked_at, next_check_at FROM refunds
 WHERE organization_id = $1 AND id = $2
 FOR UPDATE
 `
@@ -901,6 +1109,9 @@ func (q *Queries) LockRefund(ctx context.Context, arg LockRefundParams) (Refund,
 		&i.ResolutionNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderChecks,
+		&i.ProviderCheckedAt,
+		&i.NextCheckAt,
 	)
 	return i, err
 }
@@ -955,6 +1166,23 @@ func (q *Queries) ResolveRefundFailed(ctx context.Context, arg ResolveRefundFail
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const scheduleRefundCheck = `-- name: ScheduleRefundCheck :exec
+UPDATE refunds SET next_check_at = $1
+WHERE organization_id = $2 AND id = $3 AND status = 'requested'
+`
+
+type ScheduleRefundCheckParams struct {
+	NextCheckAt    pgtype.Timestamptz `json:"next_check_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// When the next status query of an open refund is due.
+func (q *Queries) ScheduleRefundCheck(ctx context.Context, arg ScheduleRefundCheckParams) error {
+	_, err := q.db.Exec(ctx, scheduleRefundCheck, arg.NextCheckAt, arg.OrganizationID, arg.ID)
+	return err
 }
 
 const setRefundProviderAnswer = `-- name: SetRefundProviderAnswer :execrows

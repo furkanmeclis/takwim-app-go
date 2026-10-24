@@ -20,6 +20,7 @@ import type {
   ListReservationsParams,
   ReservationAction,
   ReservationActionRequest,
+  ReservationCloseWithoutRefundRequest,
   ListPaymentFollowUpsParams,
   RefundResolveRequest,
   ReservationCollectionRequest,
@@ -425,6 +426,31 @@ export function useRefundReservationPayment(uuid: string) {
 }
 
 /** Settles a provider refund whose result was unknown. */
+/**
+ * Closes the refund to make of a visit without paying it back (the money
+ * stays with the business; the reason goes into the history).
+ */
+export function useCloseWithoutRefund() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({
+      uuid,
+      body,
+    }: {
+      uuid: string;
+      body: ReservationCloseWithoutRefundRequest;
+    }) => reservationsService.closeWithoutRefund(slug, uuid, body),
+    onSuccess: (result, { uuid }) => {
+      queryClient.setQueryData(reservationsKeys.payments(slug, uuid), result);
+      appToast.success(t("reservations.toast.refund_closed"));
+      void invalidate();
+    },
+  });
+}
+
 export function useResolveRefund(reservationUUID: string) {
   const { slug } = useTenant();
   const { t } = useLocale();

@@ -73,7 +73,7 @@ func standing(status string, endsAt, now time.Time) bool {
 // paidStates are payment states in which the customer's money arrived.
 var paidStates = []string{
 	reservationsmodel.PaymentPaid, reservationsmodel.PaymentRefundPending,
-	reservationsmodel.PaymentPartiallyRefunded, reservationsmodel.PaymentRefunded,
+	reservationsmodel.PaymentPartiallyRefunded, reservationsmodel.PaymentRefunded, reservationsmodel.PaymentKept,
 }
 
 // moneyOf derives the recorded payment picture of a visit from its total

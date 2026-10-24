@@ -96,7 +96,7 @@ A refund pays money back on one collection of a visit. It is a `refunds` row (mi
 
 `POST /v1/tenant/reservations/{uuid}/refunds` needs `tenant.payment.refund` and the cash module. The body names the collection, the amount, the channel and an `idempotency_key`:
 
-- `provider`: the provider's refund call, for an online payment whose provider can refund. `testpay` decides by the cents of the amount: `.13` is declined and `.99` gives an unknown result. `paytr` posts to `/odeme/iade`.
+- `provider`: the provider's refund call, for an online payment whose provider can refund. `testpay` decides by the cents of the amount: `.13` is declined and `.97`, `.98` and `.99` give an unknown result (its status query then answers still pending, not done and refunded). `paytr` posts to `/odeme/iade`.
 - `manual`: a refund paid by hand (`cash`, `card`, `transfer`, or `online` = paid back outside Takwim) from a till or account of the branch. A till cannot go below zero (`409 cash_account_uuid` / `insufficient_funds`).
 
 Rules:
@@ -107,10 +107,42 @@ Rules:
   - A definite refusal ends the refund as `failed`, with its reason.
   - A timeout, a 5xx or an unreadable answer leaves it `requested` with `provider_status` `uncertain`. It is never sent again by itself.
   - `POST /v1/tenant/refunds/{uuid}/resolve` (`succeeded` or `failed`) settles it after someone checks the provider's panel. A refund the provider confirmed can only be posted.
+  - When the provider has a refund status query, the worker asks it instead (see "Refund status queries").
 - After a posted refund the visit's `payment_status` becomes `refunded` when nothing paid is left, otherwise `partially_refunded` (history `refund_recorded`).
 - A cancel, a reject or the request expiry of a visit that still holds money now sets `refund_pending`, also for money taken on site. The dialog defaults to the full amount left, so cancelling a confirmed booking ends in a full refund.
 
 The Payments card shows the refundable amount, a refunds table (status, channel, reason) with "Sonucu işle" for open refunds, and the "İade yap" dialog.
+
+### Closing without a refund (TEC-978)
+
+`POST /v1/tenant/reservations/{uuid}/close-without-refund` closes a refund to make when the money stays with the business: the customer agreed to leave it, or it counts for the next visit. It needs the same permissions as a refund and a `reason`.
+
+- Allowed when money is held, no refund is open (`409 REFUND_IN_PROGRESS`) and either `payment_status` is `refund_pending` or the last refund failed. Otherwise `409 REFUND_NOTHING_TO_CLOSE`. The payment view says so beforehand with `can_close`.
+- `payment_status` becomes `kept` (migration `000076_refund_follow_through`). The reason goes into the history as event `payment_kept`, and the view shows it as `kept` (when, why, who).
+- No money moves. The amount stays on the customer's ledger as a credit and can still be refunded later. A refund then makes the visit `partially_refunded` or `refunded`.
+- The visit leaves the follow-up list. A refund that fails after the closing puts it back as `refund_failed`, and it can be closed again.
+
+The Payments card offers "İadesiz kapat" next to "İade yap".
+
+### Refund notices (TEC-978)
+
+The customer notification engine tells the customer about a refund, using the business's rule for the event (notification settings):
+
+- `refund.completed` ("iadeniz yapıldı"): a refund was posted (manual, provider, resolve or status query).
+- `refund.processing` ("iadeniz işleniyor"): the provider refused the refund or its result is unknown.
+
+Each goes once per refund (key `refund:<uuid>`). Like every customer message, they carry no amount.
+
+### Refund status queries (TEC-978)
+
+A provider adapter may implement `payments.RefundChecker` (`CheckRefund`). It only asks about a refund (by our refund reference and the payment's references) and never refunds. The worker (`payments.Service.RunRefundChecks`, every minute) takes the provider refunds with `provider_status = uncertain` whose `next_check_at` is due. Each claim counts in `provider_checks` and leases the row for two minutes, so workers do not ask twice. Then:
+
+- found: the answer becomes `succeeded` and the refund is posted (done notice). If the posting fails, the refund waits for resolve.
+- not done: the refund ends as `failed` ("not refunded at the provider (automatic check)"). It is not sent again.
+- still pending, or the query failed: the next query is due after 5 min, 15 min, 1 h, 6 h, then daily.
+- a provider without a status query, or an account that is gone: looked at again daily. A person settles it with resolve.
+
+The refund view shows `auto_check`, `provider_checks`, `provider_checked_at` and `next_check_at`. `testpay` implements the query. PayTR's status query is added when the live provider is chosen (TEC-884).
 
 ### Follow-up list
 
@@ -132,7 +164,7 @@ The Payments card shows the refundable amount, a refunds table (status, channel,
 - a `return` movement (source `sale_return`), unique per sale;
 - `ReverseLineTx` on the sale's revenue line.
 
-It does not pay money back: a refund owed for it is recorded separately. Damaged stock is fixed with a count afterwards. The stock movements table offers "Geri al" on sales not yet returned and shows a "Geri alındı" badge.
+It does not pay money back: a refund owed for it is recorded separately. Stock sales do not record a collection yet, so there is no money to refund against; paying back a walk-in sale needs the sale-time collection first (TEC-992). Damaged stock is fixed with a count afterwards. The stock movements table offers "Geri al" on sales not yet returned and shows a "Geri alındı" badge.
 
 The customer panel's visit detail lists the visit's refunds (in progress, refunded, or being followed up) and the refunded total.
 
@@ -148,6 +180,8 @@ The customer panel's visit detail lists the visit's refunds (in progress, refund
 | `REFUND_IDEMPOTENCY_REUSED`  | 409    | a refund key sent again with another body                          |
 | `REFUND_NOT_OPEN`            | 409    | resolving a refund that is already settled                         |
 | `REFUND_COLLECTION_REVERSED` | 409    | refunding a collection that was reversed                           |
+| `REFUND_NOTHING_TO_CLOSE`    | 409    | closing a visit without a refund when it has none to make          |
+| `REFUND_IN_PROGRESS`         | 409    | closing a visit without a refund while a refund is still open      |
 | `VALIDATION_ERROR` `amount`  | 422    | `exceeds_refundable`: more than is left of the collection          |
 | `STOCK_ALREADY_RETURNED`     | 409    | a sale taken back twice                                            |
 | `STOCK_NOT_RETURNABLE`       | 409    | a return of a movement that is not a sale                          |
@@ -181,6 +215,10 @@ The customer panel's visit detail lists the visit's refunds (in progress, refund
   - manual refunds, including an empty till;
   - a cash partial refund after an on-site payment;
   - the follow-up kinds, facets, search and branch scope.
+- `followthrough_db_test.go` (`TestRefundFollowThrough`, TEC-978):
+  - closing without a refund (reason, history, off the list, back on it after a later failed refund, closing again);
+  - the refund notices;
+  - the status queries (found, not done, still pending with the backoff, nothing sent again).
 - `TestSalesLedger` step 9: the product return and its reversal, once only.
 - RT-A01 covers these tenant routes for another business's records:
   - the two original tenant routes;

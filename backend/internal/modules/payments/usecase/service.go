@@ -115,6 +115,7 @@ type Service struct {
 	cfg          Config
 	log          *slog.Logger
 	events       resourceevents.Publisher
+	notify       RefundNotifier
 	now          func() time.Time
 }
 

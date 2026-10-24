@@ -17,6 +17,8 @@ export const NOTIFICATION_EVENTS: NotificationEventCode[] = [
   "reservation.rescheduled",
   "reservation.cancelled",
   "reservation.reminder",
+  "refund.completed",
+  "refund.processing",
 ];
 
 /**
@@ -54,6 +56,8 @@ export const EVENT_LABEL_KEYS: Record<NotificationEventCode, string> = {
   "reservation.rescheduled": "customer_notifications.events.rescheduled",
   "reservation.cancelled": "customer_notifications.events.cancelled",
   "reservation.reminder": "customer_notifications.events.reminder",
+  "refund.completed": "customer_notifications.events.refund_completed",
+  "refund.processing": "customer_notifications.events.refund_processing",
 };
 
 export const EVENT_HINT_KEYS: Record<NotificationEventCode, string> = {
@@ -63,6 +67,8 @@ export const EVENT_HINT_KEYS: Record<NotificationEventCode, string> = {
   "reservation.rescheduled": "customer_notifications.event_hints.rescheduled",
   "reservation.cancelled": "customer_notifications.event_hints.cancelled",
   "reservation.reminder": "customer_notifications.event_hints.reminder",
+  "refund.completed": "customer_notifications.event_hints.refund_completed",
+  "refund.processing": "customer_notifications.event_hints.refund_processing",
 };
 
 /** Labels of every channel (the voice call only carries confirmations). */

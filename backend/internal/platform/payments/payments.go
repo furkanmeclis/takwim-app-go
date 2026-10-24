@@ -135,6 +135,44 @@ func RefunderOf(p Provider) (Refunder, bool) {
 	return r, ok
 }
 
+// What a refund status query found (TEC-978).
+const (
+	// RefundFound: the provider carried the refund out.
+	RefundFound = "succeeded"
+	// RefundNotDone: the provider has no such refund, or refused it:
+	// nothing was paid back.
+	RefundNotDone = "not_done"
+	// RefundStillPending: the provider has the refund but not its final
+	// state yet; ask again later.
+	RefundStillPending = "pending"
+)
+
+// RefundCheck is the answer of a refund status query.
+type RefundCheck struct {
+	// Status is RefundFound, RefundNotDone or RefundStillPending.
+	Status string
+	// ProviderRefundID is the provider's reference of the refund, when found.
+	ProviderRefundID string
+	// Message is the provider's reason (a refusal's code and text).
+	Message string
+}
+
+// RefundChecker is implemented by providers that can tell what happened to
+// a refund whose call had an unknown result, by our RefundRef or the
+// payment's references. It only asks; it never refunds. An error means the
+// state is still unknown: the refund is asked about again later and never
+// sent again.
+type RefundChecker interface {
+	CheckRefund(ctx context.Context, account integrations.Account, in RefundRequest) (RefundCheck, error)
+}
+
+// RefundCheckerOf returns the refund status query of a provider, when it
+// has one.
+func RefundCheckerOf(p Provider) (RefundChecker, bool) {
+	c, ok := p.(RefundChecker)
+	return c, ok
+}
+
 var (
 	// ErrInvalidSignature: a notification did not verify.
 	ErrInvalidSignature = errors.New("payments: invalid signature")

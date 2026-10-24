@@ -297,6 +297,23 @@ func (e *Engine) EmitReservation(ctx context.Context, q *db.Queries, orgID, rese
 	return out.created, err
 }
 
+// EmitEvent writes the notice of a catalog event for the customer of a
+// reservation with the business's rule for the event (the refund notices,
+// TEC-978), in the caller's transaction. key makes it unique for the
+// reservation (one notice per refund). created is false when the key was
+// used already or the business turned the event off.
+func (e *Engine) EmitEvent(ctx context.Context, q *db.Queries, orgID, reservationID int64, event, key string) (bool, error) {
+	if _, ok := catalog.Get(event); !ok {
+		return false, ErrUnknownEvent
+	}
+	r, err := q.GetNotifyReservation(ctx, db.GetNotifyReservationParams{OrganizationID: orgID, ID: reservationID})
+	if err != nil {
+		return false, fmt.Errorf("customer notice: reservation: %w", err)
+	}
+	out, err := e.emit(ctx, q, orgID, emitInput{event: event, key: key, reservation: r})
+	return out.created, err
+}
+
 func (e *Engine) clock() time.Time { return e.now().UTC().Truncate(time.Microsecond) }
 
 func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }

@@ -91,6 +91,26 @@ type ReservationPayments struct {
 	CanRefund         bool               `json:"can_refund"`
 	RefundCollections []RefundCollection `json:"refund_collections"`
 	RefundAccounts    []CollectAccount   `json:"refund_accounts"`
+	// CanClose: the caller may close the refund to make without paying the
+	// money back (TEC-978): money is held, no refund is under way, and a
+	// refund is waiting or the last one failed.
+	CanClose bool `json:"can_close"`
+	// Kept is the last closing without a refund while the payment state is
+	// kept (null otherwise).
+	Kept *Kept `json:"kept"`
+}
+
+// Kept is a closing without a refund: when, why and by whom.
+type Kept struct {
+	At     time.Time `json:"at"`
+	Reason string    `json:"reason"`
+	By     *Ref      `json:"by"`
+}
+
+// CloseInput closes a refund to make without paying the money back; the
+// reason is required (it goes into the visit's history).
+type CloseInput struct {
+	Reason string `json:"reason"`
 }
 
 // Refund statuses: requested until the money is returned and posted to the
@@ -150,6 +170,13 @@ type Refund struct {
 	// NeedsAction: the provider's result is unknown, or it refunded and the
 	// posting is still missing; a person settles it (resolve).
 	NeedsAction bool `json:"needs_action"`
+	// AutoCheck: the result is unknown and the worker asks the provider's
+	// refund status query (TEC-978); ProviderChecks counts the queries made
+	// and NextCheckAt is when the next one is due.
+	AutoCheck         bool       `json:"auto_check"`
+	ProviderChecks    int32      `json:"provider_checks"`
+	ProviderCheckedAt *time.Time `json:"provider_checked_at"`
+	NextCheckAt       *time.Time `json:"next_check_at"`
 }
 
 // RefundCollection is a live collection of the visit and what is left of it.

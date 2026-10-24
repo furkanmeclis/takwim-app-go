@@ -19,6 +19,13 @@ const (
 	ReservationRescheduled = "reservation.rescheduled"
 	ReservationCancelled   = "reservation.cancelled"
 	ReservationReminder    = "reservation.reminder"
+	// RefundCompleted / RefundProcessing tell the customer about a refund of
+	// a visit (TEC-978): the money was paid back, or the refund did not go
+	// through at once (the provider refused it or its result is unknown) and
+	// the business follows it. One notice per refund and event; never the
+	// amount (no prices in messages).
+	RefundCompleted  = "refund.completed"
+	RefundProcessing = "refund.processing"
 	// ConfirmationRequest asks the customer to confirm a booking (the
 	// Konfirmasyon add-on, TEC-921). Its channels and timing come from the
 	// confirmation settings, not from a notification rule, so it is not in
@@ -123,6 +130,26 @@ var events = []Event{
 			Subject: "Randevu hatırlatması ({{business_name}})",
 			Body: "Merhaba {{customer_name}},\n\nrandevunuzu hatırlatırız: {{starts_at}}.\nHizmet: {{services}}\nŞube: {{branch_name}}\nNo: {{reference}}\n\n" +
 				"Görmek, iptal etmek veya değiştirmek için: {{link}}" + signature,
+		},
+	},
+	{
+		Code: RefundCompleted, Channels: defaultChannels,
+		Text: "{{business_name}}: {{date}} tarihli randevunuzun (no {{reference}}) iadesi yapıldı. " +
+			"Hesabınıza yansıması ödeme yöntemine göre birkaç iş günü sürebilir. Ayrıntılar: {{link}}",
+		Email: Template{
+			Subject: "İadeniz yapıldı ({{business_name}})",
+			Body: "Merhaba {{customer_name}},\n\n{{starts_at}} tarihli randevunuzun iadesi yapıldı.\nNo: {{reference}}\nHizmet: {{services}}\n\n" +
+				"Hesabınıza yansıması ödeme yöntemine göre birkaç iş günü sürebilir. Ödemelerinizi ve iadelerinizi görmek için: {{link}}" + signature,
+		},
+	},
+	{
+		Code: RefundProcessing, Channels: defaultChannels,
+		Text: "{{business_name}}: {{date}} tarihli randevunuzun (no {{reference}}) iadesi işleniyor; işletme iadenizi takip ediyor. " +
+			"Ayrıntılar: {{link}}",
+		Email: Template{
+			Subject: "İadeniz işleniyor ({{business_name}})",
+			Body: "Merhaba {{customer_name}},\n\n{{starts_at}} tarihli randevunuzun iadesi işleniyor.\nNo: {{reference}}\nHizmet: {{services}}\n\n" +
+				"İşletme iadenizi takip ediyor. Ödemelerinizi ve iadelerinizi görmek için: {{link}}" + signature,
 		},
 	},
 }

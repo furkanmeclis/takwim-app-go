@@ -96,7 +96,12 @@ func (s *Service) refundView(ctx context.Context, orgID int64, row db.Reservatio
 		return err
 	}
 	for _, f := range refunds {
-		out.Refunds = append(out.Refunds, mapRefund(f))
+		r := mapRefund(f)
+		r.AutoCheck = r.Status == model.RefundRequested && r.ProviderStatus == model.ProviderUncertain && s.canCheck(r.Provider)
+		out.Refunds = append(out.Refunds, r)
+	}
+	if err := s.keptView(ctx, orgID, row, out, allowed); err != nil {
+		return err
 	}
 	cols, err := s.refundCollections(ctx, s.q, orgID, row.ID)
 	if err != nil {
@@ -134,6 +139,17 @@ func (s *Service) refundView(ctx context.Context, orgID int64, row db.Reservatio
 	return nil
 }
 
+// canCheck reports whether a provider can be asked what happened to a
+// refund (its refund status query, TEC-978).
+func (s *Service) canCheck(provider string) bool {
+	p, ok := s.provider(provider)
+	if !ok {
+		return false
+	}
+	_, ok = payments.RefundCheckerOf(p)
+	return ok
+}
+
 func mapRefund(f db.ListReservationRefundsRow) model.Refund {
 	out := model.Refund{
 		UUID: f.Uuid, Channel: f.Channel, Provider: f.Provider, Method: f.Method, Amount: amountOf(f.Amount), Currency: f.Currency,
@@ -141,7 +157,8 @@ func mapRefund(f db.ListReservationRefundsRow) model.Refund {
 		Reason: f.Reason, ResolutionNote: f.ResolutionNote, CollectionUUID: f.CollectionUuid,
 		CashAccount: model.Ref{UUID: f.CashAccountUuid, Name: f.CashAccountName},
 		ProviderAt:  timePtr(f.ProviderAnsweredAt), ReflectedAt: timePtr(f.ReflectedAt), CreatedAt: f.CreatedAt.Time,
-		NeedsAction: f.Status == model.RefundRequested && f.ProviderStatus != "",
+		NeedsAction:    f.Status == model.RefundRequested && f.ProviderStatus != "",
+		ProviderChecks: f.ProviderChecks, ProviderCheckedAt: timePtr(f.ProviderCheckedAt), NextCheckAt: timePtr(f.NextCheckAt),
 	}
 	if f.LedgerEntryUuid.Valid {
 		v := uuid.UUID(f.LedgerEntryUuid.Bytes)
@@ -279,6 +296,7 @@ func (s *Service) Refund(ctx context.Context, orgID int64, id uuid.UUID, caller 
 			return RefundResult{}, mapRefundErr(err)
 		}
 		s.changed(ctx, orgID, id)
+		s.noticeRefund(ctx, orgID, id, refundUUID, NoticeRefundCompleted)
 		return s.result(ctx, orgID, id, caller, opts, refundUUID, false)
 	}
 
@@ -396,6 +414,8 @@ func (s *Service) askProvider(ctx context.Context, orgID int64, resID uuid.UUID,
 	}
 	if answer.ProviderStatus != model.ProviderSucceeded {
 		s.log.Warn("refund_not_done", "organization_id", orgID, "refund", f.Uuid, "provider_status", answer.ProviderStatus, "reason", answer.FailureReason)
+		// Refused or unknown: the business follows it (TEC-978).
+		s.noticeRefund(ctx, orgID, resID, f.Uuid, NoticeRefundProcessing)
 		return
 	}
 	if err := s.postProviderRefund(ctx, orgID, resID, f, userID); err != nil {
@@ -404,7 +424,7 @@ func (s *Service) askProvider(ctx context.Context, orgID int64, resID uuid.UUID,
 }
 
 // postProviderRefund posts a refund the provider confirmed, in the visit's
-// transaction.
+// transaction, and tells the customer.
 func (s *Service) postProviderRefund(ctx context.Context, orgID int64, resID uuid.UUID, f db.Refund, userID *int64) error {
 	actor := int64(0)
 	if userID != nil {
@@ -417,6 +437,9 @@ func (s *Service) postProviderRefund(ctx context.Context, orgID int64, resID uui
 			}
 			return paidOf(ctx, q, orgID, r.ID, r.Currency)
 		})
+	if err == nil {
+		s.noticeRefund(ctx, orgID, resID, f.Uuid, NoticeRefundCompleted)
+	}
 	return err
 }
 

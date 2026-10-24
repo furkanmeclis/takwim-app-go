@@ -142,7 +142,7 @@ var listEnums = map[string][]string{
 		model.ConfirmationNotRequired, model.ConfirmationScheduled, model.ConfirmationPending,
 		model.ConfirmationConfirmed, model.ConfirmationDeclined, model.ConfirmationExpired,
 	},
-	"payment_status": {model.PaymentOnSite, model.PaymentOnlinePending, model.PaymentPaid, model.PaymentRefundPending, model.PaymentPartiallyRefunded, model.PaymentRefunded, model.PaymentFailed},
+	"payment_status": {model.PaymentOnSite, model.PaymentOnlinePending, model.PaymentPaid, model.PaymentRefundPending, model.PaymentPartiallyRefunded, model.PaymentRefunded, model.PaymentFailed, model.PaymentKept},
 	"source":         {model.SourcePanel, model.SourceOnline, model.SourceEmbed},
 }
 

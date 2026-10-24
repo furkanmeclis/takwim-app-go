@@ -5430,8 +5430,11 @@ export interface paths {
          *       `channel` / `unsupported` when the provider cannot). A confirmed
          *       refund is posted at once (`succeeded`), a refusal is `failed`, an
          *       unknown result (timeout, 5xx) stays `requested` with
-         *       `provider_status: uncertain` and is never sent again: settle it
-         *       with `POST /v1/tenant/refunds/{uuid}/resolve`.
+         *       `provider_status: uncertain` and is never sent again. When the
+         *       provider has a refund status query (`auto_check`), the worker asks
+         *       it (found: posted; not done: `failed`; otherwise asked again
+         *       later, 5 min, 15 min, 1 h, 6 h, then daily); a person can always
+         *       settle it with `POST /v1/tenant/refunds/{uuid}/resolve`.
          *     - `channel: manual` records money handed back (`cash`, `card`,
          *       `transfer`) or a refund made in the provider's own panel
          *       (`online`) out of `cash_account_uuid` (an active till, bank or
@@ -5443,6 +5446,10 @@ export interface paths {
          *     never changes. `idempotency_key` identifies the request: the same key
          *     answers the same refund with `200` and `replayed: true` (sending
          *     nothing), the key with another body `409 REFUND_IDEMPOTENCY_REUSED`.
+         *     The customer is told through the customer notifications (business
+         *     rule of the event): `refund.completed` once the money is paid back,
+         *     `refund.processing` when the provider refused it or its result is
+         *     unknown (once per refund each, no amounts).
          *     Needs `tenant.payment.refund`, the cash module and
          *     `tenant.reservations.read` or `.own`.
          */
@@ -5472,6 +5479,39 @@ export interface paths {
          *     cash module and the reservation's reach.
          */
         post: operations["postTenantRefundResolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/close-without-refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a refund to make without paying it back
+         * @description Closes the refund to make of a visit when the money stays with the
+         *     business (the customer left it, or it counts for the next visit):
+         *     `payment_status` becomes `kept`, the reason goes into the visit's
+         *     history (event `payment_kept`) and the visit leaves the payment
+         *     follow-up list. The money stays on the customer's ledger as a
+         *     credit and can still be paid back later; a refund that fails after
+         *     the closing puts the visit back on the list.
+         *
+         *     Allowed when money is held for the visit, no refund is under way
+         *     (`409 REFUND_IN_PROGRESS`: settle it first) and a refund is waiting
+         *     (`refund_pending`) or the last refund failed; otherwise
+         *     `409 REFUND_NOTHING_TO_CLOSE` (`can_close` of the payment view says
+         *     so beforehand). Moves no money. Needs `tenant.payment.refund`, the
+         *     cash module and `tenant.reservations.read` or `.own`.
+         */
+        post: operations["postTenantReservationCloseWithoutRefund"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11992,7 +12032,7 @@ export interface components {
         };
         CustomerNotificationEvent: {
             /** @enum {string} */
-            code: "reservation.requested" | "reservation.accepted" | "reservation.rejected" | "reservation.rescheduled" | "reservation.cancelled" | "reservation.reminder";
+            code: "reservation.requested" | "reservation.accepted" | "reservation.rejected" | "reservation.rescheduled" | "reservation.cancelled" | "reservation.reminder" | "refund.completed" | "refund.processing";
             reminder: boolean;
             variables: string[];
             rule: components["schemas"]["CustomerNotificationRule"];
@@ -13215,7 +13255,7 @@ export interface components {
             /** @enum {string} */
             confirmation_status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
             /** @enum {string} */
-            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
             /** Format: uuid */
             branch_uuid: string;
             branch_name: string;
@@ -15880,7 +15920,7 @@ export interface components {
         /** @enum {string} */
         TenantReservationConfirmationStatus: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
         /** @enum {string} */
-        TenantReservationPaymentStatus: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+        TenantReservationPaymentStatus: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
         /** @enum {string} */
         TenantReservationSource: "panel" | "online" | "embed";
         TenantReservationListItem: {
@@ -16729,7 +16769,7 @@ export interface components {
             /** @enum {string} */
             confirmation_status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
             /** @enum {string} */
-            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
             branch: components["schemas"]["PublicRef"];
             timezone: string;
             /** Format: date-time */
@@ -16908,7 +16948,7 @@ export interface components {
             };
             status: string;
             /** @enum {string} */
-            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
             currency: string;
             expected: components["schemas"]["MoneyAmount"];
             paid: components["schemas"]["MoneyAmount"];
@@ -16923,6 +16963,23 @@ export interface components {
             can_refund: boolean;
             refund_collections: components["schemas"]["RefundCollection"][];
             refund_accounts: components["schemas"]["CollectAccount"][];
+            /** @description The caller may close the refund to make without paying it back (`POST .../close-without-refund`). */
+            can_close: boolean;
+            /** @description The last closing without a refund while `payment_status` is `kept`. */
+            kept: {
+                /** Format: date-time */
+                at: string;
+                reason: string;
+                by: {
+                    /** Format: uuid */
+                    uuid: string;
+                    name: string;
+                } | null;
+            } | null;
+        };
+        ReservationCloseWithoutRefundRequest: {
+            /** @description Why the money stays with the business (written into the visit's history). */
+            reason: string;
         };
         /**
          * @description One refund request with its three steps: the request, the
@@ -16930,6 +16987,9 @@ export interface components {
          *     the posting to the books (`ledger_entry_uuid`, `reflected_at`).
          *     `needs_action`: a provider refund still open after the provider was
          *     asked (unknown result, or confirmed and not posted yet).
+         *     `auto_check`: the result is unknown and the worker asks the
+         *     provider's refund status query (`provider_checks` made so far, the
+         *     next at `next_check_at`).
          */
         Refund: {
             /** Format: uuid */
@@ -16970,6 +17030,13 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             needs_action: boolean;
+            auto_check: boolean;
+            /** Format: int32 */
+            provider_checks: number;
+            /** Format: date-time */
+            provider_checked_at: string | null;
+            /** Format: date-time */
+            next_check_at: string | null;
         };
         RefundCollection: {
             /** Format: uuid */
@@ -17033,7 +17100,7 @@ export interface components {
             kind: "refund_pending" | "refund_failed" | "refund_unverified" | "unpaid";
             status: string;
             /** @enum {string} */
-            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
             cancel_reason: string | null;
             /** Format: date-time */
             starts_at: string;
@@ -17272,7 +17339,7 @@ export interface components {
             /** @enum {string} */
             method: "on_site" | "online";
             /** @enum {string} */
-            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
         };
         CustomerRef: {
             /** Format: uuid */
@@ -17304,7 +17371,7 @@ export interface components {
             /** @enum {string} */
             confirmation_status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
             /** @enum {string} */
-            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed" | "kept";
             cancel_reason: string | null;
             services: string[];
             staff: string[];
@@ -27689,7 +27756,7 @@ export interface operations {
                 approval_status?: string;
                 /** @description `not_required`, `scheduled`, `pending`, `confirmed`, `declined`, `expired` (any of; TEC-921) */
                 confirmation_status?: string;
-                /** @description `on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` (any of) */
+                /** @description `on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed`, `kept` (any of) */
                 payment_status?: string;
                 /** @description `panel`, `online`, `embed` (any of) */
                 source?: string;
@@ -28050,6 +28117,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeRefundResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantReservationCloseWithoutRefund: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservationCloseWithoutRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description The payments of the visit after the closing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeReservationPayments"];
                 };
             };
             400: components["responses"]["BadRequest"];

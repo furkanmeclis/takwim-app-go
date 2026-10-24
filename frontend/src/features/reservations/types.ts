@@ -23,6 +23,9 @@ export type RefundCollection = Schemas["RefundCollection"];
 export type ReservationRefundRequest = Schemas["ReservationRefundRequest"];
 export type RefundResult = Schemas["RefundResult"];
 export type RefundMethod = NonNullable<ReservationRefundRequest["method"]>;
+/** Closes a refund to make without paying it back (TEC-978). */
+export type ReservationCloseWithoutRefundRequest =
+  Schemas["ReservationCloseWithoutRefundRequest"];
 export type RefundResolveRequest = {
   outcome: "succeeded" | "failed";
   note?: string;
