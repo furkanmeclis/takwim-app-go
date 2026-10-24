@@ -138,6 +138,18 @@ export const reservationsService = {
     );
   },
 
+  /** Stock items of a branch for the new reservation form (TEC-977). */
+  branchProductOptions(slug: string, branchUuid: string, q?: string) {
+    return tenantRequest<{ items: ReservationProductOption[] }>(
+      slug,
+      "GET",
+      `${BASE}/product-options`,
+      {
+        query: q ? { branch_uuid: branchUuid, q } : { branch_uuid: branchUuid },
+      },
+    );
+  },
+
   /** Adds a product and reserves its units in the branch's stock. */
   addProduct(slug: string, uuid: string, body: ReservationProductRequest) {
     return tenantRequest<Reservation>(

@@ -315,6 +315,22 @@ type Reservation struct {
 	History       []HistoryEntry `json:"history"`
 	// Refunds are the refunds of the visit (TEC-913), newest first.
 	Refunds []Refund `json:"refunds"`
+	// Products are the products taken with the visit (TEC-977).
+	Products []Product `json:"products"`
+}
+
+// Product is what the customer sees of a product of the visit (TEC-977):
+// held (reserved for the visit), delivered (handed over) or released (the
+// visit was cancelled, rejected, expired or missed). Lines the business
+// removed are not shown; no seller, cost or stock data.
+type Product struct {
+	UUID        uuid.UUID   `json:"uuid"`
+	Name        string      `json:"name"`
+	VariantName *string     `json:"variant_name"`
+	Quantity    int         `json:"quantity"`
+	UnitPrice   money.Money `json:"unit_price"`
+	Total       money.Money `json:"total"`
+	Status      string      `json:"status"`
 }
 
 // Refund is what the customer sees of one refund: requested (under way),

@@ -46,6 +46,8 @@ func RegisterRoutes(
 	route("GET /v1/tenant/reservations/form", h.Form, read)
 	route("GET /v1/tenant/reservations/calendar", h.Calendar, read)
 	route("GET /v1/tenant/reservations/agenda", h.Agenda, read)
+	// Stock items of a branch for the new reservation form (TEC-977).
+	route("GET /v1/tenant/reservations/product-options", h.BranchProductOptions, read)
 	route("GET /v1/tenant/reservations", h.List, read)
 	route("POST /v1/tenant/reservations", h.Create, write)
 	route("GET /v1/tenant/reservations/{uuid}", h.Get, read)

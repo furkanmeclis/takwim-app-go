@@ -52,6 +52,35 @@ func (h *Handler) ProductOptions(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
 }
 
+// BranchProductOptions serves GET /v1/tenant/reservations/product-options
+// (TEC-977): the stock items of ?branch_uuid= with their available units
+// for the new reservation form (?q= matches name, SKU or barcode).
+func (h *Handler) BranchProductOptions(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	if !productsAllowed(w, r) {
+		return
+	}
+	if _, ok := caller(w, r, rbac.PermTenantReservationsRead); !ok {
+		return
+	}
+	raw := r.URL.Query().Get("branch_uuid")
+	if raw == "" {
+		response.ValidationError(w, r, []response.Detail{{Field: "branch_uuid", Message: "branch is required", Code: "required"}})
+		return
+	}
+	branch, err := uuid.Parse(raw)
+	if err != nil {
+		response.ValidationError(w, r, []response.Detail{{Field: "branch_uuid", Message: "branch must be a uuid", Code: "invalid"}})
+		return
+	}
+	items, err := h.svc.BranchProductOptions(r.Context(), scope.ID, branch, r.URL.Query().Get("q"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
+}
+
 // AddProduct serves POST /v1/tenant/reservations/{uuid}/products.
 func (h *Handler) AddProduct(w http.ResponseWriter, r *http.Request) {
 	scope := orgctx.Must(r.Context())

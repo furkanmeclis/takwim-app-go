@@ -15,6 +15,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
@@ -403,6 +404,21 @@ func (s *Service) ProductOptions(ctx context.Context, orgID int64, id uuid.UUID,
 		return nil, err
 	}
 	return ListProductOptions(ctx, s.q, orgID, row.BranchID, q, false, 50)
+}
+
+// BranchProductOptions lists the stock items of a branch for a booking
+// that does not exist yet (the panel's new reservation form, TEC-977). An
+// unknown branch, one of another business or outside the caller's branch
+// scope is availabilityusecase.ErrNotFound.
+func (s *Service) BranchProductOptions(ctx context.Context, orgID int64, branchUUID uuid.UUID, q string) ([]model.ProductOption, error) {
+	branch, err := s.q.GetBranchByUUID(ctx, db.GetBranchByUUIDParams{OrganizationID: orgID, Uuid: branchUUID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && orgctx.CheckBranch(ctx, branch.ID) != nil) {
+		return nil, availabilityusecase.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ListProductOptions(ctx, s.q, orgID, branch.ID, q, false, 50)
 }
 
 // ListProductOptions lists the stock items sold in a branch. onlineOnly

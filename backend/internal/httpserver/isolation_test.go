@@ -630,6 +630,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/customer-notifications/deliveries": {"?customer_uuid=" + orgB.ids["customer"],
 			"?reservation_uuid=" + orgB.ids["reservation"], "?q=" + orgB.marker},
 		"GET /v1/tenant/reservations/agenda": {"?from=2030-01-07&to=2030-01-13", "?from=2030-01-07&include_cancelled=true"},
+		"GET /v1/tenant/reservations/product-options": {"?branch_uuid=" + orgB.ids["branch"],
+			"?branch_uuid=" + orgA.ids["branch"] + "&q=" + orgB.ids["productSKU"], "?branch_uuid=" + orgA.ids["branch"]},
 		"GET /v1/tenant/sales/lines": {"?branch=" + orgB.ids["branch"], "?reservation=" + orgB.ids["reservation"],
 			"?customer=" + orgB.ids["customer"], "?staff=" + orgB.ids["staff"], "?q=" + orgB.marker},
 		"GET /v1/tenant/sales/entries": {"?branch=" + orgB.ids["branch"], "?reservation=" + orgB.ids["reservation"],
