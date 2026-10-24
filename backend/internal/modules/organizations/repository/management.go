@@ -140,6 +140,15 @@ func (r *Postgres) SetOrganizationLogo(ctx context.Context, orgID int64, key *st
 	return row, mapErr(err)
 }
 
+func (r *Postgres) SetOrganizationCover(ctx context.Context, orgID int64, key *string) (db.Organization, error) {
+	v := pgtype.Text{}
+	if key != nil {
+		v = pgtype.Text{String: *key, Valid: true}
+	}
+	row, err := r.q.SetOrganizationCover(ctx, db.SetOrganizationCoverParams{ID: orgID, CoverObjectKey: v})
+	return row, mapErr(err)
+}
+
 func int8Ptr(v *int64) pgtype.Int8 {
 	if v == nil || *v <= 0 {
 		return pgtype.Int8{}

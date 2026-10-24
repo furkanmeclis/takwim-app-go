@@ -36,6 +36,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/phone"
 )
@@ -62,6 +63,8 @@ var (
 	ErrReservationNotFound = errors.New("reservation not found")
 	// ErrLogoNotFound: the business has no logo.
 	ErrLogoNotFound = errors.New("logo not found")
+	// ErrCoverNotFound: the business has no cover image.
+	ErrCoverNotFound = errors.New("cover not found")
 )
 
 // UnavailableError: the business does not take public bookings on the
@@ -170,15 +173,16 @@ func (s *Service) SetClock(now func() time.Time) {
 
 // Org is a business resolved from its slug.
 type Org struct {
-	ID            int64
-	UUID          uuid.UUID
-	Slug          string
-	Name          string
-	Sector        string
-	Timezone      string
-	Currency      string
-	LogoObjectKey string
-	modules       entitlement.Effective
+	ID             int64
+	UUID           uuid.UUID
+	Slug           string
+	Name           string
+	Sector         string
+	Timezone       string
+	Currency       string
+	LogoObjectKey  string
+	CoverObjectKey string
+	modules        entitlement.Effective
 }
 
 // Scope is a minimal organization scope for activity and live events.
@@ -216,21 +220,34 @@ func (s *Service) Resolve(ctx context.Context, slug string) (Org, error) {
 	return Org{
 		ID: row.ID, UUID: row.Uuid, Slug: row.Slug, Name: row.Name, Sector: row.Sector,
 		Timezone: row.Timezone, Currency: row.Currency, LogoObjectKey: row.LogoObjectKey.String,
-		modules: entitlement.Resolve(row.Sector, st),
+		CoverObjectKey: row.CoverObjectKey.String,
+		modules:        entitlement.Resolve(row.Sector, st),
 	}, nil
 }
 
 // LogoURL is the public logo stream of the business (versioned by key).
 func LogoURL(o Org) *string {
-	if o.LogoObjectKey == "" {
+	return mediaURL(o.Slug, "logo", o.LogoObjectKey)
+}
+
+// CoverURL is the public cover image stream of the business page
+// (TEC-966), versioned by key.
+func CoverURL(o Org) *string {
+	return mediaURL(o.Slug, "cover", o.CoverObjectKey)
+}
+
+// mediaURL builds /v1/public/businesses/{slug}/{name}?v= with a version
+// derived from the object key (FNV-1a), nil without a key.
+func mediaURL(slug, name, key string) *string {
+	if key == "" {
 		return nil
 	}
 	h := uint32(2166136261)
-	for i := 0; i < len(o.LogoObjectKey); i++ {
-		h ^= uint32(o.LogoObjectKey[i])
+	for i := 0; i < len(key); i++ {
+		h ^= uint32(key[i])
 		h *= 16777619
 	}
-	u := fmt.Sprintf("/v1/public/businesses/%s/logo?v=%x", o.Slug, h)
+	u := fmt.Sprintf("/v1/public/businesses/%s/%s?v=%x", slug, name, h)
 	return &u
 }
 
@@ -240,6 +257,15 @@ func (s *Service) Logo(o Org) (string, error) {
 		return "", ErrLogoNotFound
 	}
 	return o.LogoObjectKey, nil
+}
+
+// Cover returns the object key of the business page cover. Only a key under
+// the business's own storage prefix is served.
+func (s *Service) Cover(o Org) (string, error) {
+	if o.CoverObjectKey == "" || !storage.OrganizationOwnsKey(o.CoverObjectKey, o.UUID.String()) {
+		return "", ErrCoverNotFound
+	}
+	return o.CoverObjectKey, nil
 }
 
 // booking computes whether the business takes public bookings.
@@ -347,7 +373,21 @@ func (s *Service) Business(ctx context.Context, o Org) (model.Business, error) {
 		Booking:     b,
 		BranchCount: len(branches),
 		Embed:       model.Embed{AllowedOrigins: append([]string{}, v.Settings.Embed.AllowedOrigins...)},
+		Theme:       theme(o, v.Settings.Theme),
 	}, nil
+}
+
+// theme is the customer-facing theme of the page (TEC-966). A version saved
+// before the theme decodes with an empty font: the page's default.
+func theme(o Org, t orgsettings.Theme) model.Theme {
+	font := t.Font
+	if font == "" {
+		font = orgsettings.FontDefault
+	}
+	return model.Theme{
+		PrimaryColor: t.PrimaryColor, AccentColor: t.AccentColor, Font: font,
+		Headline: t.Headline, Description: t.Description, CoverURL: CoverURL(o),
+	}
 }
 
 // Branches lists the branches shown on the customer screens.

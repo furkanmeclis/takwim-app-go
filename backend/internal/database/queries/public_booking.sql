@@ -3,7 +3,7 @@
 -- Every query below filters by the organization id of that business.
 
 -- name: GetPublicOrganizationBySlug :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at,
+SELECT id, uuid, slug, name, logo_object_key, cover_object_key, status, access_starts_at, access_ends_at,
        sector, timezone, currency, plan, addons, branch_limit, staff_limit
 FROM organizations
 WHERE slug = sqlc.arg(slug) AND deleted_at IS NULL;

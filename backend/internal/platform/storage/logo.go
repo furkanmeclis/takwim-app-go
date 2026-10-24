@@ -10,6 +10,10 @@ import (
 // MaxLogoBytes is the maximum accepted logo upload size (2 MiB).
 const MaxLogoBytes = 2 << 20
 
+// MaxCoverBytes is the maximum accepted cover image upload size (5 MiB);
+// the cover is a wide photo, so it may be larger than a logo.
+const MaxCoverBytes = 5 << 20
+
 var logoMIMEToExt = map[string]string{
 	"image/jpeg": "jpg",
 	"image/png":  "png",
@@ -76,6 +80,17 @@ func ValidateLogoSize(size int64) error {
 	}
 	if size > MaxLogoBytes {
 		return fmt.Errorf("logo must be at most 2 MiB")
+	}
+	return nil
+}
+
+// ValidateCoverSize rejects oversized cover uploads.
+func ValidateCoverSize(size int64) error {
+	if size <= 0 {
+		return fmt.Errorf("cover file is required")
+	}
+	if size > MaxCoverBytes {
+		return fmt.Errorf("cover must be at most 5 MiB")
 	}
 	return nil
 }

@@ -3020,6 +3020,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/organization/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload the business page cover image
+         * @description `tenant.settings.write`. Multipart field `cover` (PNG, JPEG or WebP, at most 5 MiB): the cover of the business page and the embedded screen (TEC-966). The response carries the new API-owned `cover_url`; the public profile's `theme.cover_url` is the same stream.
+         */
+        put: operations["putTenantOrganizationCover"];
+        post?: never;
+        /**
+         * Remove the business page cover image
+         * @description `tenant.settings.write`. The page falls back to the first branch photo.
+         */
+        delete: operations["deleteTenantOrganizationCover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/roles/meta": {
         parameters: {
             query?: never;
@@ -8337,6 +8361,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/businesses/{slug}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Business page cover image
+         * @description No authentication. Use the `theme.cover_url` of the profile (it carries a version); `404` when the business has no cover (TEC-966).
+         */
+        get: operations["getPublicBusinessCover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/businesses/{slug}/branches": {
         parameters: {
             query?: never;
@@ -10328,6 +10372,8 @@ export interface components {
             name: string;
             /** @description API-owned logo stream; never an object key */
             logo_url: string | null;
+            /** @description API-owned public stream of the business page cover image (`/v1/public/businesses/{slug}/cover`, versioned; TEC-966); never an object key */
+            cover_url: string | null;
             /** @enum {string} */
             status: "active" | "suspended";
             /**
@@ -14676,7 +14722,31 @@ export interface components {
             default_vat_rate: string;
             invoice_item_mappings: components["schemas"]["OrganizationInvoiceItemMapping"][];
         };
+        /** @description Look of the business page and the embedded screen (TEC-966). Colours are `#rrggbb` (stored lower case; empty = the app's neutral colour); the page checks their contrast and keeps the neutral theme where it is too low. The font is one the page ships. The cover image is uploaded separately (`PUT /v1/tenant/organization/cover`). */
+        OrganizationThemeSettings: {
+            /**
+             * @description Buttons, links and the selected step; `#rrggbb` or empty
+             * @example #1d4ed8
+             */
+            primary_color: string;
+            /**
+             * @description Soft highlight (hover, selected cards); `#rrggbb` or empty
+             * @example #dbeafe
+             */
+            accent_color: string;
+            font: components["schemas"]["BusinessThemeFont"];
+            /** @description Welcome headline of the page */
+            headline: string;
+            /** @description Welcome text under the headline */
+            description: string;
+        };
+        /**
+         * @description Font of the business page; `default` is the app's own font.
+         * @enum {string}
+         */
+        BusinessThemeFont: "default" | "inter" | "manrope" | "nunito" | "lora" | "playfair_display";
         OrganizationSettings: {
+            theme: components["schemas"]["OrganizationThemeSettings"];
             company: components["schemas"]["OrganizationCompanySettings"];
             reservation: components["schemas"]["OrganizationReservationSettings"];
             payment: components["schemas"]["OrganizationPaymentSettings"];
@@ -16844,6 +16914,24 @@ export interface components {
          */
         PublicChannel: "web" | "widget" | "api";
         PublicBusiness: {
+            /** @description Look of the page (TEC-966); only customer-facing values. The page applies the colours as CSS variables after a contrast check and falls back to the neutral theme where it is too low. */
+            theme: {
+                /**
+                 * @description `#rrggbb` or empty (neutral)
+                 * @example #1d4ed8
+                 */
+                primary_color: string;
+                /**
+                 * @description `#rrggbb` or empty (neutral)
+                 * @example #dbeafe
+                 */
+                accent_color: string;
+                font: components["schemas"]["BusinessThemeFont"];
+                headline: string;
+                description: string;
+                /** @description API-owned cover image stream (versioned); null = none, the page then shows the first branch photo. */
+                cover_url: string | null;
+            };
             /** Format: uuid */
             uuid: string;
             slug: string;
@@ -23904,6 +23992,71 @@ export interface operations {
         };
     };
     deleteTenantOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationProfile"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    putTenantOrganizationCover: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    cover: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    deleteTenantOrganizationCover: {
         parameters: {
             query?: never;
             header: {
@@ -34238,6 +34391,33 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Logo image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPublicBusinessCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover image */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -83,13 +83,29 @@ export const FIELD_LABEL_KEYS: Record<string, string> = {
   "policies.change": "tenant_settings.fields.change",
   "tax.default_vat_rate": "tenant_settings.fields.default_vat_rate",
   "embed.allowed_origins": "tenant_settings.fields.embed_origins",
+  "theme.primary_color": "tenant_settings.theme.primary_color",
+  "theme.accent_color": "tenant_settings.theme.accent_color",
+  "theme.font": "tenant_settings.theme.font",
+  "theme.headline": "tenant_settings.theme.headline",
+  "theme.description": "tenant_settings.theme.description",
 };
+
+/** Limits of the theme texts (API limits). */
+export const MAX_THEME_HEADLINE = 80;
+export const MAX_THEME_DESCRIPTION = 300;
 
 /** Which tab holds a settings dot path (error badges, jump to first error). */
 export type SettingsTab =
-  "company" | "reservation" | "booking" | "policies" | "channels" | "tax";
+  | "company"
+  | "reservation"
+  | "booking"
+  | "policies"
+  | "channels"
+  | "theme"
+  | "tax";
 
 export function tabOfPath(path: string): SettingsTab {
+  if (path.startsWith("theme")) return "theme";
   if (path.startsWith("company")) return "company";
   if (path.startsWith("reservation") || path.startsWith("payment"))
     return "reservation";

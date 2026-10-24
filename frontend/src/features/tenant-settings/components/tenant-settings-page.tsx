@@ -27,6 +27,7 @@ import {
   TaxSection,
 } from "@/features/tenant-settings/components/settings-sections";
 import { SettingsVersionsTab } from "@/features/tenant-settings/components/settings-versions-tab";
+import { ThemeSection } from "@/features/tenant-settings/components/theme-section";
 import {
   useSaveTenantSettings,
   useTenantSettings,
@@ -52,6 +53,7 @@ const FORM_TABS: { id: SettingsTab; labelKey: string }[] = [
   { id: "booking", labelKey: "tenant_settings.tabs.booking" },
   { id: "policies", labelKey: "tenant_settings.tabs.policies" },
   { id: "channels", labelKey: "tenant_settings.tabs.channels" },
+  { id: "theme", labelKey: "tenant_settings.tabs.theme" },
   { id: "tax", labelKey: "tenant_settings.tabs.tax" },
 ];
 
@@ -182,6 +184,13 @@ function SettingsTabs({
         <ChannelsSection disabled={disabled} />
       </TabsContent>
       <TabsContent
+        value="theme"
+        forceMount
+        className="data-[state=inactive]:hidden"
+      >
+        <ThemeSection disabled={disabled} />
+      </TabsContent>
+      <TabsContent
         value="tax"
         forceMount
         className="data-[state=inactive]:hidden"
@@ -223,7 +232,7 @@ function SettingsTabs({
 /**
  * Organization settings (TEC-690): one versioned document edited in tabs
  * (company, reservation & payment, booking flow & form, policies, sales
- * channels, tax) with a
+ * channels, page theme, tax) with a
  * sticky save bar; every save stores a new immutable version, browsable and
  * comparable in the history tab.
  */

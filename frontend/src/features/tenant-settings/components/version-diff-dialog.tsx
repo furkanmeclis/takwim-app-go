@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { THEME_FONT_LABEL_KEYS } from "@/features/business-page/lib/theme";
 import {
   FIELD_LABEL_KEYS,
   INVOICE_ITEM_LABEL_KEYS,
@@ -38,6 +39,12 @@ const MAPPING_FIELD_KEYS: Record<string, string> = {
 const ENUM_VALUE_KEYS: Record<string, string> = {
   "reservation.approval_mode:auto": "tenant_settings.approval_modes.auto",
   "reservation.approval_mode:staff": "tenant_settings.approval_modes.staff",
+  ...Object.fromEntries(
+    Object.entries(THEME_FONT_LABEL_KEYS).map(([font, key]) => [
+      `theme.font:${font}`,
+      key,
+    ]),
+  ),
 };
 
 /**

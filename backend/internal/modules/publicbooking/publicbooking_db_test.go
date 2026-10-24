@@ -327,6 +327,33 @@ func TestPublicCatalog(t *testing.T) {
 		t.Fatalf("embed origins of B = %v", other.Embed.AllowedOrigins)
 	}
 
+	// Theme (TEC-966): neutral by default, then the saved colours, font and
+	// texts; the cover URL appears once the business has a cover object.
+	if biz.Theme.Font != "default" || biz.Theme.PrimaryColor != "" || biz.Theme.CoverURL != nil || biz.Theme.Headline != "" {
+		t.Fatalf("default theme = %+v", biz.Theme)
+	}
+	cur.Settings.Theme = orgsettingsmodel.Theme{PrimaryColor: "#1D4ED8", AccentColor: "#dbeafe", Font: "lora", Headline: " Hoş geldiniz ", Description: "Online randevu alın."}
+	if _, err := f.settings.Save(context.Background(), f.org.ID, f.owner.ID, orgsettingsmodel.SaveInput{Settings: cur.Settings}); err != nil {
+		t.Fatal(err)
+	}
+	f.exec("UPDATE organizations SET cover_object_key = $2 WHERE id = $1", f.org.ID, "organizations/"+f.org.UUID.String()+"/branding/cover-x.jpg")
+	biz = decode[model.Business](t, f.do(t, http.MethodGet, base, nil, nil))
+	if biz.Theme.PrimaryColor != "#1d4ed8" || biz.Theme.AccentColor != "#dbeafe" || biz.Theme.Font != "lora" ||
+		biz.Theme.Headline != "Hoş geldiniz" || biz.Theme.Description != "Online randevu alın." ||
+		biz.Theme.CoverURL == nil || !strings.HasPrefix(*biz.Theme.CoverURL, "/v1/public/businesses/"+f.org.Slug+"/cover?v=") {
+		t.Fatalf("theme = %+v", biz.Theme)
+	}
+	if strings.Contains(string(r.env.Data), "cover_object_key") {
+		t.Fatalf("profile leaks the cover key: %s", r.env.Data)
+	}
+	// Without storage the cover stream answers 404, never the key.
+	if r := f.do(t, http.MethodGet, base+"/cover", nil, nil); r.code != http.StatusNotFound {
+		t.Fatalf("cover without storage = %d", r.code)
+	}
+	if other := decode[model.Business](t, f.do(t, http.MethodGet, f.base(f.org2.Slug), nil, nil)); other.Theme.PrimaryColor != "" || other.Theme.CoverURL != nil {
+		t.Fatalf("theme of B = %+v", other.Theme)
+	}
+
 	for _, slug := range []string{"yok-boyle-bir-isletme", strings.ToUpper(f.org.Slug) + "x"} {
 		if r := f.do(t, http.MethodGet, f.base(slug), nil, nil); r.code != http.StatusNotFound {
 			t.Fatalf("unknown slug = %d", r.code)

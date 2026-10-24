@@ -190,6 +190,32 @@ func (h *Handler) Logo(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, rc)
 }
 
+// Cover serves GET /v1/public/businesses/{slug}/cover: the cover image of
+// the business page (TEC-966), referenced by the profile's theme.cover_url.
+func (h *Handler) Cover(w http.ResponseWriter, r *http.Request) {
+	o, ok := h.business(w, r, "read", h.limits.Read)
+	if !ok {
+		return
+	}
+	key, err := h.svc.Cover(o)
+	if err != nil || h.storage == nil {
+		response.NotFound(w, r, "Cover was not found")
+		return
+	}
+	rc, _, err := h.storage.Download(r.Context(), key)
+	if err != nil {
+		response.NotFound(w, r, "Cover was not found")
+		return
+	}
+	defer func() { _ = rc.Close() }()
+	w.Header().Set("Content-Type", storage.MIMEFromLogoKey(key))
+	// The URL carries a version derived from the object key.
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, rc)
+}
+
 // Branches serves GET /v1/public/businesses/{slug}/branches.
 func (h *Handler) Branches(w http.ResponseWriter, r *http.Request) {
 	o, ok := h.business(w, r, "read", h.limits.Read)

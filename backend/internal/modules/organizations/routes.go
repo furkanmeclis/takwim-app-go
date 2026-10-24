@@ -128,4 +128,6 @@ func RegisterTenantRoutes(
 	route("PATCH /v1/tenant/organization", h.TenantPatchOrganization, settingsRead, settingsWrite)
 	route("PUT /v1/tenant/organization/logo", h.TenantUploadLogo, settingsRead, settingsWrite)
 	route("DELETE /v1/tenant/organization/logo", h.TenantDeleteLogo, settingsRead, settingsWrite)
+	route("PUT /v1/tenant/organization/cover", h.TenantUploadCover, settingsRead, settingsWrite)
+	route("DELETE /v1/tenant/organization/cover", h.TenantDeleteCover, settingsRead, settingsWrite)
 }

@@ -386,11 +386,52 @@ func (q *Queries) ListPlatformOrganizationActivity(ctx context.Context, arg List
 	return items, nil
 }
 
+const setOrganizationCover = `-- name: SetOrganizationCover :one
+UPDATE organizations
+SET cover_object_key = $1
+WHERE id = $2 AND deleted_at IS NULL
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
+`
+
+type SetOrganizationCoverParams struct {
+	CoverObjectKey pgtype.Text `json:"cover_object_key"`
+	ID             int64       `json:"id"`
+}
+
+// Cover image of the business page (TEC-966); NULL clears it.
+func (q *Queries) SetOrganizationCover(ctx context.Context, arg SetOrganizationCoverParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, setOrganizationCover, arg.CoverObjectKey, arg.ID)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.Slug,
+		&i.Name,
+		&i.LogoObjectKey,
+		&i.Status,
+		&i.AccessStartsAt,
+		&i.AccessEndsAt,
+		&i.Settings,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Timezone,
+		&i.Currency,
+		&i.Sector,
+		&i.Plan,
+		&i.Addons,
+		&i.BranchLimit,
+		&i.StaffLimit,
+		&i.CoverObjectKey,
+	)
+	return i, err
+}
+
 const setOrganizationLogo = `-- name: SetOrganizationLogo :one
 UPDATE organizations
 SET logo_object_key = $1
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 type SetOrganizationLogoParams struct {
@@ -421,6 +462,7 @@ func (q *Queries) SetOrganizationLogo(ctx context.Context, arg SetOrganizationLo
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }

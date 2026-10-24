@@ -44,6 +44,39 @@ type Settings struct {
 	Embed         Embed          `json:"embed"`
 	Tax           Tax            `json:"tax"`
 	Booking       Booking        `json:"booking"`
+	Theme         Theme          `json:"theme"`
+}
+
+// FontDefault is the app's own font of the business page theme.
+const FontDefault = "default"
+
+// Fonts lists the font options of the business page (TEC-966), in display
+// order. The page ships each one with the app, so a theme never loads a
+// font from a third party.
+var Fonts = []string{FontDefault, "inter", "manrope", "nunito", "lora", "playfair_display"}
+
+// Limits of the theme texts.
+const (
+	MaxThemeHeadline    = 80
+	MaxThemeDescription = 300
+)
+
+// Theme is the look of the business page and the embedded screen
+// (requirements §6): colours, font and welcome texts. Colours are hex
+// `#rrggbb` (lower case); empty means the app's neutral colour. The page
+// checks the contrast of every colour and falls back to the neutral theme
+// where it is too low. The cover image is a column of the organization, not
+// part of the document.
+type Theme struct {
+	// PrimaryColor colours buttons, links and the selected step.
+	PrimaryColor string `json:"primary_color"`
+	// AccentColor is the soft highlight (hover and selected cards).
+	AccentColor string `json:"accent_color"`
+	// Font is one of Fonts.
+	Font string `json:"font"`
+	// Headline and Description are the welcome texts of the page.
+	Headline    string `json:"headline"`
+	Description string `json:"description"`
 }
 
 // MaxEmbedOrigins is the most sites one business may embed its booking
@@ -268,6 +301,7 @@ func Defaults() Settings {
 		Embed:         Embed{AllowedOrigins: []string{}},
 		Tax:           Tax{InvoiceItemMappings: mappings},
 		Booking:       Booking{HiddenSteps: []string{}, Fields: []CustomField{}},
+		Theme:         Theme{Font: FontDefault},
 	}
 }
 

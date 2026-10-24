@@ -73,6 +73,7 @@ type ManagementRepository interface {
 	ListOrganizationBranchOptions(ctx context.Context, orgID int64) ([]db.ListOrganizationBranchOptionsRow, error)
 	ListOrganizationActivity(ctx context.Context, orgID int64, orgUUID uuid.UUID, limit, offset int32) ([]db.ListPlatformOrganizationActivityRow, int64, error)
 	SetOrganizationLogo(ctx context.Context, orgID int64, key *string) (db.Organization, error)
+	SetOrganizationCover(ctx context.Context, orgID int64, key *string) (db.Organization, error)
 }
 
 // Notifier enqueues the invitation e-mail (notifications usecase).
@@ -827,6 +828,26 @@ func (m *Management) SetLogo(ctx context.Context, orgID int64, key *string) (org
 	previous := ""
 	if current.LogoObjectKey.Valid {
 		previous = current.LogoObjectKey.String
+	}
+	return mapOrganization(row), previous, nil
+}
+
+// SetCover stores a new cover image object key (nil clears it) and returns
+// the organization plus the previous key so the caller can delete the
+// object (TEC-966).
+func (m *Management) SetCover(ctx context.Context, orgID int64, key *string) (orgmodel.Organization, string, error) {
+	current, err := m.orgs.repo.GetOrganizationByID(ctx, orgID)
+	if err != nil {
+		return orgmodel.Organization{}, "", mapRepoNotFound(err, ErrNotFound)
+	}
+	row, err := m.repo.SetOrganizationCover(ctx, orgID, key)
+	if err != nil {
+		return orgmodel.Organization{}, "", mapRepoNotFound(err, ErrNotFound)
+	}
+	_ = orgctx.Invalidate(ctx, m.orgs.invalidator, orgID)
+	previous := ""
+	if current.CoverObjectKey.Valid {
+		previous = current.CoverObjectKey.String
 	}
 	return mapOrganization(row), previous, nil
 }

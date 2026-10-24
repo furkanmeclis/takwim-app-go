@@ -33,6 +33,16 @@ export function flattenSettings(s: OrganizationSettings): Map<string, string> {
   }
   // Versions saved before TEC-908 decode with an empty list.
   put("embed.allowed_origins", (s.embed?.allowed_origins ?? []).join(", "));
+  // Versions saved before TEC-966 decode without a theme.
+  for (const key of [
+    "primary_color",
+    "accent_color",
+    "font",
+    "headline",
+    "description",
+  ] as const) {
+    put(`theme.${key}`, s.theme?.[key] ?? (key === "font" ? "default" : ""));
+  }
   put("booking.hidden_steps", s.booking.hidden_steps.join(", "));
   for (const field of s.booking.fields) {
     put(

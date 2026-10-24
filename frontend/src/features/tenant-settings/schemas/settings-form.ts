@@ -1,9 +1,16 @@
 import { z } from "zod";
 
 import {
+  HEX_COLOR,
+  NEUTRAL_THEME,
+  THEME_FONTS,
+} from "@/features/business-page/lib/theme";
+import {
   BOOKING_FIELD_TYPES,
   INVOICE_ITEM_TYPES,
   MAX_BOOKING_FIELDS,
+  MAX_THEME_DESCRIPTION,
+  MAX_THEME_HEADLINE,
   SALES_CHANNELS,
 } from "@/features/tenant-settings/constants";
 import {
@@ -96,6 +103,17 @@ export function optionLines(raw: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+/** A theme colour: `#rrggbb` or empty (the app's neutral colour). */
+function colorField(t: Translate) {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === "" || HEX_COLOR.test(v),
+      t("tenant_settings.validation.theme_color"),
+    );
 }
 
 function percentField(t: Translate) {
@@ -218,6 +236,29 @@ export function createSettingsSchema(t: Translate) {
           }
         }),
       }),
+      theme: z.object({
+        primary_color: colorField(t),
+        accent_color: colorField(t),
+        font: z.enum(THEME_FONTS),
+        headline: z
+          .string()
+          .trim()
+          .max(
+            MAX_THEME_HEADLINE,
+            t("tenant_settings.validation.theme_headline", {
+              max: MAX_THEME_HEADLINE,
+            }),
+          ),
+        description: z
+          .string()
+          .trim()
+          .max(
+            MAX_THEME_DESCRIPTION,
+            t("tenant_settings.validation.theme_description", {
+              max: MAX_THEME_DESCRIPTION,
+            }),
+          ),
+      }),
       tax: z.object({
         default_vat_rate: percentField(t),
         invoice_item_mappings: z.array(
@@ -330,6 +371,16 @@ export function settingsToForm(s: OrganizationSettings): SettingsFormValues {
       is_active: channels.get(code) ?? false,
     })),
     embed: { allowed_origins: (s.embed?.allowed_origins ?? []).join("\n") },
+    // Versions saved before TEC-966 decode without a theme.
+    theme: {
+      primary_color: s.theme?.primary_color ?? "",
+      accent_color: s.theme?.accent_color ?? "",
+      font: THEME_FONTS.includes(s.theme?.font ?? NEUTRAL_THEME.font)
+        ? (s.theme?.font ?? NEUTRAL_THEME.font)
+        : NEUTRAL_THEME.font,
+      headline: s.theme?.headline ?? "",
+      description: s.theme?.description ?? "",
+    },
     tax: {
       default_vat_rate: s.tax.default_vat_rate,
       invoice_item_mappings: INVOICE_ITEM_TYPES.map((item_type) => {
@@ -407,6 +458,13 @@ export function formToSaveRequest(
         is_active: c.is_active,
       })),
       embed: { allowed_origins: originLines(values.embed.allowed_origins) },
+      theme: {
+        primary_color: values.theme.primary_color.trim().toLowerCase(),
+        accent_color: values.theme.accent_color.trim().toLowerCase(),
+        font: values.theme.font,
+        headline: values.theme.headline.trim(),
+        description: values.theme.description.trim(),
+      },
       tax: {
         default_vat_rate: values.tax.default_vat_rate,
         invoice_item_mappings: values.tax.invoice_item_mappings.map((m) => ({

@@ -10,6 +10,7 @@ import { ThemeSwitch } from "@/components/layout/theme-switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useBookingSurface } from "@/features/business-page/components/booking-surface";
+import { BusinessTheme } from "@/features/business-page/components/business-theme";
 import { CUSTOMER_PANEL_PATH } from "@/features/business-page/constants";
 import type { PublicBusiness } from "@/features/business-page/types";
 import { resolveLogoSrc } from "@/lib/branding/logo-url";
@@ -128,7 +129,8 @@ function EmbedShell({
 /**
  * Frame of the business page (takwim.link/{slug}): the business's logo and
  * name, language and colour mode, and the way to the customer's own panel.
- * No panel sidebar; mobile first (375 px) and centred on wide screens.
+ * No panel sidebar; mobile first (375 px) and centred on wide screens. Both
+ * frames sit inside the business's theme (TEC-966).
  */
 export function BusinessPageShell({
   business,
@@ -143,13 +145,19 @@ export function BusinessPageShell({
   const { embed } = useBookingSurface();
   if (embed) {
     return (
-      <EmbedShell business={business} full={embed.view === "full"}>
-        {children}
-      </EmbedShell>
+      <BusinessTheme scope={slug} theme={business?.theme}>
+        <EmbedShell business={business} full={embed.view === "full"}>
+          {children}
+        </EmbedShell>
+      </BusinessTheme>
     );
   }
   return (
-    <div className="bg-muted/40 flex min-h-svh flex-col">
+    <BusinessTheme
+      scope={slug}
+      theme={business?.theme}
+      className="bg-muted/40 flex min-h-svh flex-col"
+    >
       <header className="bg-background/95 sticky top-0 z-20 border-b backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-2 px-4">
           <Link
@@ -184,6 +192,6 @@ export function BusinessPageShell({
         <span>{t("business_page.powered_by")}</span>
         <AppLogo variant="logo" className="h-4 w-auto" />
       </footer>
-    </div>
+    </BusinessTheme>
   );
 }

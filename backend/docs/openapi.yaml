@@ -4679,6 +4679,55 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
 
+  /v1/tenant/organization/cover:
+    put:
+      tags: [Tenant]
+      operationId: putTenantOrganizationCover
+      summary: Upload the business page cover image
+      description: "`tenant.settings.write`. Multipart field `cover` (PNG, JPEG or WebP, at most 5 MiB): the cover of the business page and the embedded screen (TEC-966). The response carries the new API-owned `cover_url`; the public profile's `theme.cover_url` is the same stream."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [cover]
+              properties:
+                cover: { type: string, format: binary }
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationProfile"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantOrganizationCover
+      summary: Remove the business page cover image
+      description: "`tenant.settings.write`. The page falls back to the first branch photo."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationProfile"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/roles/meta:
     get:
       tags: [Tenant]
@@ -13362,6 +13411,28 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/public/businesses/{slug}/cover:
+    get:
+      tags: [Public booking]
+      operationId: getPublicBusinessCover
+      summary: Business page cover image
+      description: No authentication. Use the `theme.cover_url` of the profile (it carries a version); `404` when the business has no cover (TEC-966).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+      responses:
+        "200":
+          description: Cover image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/public/businesses/{slug}/branches:
     get:
       tags: [Public booking]
@@ -16607,12 +16678,13 @@ components:
 
     OrganizationProfile:
       type: object
-      required: [uuid, slug, name, logo_url, status, timezone, currency, sector, access_starts_at, access_ends_at, updated_at]
+      required: [uuid, slug, name, logo_url, cover_url, status, timezone, currency, sector, access_starts_at, access_ends_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
         logo_url: { type: [string, "null"], description: API-owned logo stream; never an object key }
+        cover_url: { type: [string, "null"], description: "API-owned public stream of the business page cover image (`/v1/public/businesses/{slug}/cover`, versioned; TEC-966); never an object key" }
         status: { type: string, enum: [active, suspended] }
         timezone: { type: string, description: "IANA zone for calendar decisions; instants stay UTC", example: Europe/Istanbul }
         currency: { type: string, pattern: "^[A-Z]{3}$", description: ISO 4217 code of every amount of the organization, example: TRY }
@@ -21731,10 +21803,32 @@ components:
           type: array
           items: { $ref: "#/components/schemas/OrganizationInvoiceItemMapping" }
 
+    OrganizationThemeSettings:
+      type: object
+      description: >-
+        Look of the business page and the embedded screen (TEC-966). Colours
+        are `#rrggbb` (stored lower case; empty = the app's neutral colour);
+        the page checks their contrast and keeps the neutral theme where it is
+        too low. The font is one the page ships. The cover image is uploaded
+        separately (`PUT /v1/tenant/organization/cover`).
+      required: [primary_color, accent_color, font, headline, description]
+      properties:
+        primary_color: { type: string, description: "Buttons, links and the selected step; `#rrggbb` or empty", example: "#1d4ed8" }
+        accent_color: { type: string, description: "Soft highlight (hover, selected cards); `#rrggbb` or empty", example: "#dbeafe" }
+        font: { $ref: "#/components/schemas/BusinessThemeFont" }
+        headline: { type: string, maxLength: 80, description: Welcome headline of the page }
+        description: { type: string, maxLength: 300, description: Welcome text under the headline }
+
+    BusinessThemeFont:
+      type: string
+      description: Font of the business page; `default` is the app's own font.
+      enum: [default, inter, manrope, nunito, lora, playfair_display]
+
     OrganizationSettings:
       type: object
-      required: [company, reservation, payment, policies, sales_channels, embed, tax, booking]
+      required: [company, reservation, payment, policies, sales_channels, embed, tax, booking, theme]
       properties:
+        theme: { $ref: "#/components/schemas/OrganizationThemeSettings" }
         company: { $ref: "#/components/schemas/OrganizationCompanySettings" }
         reservation: { $ref: "#/components/schemas/OrganizationReservationSettings" }
         payment: { $ref: "#/components/schemas/OrganizationPaymentSettings" }
@@ -24552,8 +24646,19 @@ components:
 
     PublicBusiness:
       type: object
-      required: [uuid, slug, name, logo_url, sector, timezone, currency, flow, terms, contact, policies, booking, branch_count, embed]
+      required: [uuid, slug, name, logo_url, sector, timezone, currency, flow, terms, contact, policies, booking, branch_count, embed, theme]
       properties:
+        theme:
+          type: object
+          description: Look of the page (TEC-966); only customer-facing values. The page applies the colours as CSS variables after a contrast check and falls back to the neutral theme where it is too low.
+          required: [primary_color, accent_color, font, headline, description, cover_url]
+          properties:
+            primary_color: { type: string, description: "`#rrggbb` or empty (neutral)", example: "#1d4ed8" }
+            accent_color: { type: string, description: "`#rrggbb` or empty (neutral)", example: "#dbeafe" }
+            font: { $ref: "#/components/schemas/BusinessThemeFont" }
+            headline: { type: string }
+            description: { type: string }
+            cover_url: { type: [string, "null"], description: "API-owned cover image stream (versioned); null = none, the page then shows the first branch photo." }
         uuid: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
