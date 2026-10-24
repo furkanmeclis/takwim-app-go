@@ -27,7 +27,7 @@ endef
 
 DB_URL ?= postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
 
-.PHONY: tools run dev worker ping-job search-reindex build test lint fmt tidy sqlc migrate-up migrate-down migrate-create health create-super-admin openapi-lint
+.PHONY: tools run dev worker ping-job search-reindex build test lint fmt tidy sqlc migrate-up migrate-down migrate-create health create-super-admin demo-seed openapi-lint
 
 tools:
 	@echo "go:            $$(go version)"
@@ -51,6 +51,10 @@ ping-job:
 
 search-reindex:
 	@$(load_env) go run ./cmd/search-reindex
+
+# Demo businesses and accounts (TEC-928). DEMO_PASSWORD from the env, DEMO_RESET=1 to rewrite.
+demo-seed:
+	@$(load_env) go run ./cmd/demo-seed $(if $(DEMO_RESET),-reset)
 
 build:
 	go build -o bin/$(APP_NAME) ./cmd/server

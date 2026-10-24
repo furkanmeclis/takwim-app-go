@@ -46,6 +46,7 @@ Helpers:
 | `make migrate-up` | Apply SQL migrations |
 | `make create-super-admin` | Upsert platform admin + `super_admin` role |
 | `make search-reindex` | Rebuild Meilisearch indexes (users, roles, …) |
+| `make demo-seed` | Demo businesses of the six sectors and their accounts ([design/demo-data.md](./design/demo-data.md)) |
 | `make check-i18n` | Find missing / unwired translation keys (en+tr, activity, RBAC, exports) |
 
 ### Local URLs
@@ -117,6 +118,15 @@ make create-super-admin SA_EMAIL=you@example.com SA_PASSWORD='Secret1' SA_NAME=A
 ```
 
 The same target exists under `backend/` (`make -C backend create-super-admin …`).
+
+## Demo data
+
+```sh
+make demo-seed                                        # six businesses, accounts, two weeks of visits; prints a generated password
+DEMO_PASSWORD='Secret1x' make demo-seed DEMO_RESET=1  # write them again with a password you choose
+```
+
+What it writes, the accounts and the access scenarios: [design/demo-data.md](./design/demo-data.md). It refuses `APP_ENV=production`.
 
 ## After a backend contract change
 

@@ -19,7 +19,7 @@ endef
 FRONTEND_PORT ?= 3000
 
 .PHONY: infra infra-down infra-logs infra-ps migrate-up backend-dev frontend-dev local-dev \
-	free-dev-ports prod-config prod-up prod-down tools create-super-admin search-reindex check-i18n
+	free-dev-ports prod-config prod-up prod-down tools create-super-admin search-reindex demo-seed check-i18n
 
 infra:
 	@if [ -n "$(ENV_FILE)" ]; then \
@@ -139,6 +139,12 @@ create-super-admin:
 
 search-reindex:
 	@$(load_env) $(MAKE) -C backend search-reindex
+
+# Demo businesses of the six sectors and their accounts (docs/design/demo-data.md).
+# DEMO_PASSWORD (env or here) sets the accounts' password, else one is generated;
+# DEMO_RESET=1 deletes the demo businesses first. Refuses APP_ENV=production.
+demo-seed:
+	@$(load_env) $(MAKE) -C backend demo-seed DEMO_RESET="$(DEMO_RESET)"
 
 check-i18n:
 	node scripts/check-i18n.mjs
