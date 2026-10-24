@@ -14233,9 +14233,10 @@ paths:
       operationId: listCustomerPayments
       summary: Visits with money (Ödemelerim)
       description: |
-        The visit list without visits that ended with no money moving
-        (cancelled or rejected and unpaid). Same filters as the visit list;
-        newest first.
+        The visit list without visits that ended before any money was taken
+        (cancelled or rejected with no payment in the ledger). Same filters
+        as the visit list; newest first. Amounts come from the payment
+        ledger (TEC-967).
       security:
         - customerAuth: []
       parameters:
@@ -14368,7 +14369,7 @@ paths:
       tags: [Customer panel]
       operationId: getCustomerPaymentSummary
       summary: Amounts per currency
-      description: Currencies are never added together.
+      description: The ledger amounts of every visible visit, summed per currency (TEC-967). Currencies are never added together.
       security:
         - customerAuth: []
       responses:
@@ -25300,23 +25301,24 @@ components:
 
     CustomerMoney:
       type: object
-      required: [total, paid, refunded, balance, currency, method, payment_status]
+      required: [total, expected, paid, refunded, refund_pending, balance, currency, method, payment_status]
       description: |
-        The recorded payment picture of a visit. Until the payment ledger
-        records amounts, an online payment is the full total and a refund
-        the full total once refunded (`refunded` is null when unknown).
-        `balance` is null for a finished visit paid at the business.
+        The money of a visit from the business's payment ledger (TEC-967),
+        in the visit's currency; reversed entries are netted out.
+        `expected` is what the visit costs: the posted charges once it is
+        completed, the booked total while it stands, 0 after a cancel, a
+        rejection or a no-show. `paid` is every payment taken (online or at
+        the business, in parts), `refunded` what was paid back, `balance`
+        what is still owed (expected less paid net of refunded).
+        `refund_pending` is money the business holds for a cancelled,
+        rejected or refund-waiting visit, or a refund still under way.
       properties:
         total: { $ref: "#/components/schemas/MoneyAmount" }
+        expected: { $ref: "#/components/schemas/MoneyAmount" }
         paid: { $ref: "#/components/schemas/MoneyAmount" }
-        refunded:
-          oneOf:
-            - $ref: "#/components/schemas/MoneyAmount"
-            - type: "null"
-        balance:
-          oneOf:
-            - $ref: "#/components/schemas/MoneyAmount"
-            - type: "null"
+        refunded: { $ref: "#/components/schemas/MoneyAmount" }
+        refund_pending: { $ref: "#/components/schemas/MoneyAmount" }
+        balance: { $ref: "#/components/schemas/MoneyAmount" }
         currency: { type: string }
         method: { type: string, enum: [on_site, online] }
         payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
@@ -25374,7 +25376,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/CustomerReservationItem"
         - type: object
-          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history, refunds, products]
+          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history, refunds, payments, products]
           properties:
             branch:
               type: object
@@ -25451,6 +25453,20 @@ components:
                   status: { type: string, enum: [requested, succeeded, failed] }
                   requested_at: { type: string, format: date-time }
                   refunded_at: { type: [string, "null"], format: date-time }
+            payments:
+              type: array
+              description: "The visit's live payments (`payment`) and refunds (`refund`) in the ledger, oldest first (TEC-967); a reversed entry is left out. No notes, accounts or staff."
+              items:
+                type: object
+                required: [uuid, kind, method, amount, currency, date, at]
+                properties:
+                  uuid: { type: string, format: uuid }
+                  kind: { type: string, enum: [payment, refund] }
+                  method: { type: string, enum: ["", cash, card, transfer, online, other] }
+                  amount: { $ref: "#/components/schemas/MoneyAmount" }
+                  currency: { type: string }
+                  date: { type: string, format: date, description: "Business day of the entry" }
+                  at: { type: string, format: date-time }
             products:
               type: array
               description: |
@@ -25507,13 +25523,15 @@ components:
           type: array
           items:
             type: object
-            required: [currency, booked, paid, refund_pending, refunded, reservation_count]
+            required: [currency, booked, paid, refund_pending, refunded, balance, reservation_count]
+            description: "Sums of the visits' `CustomerMoney`: `booked` is the sum of `expected`; `reservation_count` counts the visits not cancelled or rejected."
             properties:
               currency: { type: string }
               booked: { $ref: "#/components/schemas/MoneyAmount" }
               paid: { $ref: "#/components/schemas/MoneyAmount" }
               refund_pending: { $ref: "#/components/schemas/MoneyAmount" }
               refunded: { $ref: "#/components/schemas/MoneyAmount" }
+              balance: { $ref: "#/components/schemas/MoneyAmount" }
               reservation_count: { type: integer, format: int64 }
 
     EnvelopeCustomerSignInStart:

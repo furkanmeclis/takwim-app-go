@@ -13,9 +13,10 @@ import { amount, toMinor } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
 /**
- * `/panel/payments`: what the person booked, paid and got back, per
- * currency, and every visit with money on it. Visits that were cancelled
- * before anything was paid are left out by the API.
+ * `/panel/payments`: what the person owes, paid and got back, per currency,
+ * from the businesses' payment ledgers (TEC-967), and every visit with
+ * money on it. Visits cancelled before anything was paid are left out by
+ * the API.
  */
 export function CustomerPaymentsPage() {
   const { t, locale } = useLocale();
@@ -29,14 +30,18 @@ export function CustomerPaymentsPage() {
       description={t("customer_panel.payments.description")}
     >
       {summary.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
         </div>
       ) : null}
       {totals.map((total) => (
-        <div key={total.currency} className="grid gap-3 sm:grid-cols-3">
+        <div
+          key={total.currency}
+          className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+        >
           <StatsCard
             title={t("customer_panel.payments.booked")}
             value={amount(total.booked, total.currency, locale)}
@@ -62,6 +67,10 @@ export function CustomerPaymentsPage() {
                   })
                 : undefined
             }
+          />
+          <StatsCard
+            title={t("customer_panel.payments.balance")}
+            value={amount(total.balance, total.currency, locale)}
           />
         </div>
       ))}

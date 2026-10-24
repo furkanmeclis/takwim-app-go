@@ -22,7 +22,7 @@ export const METHOD_KEYS: Record<
 };
 
 type Options = {
-  /** Payments view: paid / refunded / balance columns. */
+  /** Payments view: the ledger's paid / refunded / pending / balance columns. */
   money?: boolean;
 };
 
@@ -34,8 +34,8 @@ export function useCustomerReservationColumns({ money = false }: Options = {}) {
   const { t, locale } = useLocale();
 
   return useMemo(() => {
-    const cash = (value: string | null, currency: string) =>
-      value == null ? "—" : amount(value, currency, locale);
+    const cash = (value: string, currency: string) =>
+      amount(value, currency, locale);
     const columns = [
       createColumn<CustomerReservationItem>({
         accessorKey: "starts_at",
@@ -146,6 +146,21 @@ export function useCustomerReservationColumns({ money = false }: Options = {}) {
           cell: ({ row }) => (
             <span className="tabular-nums">
               {cash(row.original.money.refunded, row.original.money.currency)}
+            </span>
+          ),
+        }),
+        createColumn<CustomerReservationItem>({
+          id: "refund_pending",
+          accessorFn: (row) => row.money.refund_pending,
+          labelKey: "customer_panel.columns.refund_pending",
+          enableSorting: false,
+          defaultHidden: true,
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {cash(
+                row.original.money.refund_pending,
+                row.original.money.currency,
+              )}
             </span>
           ),
         }),

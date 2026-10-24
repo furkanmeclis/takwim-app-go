@@ -70,44 +70,54 @@ func standing(status string, endsAt, now time.Time) bool {
 	return false
 }
 
-// paidStates are payment states in which the customer's money arrived.
-var paidStates = []string{
-	reservationsmodel.PaymentPaid, reservationsmodel.PaymentRefundPending,
-	reservationsmodel.PaymentPartiallyRefunded, reservationsmodel.PaymentRefunded, reservationsmodel.PaymentKept,
+// ledger is a visit's money in the business's payment ledger, in the
+// visit's currency (TEC-967).
+type ledger struct {
+	Charged, Collected, Refunded, OpenRefunds money.Money
+	// Posted: the visit's sale lines are posted (it was completed).
+	Posted bool
 }
 
-// moneyOf derives the recorded payment picture of a visit from its total
-// and states. Until the payment ledger (TEC-912) records amounts, an online
-// payment is the full total (beta: no deposits) and a refund is the full
-// total when refunded; a partial refund has no amount yet (null).
-func moneyOf(total money.Money, currency, status, payment string) model.Money {
-	out := model.Money{Total: total, Paid: money.Zero(), Currency: currency, PaymentStatus: payment, Method: model.MethodOnline}
+func ledgerOf(charged, collected, refunded, open pgtype.Numeric, posted bool) ledger {
+	return ledger{
+		Charged: money.FromNumericOrZero(charged), Collected: money.FromNumericOrZero(collected),
+		Refunded: money.FromNumericOrZero(refunded), OpenRefunds: money.FromNumericOrZero(open), Posted: posted,
+	}
+}
+
+// moneyOf is the payment picture of a visit from the ledger, with the same
+// expected-amount rule as the business's reservation balance: the posted
+// charges once completed, the booked total while the visit stands, nothing
+// otherwise. Every partial payment counts, online or at the business, once
+// the business recorded it.
+func moneyOf(total money.Money, currency, status, payment string, l ledger) model.Money {
+	out := model.Money{
+		Total: total, Expected: money.Zero(), Paid: l.Collected, Refunded: l.Refunded, RefundPending: money.Zero(),
+		Currency: currency, PaymentStatus: payment, Method: model.MethodOnline,
+	}
 	if payment == reservationsmodel.PaymentOnSite {
 		out.Method = model.MethodOnSite
 	}
-	if slices.Contains(paidStates, payment) {
-		out.Paid = total
-	}
-	switch payment {
-	case reservationsmodel.PaymentRefunded:
-		r := total
-		out.Refunded = &r
-	case reservationsmodel.PaymentRefundPending:
-		r := money.Zero()
-		out.Refunded = &r
-	}
-	var balance money.Money
 	switch {
-	case status == reservationsmodel.StatusCancelled || status == reservationsmodel.StatusRejected:
-		balance = money.Zero()
-	case payment == reservationsmodel.PaymentOnSite &&
-		(status == reservationsmodel.StatusCompleted || status == reservationsmodel.StatusNoShow):
-		// Settled at the business; nothing recorded here.
-		return out
-	default:
-		balance = total.Sub(out.Paid).ClampZero()
+	case l.Posted:
+		out.Expected = l.Charged
+	case status == reservationsmodel.StatusRequested || status == reservationsmodel.StatusActive || status == reservationsmodel.StatusInService:
+		out.Expected = total
 	}
-	out.Balance = &balance
+	held := l.Collected.Sub(l.Refunded)
+	out.Balance = out.Expected.Sub(held).ClampZero()
+	// Money held beyond the cost is owed back only when the visit is off
+	// or the business marked it for a refund; a no-show prepayment stays
+	// with the business's no-show policy, and money the business closed
+	// without a refund (kept, TEC-978) stays as the customer's credit there.
+	owed := status == reservationsmodel.StatusCancelled || status == reservationsmodel.StatusRejected ||
+		payment == reservationsmodel.PaymentRefundPending || payment == reservationsmodel.PaymentPartiallyRefunded
+	if owed && payment != reservationsmodel.PaymentKept {
+		out.RefundPending = held.Sub(out.Expected).ClampZero()
+	}
+	if l.OpenRefunds.Cmp(out.RefundPending) > 0 {
+		out.RefundPending = l.OpenRefunds
+	}
 	return out
 }
 
@@ -165,7 +175,7 @@ func itemOf(r db.ListCustomerPanelReservationsRow, now time.Time) model.Reservat
 		StartsAt: r.StartsAt.Time, EndsAt: r.EndsAt.Time, Upcoming: standing(r.Status, r.EndsAt.Time, now),
 		Status: r.Status, ApprovalStatus: r.ApprovalStatus, ConfirmationStatus: r.ConfirmationStatus,
 		PaymentStatus: r.PaymentStatus, Services: r.ServiceNames, Staff: r.StaffNames,
-		Money:     moneyOf(total, r.Currency, r.Status, r.PaymentStatus),
+		Money:     moneyOf(total, r.Currency, r.Status, r.PaymentStatus, ledgerOf(r.Charged, r.Collected, r.Refunded, r.OpenRefunds, r.SalesPosted)),
 		CreatedAt: r.CreatedAt.Time,
 	}
 	if r.CancelReason.Valid {
@@ -181,7 +191,8 @@ func itemOf(r db.ListCustomerPanelReservationsRow, now time.Time) model.Reservat
 	return item
 }
 
-// PaymentSummary sums the person's amounts per currency.
+// PaymentSummary sums the person's amounts per currency, visit by visit
+// with the rules of the list (currencies are never added together).
 func (s *Service) PaymentSummary(ctx context.Context, p Principal) (model.PaymentSummary, error) {
 	rows, err := s.q.CustomerPanelPaymentTotals(ctx, p.IdentityID)
 	if err != nil {
@@ -193,24 +204,23 @@ func (s *Service) PaymentSummary(ctx context.Context, p Principal) (model.Paymen
 	for _, r := range rows {
 		t, ok := byCurrency[r.Currency]
 		if !ok {
-			t = &model.PaymentTotal{Currency: r.Currency, Booked: money.Zero(), Paid: money.Zero(), RefundPending: money.Zero(), Refunded: money.Zero()}
+			t = &model.PaymentTotal{
+				Currency: r.Currency, Booked: money.Zero(), Paid: money.Zero(), RefundPending: money.Zero(),
+				Refunded: money.Zero(), Balance: money.Zero(),
+			}
 			byCurrency[r.Currency] = t
 			order = append(order, r.Currency)
 		}
-		amount := money.FromNumericOrZero(r.Amount)
-		if r.Standing {
-			t.Booked = t.Booked.Add(amount)
-			t.ReservationCount += r.ReservationCount
+		m := moneyOf(money.FromNumericOrZero(r.TotalPrice), r.Currency, r.Status, r.PaymentStatus,
+			ledgerOf(r.Charged, r.Collected, r.Refunded, r.OpenRefunds, r.SalesPosted))
+		if r.Status != reservationsmodel.StatusCancelled && r.Status != reservationsmodel.StatusRejected {
+			t.ReservationCount++
 		}
-		if slices.Contains(paidStates, r.PaymentStatus) {
-			t.Paid = t.Paid.Add(amount)
-		}
-		switch r.PaymentStatus {
-		case reservationsmodel.PaymentRefundPending:
-			t.RefundPending = t.RefundPending.Add(amount)
-		case reservationsmodel.PaymentRefunded:
-			t.Refunded = t.Refunded.Add(amount)
-		}
+		t.Booked = t.Booked.Add(m.Expected)
+		t.Paid = t.Paid.Add(m.Paid)
+		t.Refunded = t.Refunded.Add(m.Refunded)
+		t.RefundPending = t.RefundPending.Add(m.RefundPending)
+		t.Balance = t.Balance.Add(m.Balance)
 	}
 	for _, c := range order {
 		out.Totals = append(out.Totals, *byCurrency[c])
@@ -225,6 +235,8 @@ type owned struct {
 	settings orgsettings.Version
 	live     bool
 	modules  entitlement.Effective
+	ledger   ledger
+	payments []model.Payment
 }
 
 func (s *Service) load(ctx context.Context, p Principal, id uuid.UUID) (owned, error) {
@@ -263,7 +275,30 @@ func (s *Service) loadRow(ctx context.Context, row db.GetCustomerPanelReservatio
 	if row.StaffLimit.Valid {
 		st.StaffLimit = &row.StaffLimit.Int32
 	}
-	return owned{row: row, full: full, settings: settings, live: live, modules: entitlement.Resolve(row.Sector, st)}, nil
+	o := owned{row: row, full: full, settings: settings, live: live, modules: entitlement.Resolve(row.Sector, st)}
+	lm, err := s.q.GetCustomerPanelReservationMoney(ctx, db.GetCustomerPanelReservationMoneyParams{OrganizationID: row.OrganizationID, ID: row.ID})
+	if err != nil {
+		return owned{}, err
+	}
+	o.ledger = ledgerOf(lm.Charged, lm.Collected, lm.Refunded, lm.OpenRefunds, lm.SalesPosted)
+	entries, err := s.q.ListCustomerPanelReservationPayments(ctx, db.ListCustomerPanelReservationPaymentsParams{
+		OrganizationID: row.OrganizationID, ReservationID: pgtype.Int8{Int64: row.ID, Valid: true},
+	})
+	if err != nil {
+		return owned{}, err
+	}
+	o.payments = make([]model.Payment, 0, len(entries))
+	for _, e := range entries {
+		kind := model.PaymentKindPayment
+		if e.Kind == "refund" {
+			kind = model.PaymentKindRefund
+		}
+		o.payments = append(o.payments, model.Payment{
+			UUID: e.Uuid, Kind: kind, Method: e.Method, Amount: money.FromNumericOrZero(e.Amount), Currency: e.Currency,
+			Date: e.EntryDate.Time.Format(time.DateOnly), At: e.CreatedAt.Time,
+		})
+	}
+	return o, nil
 }
 
 func reason(code string) *string {
@@ -322,7 +357,7 @@ func (s *Service) view(o owned) model.Reservation {
 		Status: r.Status, ApprovalStatus: r.ApprovalStatus, ConfirmationStatus: r.ConfirmationStatus,
 		PaymentStatus: r.PaymentStatus, CancelReason: r.CancelReason,
 		Services: []string{}, Staff: []string{},
-		Money:     moneyOf(r.TotalPrice, r.Currency, r.Status, r.PaymentStatus),
+		Money:     moneyOf(r.TotalPrice, r.Currency, r.Status, r.PaymentStatus, o.ledger),
 		CreatedAt: r.CreatedAt,
 	}
 	out := model.Reservation{
@@ -341,6 +376,7 @@ func (s *Service) view(o owned) model.Reservation {
 		Confirmation: confirmationView(r),
 		History:      []model.HistoryEntry{},
 		Refunds:      []model.Refund{},
+		Payments:     o.payments,
 		Products:     productsView(r.Products),
 	}
 	for _, l := range r.Lines {
@@ -388,16 +424,6 @@ func (s *Service) Reservation(ctx context.Context, p Principal, id uuid.UUID) (m
 			r.RefundedAt = &t
 		}
 		out.Refunds = append(out.Refunds, r)
-	}
-	if len(out.Refunds) > 0 {
-		// The refunds that are done are the refunded amount of the visit.
-		done := money.Zero()
-		for _, r := range out.Refunds {
-			if r.Status == "succeeded" && r.Currency == out.Money.Currency {
-				done = done.Add(r.Amount)
-			}
-		}
-		out.Money.Refunded = &done
 	}
 	return out, nil
 }
