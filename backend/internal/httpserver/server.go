@@ -158,6 +158,9 @@ import (
 	storagehandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/handler"
 	storageusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
+	voicecallmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/voicecall"
+	voicecallhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/voicecall/handler"
+	voicecallusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/voicecall/usecase"
 	whatsappmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp"
 	whatsapphandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/handler"
 	whatsappusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/usecase"
@@ -445,9 +448,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	whatsappClient := whatsappmodule.Client(cfg)
 	whatsappSvc := whatsappusecase.New(deps.Queries, whatsappClient)
 	whatsappSvc.SetLogger(log)
+	// Voice calls (TEC-923): the business's own Netgsm account; the webhook
+	// records each call's result and applies its key (the worker calls).
+	voiceClient := voicecallmodule.Client(cfg)
+	voiceSvc := voicecallusecase.New(deps.Queries, voiceClient, voicecallmodule.WebhookBase(cfg))
+	voiceSvc.SetLogger(log)
 	notifyEngine.Register(customernotifyadapters.SMS{Sender: smsSender},
 		customernotifyadapters.Email{Mail: mail.NewSMTPSender(cfg.SMTP), Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""},
-		whatsappusecase.NewChannel(whatsappSvc))
+		whatsappusecase.NewChannel(whatsappSvc), voicecallusecase.NewChannel(voiceSvc))
 	// Customer confirmation (TEC-921, Konfirmasyon add-on): every
 	// reservation change plans or follows its confirmation task in the same
 	// transaction; the requests go out through the notification engine,
@@ -499,12 +507,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: field cipher: %w", err)
 	}
+	integrationAdapters := append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)
 	integrationKit, err := integrationsmodule.New(deps.Queries, fieldCipher, cfg.App.Env, log,
-		append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)...)
+		append(integrationAdapters, voicecallmodule.Adapters(voiceClient)...)...)
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: %w", err)
 	}
 	whatsappSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner)
+	voiceSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner, fieldCipher)
 	if deps.Queue != nil {
 		integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: deps.Queue})
 	}
@@ -749,6 +759,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	whatsappH := whatsapphandler.New(whatsappSvc)
 	whatsappH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	whatsappmodule.RegisterRoutes(mux, whatsappH)
+	// Call keys (TEC-923) answer like the WhatsApp buttons.
+	voiceSvc.SetAnswers(panelSvc, confirmEngine)
+	voiceSvc.SetResourceEvents(resourceEvents)
+	voiceSvc.SetActivity(activityRec)
+	voiceH := voicecallhandler.New(voiceSvc)
+	voiceH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	voicecallmodule.RegisterRoutes(mux, voiceH)
 	publicH := publicbookinghandler.New(publicSvc, deps.Storage, activityRec)
 	publicH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	publicH.SetResourceEvents(resourceEvents)

@@ -264,7 +264,7 @@ func (q *Queries) GetConfirmationTimezone(ctx context.Context, arg GetConfirmati
 }
 
 const getEffectiveConfirmationSettings = `-- name: GetEffectiveConfirmationSettings :one
-SELECT id, organization_id, branch_id, enabled, channels, fallback, first_request_minutes, follow_up_minutes, max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, updated_by, created_at, updated_at FROM confirmation_settings
+SELECT id, organization_id, branch_id, enabled, channels, fallback, first_request_minutes, follow_up_minutes, max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, updated_by, created_at, updated_at, call_window_start_minute, call_window_end_minute, call_retries, call_retry_minutes FROM confirmation_settings
 WHERE organization_id = $1 AND (branch_id = $2 OR branch_id IS NULL)
 ORDER BY branch_id NULLS LAST
 LIMIT 1
@@ -296,12 +296,16 @@ func (q *Queries) GetEffectiveConfirmationSettings(ctx context.Context, arg GetE
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CallWindowStartMinute,
+		&i.CallWindowEndMinute,
+		&i.CallRetries,
+		&i.CallRetryMinutes,
 	)
 	return i, err
 }
 
 const getReservationConfirmation = `-- name: GetReservationConfirmation :one
-SELECT id, uuid, organization_id, reservation_id, round, reservation_version, starts_at, status, channels, fallback, on_no_answer, attempt_times, attempts_sent, next_attempt_at, deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at, created_at, updated_at FROM reservation_confirmations
+SELECT id, uuid, organization_id, reservation_id, round, reservation_version, starts_at, status, channels, fallback, on_no_answer, attempt_times, attempts_sent, next_attempt_at, deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at, created_at, updated_at, call_window_start_minute, call_window_end_minute, call_retries, call_retry_minutes, calls_made, next_call_at FROM reservation_confirmations
 WHERE organization_id = $1 AND reservation_id = $2
 `
 
@@ -340,6 +344,12 @@ func (q *Queries) GetReservationConfirmation(ctx context.Context, arg GetReserva
 		&i.ClosedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CallWindowStartMinute,
+		&i.CallWindowEndMinute,
+		&i.CallRetries,
+		&i.CallRetryMinutes,
+		&i.CallsMade,
+		&i.NextCallAt,
 	)
 	return i, err
 }
@@ -391,7 +401,7 @@ func (q *Queries) ListConfirmationBranches(ctx context.Context, arg ListConfirma
 }
 
 const listConfirmationSettings = `-- name: ListConfirmationSettings :many
-SELECT s.id, s.organization_id, s.branch_id, s.enabled, s.channels, s.fallback, s.first_request_minutes, s.follow_up_minutes, s.max_attempts, s.deadline_minutes, s.window_start_minute, s.window_end_minute, s.on_no_answer, s.updated_by, s.created_at, s.updated_at, b.uuid AS branch_uuid
+SELECT s.id, s.organization_id, s.branch_id, s.enabled, s.channels, s.fallback, s.first_request_minutes, s.follow_up_minutes, s.max_attempts, s.deadline_minutes, s.window_start_minute, s.window_end_minute, s.on_no_answer, s.updated_by, s.created_at, s.updated_at, s.call_window_start_minute, s.call_window_end_minute, s.call_retries, s.call_retry_minutes, b.uuid AS branch_uuid
 FROM confirmation_settings s
 LEFT JOIN branches b ON b.organization_id = s.organization_id AND b.id = s.branch_id
 WHERE s.organization_id = $1
@@ -399,23 +409,27 @@ ORDER BY s.branch_id NULLS FIRST
 `
 
 type ListConfirmationSettingsRow struct {
-	ID                  int64              `json:"id"`
-	OrganizationID      int64              `json:"organization_id"`
-	BranchID            pgtype.Int8        `json:"branch_id"`
-	Enabled             bool               `json:"enabled"`
-	Channels            []string           `json:"channels"`
-	Fallback            bool               `json:"fallback"`
-	FirstRequestMinutes int32              `json:"first_request_minutes"`
-	FollowUpMinutes     int32              `json:"follow_up_minutes"`
-	MaxAttempts         int32              `json:"max_attempts"`
-	DeadlineMinutes     int32              `json:"deadline_minutes"`
-	WindowStartMinute   pgtype.Int4        `json:"window_start_minute"`
-	WindowEndMinute     pgtype.Int4        `json:"window_end_minute"`
-	OnNoAnswer          string             `json:"on_no_answer"`
-	UpdatedBy           pgtype.Int8        `json:"updated_by"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	BranchUuid          pgtype.UUID        `json:"branch_uuid"`
+	ID                    int64              `json:"id"`
+	OrganizationID        int64              `json:"organization_id"`
+	BranchID              pgtype.Int8        `json:"branch_id"`
+	Enabled               bool               `json:"enabled"`
+	Channels              []string           `json:"channels"`
+	Fallback              bool               `json:"fallback"`
+	FirstRequestMinutes   int32              `json:"first_request_minutes"`
+	FollowUpMinutes       int32              `json:"follow_up_minutes"`
+	MaxAttempts           int32              `json:"max_attempts"`
+	DeadlineMinutes       int32              `json:"deadline_minutes"`
+	WindowStartMinute     pgtype.Int4        `json:"window_start_minute"`
+	WindowEndMinute       pgtype.Int4        `json:"window_end_minute"`
+	OnNoAnswer            string             `json:"on_no_answer"`
+	UpdatedBy             pgtype.Int8        `json:"updated_by"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	CallWindowStartMinute pgtype.Int4        `json:"call_window_start_minute"`
+	CallWindowEndMinute   pgtype.Int4        `json:"call_window_end_minute"`
+	CallRetries           int32              `json:"call_retries"`
+	CallRetryMinutes      int32              `json:"call_retry_minutes"`
+	BranchUuid            pgtype.UUID        `json:"branch_uuid"`
 }
 
 func (q *Queries) ListConfirmationSettings(ctx context.Context, organizationID int64) ([]ListConfirmationSettingsRow, error) {
@@ -444,6 +458,10 @@ func (q *Queries) ListConfirmationSettings(ctx context.Context, organizationID i
 			&i.UpdatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CallWindowStartMinute,
+			&i.CallWindowEndMinute,
+			&i.CallRetries,
+			&i.CallRetryMinutes,
 			&i.BranchUuid,
 		); err != nil {
 			return nil, err
@@ -462,8 +480,9 @@ FROM reservation_confirmations c
 WHERE c.status IN ('scheduled', 'pending')
   AND ($1::bigint IS NULL OR c.organization_id = $1)
   AND ((c.next_attempt_at IS NOT NULL AND c.next_attempt_at <= $2)
+       OR (c.next_call_at IS NOT NULL AND c.next_call_at <= $2)
        OR (c.change_requested_at IS NULL AND c.deadline_at <= $2))
-ORDER BY LEAST(COALESCE(c.next_attempt_at, c.deadline_at), c.deadline_at), c.id
+ORDER BY LEAST(COALESCE(c.next_attempt_at, c.deadline_at), COALESCE(c.next_call_at, c.deadline_at), c.deadline_at), c.id
 LIMIT $3
 `
 
@@ -478,8 +497,8 @@ type ListDueReservationConfirmationsRow struct {
 	ReservationID  int64 `json:"reservation_id"`
 }
 
-// Tasks with an attempt or a deadline due (the worker's scan; every
-// business, or one when organization_id is given).
+// Tasks with an attempt, a call made again (TEC-923) or a deadline due (the
+// worker's scan; every business, or one when organization_id is given).
 func (q *Queries) ListDueReservationConfirmations(ctx context.Context, arg ListDueReservationConfirmationsParams) ([]ListDueReservationConfirmationsRow, error) {
 	rows, err := q.db.Query(ctx, listDueReservationConfirmations, arg.OrganizationID, arg.NowAt, arg.LimitCount)
 	if err != nil {
@@ -501,7 +520,7 @@ func (q *Queries) ListDueReservationConfirmations(ctx context.Context, arg ListD
 }
 
 const lockReservationConfirmation = `-- name: LockReservationConfirmation :one
-SELECT id, uuid, organization_id, reservation_id, round, reservation_version, starts_at, status, channels, fallback, on_no_answer, attempt_times, attempts_sent, next_attempt_at, deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at, created_at, updated_at FROM reservation_confirmations
+SELECT id, uuid, organization_id, reservation_id, round, reservation_version, starts_at, status, channels, fallback, on_no_answer, attempt_times, attempts_sent, next_attempt_at, deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at, created_at, updated_at, call_window_start_minute, call_window_end_minute, call_retries, call_retry_minutes, calls_made, next_call_at FROM reservation_confirmations
 WHERE organization_id = $1 AND reservation_id = $2
 FOR UPDATE
 `
@@ -541,6 +560,12 @@ func (q *Queries) LockReservationConfirmation(ctx context.Context, arg LockReser
 		&i.ClosedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CallWindowStartMinute,
+		&i.CallWindowEndMinute,
+		&i.CallRetries,
+		&i.CallRetryMinutes,
+		&i.CallsMade,
+		&i.NextCallAt,
 	)
 	return i, err
 }
@@ -548,12 +573,14 @@ func (q *Queries) LockReservationConfirmation(ctx context.Context, arg LockReser
 const planReservationConfirmation = `-- name: PlanReservationConfirmation :one
 INSERT INTO reservation_confirmations (
     organization_id, reservation_id, reservation_version, starts_at, status, channels, fallback, on_no_answer,
-    attempt_times, attempts_sent, next_attempt_at, deadline_at, planned_at
+    attempt_times, attempts_sent, next_attempt_at, deadline_at, planned_at, call_window_start_minute,
+    call_window_end_minute, call_retries, call_retry_minutes
 )
 VALUES (
     $1, $2, $3, $4, 'scheduled',
     $5::text[], $6, $7, $8::timestamptz[], 0,
-    $9, $10, $11
+    $9, $10, $11, $12,
+    $13, $14, $15
 )
 ON CONFLICT (organization_id, reservation_id) DO UPDATE
 SET round = reservation_confirmations.round + 1, reservation_version = EXCLUDED.reservation_version,
@@ -561,22 +588,29 @@ SET round = reservation_confirmations.round + 1, reservation_version = EXCLUDED.
     on_no_answer = EXCLUDED.on_no_answer, attempt_times = EXCLUDED.attempt_times, attempts_sent = 0,
     next_attempt_at = EXCLUDED.next_attempt_at, deadline_at = EXCLUDED.deadline_at, answer = NULL,
     answer_channel = NULL, answered_at = NULL, change_requested_at = NULL, change_note = '', outcome = NULL,
-    last_error = '', planned_at = EXCLUDED.planned_at, closed_at = NULL
-RETURNING id, uuid, organization_id, reservation_id, round, reservation_version, starts_at, status, channels, fallback, on_no_answer, attempt_times, attempts_sent, next_attempt_at, deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at, created_at, updated_at
+    last_error = '', planned_at = EXCLUDED.planned_at, closed_at = NULL,
+    call_window_start_minute = EXCLUDED.call_window_start_minute, call_window_end_minute = EXCLUDED.call_window_end_minute,
+    call_retries = EXCLUDED.call_retries, call_retry_minutes = EXCLUDED.call_retry_minutes, calls_made = 0,
+    next_call_at = NULL
+RETURNING id, uuid, organization_id, reservation_id, round, reservation_version, starts_at, status, channels, fallback, on_no_answer, attempt_times, attempts_sent, next_attempt_at, deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at, created_at, updated_at, call_window_start_minute, call_window_end_minute, call_retries, call_retry_minutes, calls_made, next_call_at
 `
 
 type PlanReservationConfirmationParams struct {
-	OrganizationID     int64                `json:"organization_id"`
-	ReservationID      int64                `json:"reservation_id"`
-	ReservationVersion int32                `json:"reservation_version"`
-	StartsAt           pgtype.Timestamptz   `json:"starts_at"`
-	Channels           []string             `json:"channels"`
-	Fallback           bool                 `json:"fallback"`
-	OnNoAnswer         string               `json:"on_no_answer"`
-	AttemptTimes       []pgtype.Timestamptz `json:"attempt_times"`
-	NextAttemptAt      pgtype.Timestamptz   `json:"next_attempt_at"`
-	DeadlineAt         pgtype.Timestamptz   `json:"deadline_at"`
-	PlannedAt          pgtype.Timestamptz   `json:"planned_at"`
+	OrganizationID        int64                `json:"organization_id"`
+	ReservationID         int64                `json:"reservation_id"`
+	ReservationVersion    int32                `json:"reservation_version"`
+	StartsAt              pgtype.Timestamptz   `json:"starts_at"`
+	Channels              []string             `json:"channels"`
+	Fallback              bool                 `json:"fallback"`
+	OnNoAnswer            string               `json:"on_no_answer"`
+	AttemptTimes          []pgtype.Timestamptz `json:"attempt_times"`
+	NextAttemptAt         pgtype.Timestamptz   `json:"next_attempt_at"`
+	DeadlineAt            pgtype.Timestamptz   `json:"deadline_at"`
+	PlannedAt             pgtype.Timestamptz   `json:"planned_at"`
+	CallWindowStartMinute pgtype.Int4          `json:"call_window_start_minute"`
+	CallWindowEndMinute   pgtype.Int4          `json:"call_window_end_minute"`
+	CallRetries           int32                `json:"call_retries"`
+	CallRetryMinutes      int32                `json:"call_retry_minutes"`
 }
 
 // A new task, or the task planned again for a moved visit (next round,
@@ -594,6 +628,10 @@ func (q *Queries) PlanReservationConfirmation(ctx context.Context, arg PlanReser
 		arg.NextAttemptAt,
 		arg.DeadlineAt,
 		arg.PlannedAt,
+		arg.CallWindowStartMinute,
+		arg.CallWindowEndMinute,
+		arg.CallRetries,
+		arg.CallRetryMinutes,
 	)
 	var i ReservationConfirmation
 	err := row.Scan(
@@ -623,6 +661,12 @@ func (q *Queries) PlanReservationConfirmation(ctx context.Context, arg PlanReser
 		&i.ClosedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CallWindowStartMinute,
+		&i.CallWindowEndMinute,
+		&i.CallRetries,
+		&i.CallRetryMinutes,
+		&i.CallsMade,
+		&i.NextCallAt,
 	)
 	return i, err
 }
@@ -633,8 +677,9 @@ SET reservation_version = $1, status = $2,
     attempts_sent = $3, next_attempt_at = $4,
     answer = $5, answer_channel = $6, answered_at = $7,
     change_requested_at = $8, change_note = $9,
-    outcome = $10, last_error = $11, closed_at = $12
-WHERE organization_id = $13 AND id = $14
+    outcome = $10, last_error = $11, closed_at = $12,
+    calls_made = $13, next_call_at = $14
+WHERE organization_id = $15 AND id = $16
 `
 
 type SaveReservationConfirmationParams struct {
@@ -650,6 +695,8 @@ type SaveReservationConfirmationParams struct {
 	Outcome            pgtype.Text        `json:"outcome"`
 	LastError          string             `json:"last_error"`
 	ClosedAt           pgtype.Timestamptz `json:"closed_at"`
+	CallsMade          int32              `json:"calls_made"`
+	NextCallAt         pgtype.Timestamptz `json:"next_call_at"`
 	OrganizationID     int64              `json:"organization_id"`
 	ID                 int64              `json:"id"`
 }
@@ -669,6 +716,8 @@ func (q *Queries) SaveReservationConfirmation(ctx context.Context, arg SaveReser
 		arg.Outcome,
 		arg.LastError,
 		arg.ClosedAt,
+		arg.CallsMade,
+		arg.NextCallAt,
 		arg.OrganizationID,
 		arg.ID,
 	)
@@ -708,36 +757,45 @@ func (q *Queries) SetReservationConfirmationStatus(ctx context.Context, arg SetR
 const upsertConfirmationSettings = `-- name: UpsertConfirmationSettings :one
 INSERT INTO confirmation_settings (
     organization_id, branch_id, enabled, channels, fallback, first_request_minutes, follow_up_minutes,
-    max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, updated_by
+    max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, call_window_start_minute,
+    call_window_end_minute, call_retries, call_retry_minutes, updated_by
 )
 VALUES (
     $1, $2, $3, $4::text[], $5,
     $6, $7, $8, $9,
-    $10, $11, $12, $13
+    $10, $11, $12,
+    $13, $14, $15,
+    $16, $17
 )
 ON CONFLICT ON CONSTRAINT uq_confirmation_settings DO UPDATE
 SET enabled = EXCLUDED.enabled, channels = EXCLUDED.channels, fallback = EXCLUDED.fallback,
     first_request_minutes = EXCLUDED.first_request_minutes, follow_up_minutes = EXCLUDED.follow_up_minutes,
     max_attempts = EXCLUDED.max_attempts, deadline_minutes = EXCLUDED.deadline_minutes,
     window_start_minute = EXCLUDED.window_start_minute, window_end_minute = EXCLUDED.window_end_minute,
-    on_no_answer = EXCLUDED.on_no_answer, updated_by = EXCLUDED.updated_by
-RETURNING id, organization_id, branch_id, enabled, channels, fallback, first_request_minutes, follow_up_minutes, max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, updated_by, created_at, updated_at
+    on_no_answer = EXCLUDED.on_no_answer, call_window_start_minute = EXCLUDED.call_window_start_minute,
+    call_window_end_minute = EXCLUDED.call_window_end_minute, call_retries = EXCLUDED.call_retries,
+    call_retry_minutes = EXCLUDED.call_retry_minutes, updated_by = EXCLUDED.updated_by
+RETURNING id, organization_id, branch_id, enabled, channels, fallback, first_request_minutes, follow_up_minutes, max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, updated_by, created_at, updated_at, call_window_start_minute, call_window_end_minute, call_retries, call_retry_minutes
 `
 
 type UpsertConfirmationSettingsParams struct {
-	OrganizationID      int64       `json:"organization_id"`
-	BranchID            pgtype.Int8 `json:"branch_id"`
-	Enabled             bool        `json:"enabled"`
-	Channels            []string    `json:"channels"`
-	Fallback            bool        `json:"fallback"`
-	FirstRequestMinutes int32       `json:"first_request_minutes"`
-	FollowUpMinutes     int32       `json:"follow_up_minutes"`
-	MaxAttempts         int32       `json:"max_attempts"`
-	DeadlineMinutes     int32       `json:"deadline_minutes"`
-	WindowStartMinute   pgtype.Int4 `json:"window_start_minute"`
-	WindowEndMinute     pgtype.Int4 `json:"window_end_minute"`
-	OnNoAnswer          string      `json:"on_no_answer"`
-	UpdatedBy           pgtype.Int8 `json:"updated_by"`
+	OrganizationID        int64       `json:"organization_id"`
+	BranchID              pgtype.Int8 `json:"branch_id"`
+	Enabled               bool        `json:"enabled"`
+	Channels              []string    `json:"channels"`
+	Fallback              bool        `json:"fallback"`
+	FirstRequestMinutes   int32       `json:"first_request_minutes"`
+	FollowUpMinutes       int32       `json:"follow_up_minutes"`
+	MaxAttempts           int32       `json:"max_attempts"`
+	DeadlineMinutes       int32       `json:"deadline_minutes"`
+	WindowStartMinute     pgtype.Int4 `json:"window_start_minute"`
+	WindowEndMinute       pgtype.Int4 `json:"window_end_minute"`
+	OnNoAnswer            string      `json:"on_no_answer"`
+	CallWindowStartMinute pgtype.Int4 `json:"call_window_start_minute"`
+	CallWindowEndMinute   pgtype.Int4 `json:"call_window_end_minute"`
+	CallRetries           int32       `json:"call_retries"`
+	CallRetryMinutes      int32       `json:"call_retry_minutes"`
+	UpdatedBy             pgtype.Int8 `json:"updated_by"`
 }
 
 func (q *Queries) UpsertConfirmationSettings(ctx context.Context, arg UpsertConfirmationSettingsParams) (ConfirmationSetting, error) {
@@ -754,6 +812,10 @@ func (q *Queries) UpsertConfirmationSettings(ctx context.Context, arg UpsertConf
 		arg.WindowStartMinute,
 		arg.WindowEndMinute,
 		arg.OnNoAnswer,
+		arg.CallWindowStartMinute,
+		arg.CallWindowEndMinute,
+		arg.CallRetries,
+		arg.CallRetryMinutes,
 		arg.UpdatedBy,
 	)
 	var i ConfirmationSetting
@@ -774,6 +836,10 @@ func (q *Queries) UpsertConfirmationSettings(ctx context.Context, arg UpsertConf
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CallWindowStartMinute,
+		&i.CallWindowEndMinute,
+		&i.CallRetries,
+		&i.CallRetryMinutes,
 	)
 	return i, err
 }

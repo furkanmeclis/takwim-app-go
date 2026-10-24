@@ -44,6 +44,6 @@ export type ListIntegrationsParams = {
   sort?: string;
   q?: string;
   status?: string;
-  /** Integration kinds, comma separated (sms, whatsapp, email, payment). */
+  /** Integration kinds, comma separated (sms, whatsapp, email, payment, voice_call). */
   kind?: string;
 };

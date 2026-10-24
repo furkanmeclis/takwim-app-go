@@ -67,6 +67,8 @@ import (
 	staffsharesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
 	staffsharesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
+	voicecallmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/voicecall"
+	voicecallusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/voicecall/usecase"
 	whatsappmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp"
 	whatsappusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/observability"
@@ -182,6 +184,9 @@ func main() {
 	whatsappClient := whatsappmodule.Client(cfg)
 	whatsappSvc := whatsappusecase.New(queries, whatsappClient)
 	whatsappSvc.SetLogger(log)
+	voiceClient := voicecallmodule.Client(cfg)
+	voiceSvc := voicecallusecase.New(queries, voiceClient, voicecallmodule.WebhookBase(cfg))
+	voiceSvc.SetLogger(log)
 	notifyEngine.SetLogger(log)
 	notifyEngine.Register(
 		// The SMS provider is not chosen yet (TEC-884): the log sender
@@ -191,6 +196,9 @@ func main() {
 		// WhatsApp (TEC-922): the confirmation request through the business's
 		// own Cloud API account (accounts plugged in with the integration kit).
 		whatsappusecase.NewChannel(whatsappSvc),
+		// Voice calls (TEC-923): the confirmation call through the business's
+		// own Netgsm account; its result comes to the API's webhook.
+		voicecallusecase.NewChannel(voiceSvc),
 	)
 	usage := entitlementsmodule.New(queries)
 	notifyEngine.SetUsage(func(ctx context.Context, orgID int64, timezone, metric string) {
@@ -320,13 +328,15 @@ func main() {
 	// Confirmation requests carry a link to the one visit (confirm, cancel,
 	// ask for a change), issued at send time.
 	notifyEngine.SetLinkIssuerFor(customernotifycatalog.ConfirmationRequest, customernotifyadapters.VisitLinks(panelLinks))
+	integrationAdapters := append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)
 	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log,
-		append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)...)
+		append(integrationAdapters, voicecallmodule.Adapters(voiceClient)...)...)
 	if err != nil {
 		log.Error("integrations_failed", "error", err)
 		exit(1)
 	}
 	whatsappSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner)
+	voiceSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner, fieldCipher)
 	integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: queueClient})
 	integrationKit.Runner.SetResourceEvents(resourceEvents)
 

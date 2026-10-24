@@ -4109,7 +4109,7 @@ paths:
           description: "`display_name` or `created_at`; prefix `-` for descending."
           schema: { type: string }
         - { name: status, in: query, schema: { type: string }, description: "active, disabled" }
-        - { name: kind, in: query, schema: { type: string }, description: "payment, sms, whatsapp, email" }
+        - { name: kind, in: query, schema: { type: string }, description: "payment, sms, whatsapp, email, voice_call" }
         - { name: provider, in: query, schema: { type: string }, description: "Provider codes" }
       responses:
         "200":
@@ -4141,7 +4141,7 @@ paths:
               additionalProperties: false
               required: [provider, display_name, credentials]
               properties:
-                kind: { type: string, enum: [payment, sms, whatsapp, email], description: "Defaults to the provider's kind." }
+                kind: { type: string, enum: [payment, sms, whatsapp, email, voice_call], description: "Defaults to the provider's kind." }
                 provider: { type: string, pattern: "^[a-z][a-z0-9_]*$", description: "Provider code of a registered adapter (`GET /v1/tenant/integrations/meta`); `log` = development provider (no network call)." }
                 display_name: { type: string, maxLength: 120 }
                 mode: { type: string, enum: [sandbox, live] }
@@ -9486,7 +9486,7 @@ paths:
           schema: { type: string, example: -created_at }
         - name: channel
           in: query
-          description: "`sms`, `whatsapp`, `email`; comma-separate or repeat"
+          description: "`sms`, `whatsapp`, `email`, `voice_call`; comma-separate or repeat"
           schema: { type: string }
         - name: status
           in: query
@@ -13013,6 +13013,76 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/public/voice/netgsm/{account}/webhook:
+    parameters:
+      - name: account
+        in: path
+        required: true
+        description: The business's voice call integration account (Netgsm).
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Notifications]
+      operationId: postVoiceCallWebhook
+      summary: Result of a confirmation call
+      description: |
+        Netgsm posts the result of one confirmation call (TEC-923) to the
+        address given with the call: `d` names the attempt and `s` is its
+        token, which only this server can make (`401` otherwise). The order
+        id (`bulkid`) must be the attempt's. A key pressed on an answered
+        call answers the current request like a visit link button: `1`
+        confirms, `2` cancels under the business's cancel rules, `3` asks
+        for a change; any other key is recorded as `invalid_key`. A picked
+        up call is never a confirmation: without a valid key, and when the
+        call is not answered, busy or unreachable, the request runs on the
+        rule's next channel and the call is made again within the rule's
+        extra calls. Every key is recorded with its result
+        (`ConfirmationResponse`, channel `voice_call`) and each result is
+        handled once (`integration_jobs`). An unknown or non-Netgsm account,
+        or `VOICE_NETGSM_ENABLED` off: `404`. `200` when handled (also a
+        repeated delivery), `500` to have it sent again. Limit: 600 per
+        minute per account.
+      security: []
+      parameters:
+        - { name: d, in: query, required: true, description: The attempt (delivery uuid)., schema: { type: string, format: uuid } }
+        - { name: s, in: query, required: true, description: The attempt's token., schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                bulkid: { type: [string, integer] }
+                callee: { type: string }
+                state: { type: [integer, string], description: "1 answered, 2 not answered, 3 unreachable, 7 busy" }
+                answer_time: { type: string }
+                hangup_time: { type: string }
+                detail:
+                  type: object
+                  additionalProperties: true
+                  properties:
+                    push_button: { type: [string, integer, "null"], description: "The key pressed; null or -1 = none" }
+      responses:
+        "200":
+          description: Handled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, enum: [ok] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/public/payments/paytr/notify:
     post:
       tags: [Payments]
@@ -15435,7 +15505,7 @@ components:
       type: object
       required: [kind, provider, fields, modes]
       properties:
-        kind: { type: string, enum: [payment, sms, whatsapp, email] }
+        kind: { type: string, enum: [payment, sms, whatsapp, email, voice_call] }
         provider: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
         fields:
           type: array
@@ -15464,7 +15534,7 @@ components:
       required: [uuid, kind, provider, display_name, mode, status, credentials_hint, last_checked_at, last_check_status, last_check_error, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
-        kind: { type: string, enum: [payment, sms, whatsapp, email] }
+        kind: { type: string, enum: [payment, sms, whatsapp, email, voice_call] }
         provider: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
         display_name: { type: string }
         mode: { type: string, enum: [sandbox, live] }
@@ -17133,13 +17203,14 @@ components:
     ConfirmationRule:
       type: object
       required: [enabled, channels, fallback, first_request_minutes, follow_up_minutes, max_attempts, deadline_minutes,
-        window_start_minute, window_end_minute, on_no_answer]
+        window_start_minute, window_end_minute, on_no_answer, call_window_start_minute, call_window_end_minute,
+        call_retries, call_retry_minutes]
       properties:
         enabled: { type: boolean }
         channels:
           type: array
-          description: In order; the first is the primary channel.
-          items: { type: string, enum: [sms, whatsapp, email] }
+          description: "In order; the first is the primary channel. `voice_call`: the automatic call with keys (TEC-923)."
+          items: { type: string, enum: [sms, whatsapp, email, voice_call] }
         fallback: { type: boolean, description: Try the next channel when one fails. }
         first_request_minutes: { type: integer, minimum: 30, maximum: 10080, description: Minutes before the start. }
         follow_up_minutes: { type: integer, minimum: 0, maximum: 10080, description: "Minutes before the start; 0 = none." }
@@ -17148,6 +17219,26 @@ components:
         window_start_minute: { type: [integer, "null"], minimum: 0, maximum: 1439, description: Local minute of the day requests may start. }
         window_end_minute: { type: [integer, "null"], minimum: 1, maximum: 1440 }
         on_no_answer: { type: string, enum: [cancel, flag] }
+        call_window_start_minute:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 1439
+          description: |
+            Local minute of the day calls may start ringing; null = the
+            request window. With `voice_call` listed and both windows set,
+            they must overlap by `min_window_minutes`. A request due outside
+            the call hours goes out on the other channels.
+        call_window_end_minute: { type: [integer, "null"], minimum: 1, maximum: 1440 }
+        call_retries:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Extra calls when a call is not answered or brings no valid key (per planning).
+        call_retry_minutes:
+          type: integer
+          minimum: 15
+          maximum: 240
+          description: Wait before the next call; 0 on save = 30.
 
     ConfirmationSaveInput:
       allOf:
@@ -17180,7 +17271,7 @@ components:
             type: object
             required: [name, ready]
             properties:
-              name: { type: string, enum: [sms, whatsapp, email] }
+              name: { type: string, enum: [sms, whatsapp, email, voice_call] }
               ready: { type: boolean }
         default: { $ref: "#/components/schemas/ConfirmationRule" }
         default_custom: { type: boolean }
@@ -17191,13 +17282,17 @@ components:
           items: { $ref: "#/components/schemas/ConfirmationBranchRule" }
         limits:
           type: object
-          required: [min_response_minutes, min_first_request_minutes, max_minutes, max_attempts, min_window_minutes]
+          required: [min_response_minutes, min_first_request_minutes, max_minutes, max_attempts, min_window_minutes,
+            max_call_retries, min_call_retry_minutes, max_call_retry_minutes]
           properties:
             min_response_minutes: { type: integer }
             min_first_request_minutes: { type: integer }
             max_minutes: { type: integer }
             max_attempts: { type: integer }
             min_window_minutes: { type: integer }
+            max_call_retries: { type: integer }
+            min_call_retry_minutes: { type: integer }
+            max_call_retry_minutes: { type: integer }
 
     EnvelopeConfirmationSettings:
       type: object
@@ -17284,7 +17379,7 @@ components:
         next_attempt_at: { type: [string, "null"], format: date-time }
         deadline_at: { type: string, format: date-time }
         answer: { type: [string, "null"], enum: [confirm, cancel, change, null] }
-        answer_channel: { type: [string, "null"], description: "panel, visit_link, whatsapp (a button of the request), phone (recorded by a member); voice later" }
+        answer_channel: { type: [string, "null"], description: "panel, visit_link, whatsapp (a button of the request), voice_call (a key of the call), phone (recorded by a member)" }
         answered_at: { type: [string, "null"], format: date-time }
         change_requested_at: { type: [string, "null"], format: date-time }
         change_note: { type: string }
@@ -17367,11 +17462,12 @@ components:
 
     ConfirmationAttempt:
       type: object
-      required: [round, request, status, dispatch_status, channel, try, provider, recipient, error, scheduled_at, sent_at,
+      required: [round, request, call, status, dispatch_status, channel, try, provider, recipient, error, scheduled_at, sent_at,
         delivered_at, read_at, finished_at, created_at, delivery_uuid, dispatch_uuid, dispatch_error, responses]
       properties:
         round: { type: integer }
         request: { type: integer }
+        call: { type: integer, description: "A call made again after a missed one (1, 2 …); 0 = the request itself." }
         status: { type: string, description: "The channel's result (sending, sent, delivered, failed, skipped) or the request's own status without a channel." }
         dispatch_status: { type: string, enum: [pending, sending, delivered, failed, skipped, cancelled] }
         channel: { type: [string, "null"] }
@@ -17384,7 +17480,7 @@ components:
         delivered_at:
           type: [string, "null"]
           format: date-time
-          description: From the provider's delivery report (WhatsApp). Never an answer.
+          description: From the provider's delivery report (WhatsApp), or the call was picked up. Never an answer.
         read_at:
           type: [string, "null"]
           format: date-time
@@ -17396,7 +17492,7 @@ components:
         dispatch_error: { type: string }
         responses:
           type: array
-          description: The customer's replies to this message on its channel (WhatsApp buttons), oldest first.
+          description: The customer's replies to this message on its channel (WhatsApp buttons, call keys), oldest first.
           items: { $ref: "#/components/schemas/ConfirmationResponse" }
 
     ConfirmationResponse:
@@ -17414,7 +17510,7 @@ components:
             answer the booking does not take now (`reason`: `answered`,
             `status`, `cutoff`, `request_outdated`, `not_open`,
             `reservation_not_found` …). `ignored`: not an answer from the
-            customer (`other_number`, `not_an_answer`,
+            customer (`other_number`, `not_an_answer`, `invalid_key`,
             `not_confirmation_request`).
         reason: { type: string }
         responded_at: { type: string, format: date-time }
@@ -17504,7 +17600,7 @@ components:
         uuid: { type: string, format: uuid }
         dispatch_uuid: { type: string, format: uuid }
         event: { type: string }
-        channel: { type: string, enum: [sms, whatsapp, email] }
+        channel: { type: string, enum: [sms, whatsapp, email, voice_call] }
         attempt_no: { type: integer, format: int32 }
         status: { type: string, enum: [sending, sent, delivered, failed, skipped] }
         dispatch_status: { type: string, enum: [pending, sending, delivered, failed, skipped, cancelled] }

@@ -80,8 +80,8 @@ func (e *Engine) Settings(ctx context.Context, orgID int64) (model.Settings, err
 	for _, t := range tpls {
 		byTpl[t.EventCode+"|"+t.Channel] = t
 	}
-	out := model.Settings{Channels: make([]model.ChannelInfo, 0, len(channel.Known))}
-	for _, c := range channel.Known {
+	out := model.Settings{Channels: make([]model.ChannelInfo, 0, len(channel.Messages))}
+	for _, c := range channel.Messages {
 		out.Channels = append(out.Channels, model.ChannelInfo{Name: c, Ready: e.ReadyFor(ctx, orgID, c)})
 	}
 	for _, ev := range catalog.All() {
@@ -94,7 +94,7 @@ func (e *Engine) Settings(ctx context.Context, orgID int64) (model.Settings, err
 			view.UpdatedAt, view.Custom = &t, true
 		}
 		view.Rule, view.DefaultRule = ruleView(rule), ruleView(def)
-		for _, c := range channel.Known {
+		for _, c := range channel.Messages {
 			d := catalog.DefaultTemplate(ev, c)
 			tv := model.Template{Channel: c, Subject: d.Subject, Body: d.Body, DefaultSubject: d.Subject, DefaultBody: d.Body}
 			if row, ok := byTpl[ev.Code+"|"+c]; ok {
@@ -140,7 +140,7 @@ func (e *Engine) Save(ctx context.Context, orgID, actorID int64, in model.SaveIn
 	}
 	channels := []string{}
 	for i, c := range in.Channels {
-		if !channel.IsKnown(c) {
+		if !channel.IsMessage(c) {
 			ve.add("channels."+strconv.Itoa(i), "invalid", "unknown channel")
 			continue
 		}
@@ -184,7 +184,7 @@ func (e *Engine) Save(ctx context.Context, orgID, actorID int64, in model.SaveIn
 	seen := map[string]bool{}
 	for i, t := range in.Templates {
 		f := "templates." + strconv.Itoa(i)
-		if !channel.IsKnown(t.Channel) {
+		if !channel.IsMessage(t.Channel) {
 			ve.add(f+".channel", "invalid", "unknown channel")
 			continue
 		}
@@ -285,7 +285,7 @@ func (e *Engine) Preview(ctx context.Context, orgID int64, in model.PreviewInput
 	if _, ok := catalog.Get(in.Event); !ok {
 		ve.add("event", "invalid", "unknown event")
 	}
-	if !channel.IsKnown(in.Channel) {
+	if !channel.IsMessage(in.Channel) {
 		ve.add("channel", "invalid", "unknown channel")
 	}
 	if utf8.RuneCountInString(in.Body) > catalog.MaxBody {

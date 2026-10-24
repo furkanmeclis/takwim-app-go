@@ -56,6 +56,9 @@ type Event struct {
 	// Text is the SMS / WhatsApp default; Email the e-mail default.
 	Text  string
 	Email Template
+	// Voice is what an automatic call reads out (TEC-923); empty = the
+	// event is never called.
+	Voice string
 }
 
 // Vars every reservation text may use ({{name}}).
@@ -142,6 +145,10 @@ var managed = []Event{
 				"Geleceğim, iptal veya değişiklik isteği için: {{link}}\n\n" +
 				"Bu süreye kadar yanıt gelmezse randevunuz işletmenin kuralına göre iptal edilebilir." + signature,
 		},
+		// Read out by the call; the keys and what each one says back are
+		// the voice channel's (1 Geleceğim, 2 cancel, 3 change).
+		Voice: "Merhaba {{customer_name}}. {{business_name}} işletmesindeki {{date}} tarihli, saat {{time}} randevunuz için arıyoruz. " +
+			"Randevunuza geleceğinizi teyit etmek için 1'e, iptal etmek için 2'ye, başka bir saat istemek için 3'e basın.",
 	},
 }
 
@@ -182,8 +189,11 @@ func Get(code string) (Event, bool) {
 
 // DefaultTemplate is the catalog text of an event on a channel.
 func DefaultTemplate(ev Event, ch string) Template {
-	if ch == channel.Email {
+	switch ch {
+	case channel.Email:
 		return ev.Email
+	case channel.VoiceCall:
+		return Template{Body: ev.Voice}
 	}
 	return Template{Body: ev.Text}
 }

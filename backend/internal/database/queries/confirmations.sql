@@ -23,19 +23,24 @@ LIMIT 1;
 -- name: UpsertConfirmationSettings :one
 INSERT INTO confirmation_settings (
     organization_id, branch_id, enabled, channels, fallback, first_request_minutes, follow_up_minutes,
-    max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, updated_by
+    max_attempts, deadline_minutes, window_start_minute, window_end_minute, on_no_answer, call_window_start_minute,
+    call_window_end_minute, call_retries, call_retry_minutes, updated_by
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.narg(branch_id), sqlc.arg(enabled), sqlc.arg(channels)::text[], sqlc.arg(fallback),
     sqlc.arg(first_request_minutes), sqlc.arg(follow_up_minutes), sqlc.arg(max_attempts), sqlc.arg(deadline_minutes),
-    sqlc.narg(window_start_minute), sqlc.narg(window_end_minute), sqlc.arg(on_no_answer), sqlc.narg(updated_by)
+    sqlc.narg(window_start_minute), sqlc.narg(window_end_minute), sqlc.arg(on_no_answer),
+    sqlc.narg(call_window_start_minute), sqlc.narg(call_window_end_minute), sqlc.arg(call_retries),
+    sqlc.arg(call_retry_minutes), sqlc.narg(updated_by)
 )
 ON CONFLICT ON CONSTRAINT uq_confirmation_settings DO UPDATE
 SET enabled = EXCLUDED.enabled, channels = EXCLUDED.channels, fallback = EXCLUDED.fallback,
     first_request_minutes = EXCLUDED.first_request_minutes, follow_up_minutes = EXCLUDED.follow_up_minutes,
     max_attempts = EXCLUDED.max_attempts, deadline_minutes = EXCLUDED.deadline_minutes,
     window_start_minute = EXCLUDED.window_start_minute, window_end_minute = EXCLUDED.window_end_minute,
-    on_no_answer = EXCLUDED.on_no_answer, updated_by = EXCLUDED.updated_by
+    on_no_answer = EXCLUDED.on_no_answer, call_window_start_minute = EXCLUDED.call_window_start_minute,
+    call_window_end_minute = EXCLUDED.call_window_end_minute, call_retries = EXCLUDED.call_retries,
+    call_retry_minutes = EXCLUDED.call_retry_minutes, updated_by = EXCLUDED.updated_by
 RETURNING *;
 
 -- name: DeleteConfirmationSettings :execrows
@@ -100,12 +105,14 @@ FOR UPDATE;
 -- answers cleared).
 INSERT INTO reservation_confirmations (
     organization_id, reservation_id, reservation_version, starts_at, status, channels, fallback, on_no_answer,
-    attempt_times, attempts_sent, next_attempt_at, deadline_at, planned_at
+    attempt_times, attempts_sent, next_attempt_at, deadline_at, planned_at, call_window_start_minute,
+    call_window_end_minute, call_retries, call_retry_minutes
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(reservation_id), sqlc.arg(reservation_version), sqlc.arg(starts_at), 'scheduled',
     sqlc.arg(channels)::text[], sqlc.arg(fallback), sqlc.arg(on_no_answer), sqlc.arg(attempt_times)::timestamptz[], 0,
-    sqlc.narg(next_attempt_at), sqlc.arg(deadline_at), sqlc.arg(planned_at)
+    sqlc.narg(next_attempt_at), sqlc.arg(deadline_at), sqlc.arg(planned_at), sqlc.narg(call_window_start_minute),
+    sqlc.narg(call_window_end_minute), sqlc.arg(call_retries), sqlc.arg(call_retry_minutes)
 )
 ON CONFLICT (organization_id, reservation_id) DO UPDATE
 SET round = reservation_confirmations.round + 1, reservation_version = EXCLUDED.reservation_version,
@@ -113,7 +120,10 @@ SET round = reservation_confirmations.round + 1, reservation_version = EXCLUDED.
     on_no_answer = EXCLUDED.on_no_answer, attempt_times = EXCLUDED.attempt_times, attempts_sent = 0,
     next_attempt_at = EXCLUDED.next_attempt_at, deadline_at = EXCLUDED.deadline_at, answer = NULL,
     answer_channel = NULL, answered_at = NULL, change_requested_at = NULL, change_note = '', outcome = NULL,
-    last_error = '', planned_at = EXCLUDED.planned_at, closed_at = NULL
+    last_error = '', planned_at = EXCLUDED.planned_at, closed_at = NULL,
+    call_window_start_minute = EXCLUDED.call_window_start_minute, call_window_end_minute = EXCLUDED.call_window_end_minute,
+    call_retries = EXCLUDED.call_retries, call_retry_minutes = EXCLUDED.call_retry_minutes, calls_made = 0,
+    next_call_at = NULL
 RETURNING *;
 
 -- name: SaveReservationConfirmation :exec
@@ -123,19 +133,21 @@ SET reservation_version = sqlc.arg(reservation_version), status = sqlc.arg(statu
     attempts_sent = sqlc.arg(attempts_sent), next_attempt_at = sqlc.narg(next_attempt_at),
     answer = sqlc.narg(answer), answer_channel = sqlc.narg(answer_channel), answered_at = sqlc.narg(answered_at),
     change_requested_at = sqlc.narg(change_requested_at), change_note = sqlc.arg(change_note),
-    outcome = sqlc.narg(outcome), last_error = sqlc.arg(last_error), closed_at = sqlc.narg(closed_at)
+    outcome = sqlc.narg(outcome), last_error = sqlc.arg(last_error), closed_at = sqlc.narg(closed_at),
+    calls_made = sqlc.arg(calls_made), next_call_at = sqlc.narg(next_call_at)
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id);
 
 -- name: ListDueReservationConfirmations :many
--- Tasks with an attempt or a deadline due (the worker's scan; every
--- business, or one when organization_id is given).
+-- Tasks with an attempt, a call made again (TEC-923) or a deadline due (the
+-- worker's scan; every business, or one when organization_id is given).
 SELECT c.organization_id, c.reservation_id
 FROM reservation_confirmations c
 WHERE c.status IN ('scheduled', 'pending')
   AND (sqlc.narg(organization_id)::bigint IS NULL OR c.organization_id = sqlc.narg(organization_id))
   AND ((c.next_attempt_at IS NOT NULL AND c.next_attempt_at <= sqlc.arg(now_at))
+       OR (c.next_call_at IS NOT NULL AND c.next_call_at <= sqlc.arg(now_at))
        OR (c.change_requested_at IS NULL AND c.deadline_at <= sqlc.arg(now_at)))
-ORDER BY LEAST(COALESCE(c.next_attempt_at, c.deadline_at), c.deadline_at), c.id
+ORDER BY LEAST(COALESCE(c.next_attempt_at, c.deadline_at), COALESCE(c.next_call_at, c.deadline_at), c.deadline_at), c.id
 LIMIT sqlc.arg(limit_count);
 
 -- name: CountConfirmationSends :one

@@ -475,5 +475,6 @@
   "fields.bundle": "Service bundle",
   "fields.bundle_none": "No bundle, pick services one by one",
   "fields.bundle_hint": "Picking a bundle adds its services in order; you can choose the staff member of each service.",
-  "fields.bundle_price": "Bundle price {{price}}, spread over the services by their list prices."
+  "fields.bundle_price": "Bundle price {{price}}, spread over the services by their list prices.",
+  "confirmation_task.sources.voice_call": "Automatic call (key press)"
 }

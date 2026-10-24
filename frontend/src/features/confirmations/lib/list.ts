@@ -44,6 +44,7 @@ export const ANSWER_SOURCES: Record<string, string> = {
   panel: "reservations.confirmation_task.sources.panel",
   visit_link: "reservations.confirmation_task.sources.visit_link",
   whatsapp: "reservations.confirmation_task.sources.whatsapp",
+  voice_call: "reservations.confirmation_task.sources.voice_call",
   phone: "reservations.confirmation_task.sources.phone",
 };
 
@@ -54,7 +55,7 @@ export const ANSWER_KEYS: Record<string, string> = {
   change: "reservations.confirmation_task.answers.change",
 };
 
-/** Result of a reply on a channel (WhatsApp button, TEC-922). */
+/** Result of a reply on a channel (WhatsApp button, call key). */
 export const RESPONSE_RESULT: Record<string, { key: string; tone: Tone }> = {
   applied: { key: "confirmations.responses.results.applied", tone: "success" },
   rejected: {
@@ -76,6 +77,7 @@ export const RESPONSE_REASONS = [
   "reservation_not_found",
   "other_number",
   "not_an_answer",
+  "invalid_key",
   "not_confirmation_request",
 ] as const;
 

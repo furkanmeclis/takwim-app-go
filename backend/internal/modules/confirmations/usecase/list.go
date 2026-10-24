@@ -276,7 +276,7 @@ func (e *Engine) Attempts(ctx context.Context, orgID int64, id uuid.UUID) ([]mod
 			Status: row.DispatchStatus, Error: row.DispatchError, ScheduledAt: row.ScheduledAt.Time.UTC(),
 			CreatedAt: row.ScheduledAt.Time.UTC(),
 		}
-		a.Round, a.Request = requestOf(row.IdempotencyKey)
+		a.Round, a.Request, a.Call = requestOf(row.IdempotencyKey)
 		if row.DeliveryUuid.Valid {
 			id := uuid.UUID(row.DeliveryUuid.Bytes)
 			a.DeliveryUUID = &id
@@ -298,20 +298,22 @@ func (e *Engine) Attempts(ctx context.Context, orgID int64, id uuid.UUID) ([]mod
 	return out, nil
 }
 
-// requestOf reads the round and request number of a request key
-// ("…|r2:a1").
-func requestOf(key string) (round, request int) {
+// requestOf reads the round, request number and extra call of a request
+// key ("…|r2:a1", "…|r2:a1:c1" for the first call made again).
+func requestOf(key string) (round, request, call int) {
 	i := strings.LastIndex(key, "|r")
 	if i < 0 {
-		return 0, 0
+		return 0, 0, 0
 	}
 	r, a, ok := strings.Cut(key[i+2:], ":a")
 	if !ok {
-		return 0, 0
+		return 0, 0, 0
 	}
+	a, c, _ := strings.Cut(a, ":c")
 	round, _ = strconv.Atoi(r)
 	request, _ = strconv.Atoi(a)
-	return round, request
+	call, _ = strconv.Atoi(c)
+	return round, request, call
 }
 
 // ConfirmByPhone records a confirmation the customer gave on the phone

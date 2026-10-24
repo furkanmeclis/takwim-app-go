@@ -97,6 +97,11 @@ func TestValidate(t *testing.T) {
 		"first_request_minutes": func(r *model.Rule) {
 			r.FirstRequestMinutes, r.FollowUpMinutes, r.MaxAttempts, r.DeadlineMinutes = 10, 0, 1, 0
 		},
+		"channels.2":               func(r *model.Rule) { r.Channels = []string{"sms", "email", "fax"} },
+		"call_window_end_minute":   func(r *model.Rule) { v := 10*60 + 30; r.CallWindowEndMinute = &v },
+		"call_retries":             func(r *model.Rule) { r.CallRetries = 4 },
+		"call_retry_minutes":       func(r *model.Rule) { r.CallRetryMinutes = 5 },
+		"call_window_start_minute": func(r *model.Rule) { v := -1; r.CallWindowStartMinute = &v },
 	}
 	for field, mutate := range bad {
 		r := model.DefaultRule()
@@ -112,5 +117,60 @@ func TestValidate(t *testing.T) {
 	r.FollowUpMinutes = r.DeadlineMinutes + 10
 	if err := Validate(r); err == nil {
 		t.Fatal("follow-up without response time saved")
+	}
+}
+
+// TestValidateCalls (TEC-923): the voice call is a channel; its hours must
+// overlap the request hours by an hour when both are set.
+func TestValidateCalls(t *testing.T) {
+	r := model.DefaultRule()
+	r.Channels = []string{"voice_call", "sms"}
+	if err := Validate(r); err != nil {
+		t.Fatalf("voice call rule invalid: %v", err)
+	}
+	s, e := 20*60+30, 23*60
+	r.CallWindowStartMinute, r.CallWindowEndMinute = &s, &e
+	var ve *ValidationError
+	if err := Validate(r); !errors.As(err, &ve) || ve.Details[0].Code != "no_overlap" {
+		t.Fatalf("calls outside the request hours: %v", err)
+	}
+	// Without the call channel the call hours do not matter.
+	r.Channels = []string{"sms"}
+	if err := Validate(r); err != nil {
+		t.Fatalf("call hours without calls: %v", err)
+	}
+	// No call hours of its own: the request hours apply.
+	r.Channels = []string{"voice_call"}
+	r.CallWindowStartMinute, r.CallWindowEndMinute = nil, nil
+	if err := Validate(r); err != nil {
+		t.Fatalf("calls in the request hours: %v", err)
+	}
+}
+
+func TestWindowContains(t *testing.T) {
+	s, e := 10*60, 20*60
+	w := window{start: &s, end: &e, loc: ist}
+	for at, want := range map[time.Time]bool{
+		local(13, 9, 59): false, local(13, 10, 0): true, local(13, 19, 59): true, local(13, 20, 0): false,
+	} {
+		if w.contains(at) != want {
+			t.Errorf("contains(%s) = %v", at, !want)
+		}
+	}
+	if !(window{loc: ist}).contains(local(13, 3, 0)) {
+		t.Error("an open window refused a time")
+	}
+}
+
+func TestRequestOf(t *testing.T) {
+	for key, want := range map[string][3]int{
+		"confirmation.request|reservation:x|r2:a1":    {2, 1, 0},
+		"confirmation.request|reservation:x|r1:a2:c3": {1, 2, 3},
+		"reservation.reminder|reservation:x|remind":   {0, 0, 0},
+	} {
+		r, a, c := requestOf(key)
+		if [3]int{r, a, c} != want {
+			t.Errorf("requestOf(%q) = %d %d %d", key, r, a, c)
+		}
 	}
 }

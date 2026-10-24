@@ -102,7 +102,7 @@ func TestOverview(t *testing.T) {
 	if !out.Confirmation.Granted || !out.Confirmation.Active || !out.Confirmation.SectorOffers {
 		t.Fatalf("confirmation: %+v", out.Confirmation)
 	}
-	want := map[string]string{"sms": ChannelNotReady, "whatsapp": ChannelNotReady, "email": ChannelReady, "voice_call": ChannelUnavailable}
+	want := map[string]string{"sms": ChannelNotReady, "whatsapp": ChannelNotReady, "email": ChannelReady, "voice_call": ChannelNotReady}
 	if len(out.Channels) != len(want) {
 		t.Fatalf("channels: %+v", out.Channels)
 	}

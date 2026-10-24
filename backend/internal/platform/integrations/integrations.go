@@ -27,6 +27,8 @@ const (
 	KindSMS      = "sms"
 	KindWhatsApp = "whatsapp"
 	KindEmail    = "email"
+	// KindVoiceCall: automatic calls with keys (TEC-923).
+	KindVoiceCall = "voice_call"
 )
 
 // Account modes.

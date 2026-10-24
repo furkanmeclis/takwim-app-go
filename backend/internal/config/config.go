@@ -34,6 +34,22 @@ type Config struct {
 	Tenancy    TenancyConfig
 	Payments   PaymentsConfig
 	WhatsApp   WhatsAppConfig
+	Voice      VoiceConfig
+}
+
+// VoiceConfig switches the automatic confirmation calls on (TEC-923). Each
+// business connects its own Netgsm account in the panel; nothing here is a
+// credential.
+type VoiceConfig struct {
+	// NetgsmEnabled registers the Netgsm voice adapter and its webhook
+	// (VOICE_NETGSM_ENABLED).
+	NetgsmEnabled bool
+	// NetgsmBaseURL is Netgsm's API origin (VOICE_NETGSM_BASE_URL; tests
+	// point it at a fake).
+	NetgsmBaseURL string
+	// WebhookBaseURL is the public API origin Netgsm posts call results to
+	// (VOICE_WEBHOOK_BASE_URL; default PUBLIC_FRONTEND_URL + "/api").
+	WebhookBaseURL string
 }
 
 // WhatsAppConfig switches the WhatsApp Cloud API on (TEC-922). Each
@@ -370,6 +386,11 @@ func Load() (Config, error) {
 			MetaEnabled:    getBool("WHATSAPP_META_ENABLED", false),
 			MetaGraphURL:   strings.TrimRight(getEnv("WHATSAPP_META_GRAPH_URL", "https://graph.facebook.com"), "/"),
 			MetaAPIVersion: getEnv("WHATSAPP_META_API_VERSION", "v21.0"),
+		},
+		Voice: VoiceConfig{
+			NetgsmEnabled:  getBool("VOICE_NETGSM_ENABLED", false),
+			NetgsmBaseURL:  strings.TrimRight(getEnv("VOICE_NETGSM_BASE_URL", "https://api.netgsm.com.tr"), "/"),
+			WebhookBaseURL: strings.TrimRight(getEnv("VOICE_WEBHOOK_BASE_URL", ""), "/"),
 		},
 	}
 

@@ -65,10 +65,15 @@ export const EVENT_HINT_KEYS: Record<NotificationEventCode, string> = {
   "reservation.reminder": "customer_notifications.event_hints.reminder",
 };
 
-export const CHANNEL_LABEL_KEYS: Record<NotificationChannelName, string> = {
+/** Labels of every channel (the voice call only carries confirmations). */
+export const CHANNEL_LABEL_KEYS: Record<
+  NotificationChannelName | "voice_call",
+  string
+> = {
   sms: "customer_notifications.channels.sms",
   whatsapp: "customer_notifications.channels.whatsapp",
   email: "customer_notifications.channels.email",
+  voice_call: "customer_notifications.channels.voice_call",
 };
 
 export const STATUS_LABEL_KEYS: Record<NotificationDeliveryStatus, string> = {
@@ -118,7 +123,7 @@ export function eventLabel(t: Translate, code: string) {
 }
 
 export function channelLabel(t: Translate, name: string) {
-  const key = CHANNEL_LABEL_KEYS[name as NotificationChannelName];
+  const key = CHANNEL_LABEL_KEYS[name as keyof typeof CHANNEL_LABEL_KEYS];
   return key ? t(key) : name;
 }
 

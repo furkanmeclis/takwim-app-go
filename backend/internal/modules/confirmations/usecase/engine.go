@@ -17,6 +17,11 @@
 //     per attempt with the task's ordered channels and fallback. The
 //     dispatch guard drops a queued request whose task was answered or
 //     planned again, so a confirmation stops every pending repeat.
+//   - A request with the automatic voice call (TEC-923) calls only inside
+//     the call hours (else the other channels carry it). A call that is not
+//     answered or brings no valid key is made again (CallMissed) up to the
+//     rule's extra calls, inside the call hours and before the deadline;
+//     each one is its own dispatch of the same request.
 //   - The deadline cancels the booking through the reservations Cancel
 //     transition (capacity, products and session rights are released
 //     there) with the version the task tracks, or flags it. A booking whose
@@ -29,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +49,7 @@ import (
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/catalog"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/channel"
 	customernotifyusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/usecase"
 	reservationsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
@@ -211,12 +218,13 @@ func (s *state) save(ctx context.Context, q *db.Queries) error {
 		OrganizationID: r.OrganizationID, ID: r.ID, ReservationVersion: r.ReservationVersion, Status: r.Status,
 		AttemptsSent: r.AttemptsSent, NextAttemptAt: r.NextAttemptAt, Answer: r.Answer, AnswerChannel: r.AnswerChannel,
 		AnsweredAt: r.AnsweredAt, ChangeRequestedAt: r.ChangeRequestedAt, ChangeNote: r.ChangeNote, Outcome: r.Outcome,
-		LastError: r.LastError, ClosedAt: r.ClosedAt,
+		LastError: r.LastError, ClosedAt: r.ClosedAt, CallsMade: r.CallsMade, NextCallAt: r.NextCallAt,
 	})
 }
 
 func (s *state) close(status string, now time.Time) {
-	s.row.Status, s.row.NextAttemptAt, s.row.ClosedAt = status, pgtype.Timestamptz{}, ts(now)
+	s.row.Status, s.row.ClosedAt = status, ts(now)
+	s.row.NextAttemptAt, s.row.NextCallAt = pgtype.Timestamptz{}, pgtype.Timestamptz{}
 }
 
 // setStatus writes the reservation's confirmation status and a history
@@ -347,10 +355,18 @@ func (e *Engine) plan(ctx context.Context, q *db.Queries, orgID int64, r db.GetC
 	for _, t := range sched.Attempts {
 		times = append(times, ts(t))
 	}
+	// The call hours are kept as they apply: the rule's own, else the
+	// request hours.
+	callStart, callEnd := rule.CallWindowStartMinute, rule.CallWindowEndMinute
+	if callStart == nil || callEnd == nil {
+		callStart, callEnd = rule.WindowStartMinute, rule.WindowEndMinute
+	}
 	if _, err := q.PlanReservationConfirmation(ctx, db.PlanReservationConfirmationParams{
 		OrganizationID: orgID, ReservationID: r.ID, ReservationVersion: version, StartsAt: r.StartsAt,
 		Channels: rule.Channels, Fallback: rule.Fallback, OnNoAnswer: rule.OnNoAnswer, AttemptTimes: times,
 		NextAttemptAt: times[0], DeadlineAt: ts(sched.Deadline), PlannedAt: ts(now),
+		CallWindowStartMinute: int4(callStart), CallWindowEndMinute: int4(callEnd),
+		CallRetries: int32(rule.CallRetries), CallRetryMinutes: int32(rule.CallRetryMinutes),
 	}); err != nil {
 		return err
 	}
@@ -504,10 +520,44 @@ func (e *Engine) step(ctx context.Context, q *db.Queries, orgID, reservationID i
 		job, err := e.deadline(ctx, q, r, st, now)
 		return job, r.Uuid, err
 	}
-	if !task.NextAttemptAt.Valid || task.NextAttemptAt.Time.After(now) {
-		return nil, uuid.Nil, nil
+	switch {
+	case task.NextAttemptAt.Valid && !task.NextAttemptAt.Time.After(now):
+		return nil, r.Uuid, e.attempt(ctx, q, r, st, now)
+	case task.NextCallAt.Valid && !task.NextCallAt.Time.After(now):
+		return nil, r.Uuid, e.call(ctx, q, r, st, now)
 	}
-	return nil, r.Uuid, e.attempt(ctx, q, r, st, now)
+	return nil, uuid.Nil, nil
+}
+
+// callWindow is the call hours of a task in the branch's time zone.
+func callWindow(t db.ReservationConfirmation, loc *time.Location) window {
+	w := window{loc: loc}
+	if t.CallWindowStartMinute.Valid && t.CallWindowEndMinute.Valid {
+		s, e := int(t.CallWindowStartMinute.Int32), int(t.CallWindowEndMinute.Int32)
+		w.start, w.end = &s, &e
+	}
+	return w
+}
+
+// requestChannels are the channels a request goes out on now: the task's,
+// without the voice call outside the call hours.
+func requestChannels(t db.ReservationConfirmation, now time.Time, loc *time.Location) []string {
+	if !slices.Contains(t.Channels, channel.VoiceCall) || callWindow(t, loc).contains(now) {
+		return t.Channels
+	}
+	out := make([]string, 0, len(t.Channels))
+	for _, c := range t.Channels {
+		if c != channel.VoiceCall {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// latestRequest is the last moment a request (or a call) may go out: the
+// customer keeps the answer time before the deadline.
+func latestRequest(t db.ReservationConfirmation) time.Time {
+	return t.DeadlineAt.Time.Add(-time.Duration(model.MinResponseMinutes) * time.Minute)
 }
 
 // attempt writes the next request and moves the task on.
@@ -516,15 +566,25 @@ func (e *Engine) attempt(ctx context.Context, q *db.Queries, r db.GetConfirmatio
 	n := int(t.AttemptsSent) + 1
 	loc := e.location(ctx, q, t.OrganizationID, r.BranchID)
 	due := r.StartsAt.Time
+	channels := requestChannels(t, now, loc)
+	if len(channels) == 0 {
+		// Only the call, outside the call hours: wait for them when the
+		// customer still has time to answer after it.
+		if next := callWindow(t, loc).shift(now); !next.After(latestRequest(t)) {
+			st.row.NextAttemptAt = ts(next.UTC())
+			return st.save(ctx, q)
+		}
+	}
 	if _, err := e.notices.EmitReservation(ctx, q, t.OrganizationID, r.ID, customernotifyusecase.ReservationNotice{
 		Event: Event, Key: roundKey(t.Round) + ":a" + strconv.Itoa(n),
-		Channels: t.Channels, Fallback: t.Fallback, DueAt: &due,
+		Channels: channels, Fallback: t.Fallback, DueAt: &due,
 		Vars: map[string]string{"deadline": t.DeadlineAt.Time.In(loc).Format("02.01.2006 15:04")},
 	}); err != nil {
 		return err
 	}
 	st.row.AttemptsSent = int32(n)
-	st.row.NextAttemptAt = pgtype.Timestamptz{}
+	// The new request calls again itself.
+	st.row.NextAttemptAt, st.row.NextCallAt = pgtype.Timestamptz{}, pgtype.Timestamptz{}
 	if n < len(t.AttemptTimes) {
 		st.row.NextAttemptAt = t.AttemptTimes[n]
 	}
@@ -536,6 +596,91 @@ func (e *Engine) attempt(ctx context.Context, q *db.Queries, r db.GetConfirmatio
 	}
 	st.row.Status, st.row.ReservationVersion = model.TaskPending, version
 	return st.save(ctx, q)
+}
+
+// call makes a missed call again: a dispatch of the current request on the
+// voice call alone (key "r<round>:a<n>:c<k>", so the dispatch guard and
+// the answer check treat it as that request).
+func (e *Engine) call(ctx context.Context, q *db.Queries, r db.GetConfirmationReservationRow, st *state, now time.Time) error {
+	t := st.row
+	st.row.NextCallAt = pgtype.Timestamptz{}
+	loc := e.location(ctx, q, t.OrganizationID, r.BranchID)
+	w := callWindow(t, loc)
+	if t.AttemptsSent == 0 || t.CallsMade >= t.CallRetries || !slices.Contains(t.Channels, channel.VoiceCall) {
+		return st.save(ctx, q)
+	}
+	if !w.contains(now) {
+		if next := w.shift(now); !next.After(latestRequest(t)) {
+			st.row.NextCallAt = ts(next.UTC())
+		}
+		return st.save(ctx, q)
+	}
+	k := int(t.CallsMade) + 1
+	due := r.StartsAt.Time
+	if _, err := e.notices.EmitReservation(ctx, q, t.OrganizationID, r.ID, customernotifyusecase.ReservationNotice{
+		Event: Event, Key: roundKey(t.Round) + ":a" + strconv.Itoa(int(t.AttemptsSent)) + ":c" + strconv.Itoa(k),
+		Channels: []string{channel.VoiceCall}, DueAt: &due,
+		Vars: map[string]string{"deadline": t.DeadlineAt.Time.In(loc).Format("02.01.2006 15:04")},
+	}); err != nil {
+		return err
+	}
+	st.row.CallsMade = int32(k)
+	return st.save(ctx, q)
+}
+
+// CallMissed plans the call again after a call of a request that was not
+// answered or brought no valid key (TEC-923): when the task still waits,
+// the call belongs to its latest request and an extra call is left, the
+// next one rings after the rule's wait, inside the call hours, early
+// enough for an answer before the deadline and not just before the next
+// planned request (which calls anyway).
+func (e *Engine) CallMissed(ctx context.Context, d db.CustomerNotificationDispatch, at time.Time) error {
+	if d.EventCode != Event || !d.ReservationID.Valid {
+		return nil
+	}
+	orgID := d.OrganizationID
+	return e.tx(ctx, func(q *db.Queries) error {
+		r, err := q.GetConfirmationReservation(ctx, db.GetConfirmationReservationParams{OrganizationID: orgID, ID: d.ReservationID.Int64})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		t, err := q.LockReservationConfirmation(ctx, db.LockReservationConfirmationParams{OrganizationID: orgID, ReservationID: r.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		round, request, _ := requestOf(d.IdempotencyKey)
+		if !open(t.Status) || t.ChangeRequestedAt.Valid || round != int(t.Round) || request != int(t.AttemptsSent) ||
+			t.CallsMade >= t.CallRetries || !slices.Contains(t.Channels, channel.VoiceCall) ||
+			!t.StartsAt.Time.Equal(r.StartsAt.Time) || r.Status != reservationsmodel.StatusActive {
+			return nil
+		}
+		now := e.clock()
+		if at.IsZero() || at.After(now) {
+			at = now
+		}
+		next := at.Add(time.Duration(t.CallRetryMinutes) * time.Minute)
+		if next.Before(now) {
+			next = now
+		}
+		next = callWindow(t, e.location(ctx, q, orgID, r.BranchID)).shift(next).UTC().Truncate(time.Microsecond)
+		switch {
+		case next.After(latestRequest(t)):
+			return nil
+		case t.NextAttemptAt.Valid && next.Add(minGap).After(t.NextAttemptAt.Time):
+			return nil
+		case t.NextCallAt.Valid && !t.NextCallAt.Time.After(next):
+			return nil
+		}
+		st := &state{row: t}
+		st.row.NextCallAt = ts(next)
+		return st.save(ctx, q)
+	})
 }
 
 // deadline ends a task without an answer: cancel (returned as a job, run
@@ -567,7 +712,7 @@ func (e *Engine) deadline(ctx context.Context, q *db.Queries, r db.GetConfirmati
 }
 
 // AnswerInput is a customer's answer (the customer panel, a visit link, a
-// WhatsApp button; voice with TEC-923).
+// WhatsApp button, a key of the confirmation call).
 type AnswerInput struct {
 	// Answer is model.AnswerConfirm or model.AnswerChange (a cancel goes
 	// through the reservation's cancel under the business's rules).
@@ -673,6 +818,7 @@ func (e *Engine) Answer(ctx context.Context, orgID int64, id uuid.UUID, in Answe
 			}
 			st.row.ReservationVersion = version
 			st.row.ChangeRequestedAt, st.row.ChangeNote, st.row.NextAttemptAt = ts(now), note, pgtype.Timestamptz{}
+			st.row.NextCallAt = pgtype.Timestamptz{}
 			if task.Status == model.TaskScheduled {
 				st.row.Status = model.TaskPending
 			}

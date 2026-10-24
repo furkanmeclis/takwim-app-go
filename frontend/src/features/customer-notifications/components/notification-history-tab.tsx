@@ -128,10 +128,13 @@ export function NotificationHistoryTab() {
           labelKey: "customer_notifications.columns.channel",
           enableSorting: true,
           filterVariant: "faceted",
-          filterOptions: NOTIFICATION_CHANNELS.map((name) => ({
-            value: name,
-            label: channelLabel(t, name),
-          })),
+          // Confirmation calls are in the history too (TEC-923).
+          filterOptions: [...NOTIFICATION_CHANNELS, "voice_call"].map(
+            (name) => ({
+              value: name,
+              label: channelLabel(t, name),
+            }),
+          ),
           cell: ({ row }) => channelLabel(t, row.original.channel),
         }),
         createColumn<CustomerNotificationDelivery>({

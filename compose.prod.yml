@@ -88,6 +88,10 @@ x-backend-environment: &backend-environment
   WHATSAPP_META_ENABLED: ${WHATSAPP_META_ENABLED:-false}
   WHATSAPP_META_GRAPH_URL: ${WHATSAPP_META_GRAPH_URL:-https://graph.facebook.com}
   WHATSAPP_META_API_VERSION: ${WHATSAPP_META_API_VERSION:-v21.0}
+  # --- Confirmation calls: Netgsm voice on; the account is per business. ---
+  VOICE_NETGSM_ENABLED: ${VOICE_NETGSM_ENABLED:-false}
+  VOICE_NETGSM_BASE_URL: ${VOICE_NETGSM_BASE_URL:-https://api.netgsm.com.tr}
+  VOICE_WEBHOOK_BASE_URL: ${VOICE_WEBHOOK_BASE_URL:-}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_FORMAT: ${LOG_FORMAT:-json}
   # --- Mobile app (all optional; empty = feature off / defaults) ---
