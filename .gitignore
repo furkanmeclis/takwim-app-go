@@ -3,6 +3,9 @@
 .env.server
 !.env.example
 
+# Backups hold production data (scripts/backup.sh, docs/OPERATIONS.md)
+/backups/
+
 # Frontend (Next.js)
 frontend/node_modules/
 frontend/.next/

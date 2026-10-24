@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { permissions } from "@/config/permissions";
+import { OperationsHealthCard } from "@/features/operations/components/operations-health-card";
 import { SettingsForbidden } from "@/features/settings/components/settings-forbidden";
 import { SettingsPageHeader } from "@/features/settings/components/settings-page-header";
 import {
@@ -514,6 +515,8 @@ export function SystemOverviewPage() {
           </ServiceCard>
         </div>
       </section>
+
+      <OperationsHealthCard />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="border-border/60 shadow-xs">

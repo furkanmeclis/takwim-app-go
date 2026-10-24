@@ -50,3 +50,8 @@ CountUsers                 user_roles hold platform roles only
 CountUsersWithRole         user_roles hold platform roles only
 ListUsersForExport         user_roles hold platform roles only
 ListUserUUIDsForBulk       user_roles hold platform roles only
+
+# Platform operations (TEC-930): counts over every organization for the
+# platform operator (platform.settings.read); no organization row is read.
+CountPlatformIntegrationJobsByStatus platform-wide count (operations summary)
+CountPlatformEngineFailuresSince     platform-wide count (operations summary)

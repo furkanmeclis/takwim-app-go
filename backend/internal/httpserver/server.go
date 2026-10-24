@@ -91,6 +91,9 @@ import (
 	notifhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/handler"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/providers"
 	notifusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/usecase"
+	operationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/operations"
+	operationshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/operations/handler"
+	operationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/operations/usecase"
 	organizationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations"
 	orgadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/adapters"
 	orghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/handler"
@@ -169,6 +172,7 @@ import (
 	whatsappmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp"
 	whatsapphandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/handler"
 	whatsappusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/usecase"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/observability"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/appleauth"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
@@ -193,6 +197,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/queue"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/realtime"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -816,6 +821,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	activitymodule.RegisterRoutes(mux, activityH, tokens, loader)
 	activitymodule.RegisterTenantRoutes(mux, activityH, tokens, loader, tenantResolver)
 	logsmodule.RegisterRoutes(mux, logshandler.New(logsSvc), tokens, loader)
+	// Platform operations (TEC-930): queue health, failed tasks and provider
+	// errors of every organization. The inspector shares the API's Redis.
+	var queueInspector operationsusecase.QueueInspector
+	if deps.Redis != nil {
+		queueInspector = asynq.NewInspectorFromRedisClient(deps.Redis)
+	}
+	operationsmodule.RegisterRoutes(mux, operationshandler.New(operationsusecase.New(deps.Queries, queueInspector, integrationKit.Runner,
+		operationsusecase.Tracking{Enabled: observability.Enabled, Environment: cfg.Sentry.Environment}), activityRec), tokens, loader)
 	searchSvc := searchusecase.New(searchClient, searchReg, log)
 	searchH := searchhandler.New(searchSvc)
 	searchmodule.RegisterRoutes(mux, searchH, tokens, loader)

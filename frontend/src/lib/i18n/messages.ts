@@ -35,6 +35,7 @@ import enForm from "@/locales/en/form.json";
 import enImports from "@/locales/en/imports.json";
 import enIntegrations from "@/locales/en/integrations.json";
 import enLogs from "@/locales/en/logs.json";
+import enOperations from "@/locales/en/operations.json";
 import enLayout from "@/locales/en/layout.json";
 import enNotifications from "@/locales/en/notifications.json";
 import enInvitations from "@/locales/en/invitations.json";
@@ -90,6 +91,7 @@ import trForm from "@/locales/tr/form.json";
 import trImports from "@/locales/tr/imports.json";
 import trIntegrations from "@/locales/tr/integrations.json";
 import trLogs from "@/locales/tr/logs.json";
+import trOperations from "@/locales/tr/operations.json";
 import trLayout from "@/locales/tr/layout.json";
 import trNotifications from "@/locales/tr/notifications.json";
 import trInvitations from "@/locales/tr/invitations.json";
@@ -139,6 +141,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     exports: trExports,
     imports: trImports,
     logs: trLogs,
+    operations: trOperations,
     settings: trSettings,
     storage: trStorage,
     access: trAccess,
@@ -196,6 +199,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     exports: enExports,
     imports: enImports,
     logs: enLogs,
+    operations: enOperations,
     settings: enSettings,
     storage: enStorage,
     access: enAccess,

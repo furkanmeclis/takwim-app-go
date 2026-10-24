@@ -143,6 +143,11 @@ type Querier interface {
 	// a decision).
 	CountPendingApprovals(ctx context.Context, arg CountPendingApprovalsParams) (int64, error)
 	CountPermissions(ctx context.Context, q_ pgtype.Text) (int64, error)
+	// Failed export, import and bulk jobs of the platform and every
+	// organization.
+	CountPlatformEngineFailuresSince(ctx context.Context, since pgtype.Timestamptz) (CountPlatformEngineFailuresSinceRow, error)
+	CountPlatformIntegrationJobsByStatus(ctx context.Context, statuses []string) ([]CountPlatformIntegrationJobsByStatusRow, error)
+	CountPlatformNoticeFailuresSince(ctx context.Context, since pgtype.Timestamptz) (int64, error)
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
 	CountProducts(ctx context.Context, arg CountProductsParams) (int64, error)
@@ -492,6 +497,9 @@ type Querier interface {
 	// (organization_id) and the account whose secret verifies it.
 	GetPaymentByOrderRef(ctx context.Context, orderRef string) (GetPaymentByOrderRefRow, error)
 	GetPermissionBySlug(ctx context.Context, slug string) (Permission, error)
+	// The organization of a job (0 = platform job), for the runner calls that
+	// name their scope.
+	GetPlatformIntegrationJobScope(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	GetProduct(ctx context.Context, arg GetProductParams) (GetProductRow, error)
 	GetProductBySKU(ctx context.Context, arg GetProductBySKUParams) (Product, error)
 	GetProductPublicImage(ctx context.Context, arg GetProductPublicImageParams) (GetProductPublicImageRow, error)
@@ -973,6 +981,11 @@ type Querier interface {
 	ListPermissionSlugsByRoleID(ctx context.Context, roleID int64) ([]string, error)
 	ListPermissionSlugsByRoleSlug(ctx context.Context, slug string) ([]string, error)
 	ListPermissionsFiltered(ctx context.Context, arg ListPermissionsFilteredParams) ([]Permission, error)
+	// Platform operations (TEC-930): the failed work of every organization for
+	// the platform operator (platform.settings.read). Lists carry the
+	// organization's name, never customer data (no recipients, no bodies).
+	ListPlatformIntegrationJobs(ctx context.Context, arg ListPlatformIntegrationJobsParams) ([]ListPlatformIntegrationJobsRow, error)
+	ListPlatformNoticeFailures(ctx context.Context, arg ListPlatformNoticeFailuresParams) ([]ListPlatformNoticeFailuresRow, error)
 	// Platform rows only: organization-stamped notifications show in their
 	// organization's panel (/v1/tenant/notifications), never here.
 	ListPlatformNotifications(ctx context.Context, arg ListPlatformNotificationsParams) ([]Notification, error)

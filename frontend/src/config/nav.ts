@@ -26,6 +26,7 @@ import {
   HardDrive,
   KeyRound,
   LayoutDashboard,
+  ListChecks,
   LogIn,
   Package,
   Palette,
@@ -85,6 +86,13 @@ export const settingsNav = defineNav({
           titleKey: "settings.subnav.system_environment",
           href: routes.platform.settings.environment,
           icon: Cpu,
+          permission: permissions.settings.read,
+        },
+        {
+          id: "operations",
+          titleKey: "settings.subnav.operations",
+          href: routes.platform.settings.operations,
+          icon: ListChecks,
           permission: permissions.settings.read,
         },
         {
