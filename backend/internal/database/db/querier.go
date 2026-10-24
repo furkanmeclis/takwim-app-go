@@ -110,7 +110,19 @@ type Querier interface {
 	// Online booking limit (TEC-905): the customer's bookings that are still
 	// open (waiting, booked or in service) and not over yet.
 	CountOpenCustomerReservations(ctx context.Context, arg CountOpenCustomerReservationsParams) (int64, error)
+	// Confirmation tasks planned in a period, by outcome.
+	CountOrganizationConfirmations(ctx context.Context, arg CountOrganizationConfirmationsParams) (CountOrganizationConfirmationsRow, error)
+	// Customer notification attempts per channel and outcome in a period (a
+	// channel that is not ready shows up as skipped, never as sent).
+	CountOrganizationDeliveries(ctx context.Context, arg CountOrganizationDeliveriesParams) ([]CountOrganizationDeliveriesRow, error)
 	CountOrganizationMembersByOrg(ctx context.Context, arg CountOrganizationMembersByOrgParams) (int64, error)
+	// Platform business overview (TEC-927): the 360 page of a business in
+	// Takwim yönetimi. Every query names the organization; the caller resolves
+	// it from the platform route's uuid.
+	// Catalogue sizes and the reservation volume of one business. Volume counts
+	// bookings by the time they were taken (created_at); upcoming counts open
+	// visits that start after now.
+	CountOrganizationOverview(ctx context.Context, arg CountOrganizationOverviewParams) (CountOrganizationOverviewRow, error)
 	// Members holding the template owner role (any of their roles).
 	CountOrganizationOwners(ctx context.Context, organizationID int64) (int64, error)
 	CountOrganizationResourceActivity(ctx context.Context, arg CountOrganizationResourceActivityParams) (int64, error)
@@ -782,6 +794,10 @@ type Querier interface {
 	ListOrganizationBranchOptions(ctx context.Context, organizationID int64) ([]ListOrganizationBranchOptionsRow, error)
 	ListOrganizationMembersByOrg(ctx context.Context, arg ListOrganizationMembersByOrgParams) ([]ListOrganizationMembersByOrgRow, error)
 	ListOrganizationMembershipsByUser(ctx context.Context, userID int64) ([]ListOrganizationMembershipsByUserRow, error)
+	// Every connected provider account of a business (no secrets).
+	ListOrganizationOverviewAccounts(ctx context.Context, organizationID int64) ([]ListOrganizationOverviewAccountsRow, error)
+	// Bookings taken per month (business time zone) since from_time.
+	ListOrganizationReservationVolume(ctx context.Context, arg ListOrganizationReservationVolumeParams) ([]ListOrganizationReservationVolumeRow, error)
 	ListOrganizationResourceActivity(ctx context.Context, arg ListOrganizationResourceActivityParams) ([]ListOrganizationResourceActivityRow, error)
 	ListOrganizationSettingsVersions(ctx context.Context, arg ListOrganizationSettingsVersionsParams) ([]ListOrganizationSettingsVersionsRow, error)
 	ListOrganizationUsage(ctx context.Context, arg ListOrganizationUsageParams) ([]OrganizationUsage, error)

@@ -6,6 +6,7 @@ import type {
   ListOrganizationsParams,
   Organization,
   OrganizationActivityPage,
+  OrganizationOverview,
   OrganizationSummary,
   OrganizationSummaryPage,
   PatchOrganizationRequest,
@@ -36,6 +37,14 @@ export const organizationsService = {
 
   get(uuid: string) {
     return platformRequest<OrganizationSummary>("GET", `${BASE}/${uuid}`);
+  },
+
+  /** 360 overview: use, volume, channel and payment set-up (TEC-927). */
+  overview(uuid: string) {
+    return platformRequest<OrganizationOverview>(
+      "GET",
+      `${BASE}/${uuid}/overview`,
+    );
   },
 
   create(body: CreateOrganizationRequest) {

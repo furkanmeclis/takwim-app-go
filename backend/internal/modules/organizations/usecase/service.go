@@ -159,14 +159,38 @@ func (s *Service) createOrganization(
 	if err != nil {
 		return orgmodel.Organization{}, err
 	}
+	plan, addons := "", []string(nil)
+	if strings.TrimSpace(in.Plan) != "" || len(in.Addons) > 0 {
+		plan = strings.TrimSpace(in.Plan)
+		if plan == "" {
+			plan = string(entitlement.DefaultPlan)
+		}
+		if plan, addons, err = normalizeEntitlements(plan, in.Addons); err != nil {
+			return orgmodel.Organization{}, err
+		}
+	}
+	var accessEnds pgtype.Timestamptz
+	if in.AccessEndsAt != nil {
+		if !in.AccessEndsAt.After(s.now()) {
+			return orgmodel.Organization{}, fmt.Errorf("%w: access_ends_at must be in the future", ErrInvalidRequest)
+		}
+		accessEnds = pgtype.Timestamptz{Time: in.AccessEndsAt.UTC(), Valid: true}
+	}
 
 	var created db.Organization
 	err = s.repo.WithTx(ctx, func(ctx context.Context, q *db.Queries, tx pgx.Tx) error {
 		row, err := s.repo.CreateOrganization(ctx, q, db.CreateOrganizationParams{
-			Slug: allocated, Name: name, Sector: sectorParam,
+			Slug: allocated, Name: name, Sector: sectorParam, AccessEndsAt: accessEnds,
 		})
 		if err != nil {
 			return err
+		}
+		if plan != "" {
+			if row, err = q.UpdateOrganizationEntitlements(ctx, db.UpdateOrganizationEntitlementsParams{
+				Uuid: row.Uuid, Plan: plan, Addons: addons,
+			}); err != nil {
+				return err
+			}
 		}
 		if !in.NoOwner {
 			role, err := s.repo.GetTenantRoleByKey(ctx, q, row.ID, orgctx.RoleOwner)
@@ -286,24 +310,33 @@ func (s *Service) PatchOrganization(ctx context.Context, id uuid.UUID, in orgmod
 	return mapOrganization(row), nil
 }
 
-// SetEntitlements replaces the plan, add-ons and limit overrides of an
-// organization (platform only; TEC-883).
-func (s *Service) SetEntitlements(ctx context.Context, id uuid.UUID, in orgmodel.SetEntitlementsInput) (orgmodel.Organization, error) {
-	plan := strings.TrimSpace(in.Plan)
+// normalizeEntitlements checks a plan code and the add-on codes (deduped).
+func normalizeEntitlements(plan string, in []string) (string, []string, error) {
+	plan = strings.TrimSpace(plan)
 	if !entitlement.ValidPlan(plan) {
-		return orgmodel.Organization{}, fmt.Errorf("%w: plan is not known", ErrInvalidRequest)
+		return "", nil, fmt.Errorf("%w: plan is not known", ErrInvalidRequest)
 	}
 	addons := []string{}
 	seen := map[string]bool{}
-	for _, a := range in.Addons {
+	for _, a := range in {
 		a = strings.TrimSpace(a)
 		if !entitlement.ValidAddon(a) {
-			return orgmodel.Organization{}, fmt.Errorf("%w: add-on %q is not known", ErrInvalidRequest, a)
+			return "", nil, fmt.Errorf("%w: add-on %q is not known", ErrInvalidRequest, a)
 		}
 		if !seen[a] {
 			seen[a] = true
 			addons = append(addons, a)
 		}
+	}
+	return plan, addons, nil
+}
+
+// SetEntitlements replaces the plan, add-ons and limit overrides of an
+// organization (platform only; TEC-883).
+func (s *Service) SetEntitlements(ctx context.Context, id uuid.UUID, in orgmodel.SetEntitlementsInput) (orgmodel.Organization, error) {
+	plan, addons, err := normalizeEntitlements(in.Plan, in.Addons)
+	if err != nil {
+		return orgmodel.Organization{}, err
 	}
 	for _, l := range []*int32{in.BranchLimit, in.StaffLimit} {
 		if l != nil && *l < 1 {

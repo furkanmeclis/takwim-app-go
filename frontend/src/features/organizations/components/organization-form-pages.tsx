@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Link2, Mail, UserRound } from "lucide-react";
+import { Building2, Link2, Mail, Package, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -9,10 +9,12 @@ import { ErrorState } from "@/components/common/error-state";
 import { Loading } from "@/components/common/loading";
 import { EntityForm, EntityPage } from "@/components/entity";
 import {
+  AppDatePicker,
   AppForm,
   AppInput,
   AppRadioGroup,
   AppSelect,
+  AppSwitch,
   FormActions,
   FormLayout,
   FormSection,
@@ -26,8 +28,14 @@ import {
   useOrganization,
   useUpdateOrganization,
 } from "@/features/organizations/hooks/use-organizations";
+import {
+  ADDON_HINT_KEYS,
+  ADDON_LABEL_KEYS,
+  PLAN_LABEL_KEYS,
+} from "@/features/entitlements/constants";
 import { slugFromName } from "@/features/organizations/lib/slug";
 import {
+  PLAN_CODES,
   createOrganizationEditSchema,
   createOrganizationSchema,
   type OrganizationEditValues,
@@ -35,6 +43,7 @@ import {
 } from "@/features/organizations/schemas/organization-form";
 import { SECTOR_CODES, SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
 import { UserAsyncPicker } from "@/features/users/components/user-async-picker";
+import { localInputToISO } from "@/lib/datetime/local-input";
 import { useLocale } from "@/providers/locale-provider";
 
 function Forbidden() {
@@ -76,6 +85,36 @@ function SectorField() {
         label: t(SECTOR_LABEL_KEYS[code]),
       }))}
     />
+  );
+}
+
+/** Plan, the Konfirmasyon add-on and the access end of a new business. */
+function PlanFields() {
+  const { t } = useLocale();
+  return (
+    <>
+      <AppSelect
+        name="plan"
+        label={t("entitlements.plan")}
+        description={t("organizations.form.plan_hint")}
+        options={PLAN_CODES.map((code) => ({
+          value: code,
+          label: t(PLAN_LABEL_KEYS[code]),
+        }))}
+      />
+      <AppDatePicker
+        name="access_ends_at"
+        withTime
+        label={t("organizations.fields.access_ends_at")}
+        description={t("organizations.form.access_ends_hint")}
+      />
+      <AppSwitch
+        name="addon_confirmation"
+        label={t(ADDON_LABEL_KEYS.confirmation)}
+        description={t(ADDON_HINT_KEYS.confirmation)}
+        className="sm:col-span-2"
+      />
+    </>
   );
 }
 
@@ -126,7 +165,10 @@ function OwnerFields() {
   );
 }
 
-/** `/platform/organizations/create`: name, slug and owner (account or invitation). */
+/**
+ * `/platform/organizations/create`: name, slug, sector, plan / add-on /
+ * access end and owner (account or invitation).
+ */
 export function OrganizationCreatePage() {
   const { t } = useLocale();
   const router = useRouter();
@@ -140,6 +182,12 @@ export function OrganizationCreatePage() {
           label: t("organizations.form.section_identity"),
           description: t("organizations.form.section_identity_desc"),
           icon: Building2,
+        },
+        {
+          key: "plan",
+          label: t("organizations.form.section_plan"),
+          description: t("organizations.form.section_plan_desc"),
+          icon: Package,
         },
         {
           key: "owner",
@@ -173,6 +221,9 @@ export function OrganizationCreatePage() {
             name: "",
             slug: "",
             sector: "hairdresser",
+            plan: "starter",
+            addon_confirmation: false,
+            access_ends_at: "",
             owner_mode: "existing",
             owner_user_uuid: "",
             owner_email: "",
@@ -182,6 +233,11 @@ export function OrganizationCreatePage() {
               name: values.name.trim(),
               ...(values.slug ? { slug: values.slug } : {}),
               sector: values.sector,
+              plan: values.plan,
+              addons: values.addon_confirmation ? ["confirmation"] : [],
+              ...(values.access_ends_at
+                ? { access_ends_at: localInputToISO(values.access_ends_at) }
+                : {}),
               ...(values.owner_mode === "existing"
                 ? { owner_user_uuid: values.owner_user_uuid }
                 : { owner_email: values.owner_email.trim() }),
@@ -213,6 +269,14 @@ export function OrganizationCreatePage() {
                   startIcon={Link2}
                 />
                 <SectorField />
+              </FormSection>
+              <FormSection
+                id={sections.id("plan")}
+                title={t("organizations.form.section_plan")}
+                description={t("organizations.form.section_plan_desc")}
+                columns={2}
+              >
+                <PlanFields />
               </FormSection>
               <FormSection
                 id={sections.id("owner")}

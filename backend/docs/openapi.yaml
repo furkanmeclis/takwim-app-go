@@ -1389,6 +1389,8 @@ paths:
         e-mail (`owner_email`): the organization then starts without members
         and an owner invitation is e-mailed (same flow as staff invitations).
         The slug is derived from the name with Turkish folding when omitted.
+        `plan`, `addons` and `access_ends_at` set the starting entitlements
+        and access window in the same transaction (TEC-927).
       security:
         - bearerAuth: []
       requestBody:
@@ -1623,6 +1625,37 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/platform/organizations/{uuid}/overview:
+    get:
+      tags: [Platform]
+      operationId: getPlatformOrganizationOverview
+      summary: Organization 360 overview
+      description: |
+        Takwim yönetimi view of one business (TEC-927,
+        `platform.organizations.read`): entitlements with their use
+        (branches, staff seats) and this / last month's communication usage,
+        catalogue size, reservation volume (bookings by the time they were
+        taken, months in the business time zone), the Konfirmasyon right kept
+        apart from the channel counters, and the set-up state of every
+        channel and of online payment. A channel that is not ready is listed
+        as `not_ready` (its sends are recorded as skipped, never as sent);
+        `unavailable` means the channel has no adapter in this version.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeOrganizationOverview"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/platform/organizations/{uuid}/access:
     post:
@@ -14925,6 +14958,116 @@ components:
         branch_limit: { type: [integer, "null"], minimum: 1, description: "Override; `null` = plan default" }
         staff_limit: { type: [integer, "null"], minimum: 1, description: "Override; `null` = plan default" }
 
+    UsageCounter:
+      type: object
+      required: [metric, quantity]
+      properties:
+        metric: { type: string, enum: [sms, whatsapp, email, voice_call] }
+        quantity: { type: integer }
+
+    OverviewAccount:
+      type: object
+      description: A connected provider account of the business (no secrets)
+      required: [uuid, provider, display_name, mode, status, last_check_status, last_checked_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        provider: { type: string, example: netgsm }
+        display_name: { type: string }
+        mode: { type: string, enum: [sandbox, live] }
+        status: { type: string, enum: [active, disabled] }
+        last_check_status: { type: string, enum: ["", ok, failed] }
+        last_checked_at: { type: [string, "null"], format: date-time }
+
+    OverviewChannel:
+      type: object
+      required: [channel, status, account, usage, sent, failed, skipped]
+      properties:
+        channel: { type: string, enum: [sms, whatsapp, email, voice_call] }
+        status:
+          type: string
+          enum: [ready, not_ready, unavailable]
+          description: "`ready`: a provider delivers now; `not_ready`: sends are recorded as skipped; `unavailable`: no adapter in this version"
+        account:
+          description: The business's own account of the channel, if any (active first)
+          oneOf:
+            - $ref: "#/components/schemas/OverviewAccount"
+            - type: "null"
+        usage: { type: integer, description: Counted use this month }
+        sent: { type: integer, description: Customer notifications sent or delivered this month }
+        failed: { type: integer }
+        skipped: { type: integer, description: "Not sent (channel not ready, no address)" }
+
+    OrganizationOverview:
+      type: object
+      required: [period, previous_period, entitlements, previous_usage, catalogue, reservations, confirmation, channels, payment]
+      properties:
+        period: { type: string, example: "2026-10" }
+        previous_period: { type: string, example: "2026-09" }
+        entitlements: { $ref: "#/components/schemas/EntitlementSummary" }
+        previous_usage:
+          type: array
+          items: { $ref: "#/components/schemas/UsageCounter" }
+        catalogue:
+          type: object
+          required: [customers, services]
+          properties:
+            customers: { type: integer }
+            services: { type: integer }
+        reservations:
+          type: object
+          required: [total, this_month, previous_month, cancelled_this_month, upcoming, monthly]
+          properties:
+            total: { type: integer }
+            this_month: { type: integer }
+            previous_month: { type: integer }
+            cancelled_this_month: { type: integer, description: "Cancelled, rejected or no-show bookings taken this month" }
+            upcoming: { type: integer, description: Requested or active visits that start after now }
+            monthly:
+              type: array
+              description: The last six months, oldest first
+              items:
+                type: object
+                required: [period, reservations]
+                properties:
+                  period: { type: string, example: "2026-10" }
+                  reservations: { type: integer }
+        confirmation:
+          type: object
+          description: The Konfirmasyon right; its channel use is counted under `channels`
+          required: [sector_offers, granted, active, total, confirmed, declined, expired, open]
+          properties:
+            sector_offers: { type: boolean }
+            granted: { type: boolean, description: The add-on is assigned }
+            active: { type: boolean, description: Sector offers it and the add-on is granted }
+            total: { type: integer, description: Confirmation tasks planned this month }
+            confirmed: { type: integer }
+            declined: { type: integer }
+            expired: { type: integer }
+            open: { type: integer }
+        channels:
+          type: array
+          items: { $ref: "#/components/schemas/OverviewChannel" }
+        payment:
+          type: object
+          required: [status, account, online_cash_accounts]
+          properties:
+            status:
+              type: string
+              enum: [ready, not_connected, no_cash_account, provider_unavailable]
+            account:
+              oneOf:
+                - $ref: "#/components/schemas/OverviewAccount"
+                - type: "null"
+            online_cash_accounts: { type: integer }
+
+    EnvelopeOrganizationOverview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/OrganizationOverview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     EnvelopeEntitlementSummary:
       type: object
       required: [success, data, meta]
@@ -19130,6 +19273,17 @@ components:
         sector:
           allOf: [{ $ref: "#/components/schemas/SectorCode" }]
           description: Defaults to `hairdresser`
+        plan:
+          allOf: [{ $ref: "#/components/schemas/PlanCode" }]
+          description: Starting plan; defaults to `starter`
+        addons:
+          type: array
+          description: Add-on modules granted from the start
+          items: { $ref: "#/components/schemas/Addon" }
+        access_ends_at:
+          type: [string, "null"]
+          format: date-time
+          description: End of the access window (must be in the future); omitted = open ended
 
     PatchOrganizationRequest:
       type: object

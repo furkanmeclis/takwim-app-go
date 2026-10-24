@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { SECTOR_CODES } from "@/features/sectors/constants";
 
+/** Plans a new business can start on (TEC-883 catalog). */
+export const PLAN_CODES = ["starter", "growth", "enterprise"] as const;
+
 type Translate = (key: string) => string;
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -23,11 +26,24 @@ export function createOrganizationSchema(t: Translate) {
           t("organizations.validation.slug_invalid"),
         ),
       sector: z.enum(SECTOR_CODES),
+      plan: z.enum(PLAN_CODES),
+      addon_confirmation: z.boolean(),
+      access_ends_at: z.string(),
       owner_mode: z.enum(["existing", "invite"]),
       owner_user_uuid: z.string(),
       owner_email: z.string().trim(),
     })
     .superRefine((values, ctx) => {
+      if (
+        values.access_ends_at &&
+        new Date(values.access_ends_at).getTime() <= Date.now()
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["access_ends_at"],
+          message: t("organizations.validation.access_end_future"),
+        });
+      }
       if (values.owner_mode === "existing" && !values.owner_user_uuid) {
         ctx.addIssue({
           code: "custom",

@@ -104,17 +104,23 @@ func organizationListFilter(w http.ResponseWriter, r *http.Request, q apiquery.Q
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name          string    `json:"name"`
-		Slug          string    `json:"slug"`
-		OwnerUserUUID uuid.UUID `json:"owner_user_uuid"`
-		OwnerEmail    string    `json:"owner_email"`
-		Sector        string    `json:"sector"`
+		Name          string     `json:"name"`
+		Slug          string     `json:"slug"`
+		OwnerUserUUID uuid.UUID  `json:"owner_user_uuid"`
+		OwnerEmail    string     `json:"owner_email"`
+		Sector        string     `json:"sector"`
+		Plan          string     `json:"plan"`
+		Addons        []string   `json:"addons"`
+		AccessEndsAt  *time.Time `json:"access_ends_at"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
-	input := orgmodel.CreateOrganizationInput{Name: in.Name, Slug: in.Slug, Sector: in.Sector, OwnerUserUUID: in.OwnerUserUUID, OwnerUserID: p.UserInternal}
+	input := orgmodel.CreateOrganizationInput{
+		Name: in.Name, Slug: in.Slug, Sector: in.Sector, OwnerUserUUID: in.OwnerUserUUID, OwnerUserID: p.UserInternal,
+		Plan: in.Plan, Addons: in.Addons, AccessEndsAt: in.AccessEndsAt,
+	}
 	var (
 		org        orgmodel.Organization
 		invitation *orgmodel.Invitation
@@ -137,7 +143,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeTenantError(w, r, err)
 		return
 	}
-	payload := map[string]any{"slug": org.Slug, "name": org.Name}
+	payload := map[string]any{"slug": org.Slug, "name": org.Name, "sector": org.Sector, "plan": org.Plan, "addons": org.Addons}
+	if org.AccessEndsAt != nil {
+		payload["access_ends_at"] = *org.AccessEndsAt
+	}
 	if invitation != nil {
 		payload["owner_invitation"] = invitation.Email
 	}

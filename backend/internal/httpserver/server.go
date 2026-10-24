@@ -93,6 +93,7 @@ import (
 	orghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/handler"
 	orgrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/organizations/usecase"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgoverview"
 	orgsettingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings"
 	orgsettingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/handler"
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
@@ -496,6 +497,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	paymentsH := paymentshandler.New(paymentsSvc, activityRec)
 	paymentsH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	paymentsmodule.RegisterRoutes(mux, paymentsH, tokens, loader, tenantResolver)
+
+	// Takwim yönetimi 360 page of a business (TEC-927): plan use, volume,
+	// communication use and the channel / payment set-up state.
+	orgoverview.RegisterRoutes(mux, orgoverview.NewHandler(
+		orgoverview.New(deps.Queries, entitlementSvc, notifyEngine, paymentsSvc), orgSvc), tokens, loader)
 
 	// Live lists of tenant resources: org:{org_uuid}:resource:{name}, open to
 	// members whose tenant role grants the resource's read permission.

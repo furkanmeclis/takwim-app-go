@@ -13,6 +13,12 @@ export type OrganizationActivityPage = Schemas["OrganizationActivityPage"];
 export type PlatformMemberRequest = Schemas["PlatformMemberRequest"];
 export type PlatformMemberPatchRequest = Schemas["PlatformMemberPatchRequest"];
 export type BranchOption = Schemas["BranchOption"];
+export type OrganizationOverview = Schemas["OrganizationOverview"];
+export type OverviewChannel = Schemas["OverviewChannel"];
+export type OverviewAccount = Schemas["OverviewAccount"];
+export type OverviewPayment = OrganizationOverview["payment"];
+export type OverviewMonth =
+  OrganizationOverview["reservations"]["monthly"][number];
 export type OrganizationStatus = OrganizationSummary["status"];
 export type OrganizationAccessState = OrganizationSummary["access_state"];
 
