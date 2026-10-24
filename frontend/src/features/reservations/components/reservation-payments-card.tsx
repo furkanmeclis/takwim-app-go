@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { HandCoins, Undo2 } from "lucide-react";
+import { Archive, HandCoins, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
@@ -29,6 +29,8 @@ import {
   labelOf,
 } from "@/features/integrations/constants";
 import {
+  type CloseTarget,
+  CloseWithoutRefundDialog,
   RefundDialog,
   RefundsTable,
   ResolveRefundDialog,
@@ -79,6 +81,7 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
   const [collecting, setCollecting] = useState(false);
   const [refunding, setRefunding] = useState(false);
   const [resolving, setResolving] = useState<Refund | null>(null);
+  const [closing, setClosing] = useState<CloseTarget | null>(null);
   const view = query.data;
   const money = (value: string | null | undefined) =>
     amount(value ?? "0", view?.currency ?? "TRY", locale);
@@ -220,12 +223,13 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
     Boolean(view?.can_refund) &&
     canRefundPermission &&
     parseAmount(view?.refundable ?? "0") > 0;
+  const canClose = Boolean(view?.can_close) && canRefundPermission;
 
   return (
     <EntitySectionCard
       title={t("reservations.detail.payments")}
       actions={
-        canCollect || canRefund ? (
+        canCollect || canRefund || canClose ? (
           <div className="flex flex-wrap gap-2">
             {canCollect ? (
               <Button
@@ -249,6 +253,24 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
                 {t("reservations.refunds.action")}
               </Button>
             ) : null}
+            {canClose && view ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setClosing({
+                    uuid,
+                    number: view.reservation.number,
+                    amount: view.refundable,
+                    currency: view.currency,
+                  })
+                }
+              >
+                <Archive className="size-4" />
+                {t("reservations.refunds.close")}
+              </Button>
+            ) : null}
           </div>
         ) : null
       }
@@ -263,6 +285,22 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
       ) : null}
       {view ? (
         <div className="space-y-6">
+          {view.kept ? (
+            <Alert>
+              <AlertDescription>
+                {t(
+                  view.kept.by
+                    ? "reservations.refunds.kept_by"
+                    : "reservations.refunds.kept",
+                  {
+                    date: datetime(view.kept.at, undefined, locale),
+                    name: view.kept.by?.name ?? "",
+                    reason: view.kept.reason,
+                  },
+                )}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <EntityDetail
             sections={[
               {
@@ -386,6 +424,12 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
         view={view}
         open={refunding}
         onOpenChange={setRefunding}
+      />
+      <CloseWithoutRefundDialog
+        target={closing}
+        onOpenChange={(open) => {
+          if (!open) setClosing(null);
+        }}
       />
       <ResolveRefundDialog
         reservationUUID={uuid}

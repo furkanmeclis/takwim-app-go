@@ -112,6 +112,42 @@ func (h *Handler) ResolveRefund(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, RefundResponse{Refund: out.Refund, Payments: out.Payments})
 }
 
+// CloseWithoutRefund serves POST
+// /v1/tenant/reservations/{uuid}/close-without-refund: the refund to make
+// of a visit is closed with a reason, the money stays with the business
+// (TEC-978).
+func (h *Handler) CloseWithoutRefund(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathUUID(w, r)
+	if !ok {
+		return
+	}
+	var in model.CloseInput
+	if !decode(w, r, &in) {
+		return
+	}
+	p := authctx.MustPrincipal(r.Context())
+	out, err := h.svc.CloseWithoutRefund(r.Context(), orgctx.Must(r.Context()).ID, id, c, p.UserInternal, viewOptions(r), in)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if h.activity != nil {
+		h.activity.RecordEntry(r.Context(), activity.Entry{
+			ActorID: &p.UserInternal, Action: "reservations.refund_closed", Resource: reservationsmodel.Slug, ResourceUUID: &id,
+			Payload: map[string]any{
+				"number": out.Reservation.Number, "currency": out.Currency, "held": out.Refundable.String(),
+				"reason": strings.TrimSpace(in.Reason),
+			},
+			Request: r,
+		})
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // FollowUpsMeta is the table contract of GET /v1/tenant/payments/follow-ups:
 // a read-only work list (refunds to make or settle, unpaid visits).
 func FollowUpsMeta() resourcemeta.ResourceMeta {

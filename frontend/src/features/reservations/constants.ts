@@ -61,6 +61,7 @@ export const PAYMENT: Record<PaymentStatus, { key: string; tone: Tone }> = {
   },
   refunded: { key: "reservations.payment.refunded", tone: "default" },
   failed: { key: "reservations.payment.failed", tone: "danger" },
+  kept: { key: "reservations.payment.kept", tone: "default" },
 };
 
 export const SOURCE: Record<ReservationSource, string> = {
@@ -87,6 +88,7 @@ export const EVENT_LABEL_KEYS: Record<string, string> = {
   product_added: "reservations.events.product_added",
   product_removed: "reservations.events.product_removed",
   refund_recorded: "reservations.events.refund_recorded",
+  payment_kept: "reservations.events.payment_kept",
   confirmation_scheduled: "reservations.events.confirmation_scheduled",
   confirmation_requested: "reservations.events.confirmation_requested",
   confirmation_confirmed: "reservations.events.confirmation_confirmed",

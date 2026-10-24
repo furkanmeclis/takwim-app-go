@@ -146,8 +146,8 @@ var _ payments.Refunder = (*Provider)(nil)
 
 // Refund implements payments.Refunder without any network call. Like card
 // test numbers, the amount picks the answer: an amount ending in .13 is
-// declined, one ending in .99 has an unknown result (a timeout); any other
-// is refunded.
+// declined; one ending in .99, .98 or .97 has an unknown result (a
+// timeout); any other is refunded.
 func (p *Provider) Refund(_ context.Context, _ integrations.Account, in payments.RefundRequest) (payments.RefundResult, error) {
 	if in.OrderRef == "" || in.RefundRef == "" || !in.Amount.IsPositive() {
 		return payments.RefundResult{}, &payments.ProviderError{Code: "invalid_request", Message: "order, refund reference and amount are required"}
@@ -155,8 +155,27 @@ func (p *Provider) Refund(_ context.Context, _ integrations.Account, in payments
 	switch in.Amount.Minor() % 100 {
 	case 13:
 		return payments.RefundResult{}, &payments.ProviderError{Code: "test_declined", Message: "refund declined by the test provider"}
-	case 99:
+	case 97, 98, 99:
 		return payments.RefundResult{}, &payments.ProviderError{Message: "test provider timeout", Temporary: true}
 	}
 	return payments.RefundResult{ProviderRefundID: "test_refund_" + in.RefundRef, Test: true}, nil
+}
+
+var _ payments.RefundChecker = (*Provider)(nil)
+
+// CheckRefund implements payments.RefundChecker: what the test provider
+// "did" with a refund whose call timed out. An amount ending in .99 was
+// refunded after all, one ending in .98 was not (not found), one ending in
+// .97 is still pending.
+func (p *Provider) CheckRefund(_ context.Context, _ integrations.Account, in payments.RefundRequest) (payments.RefundCheck, error) {
+	if in.OrderRef == "" || in.RefundRef == "" {
+		return payments.RefundCheck{}, &payments.ProviderError{Code: "invalid_request", Message: "order and refund reference are required"}
+	}
+	switch in.Amount.Minor() % 100 {
+	case 98:
+		return payments.RefundCheck{Status: payments.RefundNotDone, Message: "test provider has no such refund"}, nil
+	case 97:
+		return payments.RefundCheck{Status: payments.RefundStillPending}, nil
+	}
+	return payments.RefundCheck{Status: payments.RefundFound, ProviderRefundID: "test_refund_" + in.RefundRef}, nil
 }

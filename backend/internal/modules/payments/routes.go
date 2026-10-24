@@ -54,6 +54,8 @@ func RegisterRoutes(
 	refund := append(slices.Clone(base), middleware.RequireModule(sector.ModuleCash), middleware.RequireTenantPermission(rbac.PermTenantPaymentRefund))
 	mux.Handle("POST /v1/tenant/reservations/{uuid}/refunds", middleware.Chain(http.HandlerFunc(h.Refund), refund...))
 	mux.Handle("POST /v1/tenant/refunds/{uuid}/resolve", middleware.Chain(http.HandlerFunc(h.ResolveRefund), refund...))
+	// Closing a refund to make without paying it back (TEC-978).
+	mux.Handle("POST /v1/tenant/reservations/{uuid}/close-without-refund", middleware.Chain(http.HandlerFunc(h.CloseWithoutRefund), refund...))
 
 	// The payment follow-up list: members who take or pay back money, or
 	// read the books.

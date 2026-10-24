@@ -1161,6 +1161,9 @@ type Refund struct {
 	ResolutionNote       string             `json:"resolution_note"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ProviderChecks       int32              `json:"provider_checks"`
+	ProviderCheckedAt    pgtype.Timestamptz `json:"provider_checked_at"`
+	NextCheckAt          pgtype.Timestamptz `json:"next_check_at"`
 }
 
 type Reservation struct {

@@ -10,6 +10,7 @@ import type {
   ReservationActionRequest,
   ReservationAgenda,
   ReservationCalendar,
+  ReservationCloseWithoutRefundRequest,
   ListPaymentFollowUpsParams,
   PaymentFollowUpFacets,
   PaymentFollowUpPage,
@@ -241,6 +242,23 @@ export const reservationsService = {
       slug,
       "POST",
       `${BASE}/${uuid}/refunds`,
+      { body },
+    );
+  },
+
+  /**
+   * Closes the refund to make of a visit without paying it back: the
+   * money stays with the business, the reason goes into the history.
+   */
+  closeWithoutRefund(
+    slug: string,
+    uuid: string,
+    body: ReservationCloseWithoutRefundRequest,
+  ) {
+    return tenantRequest<ReservationPayments>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/close-without-refund`,
       { body },
     );
   },

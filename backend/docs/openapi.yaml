@@ -8458,7 +8458,7 @@ paths:
           schema: { type: string }
         - name: payment_status
           in: query
-          description: "`on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` (any of)"
+          description: "`on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed`, `kept` (any of)"
           schema: { type: string }
         - name: source
           in: query
@@ -8736,8 +8736,11 @@ paths:
           `channel` / `unsupported` when the provider cannot). A confirmed
           refund is posted at once (`succeeded`), a refusal is `failed`, an
           unknown result (timeout, 5xx) stays `requested` with
-          `provider_status: uncertain` and is never sent again: settle it
-          with `POST /v1/tenant/refunds/{uuid}/resolve`.
+          `provider_status: uncertain` and is never sent again. When the
+          provider has a refund status query (`auto_check`), the worker asks
+          it (found: posted; not done: `failed`; otherwise asked again
+          later, 5 min, 15 min, 1 h, 6 h, then daily); a person can always
+          settle it with `POST /v1/tenant/refunds/{uuid}/resolve`.
         - `channel: manual` records money handed back (`cash`, `card`,
           `transfer`) or a refund made in the provider's own panel
           (`online`) out of `cash_account_uuid` (an active till, bank or
@@ -8749,6 +8752,10 @@ paths:
         never changes. `idempotency_key` identifies the request: the same key
         answers the same refund with `200` and `replayed: true` (sending
         nothing), the key with another body `409 REFUND_IDEMPOTENCY_REUSED`.
+        The customer is told through the customer notifications (business
+        rule of the event): `refund.completed` once the money is paid back,
+        `refund.processing` when the provider refused it or its result is
+        unknown (once per refund each, no amounts).
         Needs `tenant.payment.refund`, the cash module and
         `tenant.reservations.read` or `.own`.
       security:
@@ -8815,6 +8822,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeRefundResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/reservations/{uuid}/close-without-refund:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationCloseWithoutRefund
+      summary: Close a refund to make without paying it back
+      description: |
+        Closes the refund to make of a visit when the money stays with the
+        business (the customer left it, or it counts for the next visit):
+        `payment_status` becomes `kept`, the reason goes into the visit's
+        history (event `payment_kept`) and the visit leaves the payment
+        follow-up list. The money stays on the customer's ledger as a
+        credit and can still be paid back later; a refund that fails after
+        the closing puts the visit back on the list.
+
+        Allowed when money is held for the visit, no refund is under way
+        (`409 REFUND_IN_PROGRESS`: settle it first) and a refund is waiting
+        (`refund_pending`) or the last refund failed; otherwise
+        `409 REFUND_NOTHING_TO_CLOSE` (`can_close` of the payment view says
+        so beforehand). Moves no money. Needs `tenant.payment.refund`, the
+        cash module and `tenant.reservations.read` or `.own`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationCloseWithoutRefundRequest"
+      responses:
+        "200":
+          description: The payments of the visit after the closing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeReservationPayments"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
@@ -18435,7 +18486,7 @@ components:
       properties:
         code:
           type: string
-          enum: [reservation.requested, reservation.accepted, reservation.rejected, reservation.rescheduled, reservation.cancelled, reservation.reminder]
+          enum: [reservation.requested, reservation.accepted, reservation.rejected, reservation.rescheduled, reservation.cancelled, reservation.reminder, refund.completed, refund.processing]
         reminder: { type: boolean }
         variables:
           type: array
@@ -19768,7 +19819,7 @@ components:
         status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }
         approval_status: { type: string, enum: [pending, accepted, rejected] }
         confirmation_status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
-        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
         branch_uuid: { type: string, format: uuid }
         branch_name: { type: string }
         customer_name: { type: string }
@@ -23296,7 +23347,7 @@ components:
 
     TenantReservationPaymentStatus:
       type: string
-      enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed]
+      enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept]
 
     TenantReservationSource:
       type: string
@@ -24372,7 +24423,7 @@ components:
         status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }
         approval_status: { type: string, enum: [pending, accepted, rejected] }
         confirmation_status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
-        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
         branch: { $ref: "#/components/schemas/PublicRef" }
         timezone: { type: string }
         starts_at: { type: string, format: date-time }
@@ -24568,7 +24619,7 @@ components:
 
     ReservationPayments:
       type: object
-      required: [reservation, status, payment_status, currency, expected, paid, remaining, credit, entries, online, can_collect, collect_accounts, refundable, refunds, can_refund, refund_collections, refund_accounts]
+      required: [reservation, status, payment_status, currency, expected, paid, remaining, credit, entries, online, can_collect, collect_accounts, refundable, refunds, can_refund, refund_collections, refund_accounts, can_close, kept]
       properties:
         reservation:
           type: object
@@ -24577,7 +24628,7 @@ components:
             uuid: { type: string, format: uuid }
             number: { type: integer, format: int64 }
         status: { type: string }
-        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
         currency: { type: string }
         expected: { $ref: "#/components/schemas/MoneyAmount" }
         paid: { $ref: "#/components/schemas/MoneyAmount" }
@@ -24604,6 +24655,36 @@ components:
         refund_accounts:
           type: array
           items: { $ref: "#/components/schemas/CollectAccount" }
+        can_close:
+          type: boolean
+          description: The caller may close the refund to make without paying it back (`POST .../close-without-refund`).
+        kept:
+          description: The last closing without a refund while `payment_status` is `kept`.
+          oneOf:
+            - type: object
+              required: [at, reason, by]
+              properties:
+                at: { type: string, format: date-time }
+                reason: { type: string }
+                by:
+                  oneOf:
+                    - type: object
+                      required: [uuid, name]
+                      properties:
+                        uuid: { type: string, format: uuid }
+                        name: { type: string }
+                    - type: "null"
+            - type: "null"
+
+    ReservationCloseWithoutRefundRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+          description: Why the money stays with the business (written into the visit's history).
 
     Refund:
       type: object
@@ -24613,7 +24694,10 @@ components:
         the posting to the books (`ledger_entry_uuid`, `reflected_at`).
         `needs_action`: a provider refund still open after the provider was
         asked (unknown result, or confirmed and not posted yet).
-      required: [uuid, channel, provider, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, reason, resolution_note, collection_uuid, cash_account, ledger_entry_uuid, requested_by, provider_answered_at, reflected_at, created_at, needs_action]
+        `auto_check`: the result is unknown and the worker asks the
+        provider's refund status query (`provider_checks` made so far, the
+        next at `next_check_at`).
+      required: [uuid, channel, provider, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, reason, resolution_note, collection_uuid, cash_account, ledger_entry_uuid, requested_by, provider_answered_at, reflected_at, created_at, needs_action, auto_check, provider_checks, provider_checked_at, next_check_at]
       properties:
         uuid: { type: string, format: uuid }
         channel: { type: string, enum: [provider, manual] }
@@ -24647,6 +24731,10 @@ components:
         reflected_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
         needs_action: { type: boolean }
+        auto_check: { type: boolean }
+        provider_checks: { type: integer, format: int32 }
+        provider_checked_at: { type: [string, "null"], format: date-time }
+        next_check_at: { type: [string, "null"], format: date-time }
 
     RefundCollection:
       type: object
@@ -24704,7 +24792,7 @@ components:
         number: { type: integer, format: int64 }
         kind: { type: string, enum: [refund_pending, refund_failed, refund_unverified, unpaid] }
         status: { type: string }
-        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
         cancel_reason: { type: [string, "null"] }
         starts_at: { type: string, format: date-time }
         branch:
@@ -24964,7 +25052,7 @@ components:
             - type: "null"
         currency: { type: string }
         method: { type: string, enum: [on_site, online] }
-        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
 
     CustomerRef:
       type: object
@@ -24994,7 +25082,7 @@ components:
         status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }
         approval_status: { type: string, enum: [pending, accepted, rejected] }
         confirmation_status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
-        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed, kept] }
         cancel_reason: { type: [string, "null"] }
         services:
           type: array

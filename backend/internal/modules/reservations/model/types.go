@@ -83,6 +83,10 @@ const (
 	PaymentPartiallyRefunded = "partially_refunded"
 	PaymentRefunded          = "refunded"
 	PaymentFailed            = "failed"
+	// PaymentKept: a person closed the refund to make without paying the
+	// money back (TEC-978): the customer left it, or it counts for the
+	// next visit.
+	PaymentKept = "kept"
 )
 
 // Payment methods a booking asks for.

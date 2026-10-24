@@ -39,6 +39,10 @@ type Querier interface {
 	// Moves a pending / failed job to processing (one worker at a time).
 	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
+	// Takes one due status query: it is counted and the next one moves to
+	// lease_until, so another worker skips the refund meanwhile. No row when
+	// the refund was settled or another worker took it.
+	ClaimRefundCheck(ctx context.Context, arg ClaimRefundCheckParams) (Refund, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
 	// After a number change the records proven with the old phone show only
 	// what was booked before: a later booking with that phone is the next
@@ -520,6 +524,9 @@ type Querier interface {
 	GetRefundAccount(ctx context.Context, arg GetRefundAccountParams) (GetRefundAccountRow, error)
 	GetRefundByIdempotencyKey(ctx context.Context, arg GetRefundByIdempotencyKeyParams) (GetRefundByIdempotencyKeyRow, error)
 	GetRefundByUUID(ctx context.Context, arg GetRefundByUUIDParams) (GetRefundByUUIDRow, error)
+	// What a status query needs of a refund: the provider references of the
+	// online payment it pays back and its visit.
+	GetRefundCheckTarget(ctx context.Context, arg GetRefundCheckTargetParams) (GetRefundCheckTargetRow, error)
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
 	GetReservationBranchTimezone(ctx context.Context, arg GetReservationBranchTimezoneParams) (string, error)
 	// The bundle a booking names, with whether the branch offers it.
@@ -701,6 +708,9 @@ type Querier interface {
 	// The staff member is the account of a business owner (their own services
 	// stay in the business share).
 	IsShareStaffOwner(ctx context.Context, arg IsShareStaffOwnerParams) (bool, error)
+	// When and why a person last closed the visit's refund without paying it
+	// back (TEC-978); no row when never.
+	LastPaymentKept(ctx context.Context, arg LastPaymentKeptParams) (LastPaymentKeptRow, error)
 	LatestCashClosingDate(ctx context.Context, arg LatestCashClosingDateParams) (pgtype.Date, error)
 	// The last release of the phone that closed the profile's earlier history
 	// without the person asking (a platform reassignment or the dormant check):
@@ -1156,6 +1166,9 @@ type Querier interface {
 	ListTenantRolePermissionSlugsByRoleID(ctx context.Context, roleID int64) ([]string, error)
 	// Template roles plus the roles created by this organization.
 	ListTenantRolesForOrganization(ctx context.Context, organizationID int64) ([]ListTenantRolesForOrganizationRow, error)
+	// Provider refunds whose result is unknown and whose next status query is
+	// due, every business (the worker's refund check sweep, TEC-978).
+	ListUncertainRefundsDue(ctx context.Context, arg ListUncertainRefundsDueParams) ([]ListUncertainRefundsDueRow, error)
 	// Live records with the proven phone that are not linked yet, in every live
 	// business. The caller links each one with customers.LinkVerified; a
 	// record older than the phone's last release opens only what came after.
@@ -1369,6 +1382,8 @@ type Querier interface {
 	SaveReservationConfirmation(ctx context.Context, arg SaveReservationConfirmationParams) error
 	// Stores the outcome of a provider call and releases the claim.
 	SaveRunnerJob(ctx context.Context, arg SaveRunnerJobParams) error
+	// When the next status query of an open refund is due.
+	ScheduleRefundCheck(ctx context.Context, arg ScheduleRefundCheckParams) error
 	ServiceNameTaken(ctx context.Context, arg ServiceNameTakenParams) (bool, error)
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)

@@ -314,6 +314,7 @@
   "actions.reservations.payment_collected": "Ödeme alındı",
   "actions.reservations.refund_requested": "İade kaydedildi",
   "actions.reservations.refund_resolved": "İade sonucu işlendi",
+  "actions.reservations.refund_closed": "İadesiz kapatıldı",
   "actions.products.sale_returned": "Satış geri alındı",
   "resources.tenant.confirmations": "Randevu teyidi",
   "actions.confirmations.updated": "Teyit kuralı güncellendi",

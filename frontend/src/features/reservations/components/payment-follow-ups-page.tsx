@@ -1,9 +1,10 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { Archive } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
 import { StatusChip } from "@/components/common/status-chip";
@@ -15,7 +16,13 @@ import {
 } from "@/components/entity";
 import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
+import {
+  type CloseTarget,
+  CloseWithoutRefundDialog,
+} from "@/features/reservations/components/reservation-refunds";
 import {
   PAYMENT,
   RESERVATIONS_RESOURCE,
@@ -38,6 +45,7 @@ import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantLiveList } from "@/features/tenant/lib/live";
 import { amount, datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
 
 /** Follow-up kinds, in the order a manager handles them. */
 const FOLLOW_UP_KINDS: Record<
@@ -59,6 +67,12 @@ const FOLLOW_UP_KINDS: Record<
   unpaid: { key: "reservations.follow_ups.kinds.unpaid", tone: "danger" },
 };
 
+/** Kinds a manager may close without paying the money back. */
+const CLOSABLE_KINDS: PaymentFollowUpKind[] = [
+  "refund_pending",
+  "refund_failed",
+];
+
 function filterValues(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   if (typeof value === "string" && value) return [value];
@@ -73,12 +87,16 @@ function joined(values: string[]) {
  * Visits whose money needs a person: paid and then cancelled (or paid
  * online after the cancel), a refund whose provider result is unknown or
  * that failed, and completed visits not paid in full. A row opens the
- * visit, where the refund or the payment is recorded.
+ * visit, where the refund or the payment is recorded; a refund to make can
+ * also be closed here without paying it back.
  */
 export function PaymentFollowUpsPage() {
   const { t, locale } = useLocale();
   const { slug, organization } = useTenant();
   const router = useRouter();
+  const { can } = usePermission();
+  const canClose = can(permissions.tenant.payment.refund);
+  const [closing, setClosing] = useState<CloseTarget | null>(null);
 
   // A refund, a payment or a cancel publishes on the reservations channel.
   const listState = useServerListState({
@@ -284,8 +302,35 @@ export function PaymentFollowUpsPage() {
           </span>
         ),
       }),
+      createColumn<PaymentFollowUp>({
+        id: "actions",
+        labelKey: "reservations.columns.actions",
+        enableSorting: false,
+        enableHiding: false,
+        enableResizing: false,
+        cell: ({ row }) =>
+          canClose && CLOSABLE_KINDS.includes(row.original.kind) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(event) => {
+                event.stopPropagation();
+                setClosing({
+                  uuid: row.original.uuid,
+                  number: row.original.number,
+                  amount: row.original.amount,
+                  currency: row.original.currency,
+                });
+              }}
+            >
+              <Archive className="size-4" />
+              {t("reservations.refunds.close")}
+            </Button>
+          ) : null,
+      }),
     ] as ColumnDef<PaymentFollowUp, unknown>[];
-  }, [branches, kindCounts, locale, slug, t]);
+  }, [branches, canClose, kindCounts, locale, slug, t]);
 
   const total = listQuery.data?.total ?? 0;
   const pageCount = useMemo(() => {
@@ -359,6 +404,12 @@ export function PaymentFollowUpsPage() {
             refreshDisabled={listQuery.isFetching}
           />
         }
+      />
+      <CloseWithoutRefundDialog
+        target={closing}
+        onOpenChange={(open) => {
+          if (!open) setClosing(null);
+        }}
       />
     </EntityPage>
   );

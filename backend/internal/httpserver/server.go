@@ -539,6 +539,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	paymentsSvc := paymentsusecase.New(deps.Queries, reservationsSvc, salesSvc, integrationKit.Accounts, integrationKit.Runner,
 		paymentsusecase.Config{FrontendURL: cfg.Auth.FrontendURL}, log)
 	paymentsSvc.SetResourceEvents(resourceEvents)
+	// Refund done / being processed notices to the customer (TEC-978).
+	paymentsSvc.SetRefundNotifier(paymentsmodule.RefundNotices(notifyEngine, deps.Queries))
 	paymentsH := paymentshandler.New(paymentsSvc, activityRec)
 	paymentsH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	paymentsmodule.RegisterRoutes(mux, paymentsH, tokens, loader, tenantResolver)

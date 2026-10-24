@@ -1,7 +1,15 @@
 package payments
 
 import (
+	"context"
+
+	"github.com/google/uuid"
+
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/config"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
+	customernotifycatalog "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/catalog"
+	customernotifyusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/usecase"
+	paymentsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/integrations"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/payments/paytr"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/payments/testpay"
@@ -19,4 +27,21 @@ func Adapters(cfg config.Config) []integrations.Adapter {
 		out = append(out, testpay.New(cfg.Auth.FrontendURL))
 	}
 	return out
+}
+
+// RefundNotices sends the refund notices (TEC-978) through the customer
+// notification engine with the business's rule for the event: one notice
+// per refund and event.
+func RefundNotices(engine *customernotifyusecase.Engine, q *db.Queries) paymentsusecase.RefundNotifier {
+	if engine == nil {
+		return nil
+	}
+	return func(ctx context.Context, orgID, reservationID int64, refund uuid.UUID, notice string) error {
+		event := customernotifycatalog.RefundCompleted
+		if notice == paymentsusecase.NoticeRefundProcessing {
+			event = customernotifycatalog.RefundProcessing
+		}
+		_, err := engine.EmitEvent(ctx, q, orgID, reservationID, event, "refund:"+refund.String())
+		return err
+	}
 }

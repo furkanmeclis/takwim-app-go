@@ -38,6 +38,8 @@ Dispatches and deliveries belong to the customer and the reservation (composite 
 | rescheduled                                     | `reservation.rescheduled` | reservation version  |
 | reminder (worker, below)                        | `reservation.reminder`    | offset + visit start |
 
+Refund notices (TEC-978) come from the payments module through `EmitEvent`, with the business's rule for the event, after the refund is recorded: `refund.completed` once the money is paid back, `refund.processing` when the provider refused the refund or its result is unknown. The key is the refund (`refund:<uuid>`). They have no due time, so a cancelled or past visit still gets them, and like every notice they name no amount. See `docs/design/payments.md`.
+
 The key is `event|reservation:<uuid>|<discriminator>`; inserting a dispatch with a key that exists does nothing, so a replayed request or a payment after the acceptance never sends a second "accepted". A visit whose start has passed gets no notice (a walk-in recorded afterwards). Panel bookings notify as well as online ones. An event that is off writes nothing; a rule without channels writes a `skipped` dispatch.
 
 The direct "panel link" SMS of the public booking flow is gone: the requested / accepted notice carries the link (customer-panel.md).

@@ -24,6 +24,7 @@ import {
   labelOf,
 } from "@/features/integrations/constants";
 import {
+  useCloseWithoutRefund,
   useRefundReservationPayment,
   useResolveRefund,
 } from "@/features/reservations/hooks/use-reservations";
@@ -45,6 +46,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 const REFUND_FORM_ID = "reservation-refund-form";
 const RESOLVE_FORM_ID = "reservation-refund-resolve-form";
+const CLOSE_FORM_ID = "reservation-refund-close-form";
 
 const STATUS_TONES = {
   requested: "warning",
@@ -129,6 +131,19 @@ export function RefundsTable({
               {row.original.failure_reason ? (
                 <span className="text-muted-foreground text-xs">
                   {row.original.failure_reason}
+                </span>
+              ) : null}
+              {row.original.auto_check ? (
+                <span className="text-muted-foreground text-xs">
+                  {row.original.next_check_at
+                    ? t("reservations.refunds.auto_check_next", {
+                        time: datetime(
+                          row.original.next_check_at,
+                          undefined,
+                          locale,
+                        ),
+                      })
+                    : t("reservations.refunds.auto_check")}
                 </span>
               ) : null}
             </span>
@@ -572,6 +587,102 @@ export function ResolveRefundDialog({
           <AppTextarea
             name="note"
             label={t("reservations.refunds.resolve_dialog.note")}
+          />
+        </AppForm>
+      ) : null}
+    </AppDialog>
+  );
+}
+
+/** The visit whose refund to make is closed without paying it back. */
+export type CloseTarget = {
+  uuid: string;
+  number: number;
+  amount: string;
+  currency: string;
+};
+
+/**
+ * Closes a refund to make without paying the money back (the customer left
+ * it, or it counts for the next visit). The reason is required and goes
+ * into the visit's history; no money moves.
+ */
+export function CloseWithoutRefundDialog({
+  target,
+  onOpenChange,
+}: {
+  target: CloseTarget | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t, locale } = useLocale();
+  const close = useCloseWithoutRefund();
+  const schema = useMemo(
+    () =>
+      z.object({
+        reason: z
+          .string()
+          .trim()
+          .min(1, t("reservations.validation.close_reason_required"))
+          .max(MAX_REFUND_NOTE, t("reservations.validation.collect_note_max")),
+      }),
+    [t],
+  );
+
+  return (
+    <AppDialog
+      open={Boolean(target)}
+      onOpenChange={onOpenChange}
+      title={t("reservations.refunds.close_dialog.title")}
+      description={
+        target
+          ? t("reservations.refunds.close_dialog.description", {
+              number: target.number,
+              amount: amount(target.amount, target.currency, locale),
+            })
+          : undefined
+      }
+      className="sm:max-w-lg"
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            {t("form.cancel")}
+          </Button>
+          <Button type="submit" form={CLOSE_FORM_ID} disabled={close.isPending}>
+            {t("reservations.refunds.close_dialog.submit")}
+          </Button>
+        </>
+      }
+    >
+      {target ? (
+        <AppForm<{ reason: string }>
+          key={target.uuid}
+          id={CLOSE_FORM_ID}
+          className="grid gap-4"
+          schema={schema}
+          defaultValues={{ reason: "" }}
+          onSubmit={async (values) => {
+            await close.mutateAsync({
+              uuid: target.uuid,
+              body: { reason: values.reason.trim() },
+            });
+            onOpenChange(false);
+          }}
+        >
+          <Alert>
+            <AlertDescription>
+              {t("reservations.refunds.close_dialog.hint")}
+            </AlertDescription>
+          </Alert>
+          <AppTextarea
+            name="reason"
+            label={t("reservations.refunds.close_dialog.reason")}
+            placeholder={t(
+              "reservations.refunds.close_dialog.reason_placeholder",
+            )}
           />
         </AppForm>
       ) : null}

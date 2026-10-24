@@ -47,6 +47,7 @@ import (
 	orgsettingsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/repository"
 	orgsettingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/usecase"
 	paymentsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments"
+	paymentsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/usecase"
 	productsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/adapters"
 	productsrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/repository"
 	productsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/usecase"
@@ -353,6 +354,13 @@ func main() {
 	voiceSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner, fieldCipher)
 	integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: queueClient})
 	integrationKit.Runner.SetResourceEvents(resourceEvents)
+	// Provider refunds whose result is unknown (TEC-978): this process asks
+	// the provider's refund status query, posts what it confirms and tells
+	// the customer; nothing is sent to the provider again.
+	paymentsSvc := paymentsusecase.New(queries, reservationsSvc, salesSvc, integrationKit.Accounts, integrationKit.Runner,
+		paymentsusecase.Config{FrontendURL: cfg.Auth.FrontendURL}, log)
+	paymentsSvc.SetResourceEvents(resourceEvents)
+	paymentsSvc.SetRefundNotifier(paymentsmodule.RefundNotices(notifyEngine, queries))
 
 	// The minute sweep of capacity holds also cancels the requests whose
 	// approval or payment hold lapsed (TEC-899).
@@ -420,6 +428,7 @@ func main() {
 
 	go notifyEngine.Run(ctx, customernotifyusecase.DefaultSendInterval, customernotifyusecase.DefaultReminderInterval)
 	go confirmEngine.Run(ctx, confirmationsusecase.DefaultInterval)
+	go paymentsSvc.RunRefundChecks(ctx, paymentsusecase.DefaultRefundCheckInterval)
 
 	errCh := make(chan error, 1)
 	go func() {
