@@ -1,10 +1,19 @@
 "use client";
 
-import { MessageSquareWarning, PhoneOff } from "lucide-react";
+import { MessageSquareWarning, PhoneOff, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 
 import { StatusChip } from "@/components/common/status-chip";
 import { EntityDetail, EntitySectionCard } from "@/components/entity";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { permissions } from "@/config/permissions";
+import {
+  ConfirmByPhoneDialog,
+  type PhoneConfirmTarget,
+} from "@/features/confirmations/components/confirm-by-phone-dialog";
+import { ConfirmationAttemptsTable } from "@/features/confirmations/components/confirmation-attempts-table";
+import { useConfirmationFollowUpAccess } from "@/features/confirmations/hooks/use-confirmations";
 import { channelLabel } from "@/features/customer-notifications/constants";
 import type {
   Reservation,
@@ -13,6 +22,7 @@ import type {
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
 
 type Tone = "default" | "success" | "warning" | "danger";
 
@@ -38,6 +48,17 @@ export function ReservationConfirmationCard({
 }) {
   const { t, locale } = useLocale();
   const { organization } = useTenant();
+  const { can } = usePermission();
+  // The requests and the phone confirmation (TEC-924) need the add-on and
+  // the business-wide reservations permissions.
+  const followUp = useConfirmationFollowUpAccess();
+  const canConfirm = followUp && can(permissions.tenant.reservations.write);
+  const [phoneTarget, setPhoneTarget] = useState<PhoneConfirmTarget | null>(
+    null,
+  );
+  // When the card was shown: a visit already started takes no answer (the
+  // API refuses it too).
+  const [shownAt] = useState(() => Date.now());
   const zone = organization?.timezone ?? undefined;
   const c = reservation.confirmation;
   if (!c) return null;
@@ -65,6 +86,12 @@ export function ReservationConfirmationCard({
         .filter(Boolean)
         .join(" · ")
     : "—";
+  // Same rule as the API: an open task, or expired without a cancel, of a
+  // visit still ahead.
+  const answerable =
+    open &&
+    (c.status !== "expired" || c.outcome !== "cancelled") &&
+    new Date(reservation.starts_at).getTime() > shownAt;
 
   return (
     <div className="space-y-3">
@@ -96,10 +123,30 @@ export function ReservationConfirmationCard({
       <EntitySectionCard
         title={t("reservations.confirmation_task.title")}
         actions={
-          <StatusChip
-            label={t(`reservations.confirmation_task.status.${c.status}`)}
-            tone={TASK_TONES[c.status]}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusChip
+              label={t(`reservations.confirmation_task.status.${c.status}`)}
+              tone={TASK_TONES[c.status]}
+            />
+            {canConfirm && answerable ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setPhoneTarget({
+                    uuid: reservation.uuid,
+                    number: reservation.number,
+                    version: reservation.version,
+                    customerName: reservation.customer.name,
+                    phone: null,
+                  })
+                }
+              >
+                <ShieldCheck className="size-4" />
+                {t("confirmations.phone.action")}
+              </Button>
+            ) : null}
+          </div>
         }
       >
         <EntityDetail
@@ -180,6 +227,17 @@ export function ReservationConfirmationCard({
           ]}
         />
       </EntitySectionCard>
+      {followUp ? (
+        <EntitySectionCard title={t("confirmations.attempts.title")}>
+          <ConfirmationAttemptsTable reservationUuid={reservation.uuid} />
+        </EntitySectionCard>
+      ) : null}
+      <ConfirmByPhoneDialog
+        target={phoneTarget}
+        onOpenChange={(open) => {
+          if (!open) setPhoneTarget(null);
+        }}
+      />
     </div>
   );
 }

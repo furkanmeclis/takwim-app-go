@@ -461,5 +461,6 @@
   "custom_fields.no": "No",
   "form.section_questions": "Extra fields",
   "form.section_questions_desc": "Questions set in the business settings; the answers are stored on the booking.",
-  "columns.custom_answers": "Extra fields"
+  "columns.custom_answers": "Extra fields",
+  "confirmation_task.sources.phone": "By phone (staff)"
 }

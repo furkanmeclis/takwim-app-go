@@ -61,5 +61,6 @@
   "nav_staff_shares": "Staff shares",
   "nav_payment_follow_ups": "Payment follow-up",
   "nav_tenant_settings_confirmation": "Booking confirmation",
-  "nav_tenant_settings_embed": "Embed code"
+  "nav_tenant_settings_embed": "Embed code",
+  "nav_confirmations": "Confirmation list"
 }

@@ -28,6 +28,7 @@ import {
   Settings2,
   Share2,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Store,
@@ -41,6 +42,7 @@ import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { defineNav } from "@/features/nav-engine";
 import type { NavCatalog } from "@/features/nav-engine";
+import { ConfirmationsNavAdornment } from "@/features/confirmations/nav";
 import { usersNavItem } from "@/features/users/nav";
 
 const integrationReadPermissions = [
@@ -336,6 +338,15 @@ export function tenantNav(slug: string): NavCatalog {
               permissions.tenant.reservations.own,
             ],
             module: "reservations",
+          },
+          {
+            id: "confirmations",
+            titleKey: "layout.nav_confirmations",
+            href: routes.tenant.reservations.confirmations(slug),
+            icon: ShieldCheck,
+            permission: permissions.tenant.reservations.read,
+            module: "confirmation",
+            Adornment: ConfirmationsNavAdornment,
           },
           {
             id: "payment-follow-ups",

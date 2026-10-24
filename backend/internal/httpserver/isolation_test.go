@@ -614,6 +614,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/payments/follow-ups": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker,
 			"?kind=refund_pending,unpaid"},
 		"GET /v1/tenant/payments/follow-ups/facets": {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/confirmations": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker,
+			"?q=" + orgB.ids["customerPhone"][3:], "?state=pending,scheduled,change_requested", "?attention=true"},
+		"GET /v1/tenant/confirmations/facets": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.ids["customerPhone"][3:]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")

@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ConfirmationAlerts } from "@/features/confirmations/components/confirmation-alerts";
 import { BranchOverview } from "@/features/tenant/components/branch-overview";
 import { SectorOverviewCard } from "@/features/sectors/components/sector-overview-card";
 import { SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
@@ -46,6 +47,8 @@ export function TenantOverviewPage() {
         description={t("tenant.overview.description")}
         icon={<Building2 className="size-6" />}
       />
+
+      <ConfirmationAlerts />
 
       <BranchOverview />
 

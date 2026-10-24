@@ -10,9 +10,12 @@ import (
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/usecase"
+	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 )
 
@@ -20,6 +23,7 @@ import (
 type Handler struct {
 	engine   *usecase.Engine
 	activity *activity.Recorder
+	events   resourceevents.Publisher
 }
 
 // New builds the handler. rec may be nil.
@@ -105,9 +109,29 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.ValidationError(w, r, details)
 		return
 	}
-	if errors.Is(err, usecase.ErrBranchNotFound) {
-		response.NotFound(w, r, "Branch was not found")
+	var qve *apiquery.ValidationError
+	if errors.As(err, &qve) {
+		details := make([]response.Detail, 0, len(qve.Details))
+		for _, d := range qve.Details {
+			details = append(details, response.Detail{Field: d.Field, Message: d.Message, Code: d.Code})
+		}
+		response.ValidationError(w, r, details)
 		return
 	}
-	response.InternalErr(w, r, err, "Unexpected server error")
+	switch {
+	case errors.Is(err, usecase.ErrBranchNotFound):
+		response.NotFound(w, r, "Branch was not found")
+	case errors.Is(err, usecase.ErrNotFound):
+		response.NotFound(w, r, "Reservation was not found")
+	case errors.Is(err, usecase.ErrNotOpen):
+		response.ErrorWithDetails(w, r, http.StatusConflict, CodeNotOpen, err.Error(), []response.Detail{{
+			Field: "confirmation", Message: err.Error(), Code: "not_open",
+		}})
+	case errors.Is(err, reservationsusecase.ErrStaleVersion):
+		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
+			Field: "expected_version", Message: err.Error(), Code: "stale",
+		}})
+	default:
+		response.InternalErr(w, r, err, "Unexpected server error")
+	}
 }

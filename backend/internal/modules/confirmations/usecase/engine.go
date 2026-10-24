@@ -48,6 +48,7 @@ import (
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 )
 
@@ -92,6 +93,7 @@ type Engine struct {
 	q            *db.Queries
 	notices      Notices
 	reservations Canceller
+	events       resourceevents.Publisher
 	log          *slog.Logger
 	now          func() time.Time
 	batch        int32
@@ -107,6 +109,19 @@ func New(pool *pgxpool.Pool, q *db.Queries, notices Notices) *Engine {
 
 // SetReservations sets the use case the deadline cancels through.
 func (e *Engine) SetReservations(r Canceller) { e.reservations = r }
+
+// SetResourceEvents tells the panel's live lists (tenant.reservations)
+// about the changes the worker makes: a request sent, a deadline reached
+// (TEC-924). Changes made inside an API request are published by its
+// handler.
+func (e *Engine) SetResourceEvents(pub resourceevents.Publisher) { e.events = pub }
+
+func (e *Engine) changed(ctx context.Context, orgID int64, id uuid.UUID) {
+	if e.events == nil || id == uuid.Nil {
+		return
+	}
+	e.events.Publish(orgctx.WithOrganizationID(ctx, orgID), reservationsmodel.Slug, resourceevents.ActionUpdated, id.String())
+}
 
 // SetLogger replaces the logger.
 func (e *Engine) SetLogger(l *slog.Logger) {
@@ -204,6 +219,12 @@ func (s *state) close(status string, now time.Time) {
 // row. bump raises the version (a change of the engine's own); otherwise
 // the row belongs to the change being written (its version).
 func (e *Engine) setStatus(ctx context.Context, q *db.Queries, orgID, reservationID int64, from, to string, bump bool, typ, note string) (int32, error) {
+	return e.setStatusBy(ctx, q, orgID, reservationID, from, to, bump, typ, note, 0)
+}
+
+// setStatusBy is setStatus with the member who made the change in the
+// history row (0 = the system or the customer).
+func (e *Engine) setStatusBy(ctx context.Context, q *db.Queries, orgID, reservationID int64, from, to string, bump bool, typ, note string, actorID int64) (int32, error) {
 	version, err := q.SetReservationConfirmationStatus(ctx, db.SetReservationConfirmationStatusParams{
 		OrganizationID: orgID, ID: reservationID, ConfirmationStatus: to, Bump: bump,
 	})
@@ -215,7 +236,7 @@ func (e *Engine) setStatus(ctx context.Context, q *db.Queries, orgID, reservatio
 	}
 	return version, q.CreateConfirmationEvent(ctx, db.CreateConfirmationEventParams{
 		OrganizationID: orgID, ReservationID: reservationID, Version: version, Type: typ,
-		FromStatus: text(from), ToStatus: text(to), Note: note,
+		FromStatus: text(from), ToStatus: text(to), Note: note, ActorID: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
 	})
 }
 
@@ -370,13 +391,18 @@ type cancelJob struct {
 // deadline.
 func (e *Engine) Process(ctx context.Context, orgID, reservationID int64) error {
 	var job *cancelJob
+	var moved uuid.UUID
 	err := e.tx(ctx, func(q *db.Queries) error {
 		var err error
-		job, err = e.step(ctx, q, orgID, reservationID)
+		job, moved, err = e.step(ctx, q, orgID, reservationID)
 		return err
 	})
-	if err != nil || job == nil {
+	if err != nil {
 		return err
+	}
+	e.changed(ctx, orgID, moved)
+	if job == nil {
+		return nil
 	}
 	if e.reservations == nil {
 		return errors.New("confirmation: no reservations use case to cancel through")
@@ -390,6 +416,9 @@ func (e *Engine) Process(ctx context.Context, orgID, reservationID int64) error 
 			return nil
 		},
 	})
+	if err == nil {
+		e.changed(ctx, job.orgID, job.id)
+	}
 	// Changed since (answered, moved, started): the next scan sees the
 	// new state.
 	if errors.Is(err, reservationsusecase.ErrStaleVersion) || errors.Is(err, reservationsusecase.ErrInvalidTransition) ||
@@ -399,23 +428,23 @@ func (e *Engine) Process(ctx context.Context, orgID, reservationID int64) error 
 	return err
 }
 
-func (e *Engine) step(ctx context.Context, q *db.Queries, orgID, reservationID int64) (*cancelJob, error) {
+func (e *Engine) step(ctx context.Context, q *db.Queries, orgID, reservationID int64) (*cancelJob, uuid.UUID, error) {
 	r, err := q.GetConfirmationReservation(ctx, db.GetConfirmationReservationParams{OrganizationID: orgID, ID: reservationID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, uuid.Nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, uuid.Nil, err
 	}
 	task, err := q.LockReservationConfirmation(ctx, db.LockReservationConfirmationParams{OrganizationID: orgID, ReservationID: reservationID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, uuid.Nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, uuid.Nil, err
 	}
 	if !open(task.Status) {
-		return nil, nil
+		return nil, uuid.Nil, nil
 	}
 	now := e.clock()
 	st := &state{row: task}
@@ -424,16 +453,16 @@ func (e *Engine) step(ctx context.Context, q *db.Queries, orgID, reservationID i
 		r.Status != reservationsmodel.StatusActive {
 		st.close(model.TaskDropped, now)
 		st.row.LastError = "reservation changed"
-		return nil, st.save(ctx, q)
+		return nil, r.Uuid, st.save(ctx, q)
 	}
 	on, err := ModuleOn(ctx, q, orgID)
 	if err != nil {
-		return nil, err
+		return nil, uuid.Nil, err
 	}
 	rule := model.Rule{}
 	if on {
 		if rule, err = RuleFor(ctx, q, orgID, r.BranchID); err != nil {
-			return nil, err
+			return nil, uuid.Nil, err
 		}
 	}
 	if !on || !rule.Enabled {
@@ -441,20 +470,21 @@ func (e *Engine) step(ctx context.Context, q *db.Queries, orgID, reservationID i
 		// cancel any more.
 		version, err := e.setStatus(ctx, q, orgID, r.ID, r.ConfirmationStatus, reservationsmodel.ConfirmationNotRequired, true, EventDropped, "")
 		if err != nil {
-			return nil, err
+			return nil, uuid.Nil, err
 		}
 		st.row.ReservationVersion = version
 		st.close(model.TaskDropped, now)
 		st.row.LastError = "confirmation turned off"
-		return nil, st.save(ctx, q)
+		return nil, r.Uuid, st.save(ctx, q)
 	}
 	if !now.Before(task.DeadlineAt.Time) && !task.ChangeRequestedAt.Valid {
-		return e.deadline(ctx, q, r, st, now)
+		job, err := e.deadline(ctx, q, r, st, now)
+		return job, r.Uuid, err
 	}
 	if !task.NextAttemptAt.Valid || task.NextAttemptAt.Time.After(now) {
-		return nil, nil
+		return nil, uuid.Nil, nil
 	}
-	return nil, e.attempt(ctx, q, r, st, now)
+	return nil, r.Uuid, e.attempt(ctx, q, r, st, now)
 }
 
 // attempt writes the next request and moves the task on.
@@ -521,7 +551,11 @@ type AnswerInput struct {
 	Answer string
 	Source string
 	Note   string
-	// Guard runs on the locked reservation (ownership).
+	// ActorID is the member who recorded the answer (a confirmation given
+	// on the phone, TEC-924); 0 = the customer.
+	ActorID int64
+	// Guard runs on the locked reservation (ownership, branch scope,
+	// expected version).
 	Guard func(reservationsmodel.Locked) error
 }
 
@@ -562,7 +596,7 @@ func (e *Engine) Answer(ctx context.Context, orgID int64, id uuid.UUID, in Answe
 		}
 		if in.Guard != nil {
 			if err := in.Guard(reservationsmodel.Locked{
-				CustomerID: r.CustomerID, Status: r.Status, ConfirmationStatus: r.ConfirmationStatus,
+				CustomerID: r.CustomerID, BranchID: r.BranchID, Status: r.Status, ConfirmationStatus: r.ConfirmationStatus,
 				StartsAt: r.StartsAt.Time, Version: int(r.Version),
 			}); err != nil {
 				return err
@@ -589,7 +623,14 @@ func (e *Engine) Answer(ctx context.Context, orgID int64, id uuid.UUID, in Answe
 		st.row.Answer, st.row.AnswerChannel, st.row.AnsweredAt = text(in.Answer), text(in.Source), ts(now)
 		switch in.Answer {
 		case model.AnswerConfirm:
-			version, err := e.setStatus(ctx, q, orgID, r.ID, r.ConfirmationStatus, reservationsmodel.ConfirmationConfirmed, true, EventConfirmed, in.Source)
+			// The history note is where the answer came from, or the
+			// member's note of a phone confirmation.
+			eventNote := in.Source
+			if in.ActorID > 0 && note != "" {
+				eventNote = note
+			}
+			version, err := e.setStatusBy(ctx, q, orgID, r.ID, r.ConfirmationStatus, reservationsmodel.ConfirmationConfirmed, true,
+				EventConfirmed, eventNote, in.ActorID)
 			if err != nil {
 				return err
 			}

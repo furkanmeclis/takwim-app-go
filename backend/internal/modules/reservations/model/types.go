@@ -349,6 +349,7 @@ type RescheduleInput struct {
 // Locked is what a guard sees of a reservation locked for a change.
 type Locked struct {
 	CustomerID         int64
+	BranchID           int64
 	Status             string
 	PaymentStatus      string
 	ConfirmationStatus string
