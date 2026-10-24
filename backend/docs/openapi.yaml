@@ -10918,6 +10918,90 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/reports/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantReportSummary
+      summary: Business report of a period
+      description: |
+        Reservations (by status and channel) and confirmation results of the
+        visits that start in the range, revenue (sale lines), collections
+        and refunds (ledger), transfers between accounts, other income and
+        expenses (cash book), staff share and staff payouts, product cost,
+        the business share (revenue - staff share) and the operating result
+        (revenue - product cost - staff share - expenses), and the stock.
+        Each figure comes from its own record, so revenue, collections,
+        transfers and staff payouts never mix (A20). Returned in total, per
+        day (business day; visits by the local day in the branch time zone)
+        and per branch, plus a head office row for the records of accounts
+        without a branch. The range defaults to today and is at most 366
+        days. Needs the reports module and tenant.finance.read; the caller's
+        branch scope (and X-Branch) limits every figure, and a member
+        without every branch never sees head office records.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/ReportDateFrom"
+        - $ref: "#/components/parameters/ReportDateTo"
+        - $ref: "#/components/parameters/ReportBranch"
+        - $ref: "#/components/parameters/ReportStaff"
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeReport"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/reports/export:
+    get:
+      tags: [Tenant]
+      operationId: exportTenantReport
+      summary: Report as CSV
+      description: |
+        The same report as CSV (UTF-8 with BOM, comma separated): one row per
+        day and a total row (section=days, default) or one row per branch,
+        the head office row and a total row (section=branches). Amounts use
+        a dot as the decimal separator; with several currencies there is one
+        row per currency and the counts sit on the first one. Column titles
+        follow locale (tr default). Needs tenant.report.export as well; the
+        export is written to the activity log.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/ReportDateFrom"
+        - $ref: "#/components/parameters/ReportDateTo"
+        - $ref: "#/components/parameters/ReportBranch"
+        - $ref: "#/components/parameters/ReportStaff"
+        - name: section
+          in: query
+          schema: { type: string, enum: [days, branches], default: days }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: CSV file
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: "attachment; filename=rapor_{section}_{from}_{to}.csv"
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/staff-shares/me:
     get:
       tags: [Tenant]
@@ -13422,6 +13506,26 @@ components:
         Organization of a `/v1/tenant/*` request: its slug (preferred, readable
         in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
       schema: { type: string, maxLength: 64, example: acme }
+    ReportDateFrom:
+      name: date_from
+      in: query
+      description: First day (default today in the business time zone)
+      schema: { type: string, format: date }
+    ReportDateTo:
+      name: date_to
+      in: query
+      description: Last day (default date_from, else today; at most 366 days)
+      schema: { type: string, format: date }
+    ReportBranch:
+      name: branch
+      in: query
+      description: Branch uuids and / or head_office; comma-separate or repeat. Absent = every branch in scope and the head office.
+      schema: { type: string }
+    ReportStaff:
+      name: staff
+      in: query
+      description: Staff uuids; comma-separate or repeat. Narrows revenue, shares, payouts, visits and confirmations.
+      schema: { type: string }
     XBranch:
       name: X-Branch
       in: header
@@ -17062,6 +17166,175 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/SalesSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ReportReservations:
+      type: object
+      description: Visits that start in the range, by status and by channel (total = the sum of the statuses).
+      required: [total, requested, active, in_service, completed, cancelled, rejected, no_show, from_panel, from_online, from_embed]
+      properties:
+        total: { type: integer, format: int64 }
+        requested: { type: integer, format: int64 }
+        active: { type: integer, format: int64 }
+        in_service: { type: integer, format: int64 }
+        completed: { type: integer, format: int64 }
+        cancelled: { type: integer, format: int64 }
+        rejected: { type: integer, format: int64 }
+        no_show: { type: integer, format: int64 }
+        from_panel: { type: integer, format: int64 }
+        from_online: { type: integer, format: int64 }
+        from_embed: { type: integer, format: int64 }
+
+    ReportConfirmations:
+      type: object
+      description: |
+        Confirmation tasks of the visits in the range by the state the
+        confirmation list shows; cancelled / flagged / unreachable are the
+        outcomes of expired tasks, dropped means the visit was cancelled or
+        moved first.
+      required: [total, scheduled, pending, confirmed, declined, change_requested, cancelled, flagged, unreachable, expired, dropped]
+      properties:
+        total: { type: integer, format: int64 }
+        scheduled: { type: integer, format: int64 }
+        pending: { type: integer, format: int64 }
+        confirmed: { type: integer, format: int64 }
+        declined: { type: integer, format: int64 }
+        change_requested: { type: integer, format: int64 }
+        cancelled: { type: integer, format: int64 }
+        flagged: { type: integer, format: int64 }
+        unreachable: { type: integer, format: int64 }
+        expired: { type: integer, format: int64 }
+        dropped: { type: integer, format: int64 }
+
+    ReportMoney:
+      type: object
+      description: |
+        The figures of one currency, each from its own record. business_share
+        = revenue.net - staff_share; operational_result = revenue.net -
+        product_cost - staff_share - expenses (other income, transfers,
+        collections and staff payouts are outside it).
+      required: [currency, revenue, collections, transfers, staff_share, staff_payments, business_share, product_cost,
+        income, expenses, operational_result]
+      properties:
+        currency: { type: string }
+        revenue: { $ref: "#/components/schemas/SalesRevenue" }
+        collections: { $ref: "#/components/schemas/SalesCollections" }
+        transfers: { type: string, description: "Money moved between accounts (not revenue)" }
+        staff_share: { type: string, description: "Calculated staff shares of the sale lines" }
+        staff_payments: { type: string, description: "Paid to staff (settles shares; not an expense)" }
+        business_share: { type: string }
+        product_cost: { type: string, description: "Unit cost of the stock movement, else the current product / variant cost" }
+        income: { type: string, description: "Other income from the cash book (not revenue)" }
+        expenses: { type: string, description: "Expenses from the cash book (staff payouts excluded)" }
+        operational_result: { type: string }
+
+    ReportStock:
+      type: object
+      description: |
+        Units moved in the range (sold and transferred out as positive
+        units, adjustments signed) and the stock now (not bound to the
+        range); value at the current unit cost in the business currency.
+      required: [received, sold, returned, adjusted, transferred_in, transferred_out, movements, on_hand, reserved, items,
+        low_items, out_items, value, currency]
+      properties:
+        received: { type: integer, format: int64 }
+        sold: { type: integer, format: int64 }
+        returned: { type: integer, format: int64 }
+        adjusted: { type: integer, format: int64 }
+        transferred_in: { type: integer, format: int64 }
+        transferred_out: { type: integer, format: int64 }
+        movements: { type: integer, format: int64 }
+        on_hand: { type: integer, format: int64 }
+        reserved: { type: integer, format: int64 }
+        items: { type: integer, format: int64 }
+        low_items: { type: integer, format: int64 }
+        out_items: { type: integer, format: int64 }
+        value: { type: string }
+        currency: { type: string }
+
+    ReportFigures:
+      type: object
+      required: [reservations, confirmations, money]
+      properties:
+        reservations: { $ref: "#/components/schemas/ReportReservations" }
+        confirmations: { $ref: "#/components/schemas/ReportConfirmations" }
+        money:
+          type: array
+          description: One entry per currency; the business currency first and always present.
+          items: { $ref: "#/components/schemas/ReportMoney" }
+
+    ReportDay:
+      allOf:
+        - $ref: "#/components/schemas/ReportFigures"
+        - type: object
+          required: [date]
+          properties:
+            date: { type: string, format: date }
+
+    ReportBranch:
+      allOf:
+        - $ref: "#/components/schemas/ReportFigures"
+        - type: object
+          required: [branch, stock]
+          properties:
+            branch:
+              description: The branch; null on the head office row (records of accounts without a branch).
+              type: [object, "null"]
+              required: [uuid, code, name, is_active]
+              properties:
+                uuid: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+                is_active: { type: boolean }
+            stock: { $ref: "#/components/schemas/ReportStock" }
+
+    Report:
+      type: object
+      required: [date_from, date_to, scope, totals, days, branches]
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        scope:
+          type: object
+          required: [timezone, currency, branches, head_office, staff, omitted_for_staff]
+          properties:
+            timezone: { type: string }
+            currency: { type: string }
+            branches:
+              type: array
+              description: The branch filter as applied (only branches of this business)
+              items: { type: string, format: uuid }
+            head_office: { type: boolean, description: "Head office records are included" }
+            staff:
+              type: array
+              description: The staff filter as applied (only staff of this business)
+              items: { type: string, format: uuid }
+            omitted_for_staff:
+              type: array
+              description: Money figures left out (zero) because a staff filter cannot narrow them
+              items: { type: string, enum: [collections, transfers, income, expenses] }
+        totals:
+          allOf:
+            - $ref: "#/components/schemas/ReportFigures"
+            - type: object
+              required: [stock]
+              properties:
+                stock: { $ref: "#/components/schemas/ReportStock" }
+        days:
+          type: array
+          description: Days of the range with any record, oldest first
+          items: { $ref: "#/components/schemas/ReportDay" }
+        branches:
+          type: array
+          description: Branch comparison (every active branch in scope, then the head office row when it has records)
+          items: { $ref: "#/components/schemas/ReportBranch" }
+
+    EnvelopeReport:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Report" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeReservationBalance:

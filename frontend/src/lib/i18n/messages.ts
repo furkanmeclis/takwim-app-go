@@ -13,6 +13,7 @@ import enCash from "@/locales/en/cash.json";
 import enFinance from "@/locales/en/finance.json";
 import enSales from "@/locales/en/sales.json";
 import enStaffShares from "@/locales/en/staff_shares.json";
+import enReports from "@/locales/en/reports.json";
 import enReservations from "@/locales/en/reservations.json";
 import enCustomerPanel from "@/locales/en/customer_panel.json";
 import enCustomerNotifications from "@/locales/en/customer_notifications.json";
@@ -63,6 +64,7 @@ import trCash from "@/locales/tr/cash.json";
 import trFinance from "@/locales/tr/finance.json";
 import trSales from "@/locales/tr/sales.json";
 import trStaffShares from "@/locales/tr/staff_shares.json";
+import trReports from "@/locales/tr/reports.json";
 import trReservations from "@/locales/tr/reservations.json";
 import trCustomerPanel from "@/locales/tr/customer_panel.json";
 import trCustomerNotifications from "@/locales/tr/customer_notifications.json";
@@ -148,6 +150,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     finance: trFinance,
     sales: trSales,
     staff_shares: trStaffShares,
+    reports: trReports,
     reservations: trReservations,
     customer_panel: trCustomerPanel,
     customer_notifications: trCustomerNotifications,
@@ -200,6 +203,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     finance: enFinance,
     sales: enSales,
     staff_shares: enStaffShares,
+    reports: enReports,
     reservations: enReservations,
     customer_panel: enCustomerPanel,
     customer_notifications: enCustomerNotifications,

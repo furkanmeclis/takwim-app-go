@@ -110,6 +110,7 @@ export const routes = {
       edit: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/customers/${uuid}/edit`,
     },
+    reports: (slug: string) => `/t/${encodeURIComponent(slug)}/reports`,
     calendar: (slug: string) => `/t/${encodeURIComponent(slug)}/calendar`,
     myAgenda: (slug: string) => `/t/${encodeURIComponent(slug)}/my-agenda`,
     myShares: (slug: string) => `/t/${encodeURIComponent(slug)}/my-shares`,
