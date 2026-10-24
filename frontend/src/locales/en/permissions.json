@@ -55,6 +55,8 @@
   "labels.platform.integrations.apple.write": "Write Apple integration settings",
   "labels.platform.auth.settings.read": "Read auth registration settings",
   "labels.platform.auth.settings.write": "Write auth registration settings",
+  "labels.platform.customer_phones.read": "Read customer number releases",
+  "labels.platform.customer_phones.write": "Process number reassignment notices",
   "labels.auth.session": "Auth session",
   "labels.tenant.settings.read": "Read business settings",
   "labels.tenant.settings.write": "Write business settings",

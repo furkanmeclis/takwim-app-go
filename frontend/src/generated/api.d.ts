@@ -8387,6 +8387,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/platform/customer-phone-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer numbers that changed hands
+         * @description Releases of customer panel numbers (TEC-910 / TEC-972), newest first:
+         *     number changes and reassignment reports made by the person
+         *     (`source=customer`), reassignment notices processed by an operator
+         *     (`platform`) and the history of long unproven numbers closed at their
+         *     next sign-in (`system`, reason `dormant`). Numbers are masked. `q` is
+         *     a phone (exact match in any spelling) or a part of the note
+         *     (`platform.customer_phones.read`).
+         */
+        get: operations["listPlatformCustomerPhoneReleases"];
+        put?: never;
+        /**
+         * Process a number reassignment notice
+         * @description The number was given to somebody else (operator notice, support
+         *     request). Every business's earlier history of the number's profile
+         *     is hidden (`visible_from` = now), every session of the profile ends,
+         *     and records of the number found later open only what is booked from
+         *     now on; nothing is deleted at the businesses. A number without a
+         *     profile is released too. `409 PHONE_ALREADY_RELEASED` when nobody
+         *     proved the number since its last release
+         *     (`platform.customer_phones.write`).
+         */
+        post: operations["createPlatformCustomerPhoneReassignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customer/me": {
         parameters: {
             query?: never;
@@ -16803,6 +16840,64 @@ export interface components {
             /** Format: int64 */
             active_sessions: number;
             businesses: components["schemas"]["CustomerBusiness"][];
+            /**
+             * @description Set when the earlier history was closed without the person asking
+             *     (TEC-972): `reassigned` (Takwim processed a reassignment notice of
+             *     the number) or `dormant` (the number had not been proven for 180
+             *     days). Null otherwise.
+             */
+            history_notice: components["schemas"]["CustomerHistoryNotice"] | null;
+        };
+        CustomerHistoryNotice: {
+            /** @enum {string} */
+            reason: "reassigned" | "dormant";
+            /** Format: date-time */
+            closed_at: string;
+        };
+        CustomerPhoneReassignmentInput: {
+            /** @description Any spelling; normalized to E.164. */
+            phone: string;
+            /** @description Where the notice came from. */
+            note?: string;
+        };
+        CustomerPhoneRelease: {
+            /** Format: uuid */
+            uuid: string;
+            /** @example +90532*****67 */
+            phone_masked: string;
+            /** @enum {string} */
+            reason: "number_changed" | "reassigned" | "dormant";
+            /** @enum {string} */
+            source: "customer" | "platform" | "system";
+            note: string;
+            /** @description The operator of a platform release; empty otherwise. */
+            created_by_name: string;
+            /** @description A Takwim profile used the number. */
+            has_profile: boolean;
+            /** @description Businesses whose earlier history the release hid. */
+            businesses_hidden: number;
+            sessions_revoked: number;
+            /** Format: date-time */
+            released_at: string;
+        };
+        CustomerPhoneReleasePage: {
+            items: components["schemas"]["CustomerPhoneRelease"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeCustomerPhoneRelease: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPhoneRelease"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerPhoneReleasePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerPhoneReleasePage"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         CustomerSession: {
             /** @description Customer token (Bearer). The web BFF removes it from the answer and keeps it in an httpOnly cookie. */
@@ -33161,6 +33256,69 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listPlatformCustomerPhoneReleases: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description `released_at` or `-released_at` (default). */
+                sort?: string;
+                /** @description `number_changed`, `reassigned`, `dormant` (comma separated) */
+                reason?: string;
+                /** @description `customer`, `platform`, `system` (comma separated) */
+                source?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPhoneReleasePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createPlatformCustomerPhoneReassignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerPhoneReassignmentInput"];
+            };
+        };
+        responses: {
+            /** @description The release */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerPhoneRelease"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
         };
     };
     getCustomerProfile: {

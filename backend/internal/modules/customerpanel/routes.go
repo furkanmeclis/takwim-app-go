@@ -7,8 +7,22 @@ package customerpanel
 import (
 	"net/http"
 
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/middleware"
 	customerpanelhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/handler"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/jwt"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 )
+
+// RegisterPlatformRoutes mounts the Takwim management routes of the
+// customer panel (TEC-972): the numbers that changed hands and the
+// reassignment notices processed by an operator.
+func RegisterPlatformRoutes(mux *http.ServeMux, h *customerpanelhandler.PlatformHandler, tokens *jwt.Manager, loader middleware.IdentityLoader) {
+	authn := middleware.Authenticate(tokens, loader)
+	read := middleware.RequirePermission(rbac.PermPlatformCustomerPhonesRead)
+	write := middleware.RequirePermission(rbac.PermPlatformCustomerPhonesWrite)
+	mux.Handle("GET /v1/platform/customer-phone-releases", middleware.Chain(http.HandlerFunc(h.ListReleases), authn, read))
+	mux.Handle("POST /v1/platform/customer-phone-releases", middleware.Chain(http.HandlerFunc(h.CreateReassignment), authn, write))
+}
 
 // RegisterRoutes mounts /v1/customer/*. The sign-in routes are public; the
 // rest need a customer session (never a staff token).

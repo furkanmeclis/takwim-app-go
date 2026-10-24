@@ -45,12 +45,17 @@ const (
 	eventPhoneChangeRefused = "phone_change_refused"
 	eventReassigned         = "reassigned"
 	eventSessionRevoked     = "session_revoked"
+	// TEC-972: a reassignment processed from Takwim management and the
+	// history of a long unproven number closed at its next sign-in.
+	eventPlatformReassigned = "platform_reassigned"
+	eventDormantClosed      = "dormant_closed"
 )
 
 // Reasons of customer_phone_releases.
 const (
-	releaseNumberChanged = "number_changed"
-	releaseReassigned    = "reassigned"
+	releaseNumberChanged = model.ReleaseNumberChanged
+	releaseReassigned    = model.ReleaseReassigned
+	releaseDormant       = model.ReleaseDormant
 )
 
 var (
@@ -255,9 +260,9 @@ func (s *Service) VerifyPhoneChange(ctx context.Context, p Principal, in model.V
 		if n == 0 {
 			return ErrUnauthorized
 		}
-		if err := q.CreateCustomerPhoneRelease(ctx, db.CreateCustomerPhoneReleaseParams{
+		if _, err := q.CreateCustomerPhoneRelease(ctx, db.CreateCustomerPhoneReleaseParams{
 			PhoneE164: p.Phone, IdentityID: pgtype.Int8{Int64: p.IdentityID, Valid: true},
-			Reason: releaseNumberChanged,
+			Reason: releaseNumberChanged, Source: model.ReleaseSourceCustomer,
 		}); err != nil {
 			return err
 		}
@@ -310,16 +315,19 @@ func (s *Service) ReportReassigned(ctx context.Context, p Principal, in model.Re
 	}
 	now := s.now()
 	err = s.inTx(ctx, func(q *db.Queries) error {
-		if _, err := q.HideCustomerIdentityHistory(ctx, db.HideCustomerIdentityHistoryParams{IdentityID: p.IdentityID, Keep: keep}); err != nil {
+		hidden, err := q.HideCustomerIdentityHistory(ctx, db.HideCustomerIdentityHistoryParams{IdentityID: p.IdentityID, Keep: keep})
+		if err != nil {
 			return err
 		}
-		if err := q.CreateCustomerPhoneRelease(ctx, db.CreateCustomerPhoneReleaseParams{
+		revoked, err := q.RevokeOtherCustomerSessions(ctx, db.RevokeOtherCustomerSessionsParams{Now: ts(now), IdentityID: p.IdentityID, KeepID: p.SessionID})
+		if err != nil {
+			return err
+		}
+		_, err = q.CreateCustomerPhoneRelease(ctx, db.CreateCustomerPhoneReleaseParams{
 			PhoneE164: p.Phone, IdentityID: pgtype.Int8{Int64: p.IdentityID, Valid: true},
-			Reason: releaseReassigned,
-		}); err != nil {
-			return err
-		}
-		_, err := q.RevokeOtherCustomerSessions(ctx, db.RevokeOtherCustomerSessionsParams{Now: ts(now), IdentityID: p.IdentityID, KeepID: p.SessionID})
+			Reason: releaseReassigned, Source: model.ReleaseSourceCustomer,
+			BusinessesHidden: int32(hidden), SessionsRevoked: int32(revoked),
+		})
 		return err
 	})
 	if err != nil {

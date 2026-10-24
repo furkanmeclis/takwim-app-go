@@ -55,6 +55,8 @@
   "labels.platform.integrations.apple.write": "Apple entegrasyon ayarlarını düzenle",
   "labels.platform.auth.settings.read": "Auth kayıt ayarlarını görüntüle",
   "labels.platform.auth.settings.write": "Auth kayıt ayarlarını düzenle",
+  "labels.platform.customer_phones.read": "Müşteri numara devirlerini görüntüle",
+  "labels.platform.customer_phones.write": "Numara yeniden tahsis bildirimi işle",
   "labels.auth.session": "Oturum",
   "labels.tenant.settings.read": "İşletme ayarlarını görüntüle",
   "labels.tenant.settings.write": "İşletme ayarlarını yönet",

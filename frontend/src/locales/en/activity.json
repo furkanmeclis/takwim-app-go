@@ -56,6 +56,8 @@
   "actions.branches.service_point_updated": "Service point updated",
   "actions.branches.service_point_deleted": "Service point deleted",
   "resources.platform.catalog": "Vehicle catalog",
+  "resources.platform.customer_phones": "Customer numbers",
+  "actions.customer_phones.reassigned": "Number reassignment notice processed",
   "actions.catalog.import_uploaded": "Kasko list uploaded",
   "actions.catalog.import_apply_requested": "Kasko list apply requested",
   "actions.catalog.import_applied": "Kasko list applied",

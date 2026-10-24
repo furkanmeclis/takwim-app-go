@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, Trash2 } from "lucide-react";
+import { Eye, ShieldAlert, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -20,6 +21,7 @@ import {
 } from "@/components/entity";
 import { createColumn } from "@/components/tables";
 import { Card, CardContent } from "@/components/common/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
@@ -40,6 +42,48 @@ import { usePermission } from "@/providers/permission-provider";
 function firstString(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+const LOG_LEVELS = ["debug", "warn", "error"] as const;
+
+type LogPreset = {
+  id: string;
+  labelKey: string;
+  filters: EntityFilterValues;
+};
+
+/**
+ * Ready filters. `customer_auth`: the security warnings of the customer
+ * panel (failed codes and links from one address, throttled addresses,
+ * reassigned numbers, dormant numbers closed; TEC-910 / TEC-972).
+ */
+const LOG_PRESETS: LogPreset[] = [
+  {
+    id: "customer_auth",
+    labelKey: "logs.presets.customer_auth",
+    filters: { source: "customer_auth", level: "warn" },
+  },
+];
+
+function presetMatches(preset: LogPreset, values: EntityFilterValues) {
+  const keys = new Set([
+    ...Object.keys(preset.filters),
+    ...Object.keys(values).filter((key) => values[key]),
+  ]);
+  return [...keys].every(
+    (key) => firstString(values[key]) === firstString(preset.filters[key]),
+  );
+}
+
+function filtersFromSearch(search: URLSearchParams): EntityFilterValues {
+  const out: EntityFilterValues = {};
+  const source = search.get("source")?.trim();
+  if (source) out.source = source;
+  const level = search.get("level")?.trim();
+  if (level && (LOG_LEVELS as readonly string[]).includes(level)) {
+    out.level = level;
+  }
+  return out;
 }
 
 function levelTone(level: AppLog["level"]) {
@@ -95,9 +139,16 @@ function LogsListPanel() {
     initialPageSize: 20,
   });
 
+  const searchParams = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState<EntityFilterValues>({});
-  const [appliedFilters, setAppliedFilters] = useState<EntityFilterValues>({});
+  // Another page can link here with filters (`?source=customer_auth&level=warn`).
+  const [appliedFilters, setAppliedFilters] = useState<EntityFilterValues>(() =>
+    filtersFromSearch(searchParams),
+  );
+  const activePreset = LOG_PRESETS.find((preset) =>
+    presetMatches(preset, appliedFilters),
+  );
   const [selected, setSelected] = useState<AppLog | null>(null);
 
   const sourcesQuery = useQuery({
@@ -267,6 +318,36 @@ function LogsListPanel() {
   return (
     <div className="space-y-6">
       <StatsCards />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground text-sm">
+          {t("logs.presets.title")}
+        </span>
+        {LOG_PRESETS.map((preset) => {
+          const active = activePreset?.id === preset.id;
+          return (
+            <Button
+              key={preset.id}
+              type="button"
+              size="sm"
+              variant={active ? "secondary" : "outline"}
+              aria-pressed={active}
+              onClick={() => {
+                const next = active ? {} : { ...preset.filters };
+                setAppliedFilters(next);
+                setDraftFilters(next);
+                listState.setPagination((current) => ({
+                  ...current,
+                  pageIndex: 0,
+                }));
+              }}
+            >
+              <ShieldAlert className="size-4" />
+              {t(preset.labelKey)}
+            </Button>
+          );
+        })}
+      </div>
 
       <EntityTable
         columns={columns}

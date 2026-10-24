@@ -781,6 +781,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	panelH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	panelH.SetResourceEvents(resourceEvents)
 	customerpanelmodule.RegisterRoutes(mux, panelH)
+	customerpanelmodule.RegisterPlatformRoutes(mux, customerpanelhandler.NewPlatform(panelSvc, activityRec), tokens, loader)
 	// WhatsApp replies (TEC-922) answer like the visit link.
 	whatsappSvc.SetAnswers(panelSvc, confirmEngine)
 	whatsappSvc.SetResourceEvents(resourceEvents)

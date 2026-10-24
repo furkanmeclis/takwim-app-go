@@ -223,6 +223,8 @@ export const routes = {
       storage: "/platform/settings/storage",
       access: "/platform/settings/access",
       auth: "/platform/settings/auth",
+      /** Customer numbers that changed hands (TEC-972). */
+      customerPhones: "/platform/settings/customer-phones",
       imports: "/platform/settings/imports",
       exports: "/platform/settings/exports",
     },

@@ -13488,6 +13488,81 @@ paths:
         "204": { description: Signed out }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /v1/platform/customer-phone-releases:
+    get:
+      tags: [Platform]
+      operationId: listPlatformCustomerPhoneReleases
+      summary: Customer numbers that changed hands
+      description: |
+        Releases of customer panel numbers (TEC-910 / TEC-972), newest first:
+        number changes and reassignment reports made by the person
+        (`source=customer`), reassignment notices processed by an operator
+        (`platform`) and the history of long unproven numbers closed at their
+        next sign-in (`system`, reason `dormant`). Numbers are masked. `q` is
+        a phone (exact match in any spelling) or a part of the note
+        (`platform.customer_phones.read`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "`released_at` or `-released_at` (default)."
+          schema: { type: string, example: "-released_at" }
+        - name: reason
+          in: query
+          description: "`number_changed`, `reassigned`, `dormant` (comma separated)"
+          schema: { type: string, example: "reassigned,dormant" }
+        - name: source
+          in: query
+          description: "`customer`, `platform`, `system` (comma separated)"
+          schema: { type: string, example: "platform" }
+      responses:
+        "200":
+          description: Release page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPhoneReleasePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Platform]
+      operationId: createPlatformCustomerPhoneReassignment
+      summary: Process a number reassignment notice
+      description: |
+        The number was given to somebody else (operator notice, support
+        request). Every business's earlier history of the number's profile
+        is hidden (`visible_from` = now), every session of the profile ends,
+        and records of the number found later open only what is booked from
+        now on; nothing is deleted at the businesses. A number without a
+        profile is released too. `409 PHONE_ALREADY_RELEASED` when nobody
+        proved the number since its last release
+        (`platform.customer_phones.write`).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerPhoneReassignmentInput" }
+      responses:
+        "201":
+          description: The release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerPhoneRelease"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/customer/me:
     get:
       tags: [Customer panel]
@@ -24362,7 +24437,7 @@ components:
 
     CustomerProfile:
       type: object
-      required: [phone, phone_display, verified_at, session_expires_at, active_sessions, businesses]
+      required: [phone, phone_display, verified_at, session_expires_at, active_sessions, businesses, history_notice]
       properties:
         phone: { type: string, description: E.164 }
         phone_display: { type: string }
@@ -24372,6 +24447,72 @@ components:
         businesses:
           type: array
           items: { $ref: "#/components/schemas/CustomerBusiness" }
+        history_notice:
+          description: |
+            Set when the earlier history was closed without the person asking
+            (TEC-972): `reassigned` (Takwim processed a reassignment notice of
+            the number) or `dormant` (the number had not been proven for 180
+            days). Null otherwise.
+          oneOf:
+            - $ref: "#/components/schemas/CustomerHistoryNotice"
+            - type: "null"
+
+    CustomerHistoryNotice:
+      type: object
+      required: [reason, closed_at]
+      properties:
+        reason: { type: string, enum: [reassigned, dormant] }
+        closed_at: { type: string, format: date-time }
+
+    CustomerPhoneReassignmentInput:
+      type: object
+      required: [phone]
+      additionalProperties: false
+      properties:
+        phone: { type: string, description: Any spelling; normalized to E.164. }
+        note: { type: string, maxLength: 500, description: Where the notice came from. }
+
+    CustomerPhoneRelease:
+      type: object
+      required: [uuid, phone_masked, reason, source, note, created_by_name, has_profile, businesses_hidden, sessions_revoked, released_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        phone_masked: { type: string, example: "+90532*****67" }
+        reason: { type: string, enum: [number_changed, reassigned, dormant] }
+        source: { type: string, enum: [customer, platform, system] }
+        note: { type: string }
+        created_by_name: { type: string, description: The operator of a platform release; empty otherwise. }
+        has_profile: { type: boolean, description: A Takwim profile used the number. }
+        businesses_hidden: { type: integer, description: Businesses whose earlier history the release hid. }
+        sessions_revoked: { type: integer }
+        released_at: { type: string, format: date-time }
+
+    CustomerPhoneReleasePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerPhoneRelease" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeCustomerPhoneRelease:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPhoneRelease" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerPhoneReleasePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerPhoneReleasePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     CustomerSession:
       type: object

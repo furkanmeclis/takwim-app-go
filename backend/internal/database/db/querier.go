@@ -91,6 +91,7 @@ type Querier interface {
 	CountCustomerPackages(ctx context.Context, arg CountCustomerPackagesParams) (int64, error)
 	CountCustomerPanelPackages(ctx context.Context, arg CountCustomerPanelPackagesParams) (int64, error)
 	CountCustomerPanelReservations(ctx context.Context, arg CountCustomerPanelReservationsParams) (int64, error)
+	CountCustomerPhoneReleases(ctx context.Context, arg CountCustomerPhoneReleasesParams) (int64, error)
 	CountCustomers(ctx context.Context, arg CountCustomersParams) (int64, error)
 	// Live branches and staff seats of a business: members, open invitations
 	// and staff without an account (a staff record linked to a member uses the
@@ -201,8 +202,10 @@ type Querier interface {
 	// organization_id.
 	CreateCustomerOTPChallenge(ctx context.Context, arg CreateCustomerOTPChallengeParams) (CustomerOtpChallenge, error)
 	// Release times and history windows use the database clock, like the
-	// created_at of the records they are compared with.
-	CreateCustomerPhoneRelease(ctx context.Context, arg CreateCustomerPhoneReleaseParams) error
+	// created_at of the records they are compared with. source: the person in
+	// the panel (customer), a platform operator (platform, TEC-972) or the
+	// dormant number check (system).
+	CreateCustomerPhoneRelease(ctx context.Context, arg CreateCustomerPhoneReleaseParams) (CustomerPhoneRelease, error)
 	CreateCustomerSession(ctx context.Context, arg CreateCustomerSessionParams) (CustomerSession, error)
 	CreateCustomerVisitLink(ctx context.Context, arg CreateCustomerVisitLinkParams) (CustomerVisitLink, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
@@ -691,6 +694,10 @@ type Querier interface {
 	// stay in the business share).
 	IsShareStaffOwner(ctx context.Context, arg IsShareStaffOwnerParams) (bool, error)
 	LatestCashClosingDate(ctx context.Context, arg LatestCashClosingDateParams) (pgtype.Date, error)
+	// The last release of the phone that closed the profile's earlier history
+	// without the person asking (a platform reassignment or the dormant check):
+	// the panel explains the hidden history with it.
+	LatestClosingCustomerPhoneRelease(ctx context.Context, arg LatestClosingCustomerPhoneReleaseParams) (LatestClosingCustomerPhoneReleaseRow, error)
 	// The last time the phone changed hands (no row: never).
 	LatestCustomerPhoneRelease(ctx context.Context, phoneE164 string) (pgtype.Timestamptz, error)
 	LatestOrganizationSettingsVersion(ctx context.Context, organizationID int64) (int32, error)
@@ -854,6 +861,9 @@ type Querier interface {
 	// on the business day in the business's time zone.
 	ListCustomerPanelPackages(ctx context.Context, arg ListCustomerPanelPackagesParams) ([]ListCustomerPanelPackagesRow, error)
 	ListCustomerPanelReservations(ctx context.Context, arg ListCustomerPanelReservationsParams) ([]ListCustomerPanelReservationsRow, error)
+	// Platform list of releases (TEC-972), newest first unless asked otherwise.
+	// phone is an exact E.164 match; note a case-insensitive part of the note.
+	ListCustomerPhoneReleases(ctx context.Context, arg ListCustomerPhoneReleasesParams) ([]ListCustomerPhoneReleasesRow, error)
 	// What the customer panel shows of a visit's refunds.
 	ListCustomerRefunds(ctx context.Context, arg ListCustomerRefundsParams) ([]ListCustomerRefundsRow, error)
 	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)

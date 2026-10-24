@@ -486,12 +486,18 @@ type CustomerPackage struct {
 }
 
 type CustomerPhoneRelease struct {
-	ID         int64              `json:"id"`
-	PhoneE164  string             `json:"phone_e164"`
-	IdentityID pgtype.Int8        `json:"identity_id"`
-	Reason     string             `json:"reason"`
-	ReleasedAt pgtype.Timestamptz `json:"released_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID               int64              `json:"id"`
+	PhoneE164        string             `json:"phone_e164"`
+	IdentityID       pgtype.Int8        `json:"identity_id"`
+	Reason           string             `json:"reason"`
+	ReleasedAt       pgtype.Timestamptz `json:"released_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	Source           string             `json:"source"`
+	Note             string             `json:"note"`
+	CreatedBy        pgtype.Int8        `json:"created_by"`
+	BusinessesHidden int32              `json:"businesses_hidden"`
+	SessionsRevoked  int32              `json:"sessions_revoked"`
 }
 
 type CustomerSession struct {

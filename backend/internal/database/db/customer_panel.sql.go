@@ -254,6 +254,33 @@ func (q *Queries) CountCustomerPanelReservations(ctx context.Context, arg CountC
 	return column_1, err
 }
 
+const countCustomerPhoneReleases = `-- name: CountCustomerPhoneReleases :one
+SELECT COUNT(*)::BIGINT FROM customer_phone_releases r
+WHERE ($1::TEXT IS NULL OR r.phone_e164 = $1)
+  AND ($2::TEXT IS NULL OR r.note ILIKE '%' || $2 || '%')
+  AND ($3::TEXT[] IS NULL OR r.reason = ANY($3::TEXT[]))
+  AND ($4::TEXT[] IS NULL OR r.source = ANY($4::TEXT[]))
+`
+
+type CountCustomerPhoneReleasesParams struct {
+	Phone   pgtype.Text `json:"phone"`
+	Note    pgtype.Text `json:"note"`
+	Reasons []string    `json:"reasons"`
+	Sources []string    `json:"sources"`
+}
+
+func (q *Queries) CountCustomerPhoneReleases(ctx context.Context, arg CountCustomerPhoneReleasesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomerPhoneReleases,
+		arg.Phone,
+		arg.Note,
+		arg.Reasons,
+		arg.Sources,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createCustomerAccessLink = `-- name: CreateCustomerAccessLink :one
 INSERT INTO customer_access_links (token_hash, phone_e164, expires_at, created_at)
 VALUES ($1, $2, $3, $4)
@@ -371,22 +398,59 @@ func (q *Queries) CreateCustomerOTPChallenge(ctx context.Context, arg CreateCust
 	return i, err
 }
 
-const createCustomerPhoneRelease = `-- name: CreateCustomerPhoneRelease :exec
-INSERT INTO customer_phone_releases (phone_e164, identity_id, reason, released_at)
-VALUES ($1, $2, $3, NOW())
+const createCustomerPhoneRelease = `-- name: CreateCustomerPhoneRelease :one
+INSERT INTO customer_phone_releases (
+    phone_e164, identity_id, reason, released_at, source, note, created_by, businesses_hidden, sessions_revoked
+)
+VALUES (
+    $1, $2, $3, NOW(), $4, $5,
+    $6, $7, $8
+)
+RETURNING id, phone_e164, identity_id, reason, released_at, created_at, uuid, source, note, created_by, businesses_hidden, sessions_revoked
 `
 
 type CreateCustomerPhoneReleaseParams struct {
-	PhoneE164  string      `json:"phone_e164"`
-	IdentityID pgtype.Int8 `json:"identity_id"`
-	Reason     string      `json:"reason"`
+	PhoneE164        string      `json:"phone_e164"`
+	IdentityID       pgtype.Int8 `json:"identity_id"`
+	Reason           string      `json:"reason"`
+	Source           string      `json:"source"`
+	Note             string      `json:"note"`
+	CreatedBy        pgtype.Int8 `json:"created_by"`
+	BusinessesHidden int32       `json:"businesses_hidden"`
+	SessionsRevoked  int32       `json:"sessions_revoked"`
 }
 
 // Release times and history windows use the database clock, like the
-// created_at of the records they are compared with.
-func (q *Queries) CreateCustomerPhoneRelease(ctx context.Context, arg CreateCustomerPhoneReleaseParams) error {
-	_, err := q.db.Exec(ctx, createCustomerPhoneRelease, arg.PhoneE164, arg.IdentityID, arg.Reason)
-	return err
+// created_at of the records they are compared with. source: the person in
+// the panel (customer), a platform operator (platform, TEC-972) or the
+// dormant number check (system).
+func (q *Queries) CreateCustomerPhoneRelease(ctx context.Context, arg CreateCustomerPhoneReleaseParams) (CustomerPhoneRelease, error) {
+	row := q.db.QueryRow(ctx, createCustomerPhoneRelease,
+		arg.PhoneE164,
+		arg.IdentityID,
+		arg.Reason,
+		arg.Source,
+		arg.Note,
+		arg.CreatedBy,
+		arg.BusinessesHidden,
+		arg.SessionsRevoked,
+	)
+	var i CustomerPhoneRelease
+	err := row.Scan(
+		&i.ID,
+		&i.PhoneE164,
+		&i.IdentityID,
+		&i.Reason,
+		&i.ReleasedAt,
+		&i.CreatedAt,
+		&i.Uuid,
+		&i.Source,
+		&i.Note,
+		&i.CreatedBy,
+		&i.BusinessesHidden,
+		&i.SessionsRevoked,
+	)
+	return i, err
 }
 
 const createCustomerSession = `-- name: CreateCustomerSession :one
@@ -925,6 +989,35 @@ func (q *Queries) HideCustomerIdentityHistory(ctx context.Context, arg HideCusto
 	return result.RowsAffected(), nil
 }
 
+const latestClosingCustomerPhoneRelease = `-- name: LatestClosingCustomerPhoneRelease :one
+SELECT reason, source, released_at FROM customer_phone_releases
+WHERE identity_id = $1 AND phone_e164 = $2
+  AND source IN ('platform', 'system')
+ORDER BY released_at DESC, id DESC
+LIMIT 1
+`
+
+type LatestClosingCustomerPhoneReleaseParams struct {
+	IdentityID pgtype.Int8 `json:"identity_id"`
+	PhoneE164  string      `json:"phone_e164"`
+}
+
+type LatestClosingCustomerPhoneReleaseRow struct {
+	Reason     string             `json:"reason"`
+	Source     string             `json:"source"`
+	ReleasedAt pgtype.Timestamptz `json:"released_at"`
+}
+
+// The last release of the phone that closed the profile's earlier history
+// without the person asking (a platform reassignment or the dormant check):
+// the panel explains the hidden history with it.
+func (q *Queries) LatestClosingCustomerPhoneRelease(ctx context.Context, arg LatestClosingCustomerPhoneReleaseParams) (LatestClosingCustomerPhoneReleaseRow, error) {
+	row := q.db.QueryRow(ctx, latestClosingCustomerPhoneRelease, arg.IdentityID, arg.PhoneE164)
+	var i LatestClosingCustomerPhoneReleaseRow
+	err := row.Scan(&i.Reason, &i.Source, &i.ReleasedAt)
+	return i, err
+}
+
 const latestCustomerPhoneRelease = `-- name: LatestCustomerPhoneRelease :one
 SELECT released_at FROM customer_phone_releases
 WHERE phone_e164 = $1
@@ -1170,6 +1263,87 @@ func (q *Queries) ListCustomerPanelReservations(ctx context.Context, arg ListCus
 			&i.Timezone,
 			&i.ServiceNames,
 			&i.StaffNames,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCustomerPhoneReleases = `-- name: ListCustomerPhoneReleases :many
+SELECT r.uuid, r.phone_e164, r.reason, r.source, r.note, r.released_at,
+       r.businesses_hidden, r.sessions_revoked, (r.identity_id IS NOT NULL)::BOOLEAN AS has_profile,
+       COALESCE(TRIM(u.name || ' ' || u.surname), '')::TEXT AS created_by_name
+FROM customer_phone_releases r
+LEFT JOIN users u ON u.id = r.created_by
+WHERE ($1::TEXT IS NULL OR r.phone_e164 = $1)
+  AND ($2::TEXT IS NULL OR r.note ILIKE '%' || $2 || '%')
+  AND ($3::TEXT[] IS NULL OR r.reason = ANY($3::TEXT[]))
+  AND ($4::TEXT[] IS NULL OR r.source = ANY($4::TEXT[]))
+ORDER BY
+    CASE WHEN $5::BOOLEAN THEN r.released_at END ASC,
+    CASE WHEN NOT $5::BOOLEAN THEN r.released_at END DESC,
+    r.id DESC
+LIMIT $7 OFFSET $6
+`
+
+type ListCustomerPhoneReleasesParams struct {
+	Phone       pgtype.Text `json:"phone"`
+	Note        pgtype.Text `json:"note"`
+	Reasons     []string    `json:"reasons"`
+	Sources     []string    `json:"sources"`
+	OldestFirst bool        `json:"oldest_first"`
+	RowOffset   int32       `json:"row_offset"`
+	RowLimit    int32       `json:"row_limit"`
+}
+
+type ListCustomerPhoneReleasesRow struct {
+	Uuid             uuid.UUID          `json:"uuid"`
+	PhoneE164        string             `json:"phone_e164"`
+	Reason           string             `json:"reason"`
+	Source           string             `json:"source"`
+	Note             string             `json:"note"`
+	ReleasedAt       pgtype.Timestamptz `json:"released_at"`
+	BusinessesHidden int32              `json:"businesses_hidden"`
+	SessionsRevoked  int32              `json:"sessions_revoked"`
+	HasProfile       bool               `json:"has_profile"`
+	CreatedByName    string             `json:"created_by_name"`
+}
+
+// Platform list of releases (TEC-972), newest first unless asked otherwise.
+// phone is an exact E.164 match; note a case-insensitive part of the note.
+func (q *Queries) ListCustomerPhoneReleases(ctx context.Context, arg ListCustomerPhoneReleasesParams) ([]ListCustomerPhoneReleasesRow, error) {
+	rows, err := q.db.Query(ctx, listCustomerPhoneReleases,
+		arg.Phone,
+		arg.Note,
+		arg.Reasons,
+		arg.Sources,
+		arg.OldestFirst,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCustomerPhoneReleasesRow{}
+	for rows.Next() {
+		var i ListCustomerPhoneReleasesRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.PhoneE164,
+			&i.Reason,
+			&i.Source,
+			&i.Note,
+			&i.ReleasedAt,
+			&i.BusinessesHidden,
+			&i.SessionsRevoked,
+			&i.HasProfile,
+			&i.CreatedByName,
 		); err != nil {
 			return nil, err
 		}

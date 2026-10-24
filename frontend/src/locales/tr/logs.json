@@ -12,6 +12,8 @@
   "delete_title": "Logu sil",
   "delete_description": "Bu log kaydı kalıcı olarak silinecek.",
   "filters_title": "Log filtreleri",
+  "presets.title": "Hazır filtreler:",
+  "presets.customer_auth": "Müşteri erişim uyarıları",
   "filters_description": "Listeyi seviye, kaynak veya tarihe göre daraltın.",
   "filters.created_from": "Başlangıç tarihi",
   "filters.created_to": "Bitiş tarihi",

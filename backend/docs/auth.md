@@ -30,6 +30,7 @@ Single-scope role model for this boilerplate: users are global; permissions come
 | `platform.logs.read` / `.write`                          | Application logs + purge                                          |
 | `platform.access.read` / `.write`                        | Step-up policy                                                    |
 | `platform.auth.settings.read` / `.write`                 | Registration policy (also requires super admin)                   |
+| `platform.customer_phones.read` / `.write`               | Customer numbers that changed hands, reassignment notices         |
 | `platform.integrations.github.read` / `.write`           | GitHub App settings (also requires super admin)                   |
 | `platform.integrations.google.read` / `.write`           | Google OAuth settings (also requires super admin)                 |
 | `platform.integrations.facebook.read` / `.write`         | Facebook OAuth settings (also requires super admin)               |
