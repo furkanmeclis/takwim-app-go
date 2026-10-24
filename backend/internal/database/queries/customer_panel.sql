@@ -126,7 +126,7 @@ WHERE identity_id = sqlc.arg(identity_id) AND revoked_at IS NULL
 SELECT o.uuid, o.slug, o.name,
     (CASE WHEN l.visible_from IS NULL THEN c.first_name ELSE '' END)::TEXT AS first_name,
     (CASE WHEN l.visible_from IS NULL THEN c.last_name ELSE '' END)::TEXT AS last_name,
-    l.verified_at, l.visible_from, l.visible_until,
+    l.verified_at, l.visible_from, l.visible_until, l.history_requested_at, l.history_restored_at,
     (SELECT COUNT(*) FROM reservations r
      WHERE r.organization_id = l.organization_id AND r.customer_id = l.customer_id
        AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
@@ -421,11 +421,28 @@ RETURNING l.organization_id;
 
 -- name: HideCustomerIdentityHistory :execrows
 -- The number was reassigned to the person: every business except the kept
--- ones opens only what is booked from now on.
-UPDATE customer_identity_links l SET visible_from = GREATEST(COALESCE(l.visible_from, NOW()), NOW())
+-- ones opens only what is booked from now on. A pending history request and
+-- the trail of an earlier reopening (TEC-991) belong to the closing before
+-- this one and are cleared; the activity entries keep them.
+UPDATE customer_identity_links l SET visible_from = GREATEST(COALESCE(l.visible_from, NOW()), NOW()),
+    history_requested_at = NULL, history_restored_at = NULL, history_restored_by = NULL, history_restored_from = NULL
 FROM organizations o
 WHERE o.id = l.organization_id AND l.identity_id = sqlc.arg(identity_id)
   AND NOT (o.uuid = ANY(sqlc.arg(keep)::UUID[]));
+
+-- name: RequestCustomerHistory :one
+-- TEC-991: the person asks one business from the panel to reopen the
+-- history it closed. The first request keeps its time; a request while
+-- nothing is hidden changes nothing (the caller refuses it).
+UPDATE customer_identity_links l
+SET history_requested_at = CASE WHEN l.visible_from IS NULL THEN l.history_requested_at
+                                ELSE COALESCE(l.history_requested_at, NOW()) END
+FROM organizations o, customers c
+WHERE o.id = l.organization_id AND o.deleted_at IS NULL AND o.slug = sqlc.arg(slug)
+  AND c.organization_id = l.organization_id AND c.id = l.customer_id
+  AND l.identity_id = sqlc.arg(identity_id)
+RETURNING o.id AS organization_id, o.uuid AS organization_uuid, o.slug AS organization_slug, o.name AS organization_name,
+    c.uuid AS customer_uuid, l.visible_from, l.history_requested_at;
 
 -- name: CreateCustomerAccessLink :one
 INSERT INTO customer_access_links (token_hash, phone_e164, expires_at, created_at)

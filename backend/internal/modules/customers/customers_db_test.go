@@ -251,6 +251,36 @@ func TestCustomersOverHTTP(t *testing.T) {
 	if v := want(asB(http.MethodGet, "/v1/tenant/customers/"+bUUID, nil), http.StatusOK, "B after A link").data["verification"]; v != nil {
 		t.Fatal("A's verification leaked to B")
 	}
+
+	// TEC-991: a release hid the person's history at A; the reception
+	// reopens it (write permission), once, with the trail; B cannot reach it.
+	restorePath := "/v1/tenant/customers/" + aUUID + "/history/restore"
+	if !hasDetail(want(asA(http.MethodPost, restorePath, nil), http.StatusConflict, "restore with open history"), "history", "open") {
+		t.Fatal("open history conflict has no detail")
+	}
+	if _, err := pool.Exec(ctx, "UPDATE customer_identity_links SET visible_from = NOW(), history_requested_at = NOW() WHERE organization_id = $1", orgA.ID); err != nil {
+		t.Fatal(err)
+	}
+	hidden := want(asA(http.MethodGet, "/v1/tenant/customers/"+aUUID, nil), http.StatusOK, "hidden history").data["verification"].(map[string]any)
+	if hidden["history_hidden_from"] == nil || hidden["history_requested_at"] == nil || hidden["history_restored_at"] != nil {
+		t.Fatalf("hidden verification = %v", hidden)
+	}
+	want(asB(http.MethodPost, restorePath, nil), http.StatusNotFound, "B restores A")
+	reopened := want(call(dave, orgA.Slug, http.MethodPost, restorePath, nil), http.StatusOK, "reception restores").data["verification"].(map[string]any)
+	if reopened["history_hidden_from"] != nil || reopened["history_requested_at"] != nil || reopened["history_restored_at"] == nil || reopened["history_restored_by"] != "dave Test" {
+		t.Fatalf("reopened verification = %v", reopened)
+	}
+	want(asA(http.MethodPost, restorePath, nil), http.StatusConflict, "restore twice")
+	restoredAct := want(asA(http.MethodGet, "/v1/tenant/customers/"+aUUID+"/activity", nil), http.StatusOK, "restore activity")
+	var sawRestore bool
+	for _, raw := range restoredAct.data["items"].([]any) {
+		if raw.(map[string]any)["action"] == "customers.history_restored" {
+			sawRestore = true
+		}
+	}
+	if !sawRestore {
+		t.Fatalf("no customers.history_restored entry: %s", restoredAct.raw)
+	}
 	if _, err := svc.LinkedCustomer(scopedB, orgB.ID, e164); !errors.Is(err, customersusecase.ErrNotFound) {
 		t.Fatalf("B lookup after A link = %v, want not found", err)
 	}

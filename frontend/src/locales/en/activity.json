@@ -234,6 +234,8 @@
   "actions.customers.created": "Customer added",
   "actions.customers.updated": "Customer updated",
   "actions.customers.deleted": "Customer deleted",
+  "actions.customers.history_requested": "Customer asked for their panel history back",
+  "actions.customers.history_restored": "Customer's panel history reopened",
   "fields.tenant.customers.first_name": "First name",
   "fields.tenant.customers.last_name": "Last name",
   "fields.tenant.customers.phone": "Phone",

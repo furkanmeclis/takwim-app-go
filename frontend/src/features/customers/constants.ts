@@ -14,6 +14,8 @@ export const SOURCE_LABEL_KEYS: Record<CustomerSource, string> = {
 export const VERIFICATION_LABEL_KEYS: Record<string, string> = {
   otp: "customers.verification.otp",
   panel_login: "customers.verification.panel_login",
+  panel_link: "customers.verification.panel_link",
+  phone_change: "customers.verification.phone_change",
 };
 
 /** API limits (see `TenantCustomerPatchRequest`). */

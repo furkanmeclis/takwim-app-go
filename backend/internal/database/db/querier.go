@@ -642,7 +642,9 @@ type Querier interface {
 	GetWebhookIntegrationAccount(ctx context.Context, argUuid uuid.UUID) (GetWebhookIntegrationAccountRow, error)
 	HasActivePushDevices(ctx context.Context, userID int64) (bool, error)
 	// The number was reassigned to the person: every business except the kept
-	// ones opens only what is booked from now on.
+	// ones opens only what is booked from now on. A pending history request and
+	// the trail of an earlier reopening (TEC-991) belong to the closing before
+	// this one and are cleared; the activity entries keep them.
 	HideCustomerIdentityHistory(ctx context.Context, arg HideCustomerIdentityHistoryParams) (int64, error)
 	IncrementOTPAttempts(ctx context.Context, id int64) (OtpCode, error)
 	// branch_uuid ties the event to a branch of the same organization (NULL or
@@ -1353,6 +1355,10 @@ type Querier interface {
 	// Units moved per branch and kind in the period (local day of
 	// occurred_at in the branch time zone). Adjustments are signed.
 	ReportStockMovements(ctx context.Context, arg ReportStockMovementsParams) ([]ReportStockMovementsRow, error)
+	// TEC-991: the person asks one business from the panel to reopen the
+	// history it closed. The first request keeps its time; a request while
+	// nothing is hidden changes nothing (the caller refuses it).
+	RequestCustomerHistory(ctx context.Context, arg RequestCustomerHistoryParams) (RequestCustomerHistoryRow, error)
 	// Packages of a customer that can give a session to a visit in a branch:
 	// active, not used up, valid on the visit day and usable in the branch.
 	ReservationPackageOptions(ctx context.Context, arg ReservationPackageOptionsParams) ([]ReservationPackageOptionsRow, error)
@@ -1367,6 +1373,11 @@ type Querier interface {
 	ResourceNameTaken(ctx context.Context, arg ResourceNameTakenParams) (bool, error)
 	// Bulk delete rollback.
 	RestoreCustomer(ctx context.Context, arg RestoreCustomerParams) (int64, error)
+	// TEC-991: the business reopens the history it closed for the person
+	// (visible_from set by a reassignment or the dormant check) after checking
+	// who they are. Only this business's link changes; the reverted window is
+	// kept as the trail. No row: the record is not linked or nothing is hidden.
+	RestoreCustomerHistory(ctx context.Context, arg RestoreCustomerHistoryParams) (RestoreCustomerHistoryRow, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
 	RevokeCustomerSession(ctx context.Context, arg RevokeCustomerSessionParams) (int64, error)
 	// Signs out one device of the person; another person's session is no row.

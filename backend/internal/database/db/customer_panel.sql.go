@@ -1053,7 +1053,8 @@ func (q *Queries) GetReservationForVisitLinkByID(ctx context.Context, arg GetRes
 }
 
 const hideCustomerIdentityHistory = `-- name: HideCustomerIdentityHistory :execrows
-UPDATE customer_identity_links l SET visible_from = GREATEST(COALESCE(l.visible_from, NOW()), NOW())
+UPDATE customer_identity_links l SET visible_from = GREATEST(COALESCE(l.visible_from, NOW()), NOW()),
+    history_requested_at = NULL, history_restored_at = NULL, history_restored_by = NULL, history_restored_from = NULL
 FROM organizations o
 WHERE o.id = l.organization_id AND l.identity_id = $1
   AND NOT (o.uuid = ANY($2::UUID[]))
@@ -1065,7 +1066,9 @@ type HideCustomerIdentityHistoryParams struct {
 }
 
 // The number was reassigned to the person: every business except the kept
-// ones opens only what is booked from now on.
+// ones opens only what is booked from now on. A pending history request and
+// the trail of an earlier reopening (TEC-991) belong to the closing before
+// this one and are cleared; the activity entries keep them.
 func (q *Queries) HideCustomerIdentityHistory(ctx context.Context, arg HideCustomerIdentityHistoryParams) (int64, error) {
 	result, err := q.db.Exec(ctx, hideCustomerIdentityHistory, arg.IdentityID, arg.Keep)
 	if err != nil {
@@ -1178,7 +1181,7 @@ const listCustomerPanelBusinesses = `-- name: ListCustomerPanelBusinesses :many
 SELECT o.uuid, o.slug, o.name,
     (CASE WHEN l.visible_from IS NULL THEN c.first_name ELSE '' END)::TEXT AS first_name,
     (CASE WHEN l.visible_from IS NULL THEN c.last_name ELSE '' END)::TEXT AS last_name,
-    l.verified_at, l.visible_from, l.visible_until,
+    l.verified_at, l.visible_from, l.visible_until, l.history_requested_at, l.history_restored_at,
     (SELECT COUNT(*) FROM reservations r
      WHERE r.organization_id = l.organization_id AND r.customer_id = l.customer_id
        AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
@@ -1191,15 +1194,17 @@ ORDER BY o.name, o.id
 `
 
 type ListCustomerPanelBusinessesRow struct {
-	Uuid             uuid.UUID          `json:"uuid"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	FirstName        string             `json:"first_name"`
-	LastName         string             `json:"last_name"`
-	VerifiedAt       pgtype.Timestamptz `json:"verified_at"`
-	VisibleFrom      pgtype.Timestamptz `json:"visible_from"`
-	VisibleUntil     pgtype.Timestamptz `json:"visible_until"`
-	ReservationCount int64              `json:"reservation_count"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	Slug               string             `json:"slug"`
+	Name               string             `json:"name"`
+	FirstName          string             `json:"first_name"`
+	LastName           string             `json:"last_name"`
+	VerifiedAt         pgtype.Timestamptz `json:"verified_at"`
+	VisibleFrom        pgtype.Timestamptz `json:"visible_from"`
+	VisibleUntil       pgtype.Timestamptz `json:"visible_until"`
+	HistoryRequestedAt pgtype.Timestamptz `json:"history_requested_at"`
+	HistoryRestoredAt  pgtype.Timestamptz `json:"history_restored_at"`
+	ReservationCount   int64              `json:"reservation_count"`
 }
 
 // The businesses that linked the identity, with the person's name as each
@@ -1224,6 +1229,8 @@ func (q *Queries) ListCustomerPanelBusinesses(ctx context.Context, identityID in
 			&i.VerifiedAt,
 			&i.VisibleFrom,
 			&i.VisibleUntil,
+			&i.HistoryRequestedAt,
+			&i.HistoryRestoredAt,
 			&i.ReservationCount,
 		); err != nil {
 			return nil, err
@@ -1571,6 +1578,51 @@ func (q *Queries) ListUnlinkedCustomersByPhone(ctx context.Context, phoneE164 pg
 		return nil, err
 	}
 	return items, nil
+}
+
+const requestCustomerHistory = `-- name: RequestCustomerHistory :one
+UPDATE customer_identity_links l
+SET history_requested_at = CASE WHEN l.visible_from IS NULL THEN l.history_requested_at
+                                ELSE COALESCE(l.history_requested_at, NOW()) END
+FROM organizations o, customers c
+WHERE o.id = l.organization_id AND o.deleted_at IS NULL AND o.slug = $1
+  AND c.organization_id = l.organization_id AND c.id = l.customer_id
+  AND l.identity_id = $2
+RETURNING o.id AS organization_id, o.uuid AS organization_uuid, o.slug AS organization_slug, o.name AS organization_name,
+    c.uuid AS customer_uuid, l.visible_from, l.history_requested_at
+`
+
+type RequestCustomerHistoryParams struct {
+	Slug       string `json:"slug"`
+	IdentityID int64  `json:"identity_id"`
+}
+
+type RequestCustomerHistoryRow struct {
+	OrganizationID     int64              `json:"organization_id"`
+	OrganizationUuid   uuid.UUID          `json:"organization_uuid"`
+	OrganizationSlug   string             `json:"organization_slug"`
+	OrganizationName   string             `json:"organization_name"`
+	CustomerUuid       uuid.UUID          `json:"customer_uuid"`
+	VisibleFrom        pgtype.Timestamptz `json:"visible_from"`
+	HistoryRequestedAt pgtype.Timestamptz `json:"history_requested_at"`
+}
+
+// TEC-991: the person asks one business from the panel to reopen the
+// history it closed. The first request keeps its time; a request while
+// nothing is hidden changes nothing (the caller refuses it).
+func (q *Queries) RequestCustomerHistory(ctx context.Context, arg RequestCustomerHistoryParams) (RequestCustomerHistoryRow, error) {
+	row := q.db.QueryRow(ctx, requestCustomerHistory, arg.Slug, arg.IdentityID)
+	var i RequestCustomerHistoryRow
+	err := row.Scan(
+		&i.OrganizationID,
+		&i.OrganizationUuid,
+		&i.OrganizationSlug,
+		&i.OrganizationName,
+		&i.CustomerUuid,
+		&i.VisibleFrom,
+		&i.HistoryRequestedAt,
+	)
+	return i, err
 }
 
 const revokeCustomerSession = `-- name: RevokeCustomerSession :execrows

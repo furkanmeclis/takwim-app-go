@@ -49,6 +49,9 @@ const (
 	// history of a long unproven number closed at its next sign-in.
 	eventPlatformReassigned = "platform_reassigned"
 	eventDormantClosed      = "dormant_closed"
+	// TEC-991: the person asked a business to reopen its closed history
+	// (the business's own restore is recorded by the customers module).
+	eventHistoryRequested = "history_requested"
 )
 
 // Reasons of customer_phone_releases.

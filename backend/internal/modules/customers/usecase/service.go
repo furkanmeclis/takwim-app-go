@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
@@ -46,6 +47,9 @@ var (
 	ErrNotFound       = errors.New("customer not found")
 	ErrPhoneTaken     = errors.New("another customer already has this phone")
 	ErrIdentityLinked = errors.New("this person is already linked to another customer record")
+	// ErrHistoryOpen: nothing to reopen; the record is not linked to a
+	// person or its panel history is not hidden (TEC-991).
+	ErrHistoryOpen = errors.New("the customer's panel history is not hidden")
 	// ErrPhoneMismatch is returned when the proven phone is not the phone of
 	// the record (a link needs the very number on file).
 	ErrPhoneMismatch = errors.New("the verified phone does not match the customer's phone")
@@ -334,6 +338,41 @@ func (s *Service) Restore(ctx context.Context, orgID int64, id uuid.UUID) error 
 	}
 	s.index(ctx, orgID, id)
 	return nil
+}
+
+// RestoreHistory reopens the panel history this business closed for the
+// person (TEC-991): a reassignment notice or the dormant check set
+// visible_from on the link, and the business, having checked at the
+// reception who the person is, vouches that the record's history is
+// theirs. Only this business's link changes; the reverted window and the
+// actor stay on it as the trail, and a platform auth event records it. A
+// record that is not linked or whose history is open answers
+// ErrHistoryOpen.
+func (s *Service) RestoreHistory(ctx context.Context, orgID int64, id uuid.UUID, actorID int64) (model.Customer, error) {
+	q := s.repo.Q()
+	row, err := s.load(ctx, q, orgID, id)
+	if err != nil {
+		return model.Customer{}, err
+	}
+	if !row.LinkSource.Valid || !row.LinkVisibleFrom.Valid {
+		return model.Customer{}, ErrHistoryOpen
+	}
+	restored, err := q.RestoreCustomerHistory(ctx, db.RestoreCustomerHistoryParams{
+		UserID: pgtype.Int8{Int64: actorID, Valid: actorID != 0}, OrganizationID: orgID, CustomerID: row.ID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Customer{}, ErrHistoryOpen
+	}
+	if err != nil {
+		return model.Customer{}, err
+	}
+	if err := q.CreateCustomerAuthEvent(ctx, db.CreateCustomerAuthEventParams{
+		Kind: "history_restored", PhoneE164: pgtype.Text{String: restored.VerifiedPhoneE164, Valid: true},
+		IdentityID: pgtype.Int8{Int64: restored.IdentityID, Valid: true}, CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	}); err != nil {
+		return model.Customer{}, err
+	}
+	return s.Get(ctx, orgID, id)
 }
 
 // LinkVerified links the business's record to the shared identity of a
@@ -702,9 +741,21 @@ func MapCustomer(row db.GetCustomerRow) model.Customer {
 		c.ConsentUpdatedAt = &t
 	}
 	if row.LinkSource.Valid {
-		c.Verification = &model.Verification{Source: row.LinkSource.String, VerifiedAt: row.LinkVerifiedAt.Time}
+		c.Verification = &model.Verification{
+			Source: row.LinkSource.String, VerifiedAt: row.LinkVerifiedAt.Time,
+			HistoryHiddenFrom: timePtr(row.LinkVisibleFrom), HistoryRequestedAt: timePtr(row.LinkHistoryRequestedAt),
+			HistoryRestoredAt: timePtr(row.LinkHistoryRestoredAt), HistoryRestoredBy: row.LinkHistoryRestoredBy,
+		}
 	}
 	return c
+}
+
+func timePtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
 }
 
 func mapNotFound(err error) error {

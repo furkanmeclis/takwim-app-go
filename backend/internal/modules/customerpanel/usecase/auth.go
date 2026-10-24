@@ -594,6 +594,7 @@ func (s *Service) profile(ctx context.Context, p Principal) (model.Profile, erro
 			UUID: r.Uuid, Slug: r.Slug, Name: r.Name, FirstName: r.FirstName, LastName: r.LastName,
 			LinkedAt: r.VerifiedAt.Time, ReservationCount: r.ReservationCount,
 			HistoryFrom: tsPtr(r.VisibleFrom), HistoryUntil: tsPtr(r.VisibleUntil),
+			HistoryRequestedAt: tsPtr(r.HistoryRequestedAt), HistoryRestoredAt: tsPtr(r.HistoryRestoredAt),
 		})
 	}
 	return out, nil

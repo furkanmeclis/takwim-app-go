@@ -175,6 +175,12 @@ export const customerPanelService = {
     customerRequest<CustomerProfile>("POST", "/phone/reassigned", {
       body: { keep_businesses: keepBusinesses },
     }),
+  /** Asks one business to reopen the history a release closed (TEC-991). */
+  requestHistory: (slug: string) =>
+    customerRequest<CustomerProfile>(
+      "POST",
+      `/businesses/${encodeURIComponent(slug)}/history-request`,
+    ),
   /** Visit link: the token is the only key; no session is involved. */
   visit: (token: string) =>
     customerRequest<CustomerReservation>("POST", "/visit", {

@@ -185,6 +185,34 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// RestoreHistory serves POST /v1/tenant/customers/{uuid}/history/restore
+// (TEC-991): the business reopens the panel history it closed for the
+// person, after checking at the reception who they are.
+func (h *Handler) RestoreHistory(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	id, ok := pathUUID(w, r, "uuid")
+	if !ok {
+		return
+	}
+	before, err := h.svc.Get(r.Context(), scope.ID, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	c, err := h.svc.RestoreHistory(r.Context(), scope.ID, id, authctx.MustPrincipal(r.Context()).UserInternal)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	payload := map[string]any{"name": c.FullName}
+	if before.Verification != nil && before.Verification.HistoryHiddenFrom != nil {
+		payload["hidden_from"] = before.Verification.HistoryHiddenFrom
+		payload["requested"] = before.Verification.HistoryRequestedAt != nil
+	}
+	h.recordPayload(r, "customers.history_restored", c, payload)
+	response.JSON(w, r, http.StatusOK, c)
+}
+
 // Activity serves GET /v1/tenant/customers/{uuid}/activity.
 func (h *Handler) Activity(w http.ResponseWriter, r *http.Request) {
 	scope := orgctx.Must(r.Context())
@@ -213,6 +241,15 @@ func diffView(c model.Customer) map[string]any {
 // record writes the activity event of a customer and publishes the list
 // change.
 func (h *Handler) record(r *http.Request, action string, c model.Customer, changes map[string]activity.Change) {
+	h.recordChanges(r, action, c, map[string]any{"name": c.FullName}, changes)
+}
+
+// recordPayload is record with a payload of its own and no field changes.
+func (h *Handler) recordPayload(r *http.Request, action string, c model.Customer, payload map[string]any) {
+	h.recordChanges(r, action, c, payload, nil)
+}
+
+func (h *Handler) recordChanges(r *http.Request, action string, c model.Customer, payload map[string]any, changes map[string]activity.Change) {
 	h.publish(r, action, c.UUID)
 	if h.activity == nil {
 		return
@@ -221,7 +258,7 @@ func (h *Handler) record(r *http.Request, action string, c model.Customer, chang
 	id := c.UUID
 	h.activity.RecordEntry(r.Context(), activity.Entry{
 		ActorID: &p.UserInternal, Action: action, Resource: model.Slug, ResourceUUID: &id,
-		Payload: map[string]any{"name": c.FullName}, Changes: changes, Request: r,
+		Payload: payload, Changes: changes, Request: r,
 	})
 }
 
@@ -282,6 +319,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, usecase.ErrNotFound):
 		response.NotFound(w, r, "Customer was not found")
+	case errors.Is(err, usecase.ErrHistoryOpen):
+		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
+			Field: "history", Message: err.Error(), Code: "open",
+		}})
 	case errors.Is(err, usecase.ErrPhoneTaken):
 		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
 			Field: "phone", Message: err.Error(), Code: "taken",

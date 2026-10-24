@@ -48,6 +48,15 @@ export const customersService = {
     return tenantRequest<{ status: string }>(slug, "DELETE", `${BASE}/${uuid}`);
   },
 
+  /** Reopens the panel history this business closed for the person (TEC-991). */
+  restoreHistory(slug: string, uuid: string) {
+    return tenantRequest<Customer>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/history/restore`,
+    );
+  },
+
   activity(
     slug: string,
     uuid: string,

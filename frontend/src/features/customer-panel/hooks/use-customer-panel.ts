@@ -307,3 +307,12 @@ export function useReportReassigned() {
     onSuccess: changed,
   });
 }
+
+/** "Reopen my history at this business" (TEC-991); the profile reloads. */
+export function useRequestHistory() {
+  const changed = useProfileChanged();
+  return useMutation({
+    mutationFn: (slug: string) => customerPanelService.requestHistory(slug),
+    onSuccess: changed,
+  });
+}

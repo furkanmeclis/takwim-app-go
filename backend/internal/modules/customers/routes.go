@@ -72,6 +72,8 @@ func RegisterRoutes(
 	route("PATCH /v1/tenant/customers/{uuid}", h.Patch, write)
 	route("DELETE /v1/tenant/customers/{uuid}", h.Delete, write)
 	route("GET /v1/tenant/customers/{uuid}/activity", h.Activity, read)
+	// TEC-991: reopen the panel history closed for the person.
+	route("POST /v1/tenant/customers/{uuid}/history/restore", h.RestoreHistory, write)
 }
 
 // ExportQueryKeys are the list filters an export honours.

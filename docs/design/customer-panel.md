@@ -2,17 +2,17 @@
 
 One area for the people who book, across every business that knows their phone: `takwim.link/panel` on the web, the same API for the future mobile app. A person signs in with their phone and a one-time code, sees their upcoming and past visits, cancels or moves a visit within the business's rules, and sees what they booked, paid and got back. Customers are not staff: they never get a `users` row, a staff token or the panel sidebar.
 
-| Area         | Path                                                                                                                                                                         |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Use cases    | `backend/internal/modules/customerpanel/usecase` (`auth.go` sign-in and sessions, `panel.go` the panel, `security.go` links, devices, number change, `visit.go` visit links) |
-| HTTP, routes | `backend/internal/modules/customerpanel/handler`, `routes.go`                                                                                                                |
-| Queries      | `backend/internal/database/queries/customer_panel.sql`                                                                                                                       |
-| Migration    | `000055_customer_panel` (`customer_otp_challenges`, `customer_sessions`), `000058_customer_panel_security`                                                                   |
-| SMS          | `backend/internal/platform/sms` (`Sender` interface, `LogSender`)                                                                                                            |
-| Token        | `backend/internal/platform/jwt` (`KindCustomer`, `IssueCustomer`, `ParseCustomer`)                                                                                           |
-| Tests        | `backend/internal/modules/customerpanel/customerpanel_db_test.go`, `security_db_test.go`, `platform/jwt/token_test.go`                                                       |
-| BFF          | `frontend/src/lib/server/customer-session.ts` (httpOnly customer cookie, Bearer upstream)                                                                                    |
-| Web          | `frontend/src/app/panel/*`, `frontend/src/features/customer-panel/*`, locale `customer_panel.json`                                                                           |
+| Area         | Path                                                                                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Use cases    | `backend/internal/modules/customerpanel/usecase` (`auth.go` sign-in and sessions, `panel.go` the panel, `security.go` links, devices, number change, `visit.go` visit links)        |
+| HTTP, routes | `backend/internal/modules/customerpanel/handler`, `routes.go`                                                                                                                       |
+| Queries      | `backend/internal/database/queries/customer_panel.sql`                                                                                                                              |
+| Migration    | `000055_customer_panel` (`customer_otp_challenges`, `customer_sessions`), `000058_customer_panel_security`, `000075_customer_phone_reassignment`, `000077_customer_history_restore` |
+| SMS          | `backend/internal/platform/sms` (`Sender` interface, `LogSender`)                                                                                                                   |
+| Token        | `backend/internal/platform/jwt` (`KindCustomer`, `IssueCustomer`, `ParseCustomer`)                                                                                                  |
+| Tests        | `backend/internal/modules/customerpanel/customerpanel_db_test.go`, `security_db_test.go`, `platform/jwt/token_test.go`                                                              |
+| BFF          | `frontend/src/lib/server/customer-session.ts` (httpOnly customer cookie, Bearer upstream)                                                                                           |
+| Web          | `frontend/src/app/panel/*`, `frontend/src/features/customer-panel/*`, locale `customer_panel.json`                                                                                  |
 
 ## Routes
 
@@ -37,6 +37,7 @@ All under **`/v1/customer`**; the browser calls `/api/v1/customer/…` on the sa
 | `POST visit`, `POST visit/cancel`        | `{token}` of a visit link: one reservation, no session                                          |
 | `GET packages`, `GET packages/{uuid}`    | "Paketlerim" (TEC-984): `business`, `state`, `limit` / `offset`; the detail adds usage history  |
 | `POST businesses/{slug}/reservations`    | online booking as the signed-in person, with `package_sessions` (TEC-984)                       |
+| `POST businesses/{slug}/history-request` | "reopen my history at this business" after a release closed it (TEC-991)                        |
 
 Another person's visit, an unknown uuid and a malformed uuid all answer `404`.
 
@@ -158,6 +159,16 @@ Acceptance: A29, A30. A number can change hands without anybody telling the pane
 - A number whose profile has not proven it for **180 days** (`DormantAfter`, `customer_identities.phone_verified_at`) may have been recycled unreported. At its next sign-in (code or panel link), before the session opens, the profile's earlier history is closed the same way: `visible_from = now` on every link, a `dormant` release (`source=system`), every older session ends. A `dormant_closed` event and a warning record it. A number released after its last proof is left alone; a failure fails the sign-in, so history never opens unchecked.
 - We close the history instead of asking "are these visits yours?": the answer to such a question is no proof (anybody holding the number can say yes), and the question itself would show the businesses the previous holder visited. The person sees everything booked from now on; the businesses keep every record.
 - The profile (`GET me`) carries `history_notice` (`reassigned` or `dormant`, with the time) after either closing, and the panel's profile page explains why earlier visits are not shown.
+
+## Reopening closed history (TEC-991)
+
+A closing (a reassignment notice, the dormant check) is deliberately blind: it hides every business's earlier visits from the profile because nobody can tell from the number alone whose they are. When the number stayed with the same person (a customer back after seven months), the proof that the history is theirs comes from the **business that knows them**, one business at a time. Nothing at the businesses changed meanwhile, so nothing is restored from a backup: the link's `visible_from` is lifted.
+
+- **The business reopens, after a check at the reception.** `POST /v1/tenant/customers/{uuid}/history/restore` (`tenant.customers.write`, so the reception can do it) sets `visible_from = NULL` on this business's link only. The other businesses are untouched: each decides for its own records. The record page shows the hidden window (`verification.history_hidden_from`), any request from the person, and a confirmation that says in so many words that the staff recognise the person. A name match is never evidence (A29, A30): the record's name may be the previous holder's, and the check is the business's.
+- **The trail.** The link keeps `history_restored_at`, `history_restored_by` (the user) and `history_restored_from` (the window it lifted); the business's activity gets `customers.history_restored` (actor, the hidden window, whether the person had asked); the platform trail gets a `history_restored` auth event. A record that is not linked or whose history is open answers `409` (`history` / `open`).
+- **The person asks from the panel.** The profile notice explains the way back, and every closed business in the list offers "Geçmişimi geri iste": `POST /v1/customer/businesses/{slug}/history-request` writes `history_requested_at` on that link (the first request keeps its time), a `history_requested` auth event and `customers.history_requested` in the business's activity (source `customer_panel`, no actor), so the reception sees the request on the record. The panel never reopens anything itself: "are these visits yours?" is no proof. A business whose history is open answers `409 ACTION_NOT_ALLOWED` (`history_request` / `history_open`); one that does not know the person `404`. Limit: the security window (10 per session per 10 minutes).
+- **The next closing wins.** A later reassignment or dormant closing hides the business again and clears the request and the restore trail on the link (the activity entries remain); the business checks again if the person asks again.
+- Not done: a code sent to a second contact channel of the record (e-mail). Businesses rarely hold a verified e-mail of the person, and a code to an address the previous holder typed would prove nothing; the reception check is the proof we have.
 
 ## Not in this issue
 
