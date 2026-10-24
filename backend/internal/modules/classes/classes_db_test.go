@@ -336,7 +336,8 @@ func TestClassTimetable(t *testing.T) {
 	if _, _, err := g.classes.Update(g.ctx, g.org.ID, evening.UUID, moved); !errors.Is(err, usecase.ErrHasBookings) {
 		t.Fatalf("moving a booked class err = %v", err)
 	}
-	if _, err := g.classes.Delete(g.ctx, g.org.ID, evening.UUID); !errors.Is(err, usecase.ErrHasBookings) {
+	var hb *usecase.HasBookingsError
+	if _, err := g.classes.Delete(g.ctx, g.org.ID, evening.UUID); !errors.Is(err, usecase.ErrHasBookings) || !errors.As(err, &hb) || len(hb.Dates) != 1 || hb.Dates[0] != "2030-01-07" {
 		t.Fatalf("removing a booked class err = %v", err)
 	}
 	// Other seats for the session: the last seat goes, then the session is full.

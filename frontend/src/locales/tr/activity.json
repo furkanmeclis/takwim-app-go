@@ -377,6 +377,7 @@
   "actions.classes.session_cancelled": "Ders seansı iptal edildi",
   "actions.classes.session_restored": "Ders seansı geri alındı",
   "actions.classes.session_changed": "Ders seansının kontenjanı değişti",
+  "actions.classes.bookings_moved": "Ders seansının rezervasyonları taşındı",
   "fields.tenant.classes.service": "Ders",
   "fields.tenant.classes.branch": "Şube",
   "fields.tenant.classes.weekday": "Gün",

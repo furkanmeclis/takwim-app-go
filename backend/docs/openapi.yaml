@@ -15069,7 +15069,9 @@ paths:
       description: |
         The whole class (as on create). A change that would leave a booked future session outside the timetable
         (other weekday, time, branch or service, a shorter validity, inactive) is `409` `sessions` / `has_bookings`:
-        cancel or move those bookings first. A new trainer or area applies to sessions without bookings.
+        cancel or move those bookings first (the booked sessions follow as `sessions` / `booked_session` details,
+        their local date in `message`; move their bookings with `POST .../sessions/{date}/move`). A new trainer or
+        area applies to sessions without bookings.
       security:
         - bearerAuth: []
       parameters:
@@ -15097,7 +15099,9 @@ paths:
       tags: [Tenant]
       operationId: deleteTenantClass
       summary: Remove a class
-      description: Soft delete. A class with booked future sessions is `409` `sessions` / `has_bookings`.
+      description: |
+        Soft delete. A class with booked future sessions is `409` `sessions` / `has_bookings` (the booked sessions
+        follow as `sessions` / `booked_session` details, their local date in `message`).
       security:
         - bearerAuth: []
       parameters:
@@ -15211,6 +15215,49 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/classes/{uuid}/sessions/{date}/move:
+    post:
+      tags: [Tenant]
+      operationId: postTenantClassSessionMove
+      summary: Move a session's bookings to another session of the class
+      description: |
+        `tenant.classes.write` and `tenant.reservations.write` (TEC-994). The open bookings (requests and active
+        bookings) of the session are moved to the session of the same class on `to_date` in one bulk run
+        (`tenant.class_sessions` / `move_bookings`), each through the reservation's own reschedule under the
+        booking lock: the seat is held in the target, lines keep their trainer and price, package sessions stay
+        where the validity allows and the customer gets the rescheduled notice. A booking that finds no seat left
+        (or its trainer or area busy) stays where it was and is listed in `move.issues` (`slot_taken`); a booking
+        changed meanwhile is skipped (`stale`). The run keeps a bulk job also when it runs inline, so it can be
+        rolled back in the bulk window with `POST /v1/tenant/bulk/{uuid}/rollback`: each booking is moved back,
+        unless it changed since or the source session is no longer open. The session itself stays on the timetable
+        (cancel it afterwards when it is empty). Without open bookings `move` is null.
+
+        `to_date` must be another date of the class with an open session: `400` `to_date` / `required`, `invalid`,
+        `same_session`, `not_found` (no session of the class that day), `cancelled`, `past`, `full`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/ClassSessionDate"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassSessionMoveInput"
+      responses:
+        "200":
+          description: Both sessions and the run over the bookings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSessionMoveResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /v1/tenant/class-sessions:
     get:
@@ -25869,7 +25916,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/ClassSession"
         - type: object
-          required: [attendees, cancellation]
+          required: [attendees, cancellation, move]
           properties:
             attendees:
               type: array
@@ -25878,6 +25925,11 @@ components:
               description: The caller's run that cancelled the session's bookings while it can be rolled back.
               oneOf:
                 - $ref: "#/components/schemas/ClassSessionCancellation"
+                - type: "null"
+            move:
+              description: The caller's run that moved the session's bookings away while it can be rolled back (TEC-994).
+              oneOf:
+                - $ref: "#/components/schemas/ClassSessionMove"
                 - type: "null"
 
     ClassSessionCancelInput:
@@ -25915,6 +25967,60 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/ClassSessionCancelResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ClassSessionMoveInput:
+      type: object
+      required: [to_date]
+      properties:
+        to_date: { type: string, format: date, description: "Local date of the target session of the same class" }
+        locale: { type: string, description: "Language of the run's report (tr when empty)" }
+
+    ClassSessionMoveIssue:
+      type: object
+      description: One booking the move left where it was.
+      required: [reservation_uuid, label, error, skipped]
+      properties:
+        reservation_uuid: { type: string, format: uuid }
+        label: { type: string, description: "The booking's number (#12)" }
+        error: { type: string, description: "slot_taken (no seat, trainer or area busy), stale, invalid_transition, not_in_session, not_found …" }
+        skipped: { type: boolean }
+
+    ClassSessionMove:
+      type: object
+      description: A run that moved a session's bookings to another session of the class (TEC-994).
+      required: [job_uuid, to_date, total, succeeded, failed, skipped, issues, rollback_until, created_at]
+      properties:
+        job_uuid: { type: string, format: uuid, description: "The bulk job (rollback: POST /v1/tenant/bulk/{uuid}/rollback)" }
+        to_date: { type: string, format: date, description: "Local date of the target session" }
+        total: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        issues:
+          type: array
+          items: { $ref: "#/components/schemas/ClassSessionMoveIssue" }
+        rollback_until: { type: [string, "null"], format: date-time, description: "End of the undo window; null = nothing to undo" }
+        created_at: { type: string, format: date-time }
+
+    ClassSessionMoveResult:
+      type: object
+      required: [session, target, move]
+      properties:
+        session: { $ref: "#/components/schemas/ClassSessionDetail" }
+        target: { $ref: "#/components/schemas/ClassSessionDetail" }
+        move:
+          description: The run over the session's bookings (null when it had none open).
+          oneOf:
+            - $ref: "#/components/schemas/ClassSessionMove"
+            - type: "null"
+
+    EnvelopeClassSessionMoveResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassSessionMoveResult" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     ClassSessionChangeInput:

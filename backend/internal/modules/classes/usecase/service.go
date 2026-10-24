@@ -52,6 +52,18 @@ var (
 	ErrPast = errors.New("the session has already started")
 )
 
+// HasBookingsError is ErrHasBookings with the local dates of the booked
+// sessions the change would leave behind, so the panel can offer to move
+// their bookings (TEC-994).
+type HasBookingsError struct {
+	Dates []string
+}
+
+func (e *HasBookingsError) Error() string { return ErrHasBookings.Error() }
+
+// Is makes errors.Is(err, ErrHasBookings) true.
+func (e *HasBookingsError) Is(target error) bool { return target == ErrHasBookings }
+
 // ConflictError: another class of the trainer or the area (or of the same
 // service at the same start) runs at that time.
 type ConflictError struct {
@@ -528,8 +540,10 @@ func (s *Service) keepsBookings(ctx context.Context, tx *availabilityusecase.Tx,
 		return err
 	}
 	old := current.entry()
+	var dates []string
 	for _, h := range rows {
-		if _, ok := old.At(h.StartsAt.Time); !ok {
+		date, ok := old.At(h.StartsAt.Time)
+		if !ok {
 			continue
 		}
 		if next != nil && next.isActive && next.branchID == current.BranchID && next.serviceID == current.ServiceID {
@@ -537,7 +551,13 @@ func (s *Service) keepsBookings(ctx context.Context, tx *availabilityusecase.Tx,
 				continue
 			}
 		}
-		return ErrHasBookings
+		if !slices.Contains(dates, date) {
+			dates = append(dates, date)
+		}
+	}
+	if len(dates) > 0 {
+		slices.Sort(dates)
+		return &HasBookingsError{Dates: dates}
 	}
 	return nil
 }

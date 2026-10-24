@@ -29,6 +29,12 @@ const DETAIL_KEYS: Record<string, string> = {
   "sessions.has_bookings": "classes.errors.has_bookings",
   "capacity.below_booked": "classes.errors.below_booked",
   "date.past": "classes.errors.past",
+  "to_date.required": "classes.errors.to_date_required",
+  "to_date.same_session": "classes.errors.to_date_same_session",
+  "to_date.not_found": "classes.errors.to_date_not_found",
+  "to_date.cancelled": "classes.errors.to_date_cancelled",
+  "to_date.past": "classes.errors.to_date_past",
+  "to_date.full": "classes.errors.to_date_full",
   required: "classes.errors.required",
   invalid: "classes.errors.invalid",
   too_long: "classes.errors.too_long",
@@ -58,12 +64,34 @@ export function localizeClassError(error: unknown, t: Translate): unknown {
   });
 }
 
+/** "2030-01-07" as the panel writes a day: "07.01.2030". */
+function localDay(value: string) {
+  const [y, m, d] = value.split("-");
+  return y && m && d ? `${d}.${m}.${y}` : value;
+}
+
 /**
  * Toasts the error of a timetable write: a known detail in the panel's
- * words, anything else through the global API error toast.
+ * words, anything else through the global API error toast. A has_bookings
+ * conflict names the booked sessions and points to moving their bookings
+ * (TEC-994).
  */
 export function reportClassError(error: unknown, t: Translate) {
   if (!isApiError(error)) return;
+  const booked = error.details
+    .filter((detail) => detail.code === "booked_session")
+    .map((detail) => localDay(detail.message ?? ""));
+  if (
+    booked.length > 0 &&
+    error.details.some((detail) => detail.code === "has_bookings")
+  ) {
+    appToast.error(
+      t("classes.errors.has_bookings_sessions", {
+        dates: booked.join(", "),
+      }),
+    );
+    return;
+  }
   for (const detail of error.details) {
     const key = detailKey(detail.field, detail.code);
     if (key) {

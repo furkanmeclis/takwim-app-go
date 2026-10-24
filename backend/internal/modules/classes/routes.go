@@ -54,6 +54,8 @@ func RegisterRoutes(
 	route("PATCH /v1/tenant/classes/{uuid}/sessions/{date}", h.ChangeSession, read, write)
 	// Cancelling a session with its bookings also cancels reservations.
 	route("POST /v1/tenant/classes/{uuid}/sessions/{date}/cancel", h.CancelSession, read, write, reservationsWrite)
+	// Moving a session's bookings to another session reschedules reservations.
+	route("POST /v1/tenant/classes/{uuid}/sessions/{date}/move", h.MoveSessionBookings, read, write, reservationsWrite)
 
 	route("GET /v1/tenant/class-sessions", h.Sessions, read)
 }

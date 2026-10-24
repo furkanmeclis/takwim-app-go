@@ -1,13 +1,15 @@
-// Package adapters connects the class timetable to the bulk engine
-// (TEC-989): cancelling a session with its bookings is one bulk run over
-// the session's reservations, so it is reported like any bulk run and can
-// be rolled back in the bulk window.
+// Package adapters connects the class timetable to the bulk engine:
+// cancelling a session with its bookings (TEC-989) and moving the bookings
+// of a session to another session of the class (TEC-994) are bulk runs
+// over the session's reservations, so they are reported like any bulk run
+// and can be rolled back in the bulk window.
 //
-// The run is started by the classes module (POST …/sessions/{date}/cancel)
-// after it marked the session cancelled; there is no generic bulk route
-// for it. Every item goes through the reservation's own cancel; the
-// rollback takes each booking back with the reservation's reinstate and
-// opens the session again in the same transaction.
+// The runs are started by the classes module (POST …/sessions/{date}/cancel
+// after it marked the session cancelled; POST …/sessions/{date}/move);
+// there is no generic bulk route for them. Every item goes through the
+// reservation's own cancel or reschedule; the rollback takes a cancelled
+// booking back with the reservation's reinstate (opening the session again
+// in the same transaction) and reschedules a moved booking back.
 package adapters
 
 import (
@@ -42,7 +44,7 @@ var (
 	errForbidden      = errors.New("class sessions: missing permission")
 )
 
-// SessionBulk cancels the bookings of a cancelled class session.
+// SessionBulk cancels or moves the bookings of a class session.
 type SessionBulk struct {
 	classes      *classesusecase.Service
 	reservations *reservationsusecase.Service
@@ -57,13 +59,19 @@ func NewSessionBulk(classes *classesusecase.Service, reservations *reservationsu
 // Resource is the engine slug of class sessions.
 func (a *SessionBulk) Resource() string { return model.SessionsSlug }
 
-// BulkActions is the one action of the resource.
+// BulkActions are the actions of the resource.
 func (a *SessionBulk) BulkActions() []bulkengine.BulkActionDef {
 	return []bulkengine.BulkActionDef{{
 		ID: model.CancelBookingsAction, LabelKey: "bulk.actions.class_sessions.cancel_bookings",
 		Permission: rbac.PermTenantClassesWrite, Destructive: true, Reversible: true,
+	}, {
+		ID: model.MoveBookingsAction, LabelKey: "bulk.actions.class_sessions.move_bookings",
+		Permission: rbac.PermTenantClassesWrite, Reversible: true,
 	}}
 }
+
+// known are the actions of the resource.
+var known = map[string]bool{model.CancelBookingsAction: true, model.MoveBookingsAction: true}
 
 // reach needs the timetable write permission and every reservation of
 // the business (a session's bookings are anyone's).
@@ -97,12 +105,25 @@ func sessionParams(params map[string]string) (uuid.UUID, string, error) {
 	return id, date, nil
 }
 
+// moveParams reads the sessions of a move (params class, date, to_date).
+func moveParams(params map[string]string) (uuid.UUID, string, string, error) {
+	id, date, err := sessionParams(params)
+	if err != nil {
+		return uuid.Nil, "", "", err
+	}
+	to := strings.TrimSpace(params["to_date"])
+	if !timetable.ValidDate(to) || to == date {
+		return uuid.Nil, "", "", fmt.Errorf("params.to_date must be another date of the class (yyyy-MM-dd)")
+	}
+	return id, date, to, nil
+}
+
 func (a *SessionBulk) ResolveTargets(ctx context.Context, action string, target bulkengine.BulkTarget) ([]string, error) {
 	orgID, _, err := reach(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if action != model.CancelBookingsAction {
+	if !known[action] {
 		return nil, fmt.Errorf("unknown action")
 	}
 	classID, date, err := sessionParams(target.Params)
@@ -111,6 +132,15 @@ func (a *SessionBulk) ResolveTargets(ctx context.Context, action string, target 
 	}
 	if _, _, err := a.classes.SessionStart(ctx, orgID, classID, date); err != nil {
 		return nil, err
+	}
+	if action == model.MoveBookingsAction {
+		_, _, to, err := moveParams(target.Params)
+		if err != nil {
+			return nil, err
+		}
+		if _, _, err := a.classes.SessionStart(ctx, orgID, classID, to); err != nil {
+			return nil, err
+		}
 	}
 	if target.Scope != "ids" {
 		return nil, fmt.Errorf("invalid target scope")
@@ -156,6 +186,9 @@ func (a *SessionBulk) ApplyItem(ctx context.Context, action, entityUUID string) 
 		return bulkengine.BulkItemResult{}, err
 	}
 	res := bulkengine.BulkItemResult{EntityUUID: entityUUID, EntityType: "reservation", Op: "update"}
+	if action == model.MoveBookingsAction {
+		return a.moveItem(ctx, orgID, actor, res)
+	}
 	if action != model.CancelBookingsAction {
 		res.Error = "unknown_action"
 		return res, nil
@@ -228,24 +261,122 @@ func (a *SessionBulk) ApplyItem(ctx context.Context, action, entityUUID string) 
 	return res, nil
 }
 
+// moved is what a moved booking needs to come back.
+type moved struct {
+	Class   string `json:"class"`
+	Date    string `json:"date"`
+	ToDate  string `json:"to_date"`
+	Version int    `json:"version"`
+}
+
+func (m moved) asMap() map[string]any {
+	raw, _ := json.Marshal(m)
+	out := map[string]any{}
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// moveItem moves one open booking of the source session to the target
+// session through the reservation's own reschedule: the seat is held in
+// the target under the capacity lock, the lines keep their trainer and
+// price, package sessions follow where the validity allows and the
+// customer gets the rescheduled notice. No seat left, or the trainer or
+// area busy, is slot_taken: the booking stays where it was.
+func (a *SessionBulk) moveItem(ctx context.Context, orgID, actor int64, res bulkengine.BulkItemResult) (bulkengine.BulkItemResult, error) {
+	classID, date, toDate, err := moveParams(bulkengine.Params(ctx))
+	if err != nil {
+		return bulkengine.BulkItemResult{}, err
+	}
+	start, branch, err := a.classes.SessionStart(ctx, orgID, classID, date)
+	if err != nil {
+		return bulkengine.BulkItemResult{}, err
+	}
+	target, _, err := a.classes.SessionStart(ctx, orgID, classID, toDate)
+	if err != nil {
+		return bulkengine.BulkItemResult{}, err
+	}
+	id, err := uuid.Parse(res.EntityUUID)
+	if err != nil {
+		res.Error = "not_found"
+		return res, nil
+	}
+	caller := availabilityusecase.Caller{}
+	current, err := a.reservations.Get(ctx, orgID, id, caller)
+	if errors.Is(err, reservationsusecase.ErrNotFound) {
+		res.Error = "not_found"
+		return res, nil
+	}
+	if err != nil {
+		return bulkengine.BulkItemResult{}, err
+	}
+	res.Label = "#" + strconv.FormatInt(current.Number, 10)
+	// Only a booking of the source session is moved by the run.
+	if !current.StartsAt.Equal(start) || current.Branch.UUID != branch {
+		res.Error = "not_in_session"
+		return res, nil
+	}
+	version := current.Version
+	updated, err := a.reservations.Reschedule(ctx, orgID, id, caller, actor, reservationsmodel.RescheduleInput{
+		StartsAt: &target, ExpectedVersion: &version,
+	})
+	var ve *reservationsusecase.ValidationError
+	switch {
+	case err == nil:
+		res.OK = true
+		res.Previous = moved{Class: classID.String(), Date: date, ToDate: toDate, Version: updated.Version}.asMap()
+	case errors.Is(err, availabilityusecase.ErrSlotTaken):
+		res.Error = "slot_taken"
+	case errors.Is(err, reservationsusecase.ErrInvalidTransition):
+		res.Skipped, res.Error = true, "invalid_transition"
+	case errors.Is(err, reservationsusecase.ErrStaleVersion):
+		res.Skipped, res.Error = true, "stale"
+	case errors.Is(err, reservationsusecase.ErrNotFound):
+		res.Error = "not_found"
+	case errors.As(err, &ve):
+		res.Error = ve.Error()
+	default:
+		return bulkengine.BulkItemResult{}, err
+	}
+	return res, nil
+}
+
 // RevertItem takes one cancelled booking back and opens its session again
-// in the same transaction. A booking changed since the cancel, a time no
-// longer free, a package without a session left or a product out of stock
-// leaves the booking cancelled (the rollback is then partial).
+// in the same transaction, or moves a moved booking back to its session.
+// A booking changed since the run, a time no longer free (a source session
+// cancelled meanwhile included), a package without a session left or a
+// product out of stock stays as it is (the rollback is then partial).
 func (a *SessionBulk) RevertItem(ctx context.Context, action, entityUUID string, raw map[string]any) error {
 	orgID, actor, err := reach(ctx)
 	if err != nil {
 		return err
 	}
-	if action != model.CancelBookingsAction {
-		return fmt.Errorf("unknown action")
-	}
 	id, err := uuid.Parse(entityUUID)
 	if err != nil {
 		return err
 	}
-	var prev previous
 	b, _ := json.Marshal(raw)
+	if action == model.MoveBookingsAction {
+		var m moved
+		if err := json.Unmarshal(b, &m); err != nil {
+			return err
+		}
+		classID, date, _, err := moveParams(map[string]string{"class": m.Class, "date": m.Date, "to_date": m.ToDate})
+		if err != nil {
+			return err
+		}
+		back, _, err := a.classes.SessionStart(ctx, orgID, classID, date)
+		if err != nil {
+			return err
+		}
+		_, err = a.reservations.Reschedule(ctx, orgID, id, availabilityusecase.Caller{}, actor, reservationsmodel.RescheduleInput{
+			StartsAt: &back, ExpectedVersion: &m.Version,
+		})
+		return err
+	}
+	if action != model.CancelBookingsAction {
+		return fmt.Errorf("unknown action")
+	}
+	var prev previous
 	if err := json.Unmarshal(b, &prev); err != nil {
 		return err
 	}

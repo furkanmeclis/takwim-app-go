@@ -2,6 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import {
+  ArrowRightLeft,
   Ban,
   Check,
   ExternalLink,
@@ -36,6 +37,7 @@ import {
   SessionChangeDialog,
   type SessionChangeMode,
 } from "@/features/classes/components/session-change-dialog";
+import { SessionMoveDialog } from "@/features/classes/components/session-move-dialog";
 import { useSessionWhen } from "@/features/classes/components/sessions-table";
 import {
   SESSION_STATE_LABEL_KEYS,
@@ -44,7 +46,7 @@ import {
 import {
   useChangeClassSession,
   useClassSession,
-  useUndoClassSessionCancel,
+  useUndoClassSessionRun,
 } from "@/features/classes/hooks/use-classes";
 import type { ClassAttendee } from "@/features/classes/types";
 import { PAYMENT, STATUS } from "@/features/reservations/constants";
@@ -61,8 +63,17 @@ import { usePermission } from "@/providers/permission-provider";
 /** Attendance is open for visits that are booked or in progress. */
 const MARKABLE: ReservationStatus[] = ["active", "in_service"];
 
-/** Bookings a session cancel takes down (requests and active bookings). */
+/** Bookings a session cancel takes down or a move carries (requests and active bookings). */
 const OPEN: ReservationStatus[] = ["requested", "active"];
+
+/** Why a booking stayed behind in a move, by the run's error code. */
+const MOVE_ISSUE_KEYS: Record<string, string> = {
+  slot_taken: "classes.move_issues.slot_taken",
+  stale: "classes.move_issues.stale",
+  invalid_transition: "classes.move_issues.invalid_transition",
+  not_in_session: "classes.move_issues.not_in_session",
+  not_found: "classes.move_issues.not_found",
+};
 
 /**
  * One session of a class: seats, the bookings in it and attendance.
@@ -84,10 +95,13 @@ export function SessionDetailPage({
   const query = useClassSession(uuid, date);
   const action = useReservationAction();
   const change = useChangeClassSession();
-  const undo = useUndoClassSessionCancel();
+  const undo = useUndoClassSessionRun("cancel");
+  const undoMove = useUndoClassSessionRun("move");
   const [mode, setMode] = useState<SessionChangeMode | null>(null);
+  const [moving, setMoving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [undoingMove, setUndoingMove] = useState(false);
   const session = query.data;
   const canWrite = can(permissions.tenant.classes.write);
   const canMark = can(permissions.tenant.reservations.write);
@@ -243,6 +257,19 @@ export function SessionDetailPage({
   const cancellation = session?.cancellation ?? null;
   const canUndo =
     canMark && cancellation != null && cancellation.rollback_until != null;
+  // Moving bookings reschedules reservations: both permissions again.
+  const move = session?.move ?? null;
+  const canUndoMove = canMark && move != null && move.rollback_until != null;
+  const moveWhen =
+    session && move
+      ? datetimeInZone(move.created_at, session.timezone, locale, {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null;
 
   return (
     <EntityPage
@@ -272,6 +299,28 @@ export function SessionDetailPage({
               <Users className="size-4" />
               {t("classes.actions.change_seats")}
             </Button>
+            {openBookings > 0 && canMark ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setMoving(true)}
+              >
+                <ArrowRightLeft className="size-4" />
+                {t("classes.actions.move_bookings")}
+              </Button>
+            ) : null}
+            {canUndoMove ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setUndoingMove(true)}
+              >
+                <Undo2 className="size-4" />
+                {t("classes.actions.undo_move")}
+              </Button>
+            ) : null}
             {session.cancelled && canUndo ? (
               <Button
                 type="button"
@@ -434,6 +483,50 @@ export function SessionDetailPage({
                           },
                         ]
                       : []),
+                    ...(move
+                      ? [
+                          {
+                            key: "moved_bookings",
+                            label: t("classes.fields.moved_bookings"),
+                            value: (
+                              <span>
+                                {t("classes.session.moved_bookings_value", {
+                                  succeeded: move.succeeded,
+                                  total: move.total,
+                                  when: moveWhen ?? "",
+                                })}{" "}
+                                <Link
+                                  className="text-primary hover:underline"
+                                  href={routes.tenant.classes.session(
+                                    slug,
+                                    session.schedule_uuid,
+                                    move.to_date,
+                                  )}
+                                >
+                                  {t("classes.session.open_target")}
+                                </Link>
+                              </span>
+                            ),
+                          },
+                          ...(move.issues.length > 0
+                            ? [
+                                {
+                                  key: "not_moved",
+                                  label: t("classes.fields.not_moved"),
+                                  value: move.issues
+                                    .map(
+                                      (issue) =>
+                                        `${issue.label || issue.reservation_uuid.slice(0, 8)} (${t(
+                                          MOVE_ISSUE_KEYS[issue.error] ??
+                                            "classes.move_issues.other",
+                                        )})`,
+                                    )
+                                    .join(", "),
+                                },
+                              ]
+                            : []),
+                        ]
+                      : []),
                   ],
                 },
               ]}
@@ -482,6 +575,31 @@ export function SessionDetailPage({
               }}
             />
           ) : null}
+          {moving ? (
+            <SessionMoveDialog
+              session={session}
+              openBookings={openBookings}
+              open
+              onOpenChange={(open) => {
+                if (!open) setMoving(false);
+              }}
+            />
+          ) : null}
+          <ConfirmDialog
+            open={undoingMove}
+            title={t("classes.move_dialog.undo_title")}
+            description={t("classes.move_dialog.undo_description")}
+            confirmLabel={t("classes.actions.undo_move")}
+            isPending={undoMove.isPending}
+            onCancel={() => setUndoingMove(false)}
+            onConfirm={() => {
+              if (!move) return;
+              undoMove.mutate(
+                { jobUuid: move.job_uuid },
+                { onSettled: () => setUndoingMove(false) },
+              );
+            }}
+          />
           <ConfirmDialog
             open={undoing}
             title={t("classes.session_dialog.undo_title")}

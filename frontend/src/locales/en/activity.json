@@ -376,6 +376,7 @@
   "actions.classes.deleted": "Class removed from the timetable",
   "actions.classes.session_cancelled": "Class session cancelled",
   "actions.classes.session_restored": "Class session restored",
+  "actions.classes.bookings_moved": "Class session bookings moved",
   "actions.classes.session_changed": "Class session seats changed",
   "fields.tenant.classes.service": "Class",
   "fields.tenant.classes.branch": "Branch",

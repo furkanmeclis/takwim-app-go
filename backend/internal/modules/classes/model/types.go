@@ -184,6 +184,9 @@ type SessionDetail struct {
 	// Cancellation is the caller's run that cancelled the session with its
 	// bookings (TEC-989) while it can still be rolled back; nil otherwise.
 	Cancellation *SessionCancellation `json:"cancellation"`
+	// Move is the caller's run that moved the session's bookings to another
+	// session of the class (TEC-994) while it can still be rolled back.
+	Move *SessionMove `json:"move"`
 }
 
 // SessionsSlug is the bulk engine resource of "cancel a session with its
@@ -222,6 +225,48 @@ type SessionCancellation struct {
 type SessionCancelResult struct {
 	Session      SessionDetail        `json:"session"`
 	Cancellation *SessionCancellation `json:"cancellation"`
+}
+
+// MoveBookingsAction is the bulk action that moves the open bookings of a
+// session to another session of the class (TEC-994); its rollback moves
+// them back.
+const MoveBookingsAction = "move_bookings"
+
+// SessionMoveInput is the body of POST …/sessions/{date}/move: the local
+// date of the target session of the same class.
+type SessionMoveInput struct {
+	ToDate string `json:"to_date"`
+}
+
+// SessionMoveIssue is one booking a move left where it was.
+type SessionMoveIssue struct {
+	ReservationUUID string `json:"reservation_uuid"`
+	Label           string `json:"label"`
+	// Error: slot_taken (no seat, trainer or area busy), stale, invalid_transition, not_in_session …
+	Error   string `json:"error"`
+	Skipped bool   `json:"skipped"`
+}
+
+// SessionMove is a run that moved a session's bookings to another session.
+type SessionMove struct {
+	JobUUID   uuid.UUID          `json:"job_uuid"`
+	ToDate    string             `json:"to_date"`
+	Total     int                `json:"total"`
+	Succeeded int                `json:"succeeded"`
+	Failed    int                `json:"failed"`
+	Skipped   int                `json:"skipped"`
+	Issues    []SessionMoveIssue `json:"issues"`
+	// RollbackUntil ends the undo window (nil: nothing to undo).
+	RollbackUntil *time.Time `json:"rollback_until"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// SessionMoveResult answers POST …/sessions/{date}/move: both sessions as
+// they are now and the run over the bookings (nil when none was open).
+type SessionMoveResult struct {
+	Session SessionDetail `json:"session"`
+	Target  SessionDetail `json:"target"`
+	Move    *SessionMove  `json:"move"`
 }
 
 // SessionChangeInput sets how one session differs from its class:
