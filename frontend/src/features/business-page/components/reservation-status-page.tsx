@@ -6,10 +6,11 @@ import {
   CircleX,
   Clock,
   CreditCard,
+  ExternalLink,
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
@@ -24,8 +25,11 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BusinessPageShell } from "@/features/business-page/components/business-page-shell";
-import { CUSTOMER_PANEL_PATH } from "@/features/business-page/constants";
+import { useBookingSurface } from "@/features/business-page/components/booking-surface";
+import {
+  BusinessPageShell,
+  CustomerPanelLink,
+} from "@/features/business-page/components/business-page-shell";
 import {
   usePublicBusiness,
   usePublicReservation,
@@ -50,6 +54,9 @@ import { datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
 const noop = () => () => {};
+
+/** How long the embedded screen watches a payment opened in a new tab. */
+const PAYMENT_TAB_WATCH_MS = 15 * 60_000;
 
 type Headline = {
   icon: typeof CircleCheck;
@@ -116,25 +123,45 @@ function readPaymentReturn(): PaymentReturn {
   return value === "done" || value === "failed" ? value : null;
 }
 
+/** Only http(s) pages of the provider are opened. */
+function safePaymentURL(raw: string) {
+  try {
+    const url = new URL(raw, window.location.origin);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Online payment of the booking: the "pay now" button while the server says
  * it can be paid, and what the return from the provider's page means. The
  * state shown is always the server's `payment_status`, recorded only from
  * the provider's verified notification.
+ *
+ * Inside the embedded screen (TEC-908) the provider's page never opens in
+ * the frame: the customer's click opens a new tab, and this frame watches
+ * the server's state until the payment is recorded.
  */
 function PaymentPanel({
   reservation: r,
   slug,
   token,
   returned,
+  onOpened,
 }: {
   reservation: PublicReservation;
   slug: string;
   token: string;
   returned: PaymentReturn;
+  onOpened: () => void;
 }) {
   const { t, locale } = useLocale();
+  const { embed } = useBookingSurface();
   const start = useStartPublicPayment(slug, r.uuid, token);
+  const [openedURL, setOpenedURL] = useState<string | null>(null);
   const pending = r.payment_status === "online_pending";
 
   let note: { title?: string; text: string; destructive?: boolean } | null =
@@ -156,15 +183,46 @@ function PaymentPanel({
     note = { text: t("business_page.status.payment_late"), destructive: true };
   }
 
+  if (openedURL && pending && !note) {
+    note = {
+      title: t("business_page.status.payment_tab_title"),
+      text: t("business_page.status.payment_tab"),
+    };
+  }
+
   if (!note && !r.can_pay_online) return null;
 
-  const pay = () =>
+  const pay = () => {
+    if (!embed) {
+      start.mutate(locale, {
+        onSuccess: (page) => window.location.assign(page.redirect_url),
+        onError: (error) => reportPaymentError(error, t),
+      });
+      return;
+    }
+    // Opened during the click so no popup blocker stops it; it gets the
+    // provider's address once the API answers.
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
     start.mutate(locale, {
-      onSuccess: (page) => window.location.assign(page.redirect_url),
-      onError: (error) => reportPaymentError(error, t),
+      onSuccess: (page) => {
+        const url = safePaymentURL(page.redirect_url);
+        if (!url) {
+          tab?.close();
+          return;
+        }
+        if (tab) tab.location.href = url;
+        setOpenedURL(url);
+        onOpened();
+      },
+      onError: (error) => {
+        tab?.close();
+        reportPaymentError(error, t);
+      },
     });
+  };
   // The browser leaves for the provider's page right after success.
-  const busy = start.isPending || start.isSuccess;
+  const busy = start.isPending || (!embed && start.isSuccess);
 
   return (
     <div className="space-y-3">
@@ -178,12 +236,21 @@ function PaymentPanel({
       {r.can_pay_online ? (
         <Card className="gap-3 py-4">
           <CardContent className="space-y-3 px-4">
-            <Button className="w-full" onClick={pay} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" /> : <CreditCard />}
-              {busy
-                ? t("business_page.status.pay_redirecting")
-                : t("business_page.status.pay_now")}
-            </Button>
+            {openedURL ? (
+              <Button asChild className="w-full" variant="outline">
+                <a href={openedURL} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink />
+                  {t("business_page.status.pay_open_tab")}
+                </a>
+              </Button>
+            ) : (
+              <Button className="w-full" onClick={pay} disabled={busy}>
+                {busy ? <Loader2 className="animate-spin" /> : <CreditCard />}
+                {busy
+                  ? t("business_page.status.pay_redirecting")
+                  : t("business_page.status.pay_now")}
+              </Button>
+            )}
             <p className="text-muted-foreground text-center text-xs">
               {t("business_page.status.pay_secure")}
             </p>
@@ -199,13 +266,16 @@ function ReservationView({
   business,
   token,
   returned,
+  onPaymentOpened,
 }: {
   reservation: PublicReservation;
   business: PublicBusiness;
   token: string;
   returned: PaymentReturn;
+  onPaymentOpened: () => void;
 }) {
   const { t, locale } = useLocale();
+  const surface = useBookingSurface();
   const zone = r.timezone || business.timezone;
   const time = (iso: string) =>
     datetimeInZone(iso, zone, locale, { hour: "2-digit", minute: "2-digit" });
@@ -239,6 +309,7 @@ function ReservationView({
         slug={business.slug}
         token={token}
         returned={returned}
+        onOpened={onPaymentOpened}
       />
 
       <Card className="gap-3 py-4">
@@ -339,12 +410,14 @@ function ReservationView({
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button asChild className="sm:flex-1">
-          <Link href={CUSTOMER_PANEL_PATH}>
+          <CustomerPanelLink>
             {t("business_page.my_bookings")}
-          </Link>
+          </CustomerPanelLink>
         </Button>
         <Button asChild variant="outline" className="sm:flex-1">
-          <Link href={`/b/${encodeURIComponent(business.slug)}`}>
+          <Link
+            href={`${surface.base}/${encodeURIComponent(business.slug)}${surface.query}`}
+          >
             {t("business_page.status.book_again")}
           </Link>
         </Button>
@@ -375,26 +448,43 @@ export function ReservationStatusPage({
     () => undefined,
   );
   const returned = useSyncExternalStore(noop, readPaymentReturn, () => null);
+  // Embedded screen: watching the payment opened in another tab.
+  const [watchUntil, setWatchUntil] = useState<number | null>(null);
   const businessQuery = usePublicBusiness(slug, initialBusiness);
   const reservation = usePublicReservation(
     slug,
     uuid,
     token ?? null,
     returned !== null,
+    watchUntil,
   );
   const business = businessQuery.data;
 
   let body: React.ReactNode;
-  if (token === null) {
+  if (token === null && returned !== null) {
+    // Back from the provider in the tab the embedded screen opened: the
+    // result shows in the booking's own window.
+    body = (
+      <EmptyState
+        title={t("business_page.status.payment_returned_title")}
+        description={t("business_page.status.payment_returned_description")}
+        action={
+          <Button variant="outline" onClick={() => window.close()}>
+            {t("business_page.status.close_tab")}
+          </Button>
+        }
+      />
+    );
+  } else if (token === null) {
     body = (
       <EmptyState
         title={t("business_page.status.no_access_title")}
         description={t("business_page.status.no_access_description")}
         action={
           <Button asChild variant="outline">
-            <Link href={CUSTOMER_PANEL_PATH}>
+            <CustomerPanelLink>
               {t("business_page.my_bookings")}
-            </Link>
+            </CustomerPanelLink>
           </Button>
         }
       />
@@ -425,6 +515,7 @@ export function ReservationStatusPage({
         business={business}
         token={token}
         returned={returned}
+        onPaymentOpened={() => setWatchUntil(Date.now() + PAYMENT_TAB_WATCH_MS)}
       />
     );
   }

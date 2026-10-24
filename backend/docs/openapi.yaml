@@ -16739,6 +16739,16 @@ components:
           description: "`web` = takwim.link page, `widget` = embedded booking, `api` = public booking API"
         is_active: { type: boolean }
 
+    OrganizationEmbedSettings:
+      type: object
+      required: [allowed_origins]
+      properties:
+        allowed_origins:
+          type: array
+          maxItems: 20
+          description: "Sites allowed to embed the booking screen (TEC-908). Saved as origins: `example.com` becomes `https://example.com`, `https://*.example.com` allows every subdomain, http only for localhost; duplicates are dropped. An invalid entry answers `embed.allowed_origins.{i}` / `invalid`, more than 20 `too_many`."
+          items: { type: string, example: "https://www.example.com" }
+
     OrganizationInvoiceItemMapping:
       type: object
       required: [item_type, account_code, vat_rate, description]
@@ -16763,7 +16773,7 @@ components:
 
     OrganizationSettings:
       type: object
-      required: [company, reservation, payment, policies, sales_channels, tax]
+      required: [company, reservation, payment, policies, sales_channels, embed, tax]
       properties:
         company: { $ref: "#/components/schemas/OrganizationCompanySettings" }
         reservation: { $ref: "#/components/schemas/OrganizationReservationSettings" }
@@ -16772,6 +16782,7 @@ components:
         sales_channels:
           type: array
           items: { $ref: "#/components/schemas/OrganizationSalesChannel" }
+        embed: { $ref: "#/components/schemas/OrganizationEmbedSettings" }
         tax: { $ref: "#/components/schemas/OrganizationTaxSettings" }
 
     OrganizationSettingsActor:
@@ -19462,7 +19473,7 @@ components:
 
     PublicBusiness:
       type: object
-      required: [uuid, slug, name, logo_url, sector, timezone, currency, flow, terms, contact, policies, booking, branch_count]
+      required: [uuid, slug, name, logo_url, sector, timezone, currency, flow, terms, contact, policies, booking, branch_count, embed]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -19519,6 +19530,15 @@ components:
               description: Online payment is offered and the business has a working payment provider and an online cash account; the customer pays on the provider's page after booking.
             checkout_minutes: { type: integer }
         branch_count: { type: integer }
+        embed:
+          type: object
+          required: [allowed_origins]
+          description: The embedded booking screen (`/embed/{slug}`, TEC-908).
+          properties:
+            allowed_origins:
+              type: array
+              description: Sites allowed to frame the booking screen (its `frame-ancestors` policy and the only targets of its height messages). Empty = no other site.
+              items: { type: string, example: "https://www.example.com" }
 
     PublicBranch:
       type: object

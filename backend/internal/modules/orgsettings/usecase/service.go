@@ -118,6 +118,9 @@ func mapVersion(row repository.VersionRow) (model.Version, error) {
 			return model.Version{}, fmt.Errorf("decode settings version %d: %w", row.Version, err)
 		}
 	}
+	if settings.Embed.AllowedOrigins == nil {
+		settings.Embed.AllowedOrigins = []string{}
+	}
 	ready, missing := model.Readiness(settings)
 	created := row.CreatedAt.Time.UTC()
 	return model.Version{

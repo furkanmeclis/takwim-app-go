@@ -13,6 +13,7 @@ import {
   PlugZap,
   Activity,
   Bell,
+  Code2,
   Building2,
   Contact,
   Cpu,
@@ -469,6 +470,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: CalendarCheck,
             permission: permissions.tenant.settings.read,
             module: "confirmation",
+          },
+          {
+            id: "settings-embed",
+            titleKey: "layout.nav_tenant_settings_embed",
+            href: routes.tenant.settings.embed(slug),
+            icon: Code2,
+            permission: permissions.tenant.settings.read,
+            module: "booking_page",
           },
           {
             id: "settings-plan",

@@ -150,5 +150,11 @@
   "products.less": "One less",
   "products.more": "One more",
   "products.line": "{{quantity}} pcs",
-  "errors.out_of_stock": "One of the products you picked just ran out. Please pick your products again."
+  "errors.out_of_stock": "One of the products you picked just ran out. Please pick your products again.",
+  "status.payment_tab_title": "Payment opened in a new tab",
+  "status.payment_tab": "Complete the payment in the new tab. The result shows here once the payment provider has confirmed it.",
+  "status.pay_open_tab": "Open the payment page",
+  "status.payment_returned_title": "You are back from the payment page",
+  "status.payment_returned_description": "The result shows in the window where you booked. You can close this tab.",
+  "status.close_tab": "Close this tab"
 }

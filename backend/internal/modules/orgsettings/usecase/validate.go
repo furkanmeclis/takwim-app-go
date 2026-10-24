@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -198,6 +199,26 @@ func Normalize(in model.Settings) (model.Settings, error) {
 		s.SalesChannels = append(s.SalesChannels, model.SalesChannel{Code: code, IsActive: active[code]})
 	}
 
+	// --- embed: allowed sites, normalized and listed once.
+	origins := make([]string, 0, len(s.Embed.AllowedOrigins))
+	for i, raw := range s.Embed.AllowedOrigins {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		o, ok := NormalizeOrigin(raw)
+		if !ok {
+			ve.add(fmt.Sprintf("embed.allowed_origins.%d", i), "invalid", "must be a site address such as https://example.com")
+			continue
+		}
+		if !slices.Contains(origins, o) {
+			origins = append(origins, o)
+		}
+	}
+	if len(origins) > model.MaxEmbedOrigins {
+		ve.add("embed.allowed_origins", "too_many", fmt.Sprintf("at most %d sites", model.MaxEmbedOrigins))
+	}
+	s.Embed.AllowedOrigins = origins
+
 	// --- tax
 	t := &s.Tax
 	t.DefaultVATRate = strings.TrimSpace(t.DefaultVATRate)
@@ -237,6 +258,73 @@ func Normalize(in model.Settings) (model.Settings, error) {
 		return s, ve
 	}
 	return s, nil
+}
+
+var hostLabelRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// NormalizeOrigin turns a site address into the origin a browser sends
+// (`https://shop.example.com`, `https://example.com:8443`). A missing scheme
+// means https; http is accepted only for localhost (development). A leading
+// `*.` allows every subdomain, as in a CSP source. Paths, queries,
+// fragments, credentials, IP addresses other than 127.0.0.1 and bare
+// top-level names are refused.
+func NormalizeOrigin(raw string) (string, bool) {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	if v == "" || len(v) > 255 || strings.ContainsAny(v, " \t'\";,") {
+		return "", false
+	}
+	if !strings.Contains(v, "://") {
+		v = "https://" + v
+	}
+	v = strings.TrimRight(v, "/")
+	wildcard := false
+	if rest, ok := strings.CutPrefix(v, "https://*."); ok {
+		wildcard = true
+		v = "https://" + rest
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", false
+	}
+	host, port := u.Hostname(), u.Port()
+	local := host == "localhost" || host == "127.0.0.1"
+	switch {
+	case u.Scheme == "http" && !local:
+		return "", false
+	case u.Scheme != "http" && u.Scheme != "https":
+		return "", false
+	case wildcard && local:
+		return "", false
+	}
+	if port != "" {
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+			return "", false
+		}
+	}
+	if !local {
+		labels := strings.Split(host, ".")
+		if len(labels) < 2 {
+			return "", false
+		}
+		for _, l := range labels {
+			if !hostLabelRE.MatchString(l) {
+				return "", false
+			}
+		}
+		// The last label is a name (com, istanbul, xn--...), never digits.
+		if digitsRE.MatchString(labels[len(labels)-1]) {
+			return "", false
+		}
+	}
+	out := u.Scheme + "://"
+	if wildcard {
+		out += "*."
+	}
+	out += host
+	if port != "" {
+		out += ":" + port
+	}
+	return out, true
 }
 
 func maxLen(ve *ValidationError, field, v string, n int) {

@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/common/error-state";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBookingSurface } from "@/features/business-page/components/booking-surface";
 import { CheckoutTimer } from "@/features/business-page/components/checkout-timer";
 import { BranchStep } from "@/features/business-page/components/steps/branch-step";
 import {
@@ -38,6 +39,7 @@ import {
   isSlotTaken,
   reportBookingError,
 } from "@/features/business-page/lib/errors";
+import type { Preselect } from "@/features/business-page/lib/embed";
 import {
   WINDOW_DAYS,
   checkoutPrices,
@@ -79,33 +81,49 @@ import { useLocale } from "@/providers/locale-provider";
  * (`business.flow`); every rule (availability, prices, approval, payment)
  * is the API's. Picking a time holds it (`checkouts`) for the minutes of
  * `booking.checkout_minutes`; going back frees it.
+ *
+ * A pre-selection (TEC-908: `branch`, `service`, `staff`, `date` of the
+ * link or the embed code) fills the steps it names when the API lists
+ * them, and the wizard opens on the first step still to answer; going back
+ * still reaches the pre-filled ones.
  */
 export function BookingWizard({
   slug,
   business,
   branches,
+  preselect = {},
 }: {
   slug: string;
   business: PublicBusiness;
   branches: PublicBranch[];
+  preselect?: Preselect;
 }) {
   const { t } = useLocale();
   const router = useRouter();
+  const surface = useBookingSurface();
   const today = useMemo(
     () => dateKeyInZone(new Date(), business.timezone),
     [business.timezone],
   );
+  const presetBranch =
+    preselect.branch && branches.some((b) => b.uuid === preselect.branch)
+      ? preselect.branch
+      : "";
+  const presetServices = preselect.service ? [preselect.service] : [];
+  const presetDate =
+    preselect.date && preselect.date >= today ? preselect.date : "";
 
   const [step, setStep] = useState<WizardStep | null>(null);
   const [branchUuid, setBranchUuid] = useState(
-    branches.length === 1 ? branches[0]!.uuid : "",
+    branches.length === 1 ? branches[0]!.uuid : presetBranch,
   );
   const [partyText, setPartyText] = useState("2");
   const [zone, setZone] = useState("");
-  const [pickedServices, setPickedServices] = useState<string[]>([]);
+  const [pickedServices, setPickedServices] =
+    useState<string[]>(presetServices);
   const [staffBy, setStaffBy] = useState<Record<string, string | null>>({});
-  const [windowStart, setWindowStart] = useState(today);
-  const [date, setDate] = useState("");
+  const [windowStart, setWindowStart] = useState(presetDate || today);
+  const [date, setDate] = useState(presetDate);
   const [slot, setSlot] = useState<PublicSlot | null>(null);
   const [checkout, setCheckout] = useState<PublicCheckout | null>(null);
   const [productQty, setProductQty] = useState<Record<string, number>>({});
@@ -134,7 +152,10 @@ export function BookingWizard({
   // A flow without a service step (restaurant) books the branch's only
   // service by itself and asks only when there are several offers.
   const autoService = !flowHasService(business.flow) && services.length === 1;
-  const serviceUuids = autoService ? [services[0]!.uuid] : pickedServices;
+  // Only services the branch offers online (a pre-selected one may not be).
+  const serviceUuids = autoService
+    ? [services[0]!.uuid]
+    : pickedServices.filter((id) => services.some((s) => s.uuid === id));
   const selected = serviceUuids
     .map((id) => services.find((s) => s.uuid === id))
     .filter((s): s is PublicService => Boolean(s));
@@ -142,6 +163,24 @@ export function BookingWizard({
   const staffChoice =
     flowHasStaff(business.flow) &&
     selected.some((s) => staffCandidates(s, staffUuids).length > 0);
+  // A pre-selected person serves every picked service they offer, until
+  // the customer picks someone else.
+  const presetStaff =
+    preselect.staff && staffUuids.includes(preselect.staff)
+      ? preselect.staff
+      : null;
+  const staffFor: Record<string, string | null> = {};
+  for (const service of selected) {
+    staffFor[service.uuid] =
+      service.uuid in staffBy
+        ? (staffBy[service.uuid] ?? null)
+        : presetStaff &&
+            staffCandidates(service, staffUuids).some(
+              (c) => c.staff_uuid === presetStaff,
+            )
+          ? presetStaff
+          : null;
+  }
   const byParty = flowHasParty(business.flow);
   const branch = branches.find((b) => b.uuid === branchUuid);
   const areaChoice = hasAreaChoice(branch);
@@ -158,10 +197,25 @@ export function BookingWizard({
     // A product already picked keeps the step while its list reloads.
     productChoice: products.length > 0 || Object.keys(productQty).length > 0,
   });
-  const current: WizardStep = step && steps.includes(step) ? step : steps[0]!;
+  const catalogLoading =
+    Boolean(branchUuid) && (servicesQuery.isLoading || staffQuery.isLoading);
+  // Steps a valid pre-selection already answers; the wizard opens after them
+  // (only once the catalog it is checked against has loaded).
+  const preset = (s: WizardStep) =>
+    (s === "branch" && Boolean(presetBranch) && branchUuid === presetBranch) ||
+    (!catalogLoading &&
+      s === "service" &&
+      Boolean(preselect.service) &&
+      serviceUuids.includes(preselect.service!)) ||
+    (!catalogLoading &&
+      s === "staff" &&
+      Boolean(presetStaff) &&
+      selected.some((x) => staffFor[x.uuid] === presetStaff));
+  const opening = steps.find((s) => !preset(s)) ?? steps[0]!;
+  const current: WizardStep = step && steps.includes(step) ? step : opening;
   const index = steps.indexOf(current);
 
-  const lines = toLines(serviceUuids, staffBy);
+  const lines = toLines(serviceUuids, staffFor);
   // Party and area of a party sector; the checkout keeps them for the
   // booking.
   const seating = byParty
@@ -179,7 +233,7 @@ export function BookingWizard({
           from: windowStart,
           to: windowEnd,
           step_minutes: 15,
-          channel: "web",
+          channel: surface.channel,
           ...seating,
         }
       : null;
@@ -226,7 +280,7 @@ export function BookingWizard({
 
   const goTo = (next: WizardStep) => {
     setStep(next);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    surface.scrollTop();
   };
 
   const back = () => {
@@ -248,7 +302,7 @@ export function BookingWizard({
           branch_uuid: branchUuid,
           lines,
           starts_at: slot.starts_at,
-          channel: "web",
+          channel: surface.channel,
           ...seating,
         },
         uuid(),
@@ -283,7 +337,9 @@ export function BookingWizard({
       );
       const token = reservation.access_token ?? "";
       rememberAccessToken(reservation.uuid, token);
-      router.push(statusHref(slug, reservation.uuid, token));
+      router.push(
+        statusHref(slug, reservation.uuid, token, surface.base, surface.query),
+      );
     } catch (error) {
       reportBookingError(error, t);
       if (isSlotTaken(error)) {
@@ -324,9 +380,6 @@ export function BookingWizard({
     goTo(steps[index + 1]!);
   };
 
-  const catalogLoading =
-    Boolean(branchUuid) && (servicesQuery.isLoading || staffQuery.isLoading);
-
   let body: React.ReactNode;
   if (current === "branch") {
     body = (
@@ -336,7 +389,7 @@ export function BookingWizard({
         onChange={(value) => {
           setBranchUuid(value);
           setZone("");
-          setPickedServices([]);
+          setPickedServices(presetServices);
           setStaffBy({});
           setProductQty({});
           resetTime();
@@ -404,7 +457,7 @@ export function BookingWizard({
       <StaffStep
         services={selected}
         staff={staff}
-        value={staffBy}
+        value={staffFor}
         staffTerm={staffTerm}
         currency={business.currency}
         onChange={(service, person) => {

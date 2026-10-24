@@ -31,6 +31,8 @@ export function flattenSettings(s: OrganizationSettings): Map<string, string> {
   for (const channel of s.sales_channels) {
     put(`sales_channels.${channel.code}`, channel.is_active);
   }
+  // Versions saved before TEC-908 decode with an empty list.
+  put("embed.allowed_origins", (s.embed?.allowed_origins ?? []).join(", "));
   put("tax.default_vat_rate", s.tax.default_vat_rate);
   for (const mapping of s.tax.invoice_item_mappings) {
     put(

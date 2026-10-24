@@ -154,6 +154,8 @@ export const routes = {
         `/t/${encodeURIComponent(slug)}/settings/notifications`,
       confirmation: (slug: string) =>
         `/t/${encodeURIComponent(slug)}/settings/confirmation`,
+      /** Embed code generator of the booking screen (TEC-908). */
+      embed: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/embed`,
       plan: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/plan`,
       roles: {
         root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/roles`,

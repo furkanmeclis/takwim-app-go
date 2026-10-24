@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/common/error-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useBookingSurface } from "@/features/business-page/components/booking-surface";
 import { BookingWizard } from "@/features/business-page/components/booking-wizard";
 import { BusinessInfo } from "@/features/business-page/components/business-info";
 import {
@@ -17,6 +18,7 @@ import {
   usePublicBranches,
   usePublicBusiness,
 } from "@/features/business-page/hooks/use-public-booking";
+import type { Preselect } from "@/features/business-page/lib/embed";
 import { bookingOpen } from "@/features/business-page/lib/wizard";
 import type {
   PublicBranch,
@@ -72,18 +74,86 @@ function Hero({
 }
 
 /**
+ * The booking part: the wizard, or why it is closed. The business page uses
+ * channel `web`, the embedded screen `widget`.
+ */
+function BookingPanel({
+  slug,
+  business,
+  preselect,
+}: {
+  slug: string;
+  business: PublicBusiness;
+  preselect?: Preselect;
+}) {
+  const { t } = useLocale();
+  const { channel } = useBookingSurface();
+  const branchesQuery = usePublicBranches(slug);
+  const branches = branchesQuery.data ?? [];
+
+  if (!bookingOpen(business, channel)) {
+    return (
+      <Alert>
+        <CalendarX2 />
+        <AlertTitle>{t("business_page.closed_title")}</AlertTitle>
+        <AlertDescription>
+          {business.contact.phone
+            ? t("business_page.closed_call", {
+                phone: business.contact.phone,
+              })
+            : t("business_page.closed_description")}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (branchesQuery.isLoading) {
+    return <Skeleton className="h-64 w-full rounded-xl" />;
+  }
+  if (branchesQuery.isError) {
+    return (
+      <ErrorState
+        title={t("business_page.load_failed")}
+        onRetry={() => void branchesQuery.refetch()}
+        retryLabel={t("common.retry")}
+      />
+    );
+  }
+  if (branches.length === 0) {
+    return (
+      <EmptyState
+        title={t("business_page.no_branches_title")}
+        description={t("business_page.no_branches_description")}
+      />
+    );
+  }
+  return (
+    <BookingWizard
+      slug={slug}
+      business={business}
+      branches={branches}
+      preselect={preselect}
+    />
+  );
+}
+
+/**
  * The business page (takwim.link/{slug}): profile, branches and the booking
  * wizard. The profile comes from the server render; branches and the
- * catalog load in the browser through the same-origin BFF.
+ * catalog load in the browser through the same-origin BFF. The embedded
+ * screen (TEC-908) shows the same page in its full view and only the
+ * booking part in its compact view.
  */
 export function BusinessPage({
   slug,
   initialBusiness,
+  preselect,
 }: {
   slug: string;
   initialBusiness?: PublicBusiness;
+  preselect?: Preselect;
 }) {
   const { t } = useLocale();
+  const { embed } = useBookingSurface();
   const businessQuery = usePublicBusiness(slug, initialBusiness);
   const branchesQuery = usePublicBranches(slug);
   const business = businessQuery.data;
@@ -111,7 +181,13 @@ export function BusinessPage({
     );
   }
 
-  const open = bookingOpen(business);
+  if (embed?.view === "compact") {
+    return (
+      <BusinessPageShell slug={slug} business={business}>
+        <BookingPanel slug={slug} business={business} preselect={preselect} />
+      </BusinessPageShell>
+    );
+  }
 
   return (
     <BusinessPageShell slug={slug} business={business}>
@@ -126,38 +202,7 @@ export function BusinessPage({
           <TabsTrigger value="info">{t("business_page.tabs.info")}</TabsTrigger>
         </TabsList>
         <TabsContent value="book" className="space-y-4">
-          {!open ? (
-            <Alert>
-              <CalendarX2 />
-              <AlertTitle>{t("business_page.closed_title")}</AlertTitle>
-              <AlertDescription>
-                {business.contact.phone
-                  ? t("business_page.closed_call", {
-                      phone: business.contact.phone,
-                    })
-                  : t("business_page.closed_description")}
-              </AlertDescription>
-            </Alert>
-          ) : branchesQuery.isLoading ? (
-            <Skeleton className="h-64 w-full rounded-xl" />
-          ) : branchesQuery.isError ? (
-            <ErrorState
-              title={t("business_page.load_failed")}
-              onRetry={() => void branchesQuery.refetch()}
-              retryLabel={t("common.retry")}
-            />
-          ) : branches.length === 0 ? (
-            <EmptyState
-              title={t("business_page.no_branches_title")}
-              description={t("business_page.no_branches_description")}
-            />
-          ) : (
-            <BookingWizard
-              slug={slug}
-              business={business}
-              branches={branches}
-            />
-          )}
+          <BookingPanel slug={slug} business={business} preselect={preselect} />
         </TabsContent>
         <TabsContent value="info">
           <BusinessInfo business={business} branches={branches} />

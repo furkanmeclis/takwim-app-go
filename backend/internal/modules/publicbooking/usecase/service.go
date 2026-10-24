@@ -334,6 +334,7 @@ func (s *Service) Business(ctx context.Context, o Org) (model.Business, error) {
 		Policies:    model.Policies{Cancellation: p.Cancellation, Change: p.Change, NoShow: p.NoShow},
 		Booking:     b,
 		BranchCount: len(branches),
+		Embed:       model.Embed{AllowedOrigins: append([]string{}, v.Settings.Embed.AllowedOrigins...)},
 	}, nil
 }
 

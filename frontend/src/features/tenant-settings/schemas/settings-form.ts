@@ -19,6 +19,25 @@ type Translate = (
 ) => string;
 
 const PERCENT = /^\d{1,3}(\.\d{1,2})?$/;
+
+/** Most sites one business may embed on (API limit). */
+export const MAX_EMBED_ORIGINS = 20;
+
+/**
+ * One line of the embed sites field: a site address (`example.com`,
+ * `https://shop.example.com`, `https://*.example.com`; http only for
+ * localhost). The API normalizes it again (TEC-908).
+ */
+const ORIGIN_LINE =
+  /^(?:(?:https:\/\/)?(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]*[a-z0-9]|(?:https?:\/\/)?(?:localhost|127\.0\.0\.1))(?::\d{1,5})?\/?$/i;
+
+/** Non-empty lines of the embed sites field. */
+export function originLines(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 const MINUTES = /^\d{1,6}$/;
 
 function minutesField(t: Translate, min: number, max: number) {
@@ -114,6 +133,27 @@ export function createSettingsSchema(t: Translate) {
       sales_channels: z.array(
         z.object({ code: z.string(), is_active: z.boolean() }),
       ),
+      embed: z.object({
+        allowed_origins: z.string().superRefine((text, ctx) => {
+          const lines = originLines(text);
+          const bad = lines.findIndex((line) => !ORIGIN_LINE.test(line));
+          if (bad >= 0) {
+            ctx.addIssue({
+              code: "custom",
+              message: t("tenant_settings.validation.embed_origin", {
+                line: bad + 1,
+              }),
+            });
+          } else if (lines.length > MAX_EMBED_ORIGINS) {
+            ctx.addIssue({
+              code: "custom",
+              message: t("tenant_settings.validation.embed_origins_max", {
+                max: MAX_EMBED_ORIGINS,
+              }),
+            });
+          }
+        }),
+      }),
       tax: z.object({
         default_vat_rate: percentField(t),
         invoice_item_mappings: z.array(
@@ -183,6 +223,7 @@ export function settingsToForm(s: OrganizationSettings): SettingsFormValues {
       code,
       is_active: channels.get(code) ?? false,
     })),
+    embed: { allowed_origins: (s.embed?.allowed_origins ?? []).join("\n") },
     tax: {
       default_vat_rate: s.tax.default_vat_rate,
       invoice_item_mappings: INVOICE_ITEM_TYPES.map((item_type) => {
@@ -233,6 +274,7 @@ export function formToSaveRequest(
         code: c.code as OrganizationSettings["sales_channels"][number]["code"],
         is_active: c.is_active,
       })),
+      embed: { allowed_origins: originLines(values.embed.allowed_origins) },
       tax: {
         default_vat_rate: values.tax.default_vat_rate,
         invoice_item_mappings: values.tax.invoice_item_mappings.map((m) => ({

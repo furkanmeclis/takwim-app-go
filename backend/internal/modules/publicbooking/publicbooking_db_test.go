@@ -305,6 +305,27 @@ func TestPublicCatalog(t *testing.T) {
 	if raw := string(r.env.Data); strings.Contains(raw, "tax_number") || strings.Contains(raw, f.org.UUID.String()+"\",\"id") {
 		t.Fatalf("profile leaks internal fields: %s", raw)
 	}
+	if !strings.Contains(string(r.env.Data), `"embed":{"allowed_origins":[]}`) {
+		t.Fatalf("profile embed = %s", r.env.Data)
+	}
+
+	// Embed (TEC-908): the sites allowed to frame the booking screen,
+	// normalized by the settings and answered only for their business.
+	cur, err := f.settings.Current(context.Background(), f.org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur.Settings.Embed.AllowedOrigins = []string{"Kuafor.example.com/", "https://*.example.org"}
+	if _, err := f.settings.Save(context.Background(), f.org.ID, f.owner.ID, orgsettingsmodel.SaveInput{Settings: cur.Settings}); err != nil {
+		t.Fatal(err)
+	}
+	biz = decode[model.Business](t, f.do(t, http.MethodGet, base, nil, nil))
+	if strings.Join(biz.Embed.AllowedOrigins, " ") != "https://kuafor.example.com https://*.example.org" {
+		t.Fatalf("embed origins = %v", biz.Embed.AllowedOrigins)
+	}
+	if other := decode[model.Business](t, f.do(t, http.MethodGet, f.base(f.org2.Slug), nil, nil)); len(other.Embed.AllowedOrigins) != 0 {
+		t.Fatalf("embed origins of B = %v", other.Embed.AllowedOrigins)
+	}
 
 	for _, slug := range []string{"yok-boyle-bir-isletme", strings.ToUpper(f.org.Slug) + "x"} {
 		if r := f.do(t, http.MethodGet, f.base(slug), nil, nil); r.code != http.StatusNotFound {
