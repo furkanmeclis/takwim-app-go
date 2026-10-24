@@ -150,19 +150,38 @@ type Attempt struct {
 	Status  string `json:"status"`
 	// DispatchStatus is the request's own status (pending, sending,
 	// delivered, failed, skipped, cancelled).
-	DispatchStatus  string     `json:"dispatch_status"`
-	Channel         *string    `json:"channel"`
-	Try             int        `json:"try"`
-	Provider        string     `json:"provider"`
-	Recipient       string     `json:"recipient"`
-	Error           string     `json:"error"`
-	ScheduledAt     time.Time  `json:"scheduled_at"`
+	DispatchStatus string    `json:"dispatch_status"`
+	Channel        *string   `json:"channel"`
+	Try            int       `json:"try"`
+	Provider       string    `json:"provider"`
+	Recipient      string    `json:"recipient"`
+	Error          string    `json:"error"`
+	ScheduledAt    time.Time `json:"scheduled_at"`
+	// SentAt: the provider accepted the message; DeliveredAt / ReadAt come
+	// from its delivery reports (WhatsApp). None of them is an answer.
 	SentAt          *time.Time `json:"sent_at"`
+	DeliveredAt     *time.Time `json:"delivered_at"`
+	ReadAt          *time.Time `json:"read_at"`
 	FinishedAt      *time.Time `json:"finished_at"`
 	CreatedAt       time.Time  `json:"created_at"`
 	DeliveryUUID    *uuid.UUID `json:"delivery_uuid"`
 	DispatchUUID    uuid.UUID  `json:"dispatch_uuid"`
 	DispatchMessage string     `json:"dispatch_error"`
+	// Responses are the customer's replies to this message on its channel
+	// (a WhatsApp button), with what was done with each.
+	Responses []Response `json:"responses"`
+}
+
+// Response is one reply on a channel (TEC-922): the answer it asked for
+// (confirm, cancel, change, unknown) and the result (applied, rejected,
+// ignored) with the reason of one that was not applied.
+type Response struct {
+	UUID        uuid.UUID `json:"uuid"`
+	Channel     string    `json:"channel"`
+	Answer      string    `json:"answer"`
+	Result      string    `json:"result"`
+	Reason      string    `json:"reason"`
+	RespondedAt time.Time `json:"responded_at"`
 }
 
 // ConfirmInput records a confirmation the customer gave on the phone.

@@ -67,6 +67,8 @@ import (
 	staffsharesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
 	staffsharesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
+	whatsappmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp"
+	whatsappusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/whatsapp/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/observability"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
@@ -177,12 +179,18 @@ func main() {
 	// transitions, expiries) write their notices like the API's; this
 	// process sends every business's due notices and plans the reminders.
 	notifyEngine := customernotifyusecase.New(pool, queries, strings.TrimRight(cfg.Auth.FrontendURL, "/")+"/panel")
+	whatsappClient := whatsappmodule.Client(cfg)
+	whatsappSvc := whatsappusecase.New(queries, whatsappClient)
+	whatsappSvc.SetLogger(log)
 	notifyEngine.SetLogger(log)
 	notifyEngine.Register(
 		// The SMS provider is not chosen yet (TEC-884): the log sender
 		// counts as not ready, so nothing is recorded as sent through it.
 		customernotifyadapters.SMS{Sender: sms.NewLogSender(log, cfg.App.Env != "production")},
 		customernotifyadapters.Email{Mail: mailer, Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""},
+		// WhatsApp (TEC-922): the confirmation request through the business's
+		// own Cloud API account (accounts plugged in with the integration kit).
+		whatsappusecase.NewChannel(whatsappSvc),
 	)
 	usage := entitlementsmodule.New(queries)
 	notifyEngine.SetUsage(func(ctx context.Context, orgID int64, timezone, metric string) {
@@ -309,11 +317,13 @@ func main() {
 	// Confirmation requests carry a link to the one visit (confirm, cancel,
 	// ask for a change), issued at send time.
 	notifyEngine.SetLinkIssuerFor(customernotifycatalog.ConfirmationRequest, customernotifyadapters.VisitLinks(panelLinks))
-	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log, paymentsmodule.Adapters(cfg)...)
+	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log,
+		append(paymentsmodule.Adapters(cfg), whatsappmodule.Adapters(whatsappClient)...)...)
 	if err != nil {
 		log.Error("integrations_failed", "error", err)
 		exit(1)
 	}
+	whatsappSvc.SetAccounts(integrationKit.Accounts, integrationKit.Runner)
 	integrationKit.Runner.SetDispatcher(queue.IntegrationDispatcher{Client: queueClient})
 	integrationKit.Runner.SetResourceEvents(resourceEvents)
 

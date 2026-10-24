@@ -9038,6 +9038,9 @@ paths:
         The confirmation requests of the booking, newest first: one row per
         channel tried, with the provider's result, the masked recipient and
         the times (a request no channel took yet has `channel` null).
+        Acceptance (`sent_at`), delivery (`delivered_at`), read (`read_at`)
+        and the customer's replies (`responses`) are separate: a delivered
+        or read message is never a confirmation (TEC-922).
         `round` / `request` name the planning and the request ("2nd
         request of the 1st planning"). `tenant.reservations.read`; another
         business's or branch's booking: `404`.
@@ -12666,6 +12669,87 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "502": { $ref: "#/components/responses/InternalError" }
+
+  /v1/public/whatsapp/meta/{account}/webhook:
+    parameters:
+      - name: account
+        in: path
+        required: true
+        description: The business's WhatsApp integration account.
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Notifications]
+      operationId: getWhatsAppWebhookChallenge
+      summary: WhatsApp webhook subscription handshake
+      description: |
+        Meta's webhook verification (TEC-922), the callback URL the business
+        enters in its Meta app. Answers `hub.challenge` as plain text when
+        `hub.mode` is `subscribe` and `hub.verify_token` is the account's
+        verify token (`401` otherwise). An unknown, disabled or non-Cloud
+        API account, or `WHATSAPP_META_ENABLED` off: `404`.
+      security: []
+      parameters:
+        - { name: hub.mode, in: query, schema: { type: string } }
+        - { name: hub.verify_token, in: query, schema: { type: string } }
+        - { name: hub.challenge, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The challenge
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      tags: [Notifications]
+      operationId: postWhatsAppWebhook
+      summary: WhatsApp delivery statuses and replies
+      description: |
+        The Cloud API's events of the business's number, signed with the
+        account's app secret (`X-Hub-Signature-256`, `401` otherwise).
+        Delivery statuses (`sent`, `delivered`, `read`, `failed`) of our
+        messages become delivery reports: delivered / read are receipt
+        times and never a confirmation; `failed` sends the request on the
+        rule's next channel. A button reply (`tkw1:confirm`, `tkw1:cancel`,
+        `tkw1:change`) to our confirmation request answers it when it comes
+        from the customer's own number and belongs to the booking's current
+        request; cancel follows the business's cancel rules. Every reply is
+        recorded with its result (`ConfirmationResponse`) and handled once
+        per inbound message id (`integration_jobs`); the customer gets a
+        short answer in the chat. Messages that do not reply to ours are
+        left alone. `200` when handled (also a repeated delivery), `500` to
+        have it sent again. Limit: 1200 per minute per account.
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Handled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, enum: [ok] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/public/payments/paytr/notify:
     post:
@@ -16452,7 +16536,7 @@ components:
         next_attempt_at: { type: [string, "null"], format: date-time }
         deadline_at: { type: string, format: date-time }
         answer: { type: [string, "null"], enum: [confirm, cancel, change, null] }
-        answer_channel: { type: [string, "null"], description: "panel, visit_link, phone (recorded by a member); whatsapp / voice later" }
+        answer_channel: { type: [string, "null"], description: "panel, visit_link, whatsapp (a button of the request), phone (recorded by a member); voice later" }
         answered_at: { type: [string, "null"], format: date-time }
         change_requested_at: { type: [string, "null"], format: date-time }
         change_note: { type: string }
@@ -16536,7 +16620,7 @@ components:
     ConfirmationAttempt:
       type: object
       required: [round, request, status, dispatch_status, channel, try, provider, recipient, error, scheduled_at, sent_at,
-        finished_at, created_at, delivery_uuid, dispatch_uuid, dispatch_error]
+        delivered_at, read_at, finished_at, created_at, delivery_uuid, dispatch_uuid, dispatch_error, responses]
       properties:
         round: { type: integer }
         request: { type: integer }
@@ -16548,12 +16632,44 @@ components:
         recipient: { type: string, description: Masked. }
         error: { type: string }
         scheduled_at: { type: string, format: date-time }
-        sent_at: { type: [string, "null"], format: date-time }
+        sent_at: { type: [string, "null"], format: date-time, description: The provider accepted the message. }
+        delivered_at:
+          type: [string, "null"]
+          format: date-time
+          description: From the provider's delivery report (WhatsApp). Never an answer.
+        read_at:
+          type: [string, "null"]
+          format: date-time
+          description: The customer opened the message (WhatsApp read report). Never an answer.
         finished_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
         delivery_uuid: { type: [string, "null"], format: uuid }
         dispatch_uuid: { type: string, format: uuid }
         dispatch_error: { type: string }
+        responses:
+          type: array
+          description: The customer's replies to this message on its channel (WhatsApp buttons), oldest first.
+          items: { $ref: "#/components/schemas/ConfirmationResponse" }
+
+    ConfirmationResponse:
+      type: object
+      required: [uuid, channel, answer, result, reason, responded_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        channel: { type: string }
+        answer: { type: string, enum: [confirm, cancel, change, unknown] }
+        result:
+          type: string
+          enum: [applied, rejected, ignored]
+          description: |
+            `applied`: the answer was taken. `rejected`: the reply was an
+            answer the booking does not take now (`reason`: `answered`,
+            `status`, `cutoff`, `request_outdated`, `not_open`,
+            `reservation_not_found` …). `ignored`: not an answer from the
+            customer (`other_number`, `not_an_answer`,
+            `not_confirmation_request`).
+        reason: { type: string }
+        responded_at: { type: string, format: date-time }
 
     EnvelopeConfirmationAttempts:
       type: object

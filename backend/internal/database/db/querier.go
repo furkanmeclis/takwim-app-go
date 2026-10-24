@@ -368,6 +368,9 @@ type Querier interface {
 	GetCustomerIdentityByPhone(ctx context.Context, phoneE164 string) (CustomerIdentity, error)
 	GetCustomerIdentityLink(ctx context.Context, arg GetCustomerIdentityLinkParams) (CustomerIdentityLink, error)
 	GetCustomerNotificationDeliveryByExternal(ctx context.Context, arg GetCustomerNotificationDeliveryByExternalParams) (CustomerNotificationDelivery, error)
+	// The attempt a delivery report or a reply is about (the provider's id of
+	// the message we sent).
+	GetCustomerNotificationDeliveryByProviderRef(ctx context.Context, arg GetCustomerNotificationDeliveryByProviderRefParams) (CustomerNotificationDelivery, error)
 	GetCustomerNotificationDeliveryByUUID(ctx context.Context, arg GetCustomerNotificationDeliveryByUUIDParams) (CustomerNotificationDelivery, error)
 	GetCustomerNotificationDispatch(ctx context.Context, arg GetCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
 	GetCustomerNotificationDispatchByKey(ctx context.Context, arg GetCustomerNotificationDispatchByKeyParams) (CustomerNotificationDispatch, error)
@@ -547,6 +550,12 @@ type Querier interface {
 	GetValidRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetWebAuthnCredentialByCredentialID(ctx context.Context, credentialID string) (WebauthnCredential, error)
 	GetWebAuthnCredentialByUUID(ctx context.Context, arg GetWebAuthnCredentialByUUIDParams) (WebauthnCredential, error)
+	// Confirmation channels (TEC-922): delivery reports, receipt times and
+	// channel replies of the customer notification deliveries.
+	// The account a provider webhook URL names (/v1/public/whatsapp/meta/{uuid}).
+	// The only unscoped account lookup: the uuid gives the organization, and the
+	// caller verifies the request with that account's own secret before acting.
+	GetWebhookIntegrationAccount(ctx context.Context, argUuid uuid.UUID) (GetWebhookIntegrationAccountRow, error)
 	HasActivePushDevices(ctx context.Context, userID int64) (bool, error)
 	// The number was reassigned to the person: every business except the kept
 	// ones opens only what is booked from now on.
@@ -565,6 +574,9 @@ type Querier interface {
 	InsertCustomerNotificationDelivery(ctx context.Context, arg InsertCustomerNotificationDeliveryParams) (CustomerNotificationDelivery, error)
 	// No row when the idempotency key was already used (the notice exists).
 	InsertCustomerNotificationDispatch(ctx context.Context, arg InsertCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
+	// One reply on a channel; a repeated webhook of the same inbound message
+	// writes nothing.
+	InsertCustomerNotificationResponse(ctx context.Context, arg InsertCustomerNotificationResponseParams) (CustomerNotificationResponse, error)
 	InsertFinanceCategory(ctx context.Context, arg InsertFinanceCategoryParams) (InsertFinanceCategoryRow, error)
 	// ----------------------------------------------------------------- entries
 	InsertFinanceEntry(ctx context.Context, arg InsertFinanceEntryParams) (InsertFinanceEntryRow, error)
@@ -688,6 +700,8 @@ type Querier interface {
 	ListConfirmationAttempts(ctx context.Context, arg ListConfirmationAttemptsParams) ([]ListConfirmationAttemptsRow, error)
 	// The branches the settings page lists (inside the caller's scope).
 	ListConfirmationBranches(ctx context.Context, arg ListConfirmationBranchesParams) ([]ListConfirmationBranchesRow, error)
+	// The replies to one booking's confirmation requests, oldest first.
+	ListConfirmationResponses(ctx context.Context, arg ListConfirmationResponsesParams) ([]ListConfirmationResponsesRow, error)
 	ListConfirmationSettings(ctx context.Context, organizationID int64) ([]ListConfirmationSettingsRow, error)
 	// The confirmation list of the panel and its follow-up alerts (TEC-924).
 	// Every query filters by organization_id; joins by alias.organization_id
@@ -970,6 +984,9 @@ type Querier interface {
 	// business. The caller links each one with customers.LinkVerified; a
 	// record older than the phone's last release opens only what came after.
 	ListUnlinkedCustomersByPhone(ctx context.Context, phoneE164 pgtype.Text) ([]ListUnlinkedCustomersByPhoneRow, error)
+	// Accepted attempts whose delivery report never came (every business):
+	// the receipt timeout fails them so the next channel runs.
+	ListUnreportedCustomerNotificationDeliveries(ctx context.Context, arg ListUnreportedCustomerNotificationDeliveriesParams) ([]ListUnreportedCustomerNotificationDeliveriesRow, error)
 	ListUserRoleSlugs(ctx context.Context, userID int64) ([]string, error)
 	ListUserRolesByUserID(ctx context.Context, userID int64) ([]Role, error)
 	ListUserRolesByUserUUID(ctx context.Context, argUuid uuid.UUID) ([]Role, error)
@@ -1013,6 +1030,10 @@ type Querier interface {
 	MarkBulkJobFailed(ctx context.Context, arg MarkBulkJobFailedParams) (BulkJob, error)
 	MarkBulkJobProcessing(ctx context.Context, id int64) (BulkJob, error)
 	MarkBulkJobRolledBack(ctx context.Context, arg MarkBulkJobRolledBackParams) (BulkJob, error)
+	// Receipt times from a delivery report: the first report of each kind
+	// wins. A late report of an attempt that already ended still records when
+	// the message arrived; it never changes the attempt's status.
+	MarkCustomerNotificationDeliveryReceipt(ctx context.Context, arg MarkCustomerNotificationDeliveryReceiptParams) error
 	MarkExportJobCompleted(ctx context.Context, arg MarkExportJobCompletedParams) (ExportJob, error)
 	MarkExportJobFailed(ctx context.Context, arg MarkExportJobFailedParams) (ExportJob, error)
 	MarkExportJobProcessing(ctx context.Context, id int64) (ExportJob, error)

@@ -51,6 +51,8 @@ const (
 const (
 	SourcePanel     = "panel"
 	SourceVisitLink = "visit_link"
+	// SourceWhatsApp: a button of the WhatsApp request (TEC-922).
+	SourceWhatsApp = "whatsapp"
 )
 
 // Limits of the settings.

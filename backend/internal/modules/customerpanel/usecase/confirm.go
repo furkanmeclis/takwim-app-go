@@ -159,6 +159,42 @@ func (s *Service) visitAnswer(ctx context.Context, token string, meta Meta, answ
 	return Changed{Reservation: s.visitView(reloaded), Scope: scopeOf(reloaded)}, nil
 }
 
+// ChannelAnswer applies a customer's reply on a message channel (a
+// WhatsApp button, TEC-922) to the visit the message was about, with the
+// rules of the visit link: "Geleceğim", a change request (no note) or the
+// cancel under the business's cancel rules. The caller has checked that the
+// reply came from the customer's number and answers the current request.
+func (s *Service) ChannelAnswer(ctx context.Context, orgID, reservationID int64, answer, source string) (Changed, error) {
+	row, err := s.visitReservation(ctx, orgID, reservationID)
+	if err != nil {
+		return Changed{}, ErrNotFound
+	}
+	o, err := s.loadRow(ctx, row)
+	if err != nil {
+		return Changed{}, err
+	}
+	switch answer {
+	case confirmationsmodel.AnswerConfirm, confirmationsmodel.AnswerChange:
+		err = s.answer(ctx, o, answer, source, "")
+	case confirmationsmodel.AnswerCancel:
+		err = s.cancel(ctx, o, nil)
+	default:
+		return Changed{}, &ActionError{Action: "confirm", Reason: model.ReasonNotRequested}
+	}
+	if err != nil {
+		return Changed{}, err
+	}
+	fresh, err := s.visitReservation(ctx, orgID, reservationID)
+	if err != nil {
+		return Changed{}, err
+	}
+	reloaded, err := s.loadRow(ctx, fresh)
+	if err != nil {
+		return Changed{}, err
+	}
+	return Changed{Reservation: s.visitView(reloaded), Scope: scopeOf(reloaded)}, nil
+}
+
 // VisitConfirm confirms the visit of a visit link.
 func (s *Service) VisitConfirm(ctx context.Context, in model.VisitConfirmInput, meta Meta) (Changed, error) {
 	return s.visitAnswer(ctx, in.Token, meta, confirmationsmodel.AnswerConfirm, "")

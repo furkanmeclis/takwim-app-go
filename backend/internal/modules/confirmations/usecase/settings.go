@@ -167,7 +167,7 @@ func (e *Engine) Settings(ctx context.Context, scope orgctx.Scope) (model.Settin
 		},
 	}
 	for _, c := range Channels {
-		out.Channels = append(out.Channels, model.Channel{Name: c, Ready: e.ready(c)})
+		out.Channels = append(out.Channels, model.Channel{Name: c, Ready: e.readyFor(ctx, scope.ID, c)})
 	}
 	byBranch := map[int64]db.ListConfirmationSettingsRow{}
 	for _, r := range rows {

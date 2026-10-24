@@ -256,9 +256,22 @@ func (e *Engine) Attempts(ctx context.Context, orgID int64, id uuid.UUID) ([]mod
 	if err != nil {
 		return nil, err
 	}
+	replies, err := e.q.ListConfirmationResponses(ctx, db.ListConfirmationResponsesParams{
+		OrganizationID: orgID, ReservationID: pgtype.Int8{Int64: r.ID, Valid: true}, EventCode: Event,
+	})
+	if err != nil {
+		return nil, err
+	}
+	byDelivery := map[uuid.UUID][]model.Response{}
+	for _, rp := range replies {
+		byDelivery[rp.DeliveryUuid] = append(byDelivery[rp.DeliveryUuid], model.Response{
+			UUID: rp.Uuid, Channel: rp.Channel, Answer: rp.Answer, Result: rp.Result, Reason: rp.Reason,
+			RespondedAt: rp.RespondedAt.Time.UTC(),
+		})
+	}
 	out := make([]model.Attempt, 0, len(rows))
 	for _, row := range rows {
-		a := model.Attempt{
+		a := model.Attempt{Responses: []model.Response{},
 			DispatchUUID: row.DispatchUuid, DispatchStatus: row.DispatchStatus, DispatchMessage: row.DispatchError,
 			Status: row.DispatchStatus, Error: row.DispatchError, ScheduledAt: row.ScheduledAt.Time.UTC(),
 			CreatedAt: row.ScheduledAt.Time.UTC(),
@@ -274,7 +287,11 @@ func (e *Engine) Attempts(ctx context.Context, orgID int64, id uuid.UUID) ([]mod
 			a.Recipient = row.RecipientMasked.String
 			a.Error = row.DeliveryError.String
 			a.SentAt, a.FinishedAt = timePtr(row.SentAt), timePtr(row.FinishedAt)
+			a.DeliveredAt, a.ReadAt = timePtr(row.DeliveredAt), timePtr(row.ReadAt)
 			a.CreatedAt = row.DeliveryCreatedAt.Time.UTC()
+			if rs := byDelivery[id]; rs != nil {
+				a.Responses = rs
+			}
 		}
 		out = append(out, a)
 	}

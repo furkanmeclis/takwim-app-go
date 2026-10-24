@@ -435,6 +435,7 @@
   "confirmation_task.answers.change": "Asked for a change",
   "confirmation_task.sources.panel": "Customer panel",
   "confirmation_task.sources.visit_link": "Visit link",
+  "confirmation_task.sources.whatsapp": "WhatsApp",
   "confirmation_task.change": "Change request",
   "confirmation_task.outcome": "Outcome",
   "confirmation_task.outcomes.cancelled": "Cancelled for no answer",

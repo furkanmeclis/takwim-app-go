@@ -5631,6 +5631,9 @@ export interface paths {
          * @description The confirmation requests of the booking, newest first: one row per
          *     channel tried, with the provider's result, the masked recipient and
          *     the times (a request no channel took yet has `channel` null).
+         *     Acceptance (`sent_at`), delivery (`delivered_at`), read (`read_at`)
+         *     and the customer's replies (`responses`) are separate: a delivered
+         *     or read message is never a confirmation (TEC-922).
          *     `round` / `request` name the planning and the request ("2nd
          *     request of the 1st planning"). `tenant.reservations.read`; another
          *     business's or branch's booking: `404`.
@@ -7833,6 +7836,50 @@ export interface paths {
          *     the checkout window per IP.
          */
         post: operations["startPublicReservationPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/whatsapp/meta/{account}/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's WhatsApp integration account. */
+                account: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * WhatsApp webhook subscription handshake
+         * @description Meta's webhook verification (TEC-922), the callback URL the business
+         *     enters in its Meta app. Answers `hub.challenge` as plain text when
+         *     `hub.mode` is `subscribe` and `hub.verify_token` is the account's
+         *     verify token (`401` otherwise). An unknown, disabled or non-Cloud
+         *     API account, or `WHATSAPP_META_ENABLED` off: `404`.
+         */
+        get: operations["getWhatsAppWebhookChallenge"];
+        put?: never;
+        /**
+         * WhatsApp delivery statuses and replies
+         * @description The Cloud API's events of the business's number, signed with the
+         *     account's app secret (`X-Hub-Signature-256`, `401` otherwise).
+         *     Delivery statuses (`sent`, `delivered`, `read`, `failed`) of our
+         *     messages become delivery reports: delivered / read are receipt
+         *     times and never a confirmation; `failed` sends the request on the
+         *     rule's next channel. A button reply (`tkw1:confirm`, `tkw1:cancel`,
+         *     `tkw1:change`) to our confirmation request answers it when it comes
+         *     from the customer's own number and belongs to the booking's current
+         *     request; cancel follows the business's cancel rules. Every reply is
+         *     recorded with its result (`ConfirmationResponse`) and handled once
+         *     per inbound message id (`integration_jobs`); the customer gets a
+         *     short answer in the chat. Messages that do not reply to ours are
+         *     left alone. `200` when handled (also a repeated delivery), `500` to
+         *     have it sent again. Limit: 1200 per minute per account.
+         */
+        post: operations["postWhatsAppWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10761,7 +10808,7 @@ export interface components {
             deadline_at: string;
             /** @enum {string|null} */
             answer: "confirm" | "cancel" | "change" | null;
-            /** @description panel, visit_link, phone (recorded by a member); whatsapp / voice later */
+            /** @description panel, visit_link, whatsapp (a button of the request), phone (recorded by a member); voice later */
             answer_channel: string | null;
             /** Format: date-time */
             answered_at: string | null;
@@ -10852,8 +10899,21 @@ export interface components {
             error: string;
             /** Format: date-time */
             scheduled_at: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The provider accepted the message.
+             */
             sent_at: string | null;
+            /**
+             * Format: date-time
+             * @description From the provider's delivery report (WhatsApp). Never an answer.
+             */
+            delivered_at: string | null;
+            /**
+             * Format: date-time
+             * @description The customer opened the message (WhatsApp read report). Never an answer.
+             */
+            read_at: string | null;
             /** Format: date-time */
             finished_at: string | null;
             /** Format: date-time */
@@ -10863,6 +10923,28 @@ export interface components {
             /** Format: uuid */
             dispatch_uuid: string;
             dispatch_error: string;
+            /** @description The customer's replies to this message on its channel (WhatsApp buttons), oldest first. */
+            responses: components["schemas"]["ConfirmationResponse"][];
+        };
+        ConfirmationResponse: {
+            /** Format: uuid */
+            uuid: string;
+            channel: string;
+            /** @enum {string} */
+            answer: "confirm" | "cancel" | "change" | "unknown";
+            /**
+             * @description `applied`: the answer was taken. `rejected`: the reply was an
+             *     answer the booking does not take now (`reason`: `answered`,
+             *     `status`, `cutoff`, `request_outdated`, `not_open`,
+             *     `reservation_not_found` …). `ignored`: not an answer from the
+             *     customer (`other_number`, `not_an_answer`,
+             *     `not_confirmation_request`).
+             * @enum {string}
+             */
+            result: "applied" | "rejected" | "ignored";
+            reason: string;
+            /** Format: date-time */
+            responded_at: string;
         };
         EnvelopeConfirmationAttempts: {
             /** @enum {boolean} */
@@ -30291,6 +30373,79 @@ export interface operations {
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
             502: components["responses"]["InternalError"];
+        };
+    };
+    getWhatsAppWebhookChallenge: {
+        parameters: {
+            query?: {
+                "hub.mode"?: string;
+                "hub.verify_token"?: string;
+                "hub.challenge"?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The business's WhatsApp integration account. */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The challenge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postWhatsAppWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Hub-Signature-256": string;
+            };
+            path: {
+                /** @description The business's WhatsApp integration account. */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Handled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        success: true;
+                        data: {
+                            /** @enum {string} */
+                            status?: "ok";
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
         };
     };
     postPayTRNotification: {

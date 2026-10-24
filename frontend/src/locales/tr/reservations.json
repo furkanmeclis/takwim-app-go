@@ -435,6 +435,7 @@
   "confirmation_task.answers.change": "Değişiklik istedi",
   "confirmation_task.sources.panel": "Müşteri paneli",
   "confirmation_task.sources.visit_link": "Randevu bağlantısı",
+  "confirmation_task.sources.whatsapp": "WhatsApp",
   "confirmation_task.change": "Değişiklik isteği",
   "confirmation_task.outcome": "Sonuç",
   "confirmation_task.outcomes.cancelled": "Yanıt gelmediği için iptal edildi",

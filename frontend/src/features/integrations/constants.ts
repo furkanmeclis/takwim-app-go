@@ -21,12 +21,19 @@ export const INTEGRATION_FIELD_LABEL_KEYS: Record<string, string> = {
   merchant_id: "integrations.fields.merchant_id",
   merchant_key: "integrations.fields.merchant_key",
   merchant_salt: "integrations.fields.merchant_salt",
+  phone_number_id: "integrations.fields.phone_number_id",
+  access_token: "integrations.fields.access_token",
+  app_secret: "integrations.fields.app_secret",
+  verify_token: "integrations.fields.verify_token",
+  template_name: "integrations.fields.template_name",
+  template_language: "integrations.fields.template_language",
 };
 
 export const INTEGRATION_PROVIDER_LABEL_KEYS: Record<string, string> = {
   log: "integrations.providers.log",
   testpay: "integrations.providers.testpay",
   paytr: "integrations.providers.paytr",
+  meta: "integrations.providers.meta",
 };
 
 export const INTEGRATION_KIND_LABEL_KEYS: Record<string, string> = {
@@ -41,7 +48,23 @@ export const INTEGRATION_PROVIDER_HINT_KEYS: Record<string, string> = {
   log: "integrations.provider_hints.log",
   testpay: "integrations.provider_hints.testpay",
   paytr: "integrations.provider_hints.paytr",
+  meta: "integrations.provider_hints.meta",
 };
+
+/**
+ * Webhook address of an account whose provider posts its events to an
+ * account-specific URL (the WhatsApp Cloud API, TEC-922); null otherwise.
+ */
+export function integrationWebhookPath(account: {
+  kind: string;
+  provider: string;
+  uuid: string;
+}): string | null {
+  if (account.kind === "whatsapp" && account.provider === "meta") {
+    return `/api/v1/public/whatsapp/meta/${account.uuid}/webhook`;
+  }
+  return null;
+}
 
 /** Live list resource of integration jobs (backend jobs usecase). */
 export const INTEGRATION_JOBS_RESOURCE = "tenant.integration_jobs" as const;

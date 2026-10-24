@@ -7,7 +7,11 @@ import { StatusChip } from "@/components/common/status-chip";
 import { EntityTable, EntityToolbar } from "@/components/entity";
 import { createColumn } from "@/components/tables";
 import { useConfirmationAttempts } from "@/features/confirmations/hooks/use-confirmations";
-import { SEND_STATUS } from "@/features/confirmations/lib/list";
+import {
+  RESPONSE_REASONS,
+  RESPONSE_RESULT,
+  SEND_STATUS,
+} from "@/features/confirmations/lib/list";
 import type { ConfirmationAttempt } from "@/features/confirmations/types";
 import { channelLabel } from "@/features/customer-notifications/constants";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -28,7 +32,8 @@ const STATIC_TABLE = {
 /**
  * The confirmation requests of one booking: every channel tried, the
  * provider's result, the masked recipient and the times (requirements §9:
- * acceptance, delivery and the answer are kept apart).
+ * acceptance, delivery, read and the customer's reply are kept apart; a
+ * delivered or read message is never a confirmation, TEC-922).
  */
 export function ConfirmationAttemptsTable({
   reservationUuid,
@@ -41,6 +46,10 @@ export function ConfirmationAttemptsTable({
   const query = useConfirmationAttempts(reservationUuid);
 
   const columns = useMemo(() => {
+    const reasonLabel = (reason: string) =>
+      (RESPONSE_REASONS as readonly string[]).includes(reason)
+        ? t(`confirmations.responses.reasons.${reason}`)
+        : reason;
     const when = (iso: string | null | undefined) =>
       iso
         ? datetimeInZone(iso, zone, locale, {
@@ -107,9 +116,63 @@ export function ConfirmationAttemptsTable({
         enableSorting: false,
         cell: ({ row }) => (
           <span className="tabular-nums">
-            {when(row.original.finished_at ?? row.original.sent_at)}
+            {when(row.original.sent_at ?? row.original.finished_at)}
           </span>
         ),
+      }),
+      createColumn<ConfirmationAttempt>({
+        accessorKey: "delivered_at",
+        labelKey: "confirmations.attempts.columns.delivered_at",
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.delivered_at ? (
+            <span className="flex flex-col tabular-nums">
+              <span>{when(row.original.delivered_at)}</span>
+              {row.original.read_at ? (
+                <span className="text-muted-foreground text-xs">
+                  {t("confirmations.attempts.read_value", {
+                    time: when(row.original.read_at),
+                  })}
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      }),
+      createColumn<ConfirmationAttempt>({
+        id: "response",
+        accessorFn: (row) => row.responses.length,
+        labelKey: "confirmations.attempts.columns.response",
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.responses.length ? (
+            <ul className="space-y-1">
+              {row.original.responses.map((r) => {
+                const result = RESPONSE_RESULT[r.result];
+                return (
+                  <li key={r.uuid} className="flex flex-col gap-0.5">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm">
+                        {t(`confirmations.responses.answers.${r.answer}`)}
+                      </span>
+                      {result ? (
+                        <StatusChip label={t(result.key)} tone={result.tone} />
+                      ) : null}
+                    </span>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {when(r.responded_at)}
+                      {r.reason ? ` · ${reasonLabel(r.reason)}` : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <span className="text-muted-foreground">
+              {t("confirmations.attempts.no_response")}
+            </span>
+          ),
       }),
       createColumn<ConfirmationAttempt>({
         accessorKey: "error",

@@ -82,7 +82,7 @@ func (e *Engine) Settings(ctx context.Context, orgID int64) (model.Settings, err
 	}
 	out := model.Settings{Channels: make([]model.ChannelInfo, 0, len(channel.Known))}
 	for _, c := range channel.Known {
-		out.Channels = append(out.Channels, model.ChannelInfo{Name: c, Ready: e.Ready(c)})
+		out.Channels = append(out.Channels, model.ChannelInfo{Name: c, Ready: e.ReadyFor(ctx, orgID, c)})
 	}
 	for _, ev := range catalog.All() {
 		def := defaultRule(ev)

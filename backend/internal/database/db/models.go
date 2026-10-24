@@ -335,6 +335,8 @@ type CustomerNotificationDelivery struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeliveredAt     pgtype.Timestamptz `json:"delivered_at"`
+	ReadAt          pgtype.Timestamptz `json:"read_at"`
 }
 
 type CustomerNotificationDispatch struct {
@@ -357,6 +359,21 @@ type CustomerNotificationDispatch struct {
 	CompletedAt        pgtype.Timestamptz `json:"completed_at"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomerNotificationResponse struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	DeliveryID     int64              `json:"delivery_id"`
+	Channel        string             `json:"channel"`
+	Provider       string             `json:"provider"`
+	ProviderRef    string             `json:"provider_ref"`
+	Answer         string             `json:"answer"`
+	Result         string             `json:"result"`
+	Reason         string             `json:"reason"`
+	RespondedAt    pgtype.Timestamptz `json:"responded_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type CustomerNotificationRule struct {

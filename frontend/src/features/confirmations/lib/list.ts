@@ -43,6 +43,7 @@ export const SEND_STATUS: Record<string, { key: string; tone: Tone }> = {
 export const ANSWER_SOURCES: Record<string, string> = {
   panel: "reservations.confirmation_task.sources.panel",
   visit_link: "reservations.confirmation_task.sources.visit_link",
+  whatsapp: "reservations.confirmation_task.sources.whatsapp",
   phone: "reservations.confirmation_task.sources.phone",
 };
 
@@ -52,6 +53,31 @@ export const ANSWER_KEYS: Record<string, string> = {
   cancel: "reservations.confirmation_task.answers.cancel",
   change: "reservations.confirmation_task.answers.change",
 };
+
+/** Result of a reply on a channel (WhatsApp button, TEC-922). */
+export const RESPONSE_RESULT: Record<string, { key: string; tone: Tone }> = {
+  applied: { key: "confirmations.responses.results.applied", tone: "success" },
+  rejected: {
+    key: "confirmations.responses.results.rejected",
+    tone: "warning",
+  },
+  ignored: { key: "confirmations.responses.results.ignored", tone: "default" },
+};
+
+/** Why a reply was not applied (known reasons; others show as they are). */
+export const RESPONSE_REASONS = [
+  "answered",
+  "status",
+  "cutoff",
+  "not_requested",
+  "business_unavailable",
+  "request_outdated",
+  "not_open",
+  "reservation_not_found",
+  "other_number",
+  "not_an_answer",
+  "not_confirmation_request",
+] as const;
 
 /** Periods of the list toolbar. */
 export const PERIODS = ["today", "tomorrow", "upcoming", "all"] as const;

@@ -1,7 +1,7 @@
 // Package adapters connects the customer notification engine (TEC-911) to
 // the platform senders: SMS through sms.Sender, e-mail through the SMTP
-// mailer. WhatsApp and voice calls register their own channels with the
-// confirmation module (TEC-921 / 922).
+// mailer. WhatsApp is its own module (modules/whatsapp, TEC-922, the
+// business's Cloud API account); voice calls come with TEC-923.
 package adapters
 
 import (
@@ -116,10 +116,11 @@ type VisitLinker interface {
 // VisitLinks is the link issuer of the confirmation request (TEC-921): the
 // text carries a link to the one visit (confirm, cancel, ask for a change)
 // on every channel. It opens nothing but that visit, so an e-mail may carry
-// it too.
+// it too. WhatsApp answers with the template's buttons and carries no link
+// (TEC-922).
 func VisitLinks(v VisitLinker) func(ctx context.Context, ch string, to channel.Recipient, orgID, reservationID int64) (string, error) {
-	return func(ctx context.Context, _ string, _ channel.Recipient, orgID, reservationID int64) (string, error) {
-		if v == nil || reservationID == 0 {
+	return func(ctx context.Context, ch string, _ channel.Recipient, orgID, reservationID int64) (string, error) {
+		if v == nil || reservationID == 0 || ch == channel.WhatsApp {
 			return "", nil
 		}
 		link, err := v.IssueVisitLinkFor(ctx, orgID, reservationID)

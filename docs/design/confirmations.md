@@ -1,4 +1,4 @@
-# Customer confirmations (TEC-921, TEC-924)
+# Customer confirmations (TEC-921, TEC-922, TEC-924)
 
 The Konfirmasyon add-on: before a visit the business asks the customer to confirm it, on its channels in order, a set number of times, and cancels or flags the booking when no answer comes by the deadline. The customer answers in the customer panel or on the single-visit link of the message: "Geleceğim", "Değişiklik iste" or cancel. Everything is gated by the `confirmation` module (`sector.ModuleConfirmation`, an add-on, entitlements.md); without it no task is planned, no request is sent and no answer is offered.
 
@@ -60,6 +60,7 @@ The cancel runs after the task's transaction, guarded on `confirmation_status` s
 | `POST /v1/customer/reservations/{uuid}/change-request` | signed-in panel (`note`)     |
 | `POST /v1/customer/visit/confirm`                      | visit link (`token`)         |
 | `POST /v1/customer/visit/change-request`               | visit link (`token`, `note`) |
+| `POST /v1/public/whatsapp/meta/{account}/webhook`      | a WhatsApp button (TEC-922)  |
 
 - Opening a visit link answers nothing (link previews); only the button does.
 - **Confirm**: `confirmed`, event `confirmation_confirmed`, no more requests, no cancel.
@@ -120,7 +121,64 @@ The list follows the reservations live channel (`tenant.reservations`): reservat
 
 The list's views are `Takip gerekenler` (`attention=true`, visits from now on), `Bugün` (default), `Yarın`, `Yaklaşan`, `Tümü`; days are counted in the business's time zone. `?view=attention` and `?state=…&branch=…` open the list with them.
 
+## Channels (TEC-922)
+
+The request goes out on the rule's channels in order (fallback on). What the provider accepted, what it delivered, when the customer read it and what the customer answered are recorded apart, and only an explicit answer counts: a delivered or read message, an opened e-mail or an opened link is never a confirmation (§9), and a reply that cannot be applied is recorded as such, never turned into a confirmation.
+
+| Area              | Path                                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Cloud API adapter | `backend/internal/platform/whatsapp/meta` (integration adapter, template / text send, signature, webhook parsing)           |
+| Channel, webhook  | `backend/internal/modules/whatsapp` (`usecase/channel.go`, `usecase/service.go`, `handler`, `routes.go`)                    |
+| Answers           | `customerpanel/usecase/confirm.go` (`ChannelAnswer`), `confirmations/usecase/engine.go` (`RequestCurrent`)                  |
+| Receipts, timeout | `customernotify/usecase/engine.go` (`RecordDelivery`, `ExpireReceipts`), queries `confirmation_channels.sql`                |
+| Migration         | `000067_confirmation_channels` (`delivered_at`, `read_at`, `customer_notification_responses`)                               |
+| Tests             | `customerpanel/whatsapp_db_test.go`, `platform/whatsapp/meta/meta_test.go` (`TestLiveTemplate`: the real-account test, A09) |
+| Web               | attempts table (delivered / read, replies), Ayarlar → Entegrasyonlar (WhatsApp Cloud API account, webhook address)          |
+
+### Receipt times
+
+| Column (`customer_notification_deliveries`) | Means                                                                      |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| `sent_at`                                   | the provider accepted the message (SMTP took it, the Cloud API gave an id) |
+| `delivered_at`                              | the provider reported it delivered (WhatsApp `delivered`)                  |
+| `read_at`                                   | the customer opened it (WhatsApp `read`)                                   |
+| `finished_at` / `status`                    | the attempt ended: `sent`, `delivered`, `failed`, `skipped`                |
+
+A channel with delivery reports keeps its attempt open (`sent`, the dispatch `sending`) until the report. A `failed` report sends the request on the next channel; no report within 30 minutes (`DefaultReceiptTimeout`, the worker's minute sweep) fails the attempt as `no delivery report` and the next channel runs too. A late report still records its time and changes nothing else.
+
+### WhatsApp
+
+- **Account.** The business connects its own WhatsApp Business number in Ayarlar → Entegrasyonlar (`kind = whatsapp`, provider `meta`, registered when `WHATSAPP_META_ENABLED=true`): phone number id, a permanent access token, the Meta app secret, a verify token of its choice, and optionally the template name (default `randevu_teyit`) and language (`tr`). The connection check reads the number with the token. A `log` account (development) or no account: the channel is not ready for the business and every send is `skipped`.
+- **Template.** Only the confirmation request goes out on WhatsApp (a business-initiated message needs a Meta-approved template); every other notice is `skipped` and its next channel runs. The template the business registers: category _Utility_, body with five parameters and three quick reply buttons in this order:
+
+  > Merhaba {{1}}, {{2}} işletmesindeki {{3}} randevunuza gelecek misiniz? Lütfen {{4}} saatine kadar yanıtlayın. Randevu no: {{5}}
+  >
+  > [Geleceğim] [İptal] [Değişiklik]
+
+  Parameters: `customer_name`, `business_name`, `starts_at`, `deadline`, `reference`. The buttons carry the payloads `tkw1:confirm`, `tkw1:cancel`, `tkw1:change`. No link: the buttons answer.
+
+- **Webhook.** `GET|POST /v1/public/whatsapp/meta/{account}/webhook` (the address is shown when the account is edited). `GET` is the subscription handshake (`hub.verify_token` = the account's verify token). `POST` must carry `X-Hub-Signature-256` with the account's app secret (`401` otherwise); events of another number of the same app are left alone. `500` (an internal error) makes Meta send it again.
+- **Statuses.** `delivered` / `read` → receipt times (and the attempt `delivered`); `failed` → the next channel; `sent` repeats the acceptance. The webhook only records; the worker sends the next channel (links, usage).
+- **Replies.** A button press is an answer only when it replies to our message (context id), comes from the customer's own number and belongs to the booking's current request (`RequestCurrent`: the task's round and the same visit start; a press on the request of a visit that moved since never acts, A12). Then `customerpanel.ChannelAnswer` applies it with the visit link's rules: `confirm` and `change` through `Engine.Answer` (source `whatsapp`), `cancel` through the ordinary cancel under the business's cancel cutoff. Each inbound message is handled once (`integration_jobs`, kind `whatsapp.reply`, key = the inbound message id) and recorded in `customer_notification_responses` with `answer` (`confirm`, `cancel`, `change`, `unknown`), `result` and `reason`:
+
+| Result     | When                                                                                                                              |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `applied`  | the answer was taken (activity `reservations.confirmed` / `.change_requested` / `.cancelled`, source `whatsapp`; live list event) |
+| `rejected` | an answer the booking does not take now: `answered`, `status`, `cutoff`, `request_outdated`, `not_open`, `reservation_not_found`  |
+| `ignored`  | not the customer's answer: `other_number`, `not_an_answer` (a typed text), `not_confirmation_request`                             |
+
+The customer gets a short Turkish answer in the chat (allowed inside the service window): confirmed, cancelled, change sent, or why nothing changed. Messages that do not reply to ours are not touched.
+
+### SMS and e-mail
+
+Both carry the single-visit link (`/panel/v#<token>`, issued at send time). The token is in the URL fragment, so a link preview (a messenger or mail scanner fetching the URL) never even sends it to the server; opening the page only shows the visit (`POST /v1/customer/visit`), and every answer is a separate explicit request from a button (A21, `customerpanel/confirm_db_test.go`). E-mails have no open tracking. The SMS provider is chosen in TEC-884 (the log sender counts as not ready, so nothing is recorded as sent through it); its delivery reports will use the same receipt columns.
+
+### Real integration test (A09)
+
+`TestLiveTemplate` in `platform/whatsapp/meta` sends the confirmation template from a real number when `WHATSAPP_IT_PHONE_NUMBER_ID`, `WHATSAPP_IT_ACCESS_TOKEN` and `WHATSAPP_IT_TO` (and `WHATSAPP_IT_TEMPLATE` / `WHATSAPP_IT_LANGUAGE` if not the defaults) are set; the end-to-end check is then a booking of a test business with the account connected: the request arrives, the status reaches `delivered` / `read` in the attempts table, and each button gives its answer. SMS and e-mail follow with their providers (TEC-884).
+
 ## Not here yet
 
-- WhatsApp (TEC-922) and voice / IVR (TEC-923) adapters on the same channel port; answers by reply on those channels.
-- Editing the confirmation message text (the catalog's Turkish default is used).
+- Voice / IVR (TEC-923) on the same channel port.
+- Live list events for delivery failures and provider reports (TEC-981).
+- Editing the confirmation message text (the catalog's Turkish default is used, TEC-979); the WhatsApp text is the business's approved template.

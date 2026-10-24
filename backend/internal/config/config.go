@@ -33,6 +33,21 @@ type Config struct {
 	Sentry     SentryConfig
 	Tenancy    TenancyConfig
 	Payments   PaymentsConfig
+	WhatsApp   WhatsAppConfig
+}
+
+// WhatsAppConfig switches the WhatsApp Cloud API on (TEC-922). Each
+// business connects its own WhatsApp Business number in the panel; nothing
+// here is a credential.
+type WhatsAppConfig struct {
+	// MetaEnabled registers the Cloud API adapter and its webhook
+	// (WHATSAPP_META_ENABLED).
+	MetaEnabled bool
+	// MetaGraphURL is the Graph API origin (WHATSAPP_META_GRAPH_URL; tests
+	// point it at a fake).
+	MetaGraphURL string
+	// MetaAPIVersion is the Graph API version (WHATSAPP_META_API_VERSION).
+	MetaAPIVersion string
 }
 
 // PaymentsConfig switches real payment providers on (TEC-912). Each
@@ -350,6 +365,11 @@ func Load() (Config, error) {
 		Payments: PaymentsConfig{
 			PayTREnabled: getBool("PAYMENTS_PAYTR_ENABLED", false),
 			PayTRBaseURL: strings.TrimRight(getEnv("PAYMENTS_PAYTR_BASE_URL", "https://www.paytr.com"), "/"),
+		},
+		WhatsApp: WhatsAppConfig{
+			MetaEnabled:    getBool("WHATSAPP_META_ENABLED", false),
+			MetaGraphURL:   strings.TrimRight(getEnv("WHATSAPP_META_GRAPH_URL", "https://graph.facebook.com"), "/"),
+			MetaAPIVersion: getEnv("WHATSAPP_META_API_VERSION", "v21.0"),
 		},
 	}
 

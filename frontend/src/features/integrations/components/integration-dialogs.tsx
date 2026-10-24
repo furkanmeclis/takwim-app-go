@@ -19,6 +19,7 @@ import {
   INTEGRATION_FIELD_LABEL_KEYS,
   INTEGRATION_PROVIDER_HINT_KEYS,
   INTEGRATION_PROVIDER_LABEL_KEYS,
+  integrationWebhookPath,
 } from "@/features/integrations/constants";
 import {
   useConnectIntegration,
@@ -269,6 +270,30 @@ type EditValues = {
   credentials: Record<string, string>;
 };
 
+/**
+ * The callback URL the business enters at its provider (WhatsApp Cloud
+ * API: Meta app → WhatsApp → Configuration), with the verify token of the
+ * account.
+ */
+function WebhookAddress({ account }: { account: IntegrationAccount }) {
+  const { t } = useLocale();
+  const path = integrationWebhookPath(account);
+  if (!path) return null;
+  const url =
+    typeof window === "undefined" ? path : `${window.location.origin}${path}`;
+  return (
+    <div className="space-y-1.5">
+      <Label>{t("integrations.webhook.label")}</Label>
+      <p className="bg-muted rounded-md px-3 py-2 font-mono text-xs break-all select-all">
+        {url}
+      </p>
+      <p className="text-muted-foreground text-xs">
+        {t("integrations.webhook.hint")}
+      </p>
+    </div>
+  );
+}
+
 /** Rename, switch sandbox / live, rotate secrets (empty = keep). */
 export function EditIntegrationDialog({
   account,
@@ -368,6 +393,7 @@ export function EditIntegrationDialog({
                 description={t("integrations.rotate_hint")}
               />
             ))}
+            <WebhookAddress account={account} />
           </div>
         </AppForm>
       ) : null}
