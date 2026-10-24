@@ -19,6 +19,10 @@
 //     open until the report; delivery and read times are recorded apart
 //     from the acceptance. A report that never comes fails the attempt
 //     after the receipt timeout so the next channel runs.
+//   - Events set with SetResourceEvents (the confirmation request, TEC-981)
+//     tell the panel's live reservation lists about every send result and
+//     delivery report of their dispatches, so the confirmation list, its
+//     badge and alerts see a failed or skipped request right away.
 package usecase
 
 import (
@@ -40,7 +44,10 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/catalog"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/channel"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/notifications/templates"
+	reservationsmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
 	reservationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/usecase"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 )
 
 // Dispatch statuses.
@@ -98,6 +105,10 @@ type Engine struct {
 	// receiptTimeout fails an accepted attempt whose delivery report never
 	// came.
 	receiptTimeout time.Duration
+	// events publishes the outcomes of the dispatches of liveEvents on the
+	// reservations live channel.
+	events     resourceevents.Publisher
+	liveEvents map[string]bool
 }
 
 // DefaultReceiptTimeout is how long an accepted message may wait for its
@@ -188,6 +199,33 @@ func (e *Engine) SetLinkIssuerFor(event string, fn LinkIssuer) {
 		return
 	}
 	e.eventLinks[event] = fn
+}
+
+// SetResourceEvents publishes tenant.reservations "updated" for the
+// reservation of a dispatch of one of the events whenever its send result
+// or a delivery report is recorded (TEC-981: the confirmation list shows
+// the last request's outcome). Writing the dispatch is published by the
+// change that wrote it.
+func (e *Engine) SetResourceEvents(pub resourceevents.Publisher, events ...string) {
+	e.events, e.liveEvents = pub, map[string]bool{}
+	for _, ev := range events {
+		e.liveEvents[ev] = true
+	}
+}
+
+// changed tells the live lists that a dispatch's outcome moved.
+func (e *Engine) changed(ctx context.Context, orgID int64, d db.CustomerNotificationDispatch) {
+	if e.events == nil || !e.liveEvents[d.EventCode] || !d.ReservationID.Valid {
+		return
+	}
+	r, err := e.q.GetNotifyReservation(ctx, db.GetNotifyReservationParams{OrganizationID: orgID, ID: d.ReservationID.Int64})
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			e.log.WarnContext(ctx, "customer_notice_event_failed", "dispatch", d.Uuid, "error", err)
+		}
+		return
+	}
+	e.events.Publish(orgctx.WithOrganizationID(ctx, orgID), reservationsmodel.Slug, resourceevents.ActionUpdated, r.Uuid.String())
 }
 
 // SetDispatchGuard installs the guard every claim asks before sending.
@@ -441,11 +479,22 @@ type step struct {
 // fail and fallback is on. It returns when the dispatch is delivered,
 // waits for a delivery report, or has no channel left.
 func (e *Engine) Process(ctx context.Context, orgID, dispatchID int64) error {
+	// The outcome is published once, after the last step.
+	var moved *db.CustomerNotificationDispatch
+	defer func() {
+		if moved != nil {
+			e.changed(ctx, orgID, *moved)
+		}
+	}()
 	for i := 0; i < len(channel.Known)+1; i++ {
-		st, err := e.claim(ctx, orgID, dispatchID)
+		st, ended, err := e.claim(ctx, orgID, dispatchID)
+		if ended != nil {
+			moved = ended
+		}
 		if err != nil || st == nil {
 			return err
 		}
+		moved = &st.dispatch
 		res := e.send(ctx, orgID, st)
 		next, err := e.record(ctx, orgID, st, res)
 		if err != nil || !next {
@@ -505,9 +554,13 @@ func (e *Engine) stale(ctx context.Context, q *db.Queries, orgID int64, d db.Cus
 }
 
 // claim locks the dispatch and inserts the attempt row of its next channel
-// (nil when there is nothing to send).
-func (e *Engine) claim(ctx context.Context, orgID, dispatchID int64) (*step, error) {
-	var out *step
+// (nil when there is nothing to send). ended is the dispatch it closed
+// instead (cancelled, or failed with no channel left).
+func (e *Engine) claim(ctx context.Context, orgID, dispatchID int64) (*step, *db.CustomerNotificationDispatch, error) {
+	var (
+		out    *step
+		closed *db.CustomerNotificationDispatch
+	)
 	err := e.tx(ctx, func(q *db.Queries) error {
 		d, err := q.LockCustomerNotificationDispatch(ctx, db.LockCustomerNotificationDispatchParams{OrganizationID: orgID, ID: dispatchID})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -524,6 +577,7 @@ func (e *Engine) claim(ctx context.Context, orgID, dispatchID int64) (*step, err
 			return err
 		}
 		if reason != "" {
+			closed = &d
 			return q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
 				OrganizationID: orgID, ID: d.ID, Status: DispatchCancelled, NextChannelIndex: d.NextChannelIndex,
 				LastError: reason, CompletedAt: ts(e.clock()),
@@ -556,12 +610,16 @@ func (e *Engine) claim(ctx context.Context, orgID, dispatchID int64) (*step, err
 		if d.LastError == "" {
 			d.LastError = "no channel left"
 		}
+		closed = &d
 		return q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
 			OrganizationID: orgID, ID: d.ID, Status: DispatchFailed, NextChannelIndex: idx, LastError: d.LastError,
 			CompletedAt: ts(e.clock()),
 		})
 	})
-	return out, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, closed, nil
 }
 
 func truncate(s string, n int) string {
@@ -740,15 +798,20 @@ func (e *Engine) advance(ctx context.Context, q *db.Queries, orgID int64, d db.C
 // ReportDelivery implements channel.Reporter: the final result of an
 // accepted message. A failure runs the next channel (fallback) right away.
 func (e *Engine) ReportDelivery(ctx context.Context, r channel.Report) {
-	dispatchID, next, err := e.RecordDelivery(ctx, r)
+	d, found, next, err := e.recordDelivery(ctx, r)
 	if err != nil {
 		e.log.WarnContext(ctx, "customer_notice_report_failed", "organization", r.OrganizationID, "error", err)
 		return
 	}
-	if next {
-		if err := e.Process(ctx, r.OrganizationID, dispatchID); err != nil {
-			e.log.WarnContext(ctx, "customer_notice_fallback_failed", "dispatch", dispatchID, "error", err)
+	if !next {
+		if found {
+			e.changed(ctx, r.OrganizationID, d)
 		}
+		return
+	}
+	// Process publishes the next channel's result.
+	if err := e.Process(ctx, r.OrganizationID, d.ID); err != nil {
+		e.log.WarnContext(ctx, "customer_notice_fallback_failed", "dispatch", d.ID, "error", err)
 	}
 }
 
@@ -759,6 +822,17 @@ func (e *Engine) ReportDelivery(ctx context.Context, r channel.Report) {
 // (a late report); they never answer anything. An unknown delivery is no
 // error.
 func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, bool, error) {
+	d, found, next, err := e.recordDelivery(ctx, r)
+	if err != nil || !found {
+		return 0, false, err
+	}
+	e.changed(ctx, r.OrganizationID, d)
+	return d.ID, next, nil
+}
+
+// recordDelivery records a report; found tells that the delivery is ours,
+// d is its dispatch.
+func (e *Engine) recordDelivery(ctx context.Context, r channel.Report) (db.CustomerNotificationDispatch, bool, bool, error) {
 	orgID := r.OrganizationID
 	var (
 		dl  db.CustomerNotificationDelivery
@@ -771,11 +845,12 @@ func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, b
 			OrganizationID: orgID, Channel: r.Channel, ExternalUuid: pgtype.UUID{Bytes: r.ExternalUUID, Valid: true},
 		})
 	}
+	var disp db.CustomerNotificationDispatch
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && dl.Channel != r.Channel) {
-		return 0, false, nil
+		return disp, false, false, nil
 	}
 	if err != nil {
-		return 0, false, err
+		return disp, false, false, err
 	}
 	if r.Read {
 		r.Delivered = true
@@ -793,7 +868,7 @@ func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, b
 		if err := e.q.MarkCustomerNotificationDeliveryReceipt(ctx, db.MarkCustomerNotificationDeliveryReceiptParams{
 			OrganizationID: orgID, ID: dl.ID, At: ts(at), IsRead: r.Read,
 		}); err != nil {
-			return 0, false, err
+			return disp, false, false, err
 		}
 	}
 	next := false
@@ -802,6 +877,7 @@ func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, b
 		if err != nil {
 			return err
 		}
+		disp = d
 		n, err := q.FinishCustomerNotificationDelivery(ctx, db.FinishCustomerNotificationDeliveryParams{
 			OrganizationID: orgID, ID: dl.ID, Status: status, Error: r.Error, ProviderRef: truncate(r.ProviderRef, 128),
 			FinishedAt: ts(now),
@@ -826,7 +902,12 @@ func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, b
 		next, err = e.advance(ctx, q, orgID, d, dl.Channel, reason)
 		return err
 	})
-	return dl.DispatchID, next, err
+	if err != nil {
+		return disp, false, false, err
+	}
+	// A receipt recorded on an attempt that already ended is shown too
+	// (delivery and read times).
+	return disp, true, next, nil
 }
 
 // ExpireReceipts fails the accepted attempts whose delivery report did not

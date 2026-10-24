@@ -299,6 +299,9 @@ func main() {
 	// Confirmation requests and deadlines move the confirmation list
 	// (TEC-924).
 	confirmEngine.SetResourceEvents(resourceEvents)
+	// ... and so do the send results and delivery reports of the requests
+	// (a failed or skipped send, TEC-981).
+	notifyEngine.SetResourceEvents(resourceEvents, confirmationsusecase.Event)
 
 	// Integration jobs (TEC-880): queue steps and the minute sweep of due
 	// steps (lost tasks, delivery reports, backoff retries).

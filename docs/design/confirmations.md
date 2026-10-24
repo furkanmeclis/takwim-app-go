@@ -1,4 +1,4 @@
-# Customer confirmations (TEC-921, TEC-922, TEC-924)
+# Customer confirmations (TEC-921, TEC-922, TEC-924, TEC-981)
 
 The Konfirmasyon add-on: before a visit the business asks the customer to confirm it, on its channels in order, a set number of times, and cancels or flags the booking when no answer comes by the deadline. The customer answers in the customer panel or on the single-visit link of the message: "Geleceğim", "Değişiklik iste" or cancel. Everything is gated by the `confirmation` module (`sector.ModuleConfirmation`, an add-on, entitlements.md); without it no task is planned, no request is sent and no answer is offered.
 
@@ -113,7 +113,9 @@ A phone confirmation is `Engine.Answer` with source `phone` and the member as th
 
 ### Live updates and alerts
 
-The list follows the reservations live channel (`tenant.reservations`): reservation handlers publish there, the customer panel publishes the answers, the phone confirmation handler publishes, and the worker's engine publishes each request it sends and each deadline it applies (`Engine.SetResourceEvents`). The summary also refreshes every minute (a failed delivery is recorded by the notification worker without an event).
+The list follows the reservations live channel (`tenant.reservations`): reservation handlers publish there, the customer panel publishes the answers, the phone confirmation handler publishes, and the worker's engine publishes each request it writes and each deadline it applies (`Engine.SetResourceEvents`). The notification engine publishes the outcome of every request (TEC-981, `customernotify` `Engine.SetResourceEvents(pub, confirmationsusecase.Event)`): the send result once per processing (sent, accepted, failed, skipped, cancelled, no channel left), and every delivery report it records (WhatsApp webhook in the API, receipt timeout in the worker; a failure and the next channel's result are one event, a late delivery / read receipt is one too). A future channel (the voice call of TEC-923) goes through the same send / report path and needs no wiring of its own.
+
+The summary (sidebar badge, panel alert) subscribes to the same channel and refreshes on any event (debounced); the request table of a visit refreshes on events of that visit. The summary keeps a 5 minute refresh for what no event marks (a visit whose time came leaves the counts) and for events missed while disconnected; with live updates off it refreshes every minute.
 
 - Sidebar: "Teyit listesi" under the operations group (`module: confirmation`, `tenant.reservations.read`) with the `attention` count and the reasons in its info popover.
 - Panel alert (`ConfirmationAlerts`) on the organization home and on top of the list: the count by reason and a link to the "Takip gerekenler" view.

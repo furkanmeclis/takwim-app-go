@@ -452,6 +452,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	confirmEngine := confirmationsusecase.New(deps.DB, deps.Queries, notifyEngine)
 	confirmEngine.SetLogger(log)
 	notifyEngine.SetDispatchGuard(confirmEngine.Guard)
+	// Delivery reports of confirmation requests (WhatsApp webhook) move the
+	// confirmation list live (TEC-981).
+	notifyEngine.SetResourceEvents(resourceEvents, confirmationsusecase.Event)
 	reservationNotifier := reservationsusecase.Notifiers(notifyEngine, confirmEngine)
 	// Lapsed approval / payment holds cancel their requests (TEC-899).
 	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(reservationNotifier))
