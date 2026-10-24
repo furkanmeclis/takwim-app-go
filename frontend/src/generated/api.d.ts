@@ -5052,6 +5052,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/{uuid}/product-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Products that can be added to a visit
+         * @description Stock items sold in the visit's branch (active products offered there; one row per active variant) with the
+         *     units available (on hand - reserved). `q` matches name, SKU or barcode; at most 50 rows. Needs the products
+         *     module and `tenant.products.sell` besides reservation read or own.
+         */
+        get: operations["listTenantReservationProductOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a product to a visit
+         * @description Adds a product (a variant when it has them) to a requested, active or in-service visit and reserves its
+         *     units in the visit's branch in the same transaction (TEC-919). The price is the variant's own, else the
+         *     branch price, else the catalog price, kept as a snapshot. `staff_uuid` credits the sale (default: the person
+         *     of the first line). Not enough available units is `400` `quantity` / `insufficient_stock`; the last unit is
+         *     never reserved twice. The total grows by the product; a visit paid in full goes back to `on_site` for the
+         *     rest. A finished visit is `409` `status` / `invalid_transition`; a visit waiting for its online payment
+         *     `409` `payment_status` / `online_pending`. Needs the products module and `tenant.products.sell`.
+         */
+        post: operations["postTenantReservationProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/products/{productUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a product from a visit
+         * @description Takes a held product off an open visit and frees its units (`released`, reason `removed`). A delivered or
+         *     released line, or a finished visit, is `409` `status` / `invalid_transition`. Optional body
+         *     `expected_version`.
+         */
+        delete: operations["deleteTenantReservationProduct"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations/export": {
         parameters: {
             query?: never;
@@ -6778,6 +6848,28 @@ export interface paths {
          *     `not_found` for hidden or foreign records).
          */
         get: operations["listPublicStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/businesses/{slug}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Products a customer may add to a booking
+         * @description No authentication (TEC-919). Active products with `show_online`, sold in the public branch `branch_uuid`
+         *     (required) and with units available; one row per active variant. `max_quantity` is how many the customer may
+         *     take (at most 10); the stock itself is not shown. Empty without the products module.
+         */
+        get: operations["listPublicProducts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12283,6 +12375,8 @@ export interface components {
             customer_note?: string;
             internal_note?: string;
             vehicle?: components["schemas"]["ReservationVehicle"] | null;
+            /** @description Products taken with the visit (TEC-919); their units are reserved with the booking. */
+            products?: components["schemas"]["TenantReservationProductInput"][];
         };
         /**
          * @description The vehicle of a car wash booking (TEC-904). The plate is stored
@@ -12466,6 +12560,80 @@ export interface components {
             off: components["schemas"]["TenantReservationInterval"][];
             items: components["schemas"]["TenantReservationAgendaItem"][];
         };
+        TenantReservationProductInput: {
+            /** Format: uuid */
+            product_uuid: string;
+            /**
+             * Format: uuid
+             * @description Required when the product has variants.
+             */
+            variant_uuid?: string | null;
+            quantity: number;
+            /**
+             * Format: uuid
+             * @description Credited with the sale; default: the person of the first line.
+             */
+            staff_uuid?: string | null;
+        };
+        TenantReservationProductRequest: {
+            /** Format: uuid */
+            product_uuid: string;
+            /** Format: uuid */
+            variant_uuid?: string | null;
+            quantity: number;
+            /** Format: uuid */
+            staff_uuid?: string | null;
+            expected_version?: number;
+        };
+        TenantReservationProduct: {
+            /** Format: uuid */
+            uuid: string;
+            product: components["schemas"]["TenantAvailabilityRef"];
+            variant: components["schemas"]["TenantAvailabilityRef"] | null;
+            sku: string;
+            quantity: number;
+            unit_price: components["schemas"]["MoneyAmount"];
+            total: components["schemas"]["MoneyAmount"];
+            staff: components["schemas"]["TenantAvailabilityRef"] | null;
+            /**
+             * @description held: units reserved in the branch; delivered: handed over on completion (stock sale + product sale line); released: free again.
+             * @enum {string}
+             */
+            status: "held" | "delivered" | "released";
+            /** @enum {string|null} */
+            release_reason: "removed" | "cancelled" | "rejected" | "expired" | "no_show" | null;
+            /** @enum {string} */
+            source: "panel" | "online" | "embed";
+            /** Format: date-time */
+            delivered_at: string | null;
+            /** Format: date-time */
+            released_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        TenantReservationProductOption: {
+            /** Format: uuid */
+            product_uuid: string;
+            product_name: string;
+            sku: string;
+            /** Format: uuid */
+            variant_uuid: string | null;
+            variant_name: string | null;
+            price: components["schemas"]["MoneyAmount"];
+            /**
+             * Format: int64
+             * @description Units on hand minus reserved in the visit's branch.
+             */
+            available: number;
+        };
+        EnvelopeTenantReservationProductOptions: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["TenantReservationProductOption"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
         TenantReservation: {
             /** @description Number of people (restaurant) or seats of a group class. */
             party_size: number | null;
@@ -12526,10 +12694,11 @@ export interface components {
                 buffer_after_minutes: number;
                 unit_price: components["schemas"]["MoneyAmount"];
             }[];
+            products: components["schemas"]["TenantReservationProduct"][];
             events: {
                 version: number;
                 /** @enum {string} */
-                type: "created" | "accepted" | "rejected" | "cancelled" | "started" | "completed" | "no_show" | "paid" | "expired" | "rescheduled" | "notes_updated";
+                type: "created" | "accepted" | "rejected" | "cancelled" | "started" | "completed" | "no_show" | "paid" | "expired" | "rescheduled" | "notes_updated" | "payment_recorded" | "late_payment" | "product_added" | "product_removed";
                 from_status: string | null;
                 to_status: string | null;
                 actor: string | null;
@@ -12952,6 +13121,23 @@ export interface components {
             /** Format: uuid */
             reservation_uuid: string | null;
         };
+        PublicProduct: {
+            /** Format: uuid */
+            product_uuid: string;
+            name: string;
+            /** Format: uuid */
+            variant_uuid: string | null;
+            variant_name: string | null;
+            price: components["schemas"]["MoneyAmount"];
+            max_quantity: number;
+            image_url: string | null;
+        };
+        EnvelopePublicProductList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PublicProduct"][];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         PublicBookingRequest: {
             /** Format: uuid */
             checkout_token: string;
@@ -12979,6 +13165,14 @@ export interface components {
             website?: string;
             /** @description The vehicle of a car wash booking (optional). */
             vehicle?: components["schemas"]["ReservationVehicle"] | null;
+            /** @description Optional products from `GET …/products` of the checkout's branch (TEC-919), reserved with the booking. Not enough units: `400` `products[i].quantity` / `insufficient_stock`. */
+            products?: {
+                /** Format: uuid */
+                product_uuid: string;
+                /** Format: uuid */
+                variant_uuid?: string | null;
+                quantity: number;
+            }[];
         };
         PublicReservation: {
             /** @description Number of people (restaurant) or seats of a group class. */
@@ -13030,6 +13224,14 @@ export interface components {
                 ends_at: string;
                 duration_minutes: number;
                 unit_price: components["schemas"]["MoneyAmount"];
+            }[];
+            products: {
+                name: string;
+                variant_name: string | null;
+                quantity: number;
+                unit_price: components["schemas"]["MoneyAmount"];
+                /** @enum {string} */
+                status: "held" | "delivered" | "released";
             }[];
             /** Format: date-time */
             created_at: string;
@@ -22769,6 +22971,116 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    listTenantReservationProductOptions: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationProductOptions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantReservationProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantReservationProductRequest"];
+            };
+        };
+        responses: {
+            /** @description Reservation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteTenantReservationProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                productUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TenantReservationActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Reservation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     postTenantReservationsExport: {
         parameters: {
             query?: never;
@@ -26205,6 +26517,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopePublicStaffList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPublicProducts: {
+        parameters: {
+            query: {
+                branch_uuid: string;
+            };
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Products */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePublicProductList"];
                 };
             };
             400: components["responses"]["BadRequest"];

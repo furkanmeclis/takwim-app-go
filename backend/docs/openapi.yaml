@@ -8237,6 +8237,107 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /v1/tenant/reservations/{uuid}/product-options:
+    get:
+      tags: [Tenant]
+      operationId: listTenantReservationProductOptions
+      summary: Products that can be added to a visit
+      description: |
+        Stock items sold in the visit's branch (active products offered there; one row per active variant) with the
+        units available (on hand - reserved). `q` matches name, SKU or barcode; at most 50 rows. Needs the products
+        module and `tenant.products.sell` besides reservation read or own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservationProductOptions"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/reservations/{uuid}/products:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationProduct
+      summary: Add a product to a visit
+      description: |
+        Adds a product (a variant when it has them) to a requested, active or in-service visit and reserves its
+        units in the visit's branch in the same transaction (TEC-919). The price is the variant's own, else the
+        branch price, else the catalog price, kept as a snapshot. `staff_uuid` credits the sale (default: the person
+        of the first line). Not enough available units is `400` `quantity` / `insufficient_stock`; the last unit is
+        never reserved twice. The total grows by the product; a visit paid in full goes back to `on_site` for the
+        rest. A finished visit is `409` `status` / `invalid_transition`; a visit waiting for its online payment
+        `409` `payment_status` / `online_pending`. Needs the products module and `tenant.products.sell`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantReservationProductRequest"
+      responses:
+        "200":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/reservations/{uuid}/products/{productUuid}:
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantReservationProduct
+      summary: Remove a product from a visit
+      description: |
+        Takes a held product off an open visit and frees its units (`released`, reason `removed`). A delivered or
+        released line, or a finished visit, is `409` `status` / `invalid_transition`. Optional body
+        `expected_version`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: productUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantReservationActionRequest"
+      responses:
+        "200":
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/reservations/export:
     post:
       tags: [Tenant]
@@ -11018,6 +11119,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopePublicStaffList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/products:
+    get:
+      tags: [Public booking]
+      operationId: listPublicProducts
+      summary: Products a customer may add to a booking
+      description: |
+        No authentication (TEC-919). Active products with `show_online`, sold in the public branch `branch_uuid`
+        (required) and with units available; one row per active variant. `max_quantity` is how many the customer may
+        take (at most 10); the stock itself is not shown. Empty without the products module.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - name: branch_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicProductList"
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
@@ -18109,6 +18237,11 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ReservationVehicle"
             - type: "null"
+        products:
+          type: array
+          maxItems: 20
+          description: Products taken with the visit (TEC-919); their units are reserved with the booking.
+          items: { $ref: "#/components/schemas/TenantReservationProductInput" }
 
     ReservationVehicle:
       type: object
@@ -18361,9 +18494,84 @@ components:
           type: array
           items: { $ref: "#/components/schemas/TenantReservationAgendaItem" }
 
+    TenantReservationProductInput:
+      type: object
+      additionalProperties: false
+      required: [product_uuid, quantity]
+      properties:
+        product_uuid: { type: string, format: uuid }
+        variant_uuid: { type: [string, "null"], format: uuid, description: Required when the product has variants. }
+        quantity: { type: integer, minimum: 1, maximum: 99 }
+        staff_uuid: { type: [string, "null"], format: uuid, description: "Credited with the sale; default: the person of the first line." }
+
+    TenantReservationProductRequest:
+      type: object
+      additionalProperties: false
+      required: [product_uuid, quantity]
+      properties:
+        product_uuid: { type: string, format: uuid }
+        variant_uuid: { type: [string, "null"], format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 99 }
+        staff_uuid: { type: [string, "null"], format: uuid }
+        expected_version: { type: integer }
+
+    TenantReservationProduct:
+      type: object
+      required: [uuid, product, variant, sku, quantity, unit_price, total, staff, status, release_reason, source, delivered_at, released_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        product: { $ref: "#/components/schemas/TenantAvailabilityRef" }
+        variant:
+          oneOf:
+            - $ref: "#/components/schemas/TenantAvailabilityRef"
+            - type: "null"
+        sku: { type: string }
+        quantity: { type: integer }
+        unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+        total: { $ref: "#/components/schemas/MoneyAmount" }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/TenantAvailabilityRef"
+            - type: "null"
+        status:
+          type: string
+          enum: [held, delivered, released]
+          description: "held: units reserved in the branch; delivered: handed over on completion (stock sale + product sale line); released: free again."
+        release_reason: { type: [string, "null"], enum: [removed, cancelled, rejected, expired, no_show, null] }
+        source: { type: string, enum: [panel, online, embed] }
+        delivered_at: { type: [string, "null"], format: date-time }
+        released_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    TenantReservationProductOption:
+      type: object
+      required: [product_uuid, product_name, sku, variant_uuid, variant_name, price, available]
+      properties:
+        product_uuid: { type: string, format: uuid }
+        product_name: { type: string }
+        sku: { type: string }
+        variant_uuid: { type: [string, "null"], format: uuid }
+        variant_name: { type: [string, "null"] }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        available: { type: integer, format: int64, description: Units on hand minus reserved in the visit's branch. }
+
+    EnvelopeTenantReservationProductOptions:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/TenantReservationProductOption" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     TenantReservation:
       type: object
-      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, events, created_at, updated_at, party_size, zone, vehicle]
+      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, products, events, created_at, updated_at, party_size, zone, vehicle]
       properties:
         party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
@@ -18417,6 +18625,9 @@ components:
               buffer_before_minutes: { type: integer }
               buffer_after_minutes: { type: integer }
               unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/TenantReservationProduct" }
         events:
           type: array
           items:
@@ -18424,7 +18635,7 @@ components:
             required: [version, type, from_status, to_status, actor, note, created_at]
             properties:
               version: { type: integer }
-              type: { type: string, enum: [created, accepted, rejected, cancelled, started, completed, no_show, paid, expired, rescheduled, notes_updated] }
+              type: { type: string, enum: [created, accepted, rejected, cancelled, started, completed, no_show, paid, expired, rescheduled, notes_updated, payment_recorded, late_payment, product_added, product_removed] }
               from_status: { type: [string, "null"] }
               to_status: { type: [string, "null"] }
               actor: { type: [string, "null"] }
@@ -18952,6 +19163,28 @@ components:
           items: { $ref: "#/components/schemas/PublicSlotLine" }
         reservation_uuid: { type: [string, "null"], format: uuid }
 
+    PublicProduct:
+      type: object
+      required: [product_uuid, name, variant_uuid, variant_name, price, max_quantity, image_url]
+      properties:
+        product_uuid: { type: string, format: uuid }
+        name: { type: string }
+        variant_uuid: { type: [string, "null"], format: uuid }
+        variant_name: { type: [string, "null"] }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        max_quantity: { type: integer, minimum: 1, maximum: 10 }
+        image_url: { type: [string, "null"] }
+
+    EnvelopePublicProductList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicProduct" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     PublicBookingRequest:
       type: object
       additionalProperties: false
@@ -18978,10 +19211,22 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ReservationVehicle"
             - type: "null"
+        products:
+          type: array
+          maxItems: 20
+          description: "Optional products from `GET …/products` of the checkout's branch (TEC-919), reserved with the booking. Not enough units: `400` `products[i].quantity` / `insufficient_stock`."
+          items:
+            type: object
+            additionalProperties: false
+            required: [product_uuid, quantity]
+            properties:
+              product_uuid: { type: string, format: uuid }
+              variant_uuid: { type: [string, "null"], format: uuid }
+              quantity: { type: integer, minimum: 1, maximum: 10 }
 
     PublicReservation:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, can_pay_online, lines, created_at, party_size, zone, vehicle]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, can_pay_online, lines, products, created_at, party_size, zone, vehicle]
       properties:
         party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
@@ -19025,6 +19270,17 @@ components:
               ends_at: { type: string, format: date-time }
               duration_minutes: { type: integer }
               unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+        products:
+          type: array
+          items:
+            type: object
+            required: [name, variant_name, quantity, unit_price, status]
+            properties:
+              name: { type: string }
+              variant_name: { type: [string, "null"] }
+              quantity: { type: integer }
+              unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+              status: { type: string, enum: [held, delivered, released] }
         created_at: { type: string, format: date-time }
         access_token:
           type: string

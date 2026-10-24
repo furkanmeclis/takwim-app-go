@@ -19,12 +19,12 @@ Both tables are **append-only**. Triggers refuse `UPDATE` and `DELETE` (except c
 
 ## Where lines come from
 
-| Event                                         | Line                                                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| reservation `complete` (reservations hook)    | one service line per reservation line, dated the day the visit ended (at most today) in the branch time zone |
-| stock movement of kind `sale` (products hook) | one product line, dated `occurred_at` in the branch time zone; walk-in sales have no customer                |
-| `POST /v1/tenant/sales/lines/{uuid}/correct`  | reversal + replacement (new quantity, unit price or discount)                                                |
-| `POST /v1/tenant/sales/lines/{uuid}/reverse`  | reversal only                                                                                                |
+| Event                                         | Line                                                                                                                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| reservation `complete` (reservations hook)    | one service line per reservation line, dated the day the visit ended (at most today) in the branch time zone; one product line per product handed over with the visit (TEC-919), keyed by its stock movement and carrying `reservation_id` |
+| stock movement of kind `sale` (products hook) | one product line, dated `occurred_at` in the branch time zone; walk-in sales have no customer                                                                                                                                              |
+| `POST /v1/tenant/sales/lines/{uuid}/correct`  | reversal + replacement (new quantity, unit price or discount)                                                                                                                                                                              |
+| `POST /v1/tenant/sales/lines/{uuid}/reverse`  | reversal only                                                                                                                                                                                                                              |
 
 Both hooks run inside the transaction of the event, so a completed visit without its revenue (or the reverse) cannot exist. Zero-amount lines are kept but post no ledger entry. Reservations completed before this change are not backfilled.
 

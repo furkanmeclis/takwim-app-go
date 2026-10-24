@@ -294,5 +294,7 @@
   "fields.tenant.staff_share_payouts.cash_account": "Account",
   "fields.tenant.staff_share_payouts.payout_date": "Payout date",
   "fields.tenant.staff_share_payouts.note": "Note",
-  "fields.tenant.staff_share_payouts.reason": "Reason"
+  "fields.tenant.staff_share_payouts.reason": "Reason",
+  "actions.reservations.product_added": "Product added to a booking",
+  "actions.reservations.product_removed": "Product removed from a booking"
 }

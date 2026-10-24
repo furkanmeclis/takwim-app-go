@@ -251,6 +251,7 @@ type Querier interface {
 	DeleteUserTOTP(ctx context.Context, userID int64) error
 	DeleteWebAuthnCredentialByCredentialID(ctx context.Context, credentialID string) error
 	DeleteWebAuthnCredentialByUUID(ctx context.Context, arg DeleteWebAuthnCredentialByUUIDParams) error
+	DeliverReservationProduct(ctx context.Context, arg DeliverReservationProductParams) error
 	DisablePushDevice(ctx context.Context, arg DisablePushDeviceParams) error
 	// Generic runner (TEC-880). Every query names the organization scope; the
 	// worker carries the job's organization in the task payload.
@@ -393,11 +394,20 @@ type Querier interface {
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
 	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
 	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)
+	// The person serving the first staffed line (credited with products by
+	// default).
+	GetReservationFirstStaff(ctx context.Context, arg GetReservationFirstStaffParams) (int64, error)
 	GetReservationForUpdate(ctx context.Context, arg GetReservationForUpdateParams) (Reservation, error)
 	GetReservationForVisitLink(ctx context.Context, arg GetReservationForVisitLinkParams) (GetReservationForVisitLinkRow, error)
 	// The service of a planned line with its prices: personal (service_staff) ›
 	// branch offer (service_branches) › list price.
 	GetReservationLineService(ctx context.Context, arg GetReservationLineServiceParams) (GetReservationLineServiceRow, error)
+	GetReservationProductForUpdate(ctx context.Context, arg GetReservationProductForUpdateParams) (ReservationProduct, error)
+	// TEC-919: products of a reservation and their stock reservation. Every
+	// query takes the organization id.
+	// A product (and, when named, one of its variants) as it can be added to a
+	// visit in a branch: catalog state, prices, the branch offer and stock.
+	GetReservationProductPick(ctx context.Context, arg GetReservationProductPickParams) (GetReservationProductPickRow, error)
 	GetReservationRecord(ctx context.Context, arg GetReservationRecordParams) (Reservation, error)
 	GetReservationSearchDocument(ctx context.Context, arg GetReservationSearchDocumentParams) (GetReservationSearchDocumentRow, error)
 	GetResource(ctx context.Context, arg GetResourceParams) (GetResourceRow, error)
@@ -501,6 +511,7 @@ type Querier interface {
 	// Online payments (TEC-912, docs/design/payments.md).
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (Payment, error)
 	InsertPushTicket(ctx context.Context, arg InsertPushTicketParams) error
+	InsertReservationProduct(ctx context.Context, arg InsertReservationProductParams) (ReservationProduct, error)
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	// --------------------------------------------------------------- sale lines
 	InsertSaleLine(ctx context.Context, arg InsertSaleLineParams) (InsertSaleLineRow, error)
@@ -633,6 +644,8 @@ type Querier interface {
 	// confirmed bookings, with the seats each takes and what it holds (the
 	// session's trainer and area). exclude_hold_id leaves one out (0 = none).
 	ListGroupSessionHolds(ctx context.Context, arg ListGroupSessionHoldsParams) ([]ListGroupSessionHoldsRow, error)
+	// Held lines of a visit, locked, in stock-level lock order.
+	ListHeldReservationProducts(ctx context.Context, arg ListHeldReservationProductsParams) ([]ReservationProduct, error)
 	ListImportChangesForJob(ctx context.Context, jobID int64) ([]ImportChange, error)
 	ListImportJobsForActor(ctx context.Context, arg ListImportJobsForActorParams) ([]ImportJob, error)
 	ListIntegrationAccounts(ctx context.Context, arg ListIntegrationAccountsParams) ([]ListIntegrationAccountsRow, error)
@@ -714,6 +727,13 @@ type Querier interface {
 	ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error)
 	ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error)
 	ListReservationPayments(ctx context.Context, arg ListReservationPaymentsParams) ([]ListReservationPaymentsRow, error)
+	// Stock items sold in a branch with their available units (on hand -
+	// reserved): active products offered there, one row per active variant
+	// (or the product itself without variants). online_only keeps the
+	// products shown on the customer screens; in_stock_only drops items with
+	// nothing available.
+	ListReservationProductOptions(ctx context.Context, arg ListReservationProductOptionsParams) ([]ListReservationProductOptionsRow, error)
+	ListReservationProducts(ctx context.Context, arg ListReservationProductsParams) ([]ListReservationProductsRow, error)
 	// Reservation engines (TEC-963): Cmd+K documents. Every query filters by
 	// organization_id; joins by alias.organization_id too.
 	// owner_user_ids: the member who booked it and the accounts of the staff
@@ -745,6 +765,9 @@ type Querier interface {
 	ListSaleLines(ctx context.Context, arg ListSaleLinesParams) ([]ListSaleLinesRow, error)
 	ListSalesBranchesByUUID(ctx context.Context, arg ListSalesBranchesByUUIDParams) ([]ListSalesBranchesByUUIDRow, error)
 	ListSalesReservationLines(ctx context.Context, arg ListSalesReservationLinesParams) ([]ListSalesReservationLinesRow, error)
+	// Products handed over with a completed visit (TEC-919): each became one
+	// stock sale movement.
+	ListSalesReservationProducts(ctx context.Context, arg ListSalesReservationProductsParams) ([]ListSalesReservationProductsRow, error)
 	ListServiceBranchFacets(ctx context.Context, arg ListServiceBranchFacetsParams) ([]ListServiceBranchFacetsRow, error)
 	// Offers of the given services (list rows and the detail).
 	ListServiceBranches(ctx context.Context, arg ListServiceBranchesParams) ([]ListServiceBranchesRow, error)
@@ -876,6 +899,7 @@ type Querier interface {
 	// Amount paid back from one collection (refunds minus reversed refunds).
 	RefundedOfCollection(ctx context.Context, arg RefundedOfCollectionParams) (pgtype.Numeric, error)
 	ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHoldParams) (CapacityHold, error)
+	ReleaseReservationProduct(ctx context.Context, arg ReleaseReservationProductParams) error
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
 	RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldParams) (CapacityHold, error)
@@ -941,6 +965,8 @@ type Querier interface {
 	// Returns the previous key so the caller can remove the old object.
 	SetProductImage(ctx context.Context, arg SetProductImageParams) (pgtype.Text, error)
 	SetPublicCheckoutReservation(ctx context.Context, arg SetPublicCheckoutReservationParams) error
+	// The total of a new booking once its products are reserved.
+	SetReservationTotal(ctx context.Context, arg SetReservationTotalParams) error
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
 	SetRolePermissions(ctx context.Context, roleID int64) error
 	SetServiceActive(ctx context.Context, arg SetServiceActiveParams) error
@@ -948,6 +974,8 @@ type Querier interface {
 	SetServiceImage(ctx context.Context, arg SetServiceImageParams) (pgtype.Text, error)
 	SetStaffActive(ctx context.Context, arg SetStaffActiveParams) error
 	SetStockLevelOnHand(ctx context.Context, arg SetStockLevelOnHandParams) error
+	SetStockLevelReserved(ctx context.Context, arg SetStockLevelReservedParams) error
+	SetStockLevelStock(ctx context.Context, arg SetStockLevelStockParams) error
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
@@ -976,6 +1004,9 @@ type Querier interface {
 	StockCodeTaken(ctx context.Context, arg StockCodeTakenParams) (bool, error)
 	// One winner: only an attempt not succeeded yet moves.
 	SucceedPayment(ctx context.Context, arg SucceedPaymentParams) (int64, error)
+	SumReservationLinePrices(ctx context.Context, arg SumReservationLinePricesParams) (pgtype.Numeric, error)
+	// What the visit's products add to its total (held and delivered lines).
+	SumReservationProducts(ctx context.Context, arg SumReservationProductsParams) (pgtype.Numeric, error)
 	// Units on hand and reserved of one stock item over every branch (a
 	// product row with variant NULL, or one variant).
 	SumStockItem(ctx context.Context, arg SumStockItemParams) (SumStockItemRow, error)
@@ -1011,6 +1042,8 @@ type Querier interface {
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) (ProductVariant, error)
 	UpdateReservationNotes(ctx context.Context, arg UpdateReservationNotesParams) (Reservation, error)
+	// A product added or removed: the new total and payment state.
+	UpdateReservationProductsTotal(ctx context.Context, arg UpdateReservationProductsTotalParams) (Reservation, error)
 	// One transition: the new fields and version + 1.
 	UpdateReservationState(ctx context.Context, arg UpdateReservationStateParams) (Reservation, error)
 	UpdateResource(ctx context.Context, arg UpdateResourceParams) (Resource, error)

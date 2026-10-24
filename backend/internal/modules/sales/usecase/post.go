@@ -28,7 +28,9 @@ func StockMovementKey(movement uuid.UUID) string {
 // customer's ledger debit. The business day is the day the visit ended,
 // never later than today (a visit closed early counts today). Lines that
 // already have a live sale line are skipped, so running it again changes
-// nothing.
+// nothing. Products handed over with the visit (TEC-919: one stock sale
+// movement each) become product lines of the visit, keyed by their
+// movement like a counter sale, so a product is never revenue twice.
 func (s *Service) RecordReservationTx(ctx context.Context, q *db.Queries, orgID, reservationID, actorID int64) error {
 	r, err := q.GetSalesReservation(ctx, db.GetSalesReservationParams{OrganizationID: orgID, ID: reservationID})
 	if err != nil {
@@ -78,6 +80,37 @@ func (s *Service) RecordReservationTx(ctx context.Context, q *db.Queries, orgID,
 			return err
 		}
 	}
+	products, err := q.ListSalesReservationProducts(ctx, db.ListSalesReservationProductsParams{OrganizationID: orgID, ReservationID: r.ID})
+	if err != nil {
+		return err
+	}
+	customer, reservation := r.CustomerID, r.ID
+	for _, p := range products {
+		name := p.ProductName
+		if p.VariantName.Valid && p.VariantName.String != "" {
+			name += " / " + p.VariantName.String
+		}
+		sale := ProductSale{
+			MovementUUID: p.StockMovementUuid, BranchID: r.BranchID, ProductID: p.ProductID,
+			CustomerID: &customer, ReservationID: &reservation, Description: name, Quantity: p.Quantity,
+			UnitPrice: amountOf(p.UnitPrice), OccurredAt: when,
+		}
+		if p.VariantID.Valid {
+			v := p.VariantID.Int64
+			sale.VariantID = &v
+		}
+		if p.StaffID.Valid {
+			st := p.StaffID.Int64
+			sale.StaffID = &st
+		}
+		if actor.Valid {
+			a := actor.Int64
+			sale.CreatedBy = &a
+		}
+		if _, err := s.RecordProductSaleTx(ctx, q, orgID, sale); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -89,11 +122,14 @@ type ProductSale struct {
 	VariantID    *int64
 	StaffID      *int64
 	CustomerID   *int64
-	Description  string
-	Quantity     int32
-	UnitPrice    money.Money
-	OccurredAt   time.Time
-	CreatedBy    *int64
+	// ReservationID: the visit the product was handed over with (its
+	// balance counts the line).
+	ReservationID *int64
+	Description   string
+	Quantity      int32
+	UnitPrice     money.Money
+	OccurredAt    time.Time
+	CreatedBy     *int64
 }
 
 // RecordProductSaleTx writes the sale line of a stock sale inside the
@@ -121,7 +157,8 @@ func (s *Service) RecordProductSaleTx(ctx context.Context, q *db.Queries, orgID 
 	row, err := q.InsertSaleLine(ctx, db.InsertSaleLineParams{
 		OrganizationID: orgID, BranchID: in.BranchID, CustomerID: int8Ptr(in.CustomerID), Kind: model.LineSale,
 		ItemType: model.ItemProduct, SourceType: model.SourceStockMovement,
-		SourceUuid: pgtype.UUID{Bytes: in.MovementUUID, Valid: true}, ProductID: int8Of(in.ProductID),
+		SourceUuid: pgtype.UUID{Bytes: in.MovementUUID, Valid: true}, ReservationID: int8Ptr(in.ReservationID),
+		ProductID: int8Of(in.ProductID),
 		VariantID: int8Ptr(in.VariantID), StaffID: int8Ptr(in.StaffID), Description: clip(in.Description, maxDescriptionLength),
 		Quantity: in.Quantity, UnitPrice: in.UnitPrice.Numeric(), GrossAmount: gross.Numeric(),
 		DiscountAmount: money.Zero().Numeric(), NetAmount: gross.Numeric(), Currency: c.currency,

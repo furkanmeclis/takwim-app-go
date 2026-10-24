@@ -1024,6 +1024,32 @@ type ReservationLine struct {
 	StaffShareRate      pgtype.Numeric     `json:"staff_share_rate"`
 }
 
+type ReservationProduct struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	ReservationID     int64              `json:"reservation_id"`
+	BranchID          int64              `json:"branch_id"`
+	ProductID         int64              `json:"product_id"`
+	VariantID         pgtype.Int8        `json:"variant_id"`
+	ProductName       string             `json:"product_name"`
+	VariantName       pgtype.Text        `json:"variant_name"`
+	Sku               string             `json:"sku"`
+	Quantity          int32              `json:"quantity"`
+	UnitPrice         pgtype.Numeric     `json:"unit_price"`
+	UnitCost          pgtype.Numeric     `json:"unit_cost"`
+	StaffID           pgtype.Int8        `json:"staff_id"`
+	Status            string             `json:"status"`
+	ReleaseReason     pgtype.Text        `json:"release_reason"`
+	StockMovementUuid pgtype.UUID        `json:"stock_movement_uuid"`
+	Source            string             `json:"source"`
+	DeliveredAt       pgtype.Timestamptz `json:"delivered_at"`
+	ReleasedAt        pgtype.Timestamptz `json:"released_at"`
+	CreatedBy         pgtype.Int8        `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Resource struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

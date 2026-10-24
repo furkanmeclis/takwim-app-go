@@ -93,6 +93,75 @@ type CreateInput struct {
 	Zone      string `json:"zone"`
 	// Vehicle is the car of a car wash booking (optional).
 	Vehicle *Vehicle `json:"vehicle"`
+	// Products are taken with the visit (TEC-919); their units are
+	// reserved in the branch's stock with the booking.
+	Products []ProductInput `json:"products"`
+}
+
+// States of a product of a visit (TEC-919).
+const (
+	// ProductHeld: the units are reserved in the branch's stock.
+	ProductHeld = "held"
+	// ProductDelivered: handed over when the visit was completed (a stock
+	// sale and a product sale line).
+	ProductDelivered = "delivered"
+	// ProductReleased: removed, or the visit was cancelled, rejected,
+	// expired or a no-show; the units are free again.
+	ProductReleased = "released"
+)
+
+// Limits of the products of a visit.
+const (
+	MaxProductQuantity = 99
+	MaxProductLines    = 20
+)
+
+// ProductInput adds a product (or one of its variants) to a visit.
+// StaffUUID credits the sale to a person (default: the person serving the
+// first line); the public booking page never sends it.
+type ProductInput struct {
+	ProductUUID uuid.UUID  `json:"product_uuid"`
+	VariantUUID *uuid.UUID `json:"variant_uuid"`
+	Quantity    int        `json:"quantity"`
+	StaffUUID   *uuid.UUID `json:"staff_uuid"`
+}
+
+// AddProductInput is the body of POST …/{uuid}/products.
+type AddProductInput struct {
+	ProductInput
+	ExpectedVersion *int `json:"expected_version"`
+}
+
+// Product is one product of a visit with its price snapshot and state.
+type Product struct {
+	UUID          uuid.UUID   `json:"uuid"`
+	Product       Ref         `json:"product"`
+	Variant       *Ref        `json:"variant"`
+	SKU           string      `json:"sku"`
+	Quantity      int         `json:"quantity"`
+	UnitPrice     money.Money `json:"unit_price"`
+	Total         money.Money `json:"total"`
+	Staff         *Ref        `json:"staff"`
+	Status        string      `json:"status"`
+	ReleaseReason *string     `json:"release_reason"`
+	Source        string      `json:"source"`
+	DeliveredAt   *time.Time  `json:"delivered_at"`
+	ReleasedAt    *time.Time  `json:"released_at"`
+	CreatedAt     time.Time   `json:"created_at"`
+}
+
+// ProductOption is a stock item that can be added to a visit in its
+// branch, with the units available there (on hand - reserved).
+type ProductOption struct {
+	ProductUUID uuid.UUID   `json:"product_uuid"`
+	ProductName string      `json:"product_name"`
+	SKU         string      `json:"sku"`
+	VariantUUID *uuid.UUID  `json:"variant_uuid"`
+	VariantName *string     `json:"variant_name"`
+	Price       money.Money `json:"price"`
+	Available   int64       `json:"available"`
+	// ImageUUID is the product cover (public media route).
+	ImageUUID *uuid.UUID `json:"-"`
 }
 
 // Vehicle types of a car wash booking.
@@ -173,6 +242,7 @@ type Reservation struct {
 	// HoldExpiresAt is when a waiting request lets its capacity go.
 	HoldExpiresAt *time.Time `json:"hold_expires_at"`
 	Lines         []Line     `json:"lines"`
+	Products      []Product  `json:"products"`
 	Events        []Event    `json:"events"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`

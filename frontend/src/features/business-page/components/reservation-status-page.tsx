@@ -290,6 +290,30 @@ function ReservationView({
                 </span>
               </li>
             ))}
+            {r.products
+              .filter((p) => p.status !== "released")
+              .map((p, index) => (
+                <li
+                  key={`product-${index}`}
+                  className="flex justify-between gap-3"
+                >
+                  <span>
+                    <span className="block font-medium">
+                      {p.variant_name
+                        ? `${p.name} / ${p.variant_name}`
+                        : p.name}
+                    </span>
+                    <span className="text-muted-foreground block tabular-nums">
+                      {t("business_page.products.line", {
+                        quantity: p.quantity,
+                      })}
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums">
+                    {money((Number(p.unit_price) * p.quantity).toFixed(2))}
+                  </span>
+                </li>
+              ))}
           </ul>
           <Separator />
           <p className="flex justify-between text-sm font-semibold">

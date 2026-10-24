@@ -143,5 +143,12 @@
   "weekdays.thu": "Thursday",
   "weekdays.fri": "Friday",
   "weekdays.sat": "Saturday",
-  "weekdays.sun": "Sunday"
+  "weekdays.sun": "Sunday",
+  "steps.products": "Add products?",
+  "products.hint": "Pick products to take with your visit; the business sets them aside for you. You can also continue without any.",
+  "products.quantity": "Quantity of {{name}}",
+  "products.less": "One less",
+  "products.more": "One more",
+  "products.line": "{{quantity}} pcs",
+  "errors.out_of_stock": "One of the products you picked just ran out. Please pick your products again."
 }

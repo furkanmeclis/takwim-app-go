@@ -16,6 +16,8 @@ import type {
   ReservationNotesRequest,
   ReservationPage,
   ReservationPayments,
+  ReservationProductOption,
+  ReservationProductRequest,
   ReservationRescheduleRequest,
 } from "@/features/reservations/types";
 import { tenantRequest } from "@/lib/api/tenant-request";
@@ -108,6 +110,44 @@ export const reservationsService = {
       "POST",
       `${BASE}/${uuid}/collections`,
       { body },
+    );
+  },
+
+  /** Stock items of the visit's branch with their available units. */
+  productOptions(slug: string, uuid: string, q?: string) {
+    return tenantRequest<{ items: ReservationProductOption[] }>(
+      slug,
+      "GET",
+      `${BASE}/${uuid}/product-options`,
+      { query: q ? { q } : {} },
+    );
+  },
+
+  /** Adds a product and reserves its units in the branch's stock. */
+  addProduct(slug: string, uuid: string, body: ReservationProductRequest) {
+    return tenantRequest<Reservation>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/products`,
+      {
+        body,
+        silent: true,
+      },
+    );
+  },
+
+  /** Takes a held product off the visit; its units are free again. */
+  removeProduct(
+    slug: string,
+    uuid: string,
+    productUuid: string,
+    body: ReservationActionRequest,
+  ) {
+    return tenantRequest<Reservation>(
+      slug,
+      "DELETE",
+      `${BASE}/${uuid}/products/${productUuid}`,
+      { body, silent: true },
     );
   },
 

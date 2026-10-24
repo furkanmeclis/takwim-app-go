@@ -16,6 +16,14 @@ export function isSlotTaken(error: unknown) {
   );
 }
 
+/** True when a picked product ran out before the booking (TEC-919). */
+export function isOutOfStock(error: unknown) {
+  return (
+    isApiError(error) &&
+    error.details.some((d) => d.code === "insufficient_stock")
+  );
+}
+
 /**
  * Toasts a booking error in the customer's words: a taken time, closed
  * bookings and rate limits (with the wait of `Retry-After`); anything else
@@ -28,6 +36,10 @@ export function reportBookingError(error: unknown, t: Translate) {
   }
   if (isSlotTaken(error)) {
     appToast.error(t("business_page.errors.taken"));
+    return;
+  }
+  if (isOutOfStock(error)) {
+    appToast.error(t("business_page.errors.out_of_stock"));
     return;
   }
   if (error.code === "BOOKING_UNAVAILABLE") {

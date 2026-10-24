@@ -18,6 +18,7 @@ func RegisterRoutes(mux *http.ServeMux, h *publicbookinghandler.Handler) {
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/branches", h.Branches)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/services", h.Services)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/staff", h.Staff)
+	mux.HandleFunc("GET /v1/public/businesses/{slug}/products", h.Products)
 	mux.HandleFunc("POST /v1/public/businesses/{slug}/availability", h.Availability)
 	mux.HandleFunc("POST /v1/public/businesses/{slug}/checkouts", h.CreateCheckout)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/checkouts/{token}", h.GetCheckout)

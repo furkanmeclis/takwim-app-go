@@ -29,6 +29,12 @@ export type PaymentStatus = Schemas["TenantReservationPaymentStatus"];
 export type ReservationSource = Schemas["TenantReservationSource"];
 export type ReservationEvent = Reservation["events"][number];
 export type ReservationLine = Reservation["lines"][number];
+/** A product taken with the visit (TEC-919). */
+export type ReservationProduct = Schemas["TenantReservationProduct"];
+export type ReservationProductRequest =
+  Schemas["TenantReservationProductRequest"];
+export type ReservationProductOption =
+  Schemas["TenantReservationProductOption"];
 
 export type ReservationCalendar = Schemas["TenantReservationCalendar"];
 export type CalendarColumn = Schemas["TenantReservationCalendarColumn"];

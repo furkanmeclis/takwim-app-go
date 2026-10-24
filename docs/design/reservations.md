@@ -50,7 +50,7 @@ Anything else is `ErrInvalidTransition`. A visit in service or finished is never
 
 Lapsed holds are expired by the minute sweep and by every writer before it works, and the expiry hook (`ExpireRequests`) cancels their requests in the same transaction. A writer whose own action then fails (e.g. accepting a request that just timed out) still commits the expiry: the action runs in a savepoint.
 
-Releasing products and session rights on cancel comes with those modules; capacity is released here.
+Products of the visit ([reservation-products.md](./reservation-products.md), TEC-919) are released by reject, cancel, no-show and expiry and handed over by complete, in the same transaction. Releasing session rights on cancel comes with that module; capacity is released here.
 
 ## Rescheduling and notes (TEC-900)
 
