@@ -27,6 +27,8 @@ export const organizationKeys = {
     [...organizationKeys.detail(uuid), "branches"] as const,
   activity: (uuid: string, limit: number) =>
     [...organizationKeys.detail(uuid), "activity", limit] as const,
+  overview: (uuid: string) =>
+    [...organizationKeys.detail(uuid), "overview"] as const,
 };
 
 export function useOrganizationsList(params: ListOrganizationsParams) {
@@ -49,6 +51,15 @@ export function useOrganization(uuid: string) {
   return useQuery({
     queryKey: organizationKeys.detail(uuid),
     queryFn: () => organizationsService.get(uuid),
+  });
+}
+
+/** The 360 overview of one organization (TEC-927). */
+export function useOrganizationOverview(uuid: string) {
+  return useQuery({
+    queryKey: organizationKeys.overview(uuid),
+    queryFn: () => organizationsService.overview(uuid),
+    staleTime: 30_000,
   });
 }
 

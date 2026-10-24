@@ -33,6 +33,10 @@ import {
 import { PlatformEntitlementsTab } from "@/features/entitlements/components/platform-entitlements-tab";
 import { OrganizationMembersTab } from "@/features/organizations/components/organization-members-tab";
 import {
+  OrganizationOverviewTab,
+  OrganizationSetupTab,
+} from "@/features/organizations/components/organization-overview-tab";
+import {
   useDeleteOrganization,
   useOrganization,
   useOrganizationActivity,
@@ -49,6 +53,7 @@ import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
 const TABS = [
+  "overview",
   "general",
   "members",
   "status",
@@ -60,6 +65,7 @@ const TABS = [
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
+  overview: "organizations.tabs.overview",
   general: "organizations.tabs.general",
   members: "organizations.tabs.members",
   status: "organizations.tabs.status",
@@ -72,7 +78,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
 function resolveTab(value: string | undefined): Tab {
   return (TABS as readonly string[]).includes(value ?? "")
     ? (value as Tab)
-    : "general";
+    : "overview";
 }
 
 function Forbidden() {
@@ -433,9 +439,9 @@ function ActivityTab({ uuid }: { uuid: string }) {
 }
 
 /**
- * Platform organization page (TEC-670): header with status and access
- * state, tabs Genel / Üyeler / Durum / Paket / Alan adları / Bağlantılar /
- * Aktivite (`?tab=`).
+ * Platform organization page (TEC-670, 360 view TEC-927): header with
+ * status and access state, tabs Genel bakış / Genel / Üyeler / Durum /
+ * Paket / Alan adları / Kanallar ve ödeme / Aktivite (`?tab=`).
  */
 export function OrganizationDetailPage({
   uuid,
@@ -541,6 +547,12 @@ export function OrganizationDetailPage({
                 ))}
               </TabsList>
             </div>
+            <TabsContent value="overview">
+              <OrganizationOverviewTab
+                uuid={org.uuid}
+                onOpenSetup={() => openTab("integrations")}
+              />
+            </TabsContent>
             <TabsContent value="general">
               <GeneralTab org={org} />
             </TabsContent>
@@ -560,10 +572,7 @@ export function OrganizationDetailPage({
               />
             </TabsContent>
             <TabsContent value="integrations">
-              <PlaceholderTab
-                title={t("organizations.tabs.integrations")}
-                body={t("organizations.placeholders.integrations")}
-              />
+              <OrganizationSetupTab uuid={org.uuid} />
             </TabsContent>
             <TabsContent value="activity">
               <ActivityTab uuid={uuid} />

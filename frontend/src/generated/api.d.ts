@@ -798,6 +798,8 @@ export interface paths {
          *     e-mail (`owner_email`): the organization then starts without members
          *     and an owner invitation is e-mailed (same flow as staff invitations).
          *     The slug is derived from the name with Turkish folding when omitted.
+         *     `plan`, `addons` and `access_ends_at` set the starting entitlements
+         *     and access window in the same transaction (TEC-927).
          */
         post: operations["postPlatformOrganization"];
         delete?: never;
@@ -915,6 +917,34 @@ export interface paths {
          *     nothing.
          */
         put: operations["putPlatformOrganizationEntitlements"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/organizations/{uuid}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organization 360 overview
+         * @description Takwim yönetimi view of one business (TEC-927,
+         *     `platform.organizations.read`): entitlements with their use
+         *     (branches, staff seats) and this / last month's communication usage,
+         *     catalogue size, reservation volume (bookings by the time they were
+         *     taken, months in the business time zone), the Konfirmasyon right kept
+         *     apart from the channel counters, and the set-up state of every
+         *     channel and of online payment. A channel that is not ready is listed
+         *     as `not_ready` (its sends are recorded as skipped, never as sent);
+         *     `unavailable` means the channel has no adapter in this version.
+         */
+        get: operations["getPlatformOrganizationOverview"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -9439,6 +9469,99 @@ export interface components {
             /** @description Override; `null` = plan default */
             staff_limit: number | null;
         };
+        UsageCounter: {
+            /** @enum {string} */
+            metric: "sms" | "whatsapp" | "email" | "voice_call";
+            quantity: number;
+        };
+        /** @description A connected provider account of the business (no secrets) */
+        OverviewAccount: {
+            /** Format: uuid */
+            uuid: string;
+            /** @example netgsm */
+            provider: string;
+            display_name: string;
+            /** @enum {string} */
+            mode: "sandbox" | "live";
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** @enum {string} */
+            last_check_status: "" | "ok" | "failed";
+            /** Format: date-time */
+            last_checked_at: string | null;
+        };
+        OverviewChannel: {
+            /** @enum {string} */
+            channel: "sms" | "whatsapp" | "email" | "voice_call";
+            /**
+             * @description `ready`: a provider delivers now; `not_ready`: sends are recorded as skipped; `unavailable`: no adapter in this version
+             * @enum {string}
+             */
+            status: "ready" | "not_ready" | "unavailable";
+            /** @description The business's own account of the channel, if any (active first) */
+            account: components["schemas"]["OverviewAccount"] | null;
+            /** @description Counted use this month */
+            usage: number;
+            /** @description Customer notifications sent or delivered this month */
+            sent: number;
+            failed: number;
+            /** @description Not sent (channel not ready, no address) */
+            skipped: number;
+        };
+        OrganizationOverview: {
+            /** @example 2026-10 */
+            period: string;
+            /** @example 2026-09 */
+            previous_period: string;
+            entitlements: components["schemas"]["EntitlementSummary"];
+            previous_usage: components["schemas"]["UsageCounter"][];
+            catalogue: {
+                customers: number;
+                services: number;
+            };
+            reservations: {
+                total: number;
+                this_month: number;
+                previous_month: number;
+                /** @description Cancelled, rejected or no-show bookings taken this month */
+                cancelled_this_month: number;
+                /** @description Requested or active visits that start after now */
+                upcoming: number;
+                /** @description The last six months, oldest first */
+                monthly: {
+                    /** @example 2026-10 */
+                    period: string;
+                    reservations: number;
+                }[];
+            };
+            /** @description The Konfirmasyon right; its channel use is counted under `channels` */
+            confirmation: {
+                sector_offers: boolean;
+                /** @description The add-on is assigned */
+                granted: boolean;
+                /** @description Sector offers it and the add-on is granted */
+                active: boolean;
+                /** @description Confirmation tasks planned this month */
+                total: number;
+                confirmed: number;
+                declined: number;
+                expired: number;
+                open: number;
+            };
+            channels: components["schemas"]["OverviewChannel"][];
+            payment: {
+                /** @enum {string} */
+                status: "ready" | "not_connected" | "no_cash_account" | "provider_unavailable";
+                account: components["schemas"]["OverviewAccount"] | null;
+                online_cash_accounts: number;
+            };
+        };
+        EnvelopeOrganizationOverview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["OrganizationOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeEntitlementSummary: {
             /** @enum {boolean} */
             success: true;
@@ -12890,6 +13013,15 @@ export interface components {
             owner_email?: string;
             /** @description Defaults to `hairdresser` */
             sector?: components["schemas"]["SectorCode"];
+            /** @description Starting plan; defaults to `starter` */
+            plan?: components["schemas"]["PlanCode"];
+            /** @description Add-on modules granted from the start */
+            addons?: components["schemas"]["Addon"][];
+            /**
+             * Format: date-time
+             * @description End of the access window (must be in the future); omitted = open ended
+             */
+            access_ends_at?: string | null;
         };
         PatchOrganizationRequest: {
             name?: string;
@@ -17347,6 +17479,33 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getPlatformOrganizationOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOrganizationOverview"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
         };
     };
     postPlatformOrganizationAccess: {

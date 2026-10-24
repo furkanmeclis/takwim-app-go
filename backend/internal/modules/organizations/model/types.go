@@ -79,6 +79,12 @@ type CreateOrganizationInput struct {
 	// NoOwner creates the organization without a member (the owner joins
 	// later through an invitation).
 	NoOwner bool
+	// Plan and Addons are the starting entitlements (empty plan = the
+	// default plan, TEC-927).
+	Plan   string
+	Addons []string
+	// AccessEndsAt ends the access window (nil = open ended).
+	AccessEndsAt *time.Time
 }
 
 type PatchOrganizationInput struct {
