@@ -62,6 +62,9 @@ const (
 
 var fieldKeyRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
+// hexColorRE is a `#rrggbb` colour (case-insensitive; stored lower case).
+var hexColorRE = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
 // ValidVKN reports whether v is a valid Turkish tax identification number
 // (Vergi Kimlik Numarası, 10 digits, GİB checksum).
 func ValidVKN(v string) bool {
@@ -273,6 +276,7 @@ func Normalize(in model.Settings) (model.Settings, error) {
 	}
 
 	s.Booking = normalizeBooking(ve, s.Booking)
+	s.Theme = normalizeTheme(ve, s.Theme)
 
 	if len(ve.Details) > 0 {
 		return s, ve
@@ -496,4 +500,38 @@ func validPercent(v string) bool {
 	}
 	r, ok := new(big.Rat).SetString(v)
 	return ok && r.Sign() >= 0 && r.Cmp(big.NewRat(100, 1)) <= 0
+}
+
+// normalizeTheme validates the business page theme (TEC-966): colours are
+// `#rrggbb` or empty, the font is one of model.Fonts (empty = default) and
+// the texts are trimmed and bounded.
+func normalizeTheme(ve *ValidationError, in model.Theme) model.Theme {
+	out := model.Theme{
+		Font:        strings.TrimSpace(in.Font),
+		Headline:    strings.TrimSpace(in.Headline),
+		Description: strings.TrimSpace(in.Description),
+	}
+	out.PrimaryColor = normalizeColor(ve, "theme.primary_color", in.PrimaryColor)
+	out.AccentColor = normalizeColor(ve, "theme.accent_color", in.AccentColor)
+	if out.Font == "" {
+		out.Font = model.FontDefault
+	}
+	if !slices.Contains(model.Fonts, out.Font) {
+		ve.add("theme.font", "invalid", "unknown font "+out.Font)
+		out.Font = model.FontDefault
+	}
+	maxLen(ve, "theme.headline", out.Headline, model.MaxThemeHeadline)
+	maxLen(ve, "theme.description", out.Description, model.MaxThemeDescription)
+	return out
+}
+
+// normalizeColor lower-cases a `#rrggbb` colour; empty stays empty and an
+// invalid value is reported and dropped.
+func normalizeColor(ve *ValidationError, field, raw string) string {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	if v != "" && !hexColorRE.MatchString(v) {
+		ve.add(field, "invalid", "colour must be a hex value such as #1d4ed8")
+		return ""
+	}
+	return v
 }

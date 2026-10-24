@@ -91,7 +91,7 @@ INSERT INTO organizations (
     COALESCE($5, NOW()), $6,
     COALESCE($7, '{}'::jsonb), COALESCE($8::varchar, 'hairdresser')
 )
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 type CreateOrganizationParams struct {
@@ -137,6 +137,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
@@ -160,7 +161,7 @@ func (q *Queries) DeleteOrganizationMember(ctx context.Context, arg DeleteOrgani
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key FROM organizations
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -187,12 +188,13 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (Organizati
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key FROM organizations
 WHERE slug = $1 AND deleted_at IS NULL
 `
 
@@ -219,12 +221,13 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
 
 const getOrganizationByUUID = `-- name: GetOrganizationByUUID :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key FROM organizations
 WHERE uuid = $1 AND deleted_at IS NULL
 `
 
@@ -251,6 +254,7 @@ func (q *Queries) GetOrganizationByUUID(ctx context.Context, argUuid uuid.UUID) 
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
@@ -596,7 +600,7 @@ func (q *Queries) ListTenantRolePermissionSlugsByRoleID(ctx context.Context, rol
 }
 
 const lockOrganizationRow = `-- name: LockOrganizationRow :one
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit FROM organizations
+SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key FROM organizations
 WHERE id = $1 AND deleted_at IS NULL
 FOR UPDATE
 `
@@ -624,6 +628,7 @@ func (q *Queries) LockOrganizationRow(ctx context.Context, id int64) (Organizati
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
@@ -757,7 +762,7 @@ UPDATE organizations
 SET access_starts_at = COALESCE($1, access_starts_at),
     access_ends_at = $2
 WHERE uuid = $3 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 type SetOrganizationAccessWindowParams struct {
@@ -789,6 +794,7 @@ func (q *Queries) SetOrganizationAccessWindow(ctx context.Context, arg SetOrgani
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
@@ -797,7 +803,7 @@ const setOrganizationStatus = `-- name: SetOrganizationStatus :one
 UPDATE organizations
 SET status = $1
 WHERE uuid = $2 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 type SetOrganizationStatusParams struct {
@@ -828,6 +834,7 @@ func (q *Queries) SetOrganizationStatus(ctx context.Context, arg SetOrganization
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
@@ -849,7 +856,7 @@ const softDeleteOrganization = `-- name: SoftDeleteOrganization :one
 UPDATE organizations
 SET deleted_at = NOW()
 WHERE uuid = $1 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 func (q *Queries) SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error) {
@@ -875,6 +882,7 @@ func (q *Queries) SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID)
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }
@@ -889,7 +897,7 @@ SET name = COALESCE($1, name),
     currency = COALESCE($6, currency),
     sector = COALESCE($7, sector)
 WHERE uuid = $8 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 type UpdateOrganizationParams struct {
@@ -935,6 +943,7 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }

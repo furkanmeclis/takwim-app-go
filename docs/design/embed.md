@@ -133,8 +133,11 @@ The provider's page never opens inside the frame.
 
 Payment inside the frame (a provider's own iframe) is left to the provider decision (TEC-884).
 
+## Theme
+
+The frame applies the business's theme like the page (TEC-966, [business-page.md](./business-page.md), "Theme"): colours as scoped CSS variables after the contrast check, the chosen font, and in the full view the cover and welcome texts. The visitor's colour mode stays.
+
 ## Not in this issue
 
-- **Theme.** Business colours and fonts in the frame follow the theme settings (TEC-966). The frame uses the app's neutral theme and the visitor's colour mode today.
 - **Packages.** Pre-selecting a package waits for packages in the public catalog (TEC-895).
 - **Analytics events.** Messages such as "booked" for the host page are left out on purpose: they would tell the host page about the customer's booking.

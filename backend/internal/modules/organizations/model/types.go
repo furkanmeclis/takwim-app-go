@@ -17,15 +17,17 @@ const (
 )
 
 type Organization struct {
-	ID       int64     `json:"-"`
-	UUID     uuid.UUID `json:"uuid"`
-	Slug     string    `json:"slug"`
-	Name     string    `json:"name"`
-	LogoURL  *string   `json:"logo_url,omitempty"`
-	Status   string    `json:"status"`
-	Timezone string    `json:"timezone"`
-	Currency string    `json:"currency"`
-	Sector   string    `json:"sector"`
+	ID      int64     `json:"-"`
+	UUID    uuid.UUID `json:"uuid"`
+	Slug    string    `json:"slug"`
+	Name    string    `json:"name"`
+	LogoURL *string   `json:"logo_url,omitempty"`
+	// CoverURL is the public stream of the business page cover (TEC-966).
+	CoverURL *string `json:"cover_url,omitempty"`
+	Status   string  `json:"status"`
+	Timezone string  `json:"timezone"`
+	Currency string  `json:"currency"`
+	Sector   string  `json:"sector"`
 	// Plan, Addons and the limit overrides (nil = plan default) are the
 	// stored entitlements (TEC-883).
 	Plan           string          `json:"plan"`

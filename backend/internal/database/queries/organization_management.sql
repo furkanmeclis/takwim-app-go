@@ -130,6 +130,13 @@ SET logo_object_key = sqlc.narg(logo_object_key)
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL
 RETURNING *;
 
+-- name: SetOrganizationCover :one
+-- Cover image of the business page (TEC-966); NULL clears it.
+UPDATE organizations
+SET cover_object_key = sqlc.narg(cover_object_key)
+WHERE id = sqlc.arg(id) AND deleted_at IS NULL
+RETURNING *;
+
 -- name: ListOrganizationBranchOptions :many
 SELECT id, uuid, code, name, is_active
 FROM branches

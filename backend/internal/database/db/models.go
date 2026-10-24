@@ -861,6 +861,7 @@ type Organization struct {
 	Addons         []string           `json:"addons"`
 	BranchLimit    pgtype.Int4        `json:"branch_limit"`
 	StaffLimit     pgtype.Int4        `json:"staff_limit"`
+	CoverObjectKey pgtype.Text        `json:"cover_object_key"`
 }
 
 type OrganizationInvitation struct {

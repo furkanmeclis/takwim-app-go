@@ -1,7 +1,10 @@
 /* shadcn new-york · slate, Takwim brand (docs/brand.md):
-   light navy #022C81 on white, dark sky #60A7FE with ink #041F47 text */
+   light navy #022C81 on white, dark sky #60A7FE with ink #041F47 text.
+   `.light` lets a region (the business page theme preview) show the light
+   values inside a dark page. */
 
-:root {
+:root,
+.light {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.247 0.082 258.297);

@@ -834,7 +834,7 @@ func pgText(v string) pgtype.Text {
 func mapOrganization(row db.Organization) orgmodel.Organization {
 	return orgmodel.Organization{
 		ID: row.ID, UUID: row.Uuid, Slug: row.Slug, Name: row.Name,
-		LogoURL: LogoURL(row.Uuid, row.LogoObjectKey), Status: row.Status,
+		LogoURL: LogoURL(row.Uuid, row.LogoObjectKey), CoverURL: PublicCoverURL(row.Slug, row.CoverObjectKey), Status: row.Status,
 		Timezone: row.Timezone, Currency: row.Currency, Sector: row.Sector,
 		Plan: row.Plan, Addons: nonNilStrings(row.Addons),
 		BranchLimit: int4Ptr(row.BranchLimit), StaffLimit: int4Ptr(row.StaffLimit),
@@ -882,5 +882,18 @@ func LogoURL(orgUUID uuid.UUID, key pgtype.Text) *string {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key.String))
 	u := fmt.Sprintf("/v1/organizations/%s/logo?v=%x", orgUUID, h.Sum32())
+	return &u
+}
+
+// PublicCoverURL is the public stream of the business page cover
+// (/v1/public/businesses/{slug}/cover, TEC-966); the version parameter
+// changes with every upload. The panel preview and the page share it.
+func PublicCoverURL(slug string, key pgtype.Text) *string {
+	if !key.Valid || strings.TrimSpace(key.String) == "" {
+		return nil
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key.String))
+	u := fmt.Sprintf("/v1/public/businesses/%s/cover?v=%x", slug, h.Sum32())
 	return &u
 }

@@ -1442,6 +1442,8 @@ type Querier interface {
 	SetMemberBranchScope(ctx context.Context, arg SetMemberBranchScopeParams) error
 	SetMemberPrimaryRole(ctx context.Context, arg SetMemberPrimaryRoleParams) error
 	SetOrganizationAccessWindow(ctx context.Context, arg SetOrganizationAccessWindowParams) (Organization, error)
+	// Cover image of the business page (TEC-966); NULL clears it.
+	SetOrganizationCover(ctx context.Context, arg SetOrganizationCoverParams) (Organization, error)
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
 	SetPaymentCheckout(ctx context.Context, arg SetPaymentCheckoutParams) error

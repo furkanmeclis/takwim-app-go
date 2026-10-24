@@ -17,6 +17,13 @@ func OrganizationLogoObjectKey(orgUUID, versionUUID, ext string) string {
 	return fmt.Sprintf("organizations/%s/branding/logo-%s.%s", orgUUID, versionUUID, trimExt(ext))
 }
 
+// OrganizationCoverObjectKey builds
+// organizations/{orgUUID}/branding/cover-{versionUUID}.{ext}: the cover
+// image of the business page (TEC-966), versioned like the logo.
+func OrganizationCoverObjectKey(orgUUID, versionUUID, ext string) string {
+	return fmt.Sprintf("organizations/%s/branding/cover-%s.%s", orgUUID, versionUUID, trimExt(ext))
+}
+
 // ExportObjectKey builds exports/{jobUUID}/export.{ext}.
 func ExportObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("exports/%s/export.%s", jobUUID, trimExt(ext))

@@ -25,13 +25,16 @@ import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 import { appToast } from "@/providers/toast-provider";
 
-type OrganizationProfile = components["schemas"]["OrganizationProfile"];
+export type OrganizationProfile = components["schemas"]["OrganizationProfile"];
 
-const PATH = "/v1/tenant/organization";
+/** Profile route; the cover card of the theme tab shares it. */
+export const PROFILE_PATH = "/v1/tenant/organization";
+const PATH = PROFILE_PATH;
 const ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml";
 const MAX_BYTES = 2 * 1024 * 1024;
 
-const profileKey = (slug: string) => ["tenant", slug, "organization"] as const;
+export const profileKey = (slug: string) =>
+  ["tenant", slug, "organization"] as const;
 
 function createProfileSchema(t: (key: string) => string) {
   return z.object({

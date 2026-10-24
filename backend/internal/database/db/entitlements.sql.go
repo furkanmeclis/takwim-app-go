@@ -121,7 +121,7 @@ SET plan = $1,
     branch_limit = $3::int,
     staff_limit = $4::int
 WHERE uuid = $5 AND deleted_at IS NULL
-RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit
+RETURNING id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at, settings, created_at, updated_at, deleted_at, timezone, currency, sector, plan, addons, branch_limit, staff_limit, cover_object_key
 `
 
 type UpdateOrganizationEntitlementsParams struct {
@@ -163,6 +163,7 @@ func (q *Queries) UpdateOrganizationEntitlements(ctx context.Context, arg Update
 		&i.Addons,
 		&i.BranchLimit,
 		&i.StaffLimit,
+		&i.CoverObjectKey,
 	)
 	return i, err
 }

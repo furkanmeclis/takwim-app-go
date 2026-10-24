@@ -29,8 +29,13 @@ import { resolveLogoSrc } from "@/lib/branding/logo-url";
 import { assertServiceMediaURL } from "@/lib/media/urls";
 import { useLocale } from "@/providers/locale-provider";
 
-/** Cover photo: the first photo of the first branch that has one. */
-function coverOf(branches: PublicBranch[]) {
+/**
+ * Cover photo: the theme's cover (TEC-966), else the first photo of the
+ * first branch that has one.
+ */
+export function coverOf(business: PublicBusiness, branches: PublicBranch[]) {
+  const own = business.theme?.cover_url;
+  if (own) return resolveLogoSrc(assertServiceMediaURL(own));
   for (const branch of branches) {
     const url = branch.images[0]?.url;
     if (url) return resolveLogoSrc(assertServiceMediaURL(url));
@@ -38,24 +43,33 @@ function coverOf(branches: PublicBranch[]) {
   return undefined;
 }
 
-function Hero({
+/**
+ * Hero of the page: cover, logo, name, sector and cities, then the theme's
+ * welcome headline and text when the business wrote them.
+ */
+export function Hero({
   business,
   branches,
+  cover,
 }: {
   business: PublicBusiness;
   branches: PublicBranch[];
+  /** Overrides the resolved cover (the panel preview). */
+  cover?: string;
 }) {
   const { t } = useLocale();
-  const cover = coverOf(branches);
+  const src = cover ?? coverOf(business, branches);
   const cities = [...new Set(branches.map((b) => b.city).filter(Boolean))];
+  const headline = business.theme?.headline?.trim();
+  const description = business.theme?.description?.trim();
   return (
     <section className="bg-card overflow-hidden rounded-xl border">
-      {cover ? (
+      {src ? (
         // API-owned image stream; next/image would need the API host.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={cover} alt="" className="aspect-[3/1] w-full object-cover" />
+        <img src={src} alt="" className="aspect-[3/1] w-full object-cover" />
       ) : (
-        <div className="from-muted to-background aspect-[5/1] w-full bg-gradient-to-br" />
+        <div className="from-primary/15 via-muted to-background aspect-[5/1] w-full bg-gradient-to-br" />
       )}
       <div className="flex items-end gap-3 px-4 pb-4">
         <BusinessAvatar
@@ -69,6 +83,20 @@ function Hero({
           </p>
         </div>
       </div>
+      {headline || description ? (
+        <div className="space-y-1 border-t px-4 py-4">
+          {headline ? (
+            <p className="font-display text-primary text-lg font-semibold">
+              {headline}
+            </p>
+          ) : null}
+          {description ? (
+            <p className="text-muted-foreground text-sm whitespace-pre-line">
+              {description}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

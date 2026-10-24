@@ -434,6 +434,76 @@ func (h *Handler) TenantDeleteLogo(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, tenantOrganization(org))
 }
 
+// TenantUploadCover serves PUT /v1/tenant/organization/cover (multipart
+// "cover": PNG, JPEG or WebP up to 5 MiB): the cover image of the business
+// page (TEC-966). The page shows it from the public `cover_url` only.
+func (h *Handler) TenantUploadCover(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	if h.storage == nil {
+		response.ServiceUnavailable(w, r, response.CodeInternalError, "storage is not configured")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, storage.MaxCoverBytes+(1<<20))
+	if err := r.ParseMultipartForm(storage.MaxCoverBytes); err != nil {
+		response.ValidationError(w, r, []response.Detail{{Field: "cover", Message: "invalid multipart form or file too large", Code: "invalid"}})
+		return
+	}
+	file, header, err := r.FormFile("cover")
+	if err != nil {
+		response.ValidationError(w, r, []response.Detail{{Field: "cover", Message: "cover is required", Code: "required"}})
+		return
+	}
+	defer func() { _ = file.Close() }()
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+	mime, err := storage.DetectLogoMIME(header.Header.Get("Content-Type"), head[:n])
+	if err == nil {
+		err = storage.ValidateCoverSize(header.Size)
+	}
+	var ext string
+	if err == nil {
+		ext, err = storage.LogoExtForMIME(mime)
+	}
+	if err != nil {
+		response.ValidationError(w, r, []response.Detail{{Field: "cover", Message: err.Error(), Code: "invalid"}})
+		return
+	}
+	key := storage.OrganizationCoverObjectKey(scope.UUID.String(), uuid.NewString(), ext)
+	body := io.MultiReader(strings.NewReader(string(head[:n])), file)
+	if err := h.storage.Upload(r.Context(), storage.File{
+		Body: body, Size: header.Size, ContentType: mime, Filename: header.Filename,
+	}, key); err != nil {
+		response.InternalErr(w, r, err, "cover upload failed")
+		return
+	}
+	org, previous, err := h.mgmt.SetCover(r.Context(), scope.ID, &key)
+	if err != nil {
+		_ = h.storage.Delete(r.Context(), key)
+		writeError(w, r, err)
+		return
+	}
+	if previous != "" && previous != key {
+		_ = h.storage.Delete(r.Context(), previous)
+	}
+	h.recordProfile(r, "organization.cover_updated", org, map[string]any{})
+	response.JSON(w, r, http.StatusOK, tenantOrganization(org))
+}
+
+// TenantDeleteCover serves DELETE /v1/tenant/organization/cover.
+func (h *Handler) TenantDeleteCover(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	org, previous, err := h.mgmt.SetCover(r.Context(), scope.ID, nil)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if previous != "" && h.storage != nil {
+		_ = h.storage.Delete(r.Context(), previous)
+	}
+	h.recordProfile(r, "organization.cover_removed", org, map[string]any{})
+	response.JSON(w, r, http.StatusOK, tenantOrganization(org))
+}
+
 func (h *Handler) recordProfile(r *http.Request, action string, org orgmodel.Organization, payload map[string]any) {
 	h.recordProfileChanges(r, action, org, payload, nil)
 }
@@ -456,6 +526,7 @@ type TenantOrganization struct {
 	Slug           string    `json:"slug"`
 	Name           string    `json:"name"`
 	LogoURL        *string   `json:"logo_url"`
+	CoverURL       *string   `json:"cover_url"`
 	Status         string    `json:"status"`
 	Timezone       string    `json:"timezone"`
 	Currency       string    `json:"currency"`
@@ -467,7 +538,7 @@ type TenantOrganization struct {
 
 func tenantOrganization(org orgmodel.Organization) TenantOrganization {
 	out := TenantOrganization{
-		UUID: org.UUID, Slug: org.Slug, Name: org.Name, LogoURL: org.LogoURL, Status: org.Status,
+		UUID: org.UUID, Slug: org.Slug, Name: org.Name, LogoURL: org.LogoURL, CoverURL: org.CoverURL, Status: org.Status,
 		Timezone: org.Timezone, Currency: org.Currency, Sector: org.Sector,
 		AccessStartsAt: org.AccessStartsAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:      org.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),

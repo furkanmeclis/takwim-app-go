@@ -161,7 +161,7 @@ func (q *Queries) GetPublicCheckoutForUpdate(ctx context.Context, arg GetPublicC
 
 const getPublicOrganizationBySlug = `-- name: GetPublicOrganizationBySlug :one
 
-SELECT id, uuid, slug, name, logo_object_key, status, access_starts_at, access_ends_at,
+SELECT id, uuid, slug, name, logo_object_key, cover_object_key, status, access_starts_at, access_ends_at,
        sector, timezone, currency, plan, addons, branch_limit, staff_limit
 FROM organizations
 WHERE slug = $1 AND deleted_at IS NULL
@@ -173,6 +173,7 @@ type GetPublicOrganizationBySlugRow struct {
 	Slug           string             `json:"slug"`
 	Name           string             `json:"name"`
 	LogoObjectKey  pgtype.Text        `json:"logo_object_key"`
+	CoverObjectKey pgtype.Text        `json:"cover_object_key"`
 	Status         string             `json:"status"`
 	AccessStartsAt pgtype.Timestamptz `json:"access_starts_at"`
 	AccessEndsAt   pgtype.Timestamptz `json:"access_ends_at"`
@@ -197,6 +198,7 @@ func (q *Queries) GetPublicOrganizationBySlug(ctx context.Context, slug string) 
 		&i.Slug,
 		&i.Name,
 		&i.LogoObjectKey,
+		&i.CoverObjectKey,
 		&i.Status,
 		&i.AccessStartsAt,
 		&i.AccessEndsAt,

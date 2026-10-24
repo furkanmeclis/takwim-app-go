@@ -15,6 +15,7 @@ import (
 func RegisterRoutes(mux *http.ServeMux, h *publicbookinghandler.Handler) {
 	mux.HandleFunc("GET /v1/public/businesses/{slug}", h.Business)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/logo", h.Logo)
+	mux.HandleFunc("GET /v1/public/businesses/{slug}/cover", h.Cover)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/branches", h.Branches)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/services", h.Services)
 	mux.HandleFunc("GET /v1/public/businesses/{slug}/staff", h.Staff)

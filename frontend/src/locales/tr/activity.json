@@ -104,6 +104,8 @@
   "actions.organization.updated": "İşletme adı güncellendi",
   "actions.organization.logo_updated": "İşletme logosu güncellendi",
   "actions.organization.logo_removed": "İşletme logosu kaldırıldı",
+  "actions.organization.cover_updated": "İşletme sayfası kapak görseli güncellendi",
+  "actions.organization.cover_removed": "İşletme sayfası kapak görseli kaldırıldı",
   "actions.organizations.entitlements_updated": "İşletme paketi güncellendi",
   "actions.branches.image_added": "Şubeye fotoğraf eklendi",
   "actions.branches.image_removed": "Şube fotoğrafı silindi",

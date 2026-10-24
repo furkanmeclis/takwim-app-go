@@ -78,6 +78,8 @@ var isolationAllowlist = map[string]string{
 	"PATCH /v1/tenant/organization":                         "profile of the caller's organization (name only); no foreign references",
 	"PUT /v1/tenant/organization/logo":                      "logo of the caller's organization; the key is built from the scope (storage prefix check)",
 	"DELETE /v1/tenant/organization/logo":                   "logo of the caller's organization; no ids",
+	"PUT /v1/tenant/organization/cover":                     "cover image of the caller's organization; the key is built from the scope (storage prefix check)",
+	"DELETE /v1/tenant/organization/cover":                  "cover image of the caller's organization; no ids",
 	"POST /v1/tenant/integrations":                          "body has no foreign references (kind, provider code, display name, mode, the organization's own credentials)",
 	"PUT /v1/tenant/customer-notifications/settings":        "rule and texts of the caller's organization (event code, channel names); no ids",
 	"POST /v1/tenant/customer-notifications/settings/reset": "resets an event code of the caller's organization; no ids",

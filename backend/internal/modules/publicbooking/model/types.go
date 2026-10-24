@@ -139,6 +139,22 @@ type Business struct {
 	Booking     Booking           `json:"booking"`
 	BranchCount int               `json:"branch_count"`
 	Embed       Embed             `json:"embed"`
+	// Theme is the look of the page (TEC-966): only customer-facing values.
+	Theme Theme `json:"theme"`
+}
+
+// Theme is the business page theme (TEC-966): colours as `#rrggbb` (empty =
+// the app's neutral colour), a font code the page ships, the welcome texts
+// and the API-owned cover image URL (null = none; the page then falls back
+// to the first branch photo). The page checks the contrast of the colours
+// and keeps the neutral theme where it is too low.
+type Theme struct {
+	PrimaryColor string  `json:"primary_color"`
+	AccentColor  string  `json:"accent_color"`
+	Font         string  `json:"font"`
+	Headline     string  `json:"headline"`
+	Description  string  `json:"description"`
+	CoverURL     *string `json:"cover_url"`
 }
 
 // Embed is what the embedded booking screen (TEC-908) needs: the sites

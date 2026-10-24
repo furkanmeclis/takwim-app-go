@@ -104,6 +104,8 @@
   "actions.organization.updated": "Business name updated",
   "actions.organization.logo_updated": "Business logo updated",
   "actions.organization.logo_removed": "Business logo removed",
+  "actions.organization.cover_updated": "Business page cover image updated",
+  "actions.organization.cover_removed": "Business page cover image removed",
   "actions.organizations.entitlements_updated": "Organization plan updated",
   "actions.branches.image_added": "Branch photo added",
   "actions.branches.image_removed": "Branch photo removed",
