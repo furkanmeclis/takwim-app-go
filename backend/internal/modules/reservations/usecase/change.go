@@ -172,7 +172,7 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if err != nil {
 			return err
 		}
-		return event(ctx, tx.Q, updated, "rescheduled", row.Status, updated.Status, actorID, in.Note)
+		return s.event(ctx, tx.Q, updated, "rescheduled", row.Status, updated.Status, actorID, in.Note)
 	})
 	if err != nil {
 		return model.Reservation{}, err
@@ -214,7 +214,7 @@ func (s *Service) UpdateNotes(ctx context.Context, orgID int64, id uuid.UUID, ca
 		if err != nil {
 			return err
 		}
-		return event(ctx, tx.Q, updated, "notes_updated", "", "", actorID, "")
+		return s.event(ctx, tx.Q, updated, "notes_updated", "", "", actorID, "")
 	})
 	if err != nil {
 		return model.Reservation{}, err

@@ -536,13 +536,6 @@ func TestCustomerPanelSignIn(t *testing.T) {
 		t.Fatalf("codes in an hour = %d", sent)
 	}
 
-	// The panel address after an online booking (A28: no confirmation
-	// module needed).
-	f.svc.PanelLinkNotice(context.Background(), f.zeynepPhone, "Kuaför")
-	last := f.sender.msgs[len(f.sender.msgs)-1]
-	if last.Purpose != sms.PurposeCustomerPanelLink || !strings.Contains(last.Text, usecase.DefaultConfig.PanelURL) || codeRE.MatchString(last.Text) {
-		t.Fatalf("panel link = %+v", last)
-	}
 }
 
 // TestCustomerPanelReservations: the person sees their own visits in every

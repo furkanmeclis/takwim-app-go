@@ -89,6 +89,7 @@ type Service struct {
 	indexer  SearchIndexer
 	// onComplete writes the sale lines of a completed visit (TEC-916).
 	onComplete CompletionHook
+	notifier   Notifier
 }
 
 // New builds the service. The capacity writer must also run ExpireRequests
@@ -285,7 +286,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 				return err
 			}
 		}
-		if err := event(ctx, tx.Q, row, "created", "", row.Status, actorID, ""); err != nil {
+		if err := s.event(ctx, tx.Q, row, "created", "", row.Status, actorID, ""); err != nil {
 			return err
 		}
 		if p.confirm {
@@ -365,14 +366,6 @@ func (s *Service) priceLines(ctx context.Context, tx *availabilityusecase.Tx, sl
 		ve.add("payment", "not_allowed", "a booking without a price cannot be paid online")
 	}
 	return out, total, ve.orNil()
-}
-
-func event(ctx context.Context, q *db.Queries, row db.Reservation, typ, from, to string, actorID int64, note string) error {
-	return q.CreateReservationEvent(ctx, db.CreateReservationEventParams{
-		OrganizationID: row.OrganizationID, ReservationID: row.ID, Version: row.Version, Type: typ,
-		FromStatus: pgtype.Text{String: from, Valid: from != ""}, ToStatus: pgtype.Text{String: to, Valid: to != ""},
-		ActorID: pgtype.Int8{Int64: actorID, Valid: actorID > 0}, Note: note,
-	})
 }
 
 // Get returns a reservation the caller may see.

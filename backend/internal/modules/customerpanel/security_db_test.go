@@ -35,13 +35,14 @@ func (c *capture) lastMessage(t *testing.T, phone, purpose string) string {
 	return ""
 }
 
-// panelLink sends the post-booking notice and returns its link token.
+// panelLink issues the panel link a customer notice carries and returns
+// its token.
 func (f *fixture) panelLink(t *testing.T, phone string) string {
 	t.Helper()
-	f.svc.PanelLinkNotice(context.Background(), phone, "Kuaför")
-	m := linkRE.FindStringSubmatch(f.sender.lastMessage(t, phone, sms.PurposeCustomerPanelLink))
+	link := f.svc.PanelLink(context.Background(), phone)
+	m := linkRE.FindStringSubmatch(link)
 	if m == nil || m[1] != "l" {
-		t.Fatalf("no panel link in %q", f.sender.lastMessage(t, phone, sms.PurposeCustomerPanelLink))
+		t.Fatalf("no panel link in %q", link)
 	}
 	return m[2]
 }
@@ -115,11 +116,12 @@ func TestCustomerPanelLinks(t *testing.T) {
 		t.Fatalf("link failures recorded = %d", n)
 	}
 	// Daily cap: past five links the message carries the plain address.
+	var last string
 	for i := 0; i < 6; i++ {
-		f.svc.PanelLinkNotice(ctx, f.zeynepPhone, "Kuaför")
+		last = f.svc.PanelLink(ctx, f.zeynepPhone)
 	}
-	if text := f.sender.lastMessage(t, f.zeynepPhone, sms.PurposeCustomerPanelLink); strings.Contains(text, "#") {
-		t.Fatalf("link past the cap: %q", text)
+	if strings.Contains(last, "#") || !strings.HasSuffix(last, "/panel") {
+		t.Fatalf("link past the cap: %q", last)
 	}
 
 	// Visit link: one reservation, no panel.

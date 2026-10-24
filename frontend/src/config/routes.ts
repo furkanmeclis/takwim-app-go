@@ -145,6 +145,8 @@ export const routes = {
         `/t/${encodeURIComponent(slug)}/settings/members`,
       integrations: (slug: string) =>
         `/t/${encodeURIComponent(slug)}/settings/integrations`,
+      notifications: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/settings/notifications`,
       plan: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/plan`,
       roles: {
         root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/roles`,

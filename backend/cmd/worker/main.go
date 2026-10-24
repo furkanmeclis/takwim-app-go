@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/cache"
@@ -20,9 +21,13 @@ import (
 	cashadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/adapters"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	customernotifyadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/adapters"
+	customernotifyusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/usecase"
+	customerpanelusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/usecase"
 	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
 	customersrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/repository"
 	customersusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/usecase"
+	entitlementsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/exports/usecase"
 	importusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/imports/usecase"
 	integrationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/integrations"
@@ -63,11 +68,13 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	ioadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/mail"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx/orgcache"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/outbox"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine"
 	searchadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/searchengine/adapters"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sms"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/storage"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/queue"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/realtime"
@@ -158,8 +165,26 @@ func main() {
 	// business settings (payment hold times on accept).
 	orgSettings := orgsettingsusecase.New(orgsettingsrepository.NewPostgres(pool, queries))
 	reservationHolds := availabilityusecase.NewHolds(pool, queries, orgSettings)
-	reservationHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
+	// Customer notifications (TEC-911): reservation changes made here (bulk
+	// transitions, expiries) write their notices like the API's; this
+	// process sends every business's due notices and plans the reminders.
+	notifyEngine := customernotifyusecase.New(pool, queries, strings.TrimRight(cfg.Auth.FrontendURL, "/")+"/panel")
+	notifyEngine.SetLogger(log)
+	notifyEngine.Register(
+		// The SMS provider is not chosen yet (TEC-884): the log sender
+		// counts as not ready, so nothing is recorded as sent through it.
+		customernotifyadapters.SMS{Sender: sms.NewLogSender(log, cfg.App.Env != "production")},
+		customernotifyadapters.Email{Mail: mailer, Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""},
+	)
+	usage := entitlementsmodule.New(queries)
+	notifyEngine.SetUsage(func(ctx context.Context, orgID int64, timezone, metric string) {
+		if err := usage.AddUsage(ctx, orgctx.Scope{ID: orgID, Timezone: timezone}, metric, 1); err != nil {
+			log.Warn("customer_notice_usage_failed", "organization", orgID, "metric", metric, "error", err)
+		}
+	})
+	reservationHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(notifyEngine))
 	reservationsSvc := reservationsusecase.New(reservationHolds, queries, orgSettings)
+	reservationsSvc.SetNotifier(notifyEngine)
 	cashSvc := cashusecase.New(cashrepository.NewPostgres(pool, queries), nil)
 	// Completed visits and stock sales become sale lines (TEC-916) in the
 	// same transaction, whichever process runs them.
@@ -249,6 +274,13 @@ func main() {
 		log.Error("field_cipher_failed", "error", err)
 		exit(1)
 	}
+	// SMS notices carry the phone's single-use panel link (TEC-910); the
+	// link rows and their keyed hashes belong to the customer panel.
+	panelCfg := customerpanelusecase.DefaultConfig
+	panelCfg.PanelURL = strings.TrimRight(cfg.Auth.FrontendURL, "/") + "/panel"
+	panelLinks := customerpanelusecase.New(queries, nil, fieldCipher, nil, nil, customerpanelusecase.PanelDeps{}, log)
+	panelLinks.SetConfig(panelCfg)
+	notifyEngine.SetLinkIssuer(customernotifyadapters.PanelLinks(panelLinks))
 	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log)
 	if err != nil {
 		log.Error("integrations_failed", "error", err)
@@ -260,7 +292,7 @@ func main() {
 	// The minute sweep of capacity holds also cancels the requests whose
 	// approval or payment hold lapsed (TEC-899).
 	capacityHolds := availabilityusecase.NewHolds(pool, queries, nil)
-	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
+	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(notifyEngine))
 	worker := queue.NewWorker(cfg, log, notifSvc.Deliver).
 		WithExport(exportSvc.ProcessExport).
 		WithImport(importSvc.ProcessImport).
@@ -320,6 +352,8 @@ func main() {
 	} else if n > 0 {
 		log.Info("notification_reclaim_completed", "count", n)
 	}
+
+	go notifyEngine.Run(ctx, customernotifyusecase.DefaultSendInterval, customernotifyusecase.DefaultReminderInterval)
 
 	errCh := make(chan error, 1)
 	go func() {

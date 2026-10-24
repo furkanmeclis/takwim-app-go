@@ -5114,6 +5114,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/customer-notifications/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer notification rules and texts
+         * @description The channels (with whether a provider can deliver now) and every
+         *     customer notification event with the business's rule (on / off,
+         *     ordered channels, fallback, reminder offsets) and texts, next to the
+         *     defaults (`tenant.settings.read`). Works without the confirmation
+         *     add-on (A28).
+         */
+        get: operations["getTenantCustomerNotificationSettings"];
+        /**
+         * Save one event's rule and texts
+         * @description `tenant.settings.write`. Replaces the rule of `event`; each text in
+         *     `templates` is stored, and an empty text (or the default) goes back
+         *     to the default. Texts may use only the event's `{{variables}}`
+         *     (`unknown_variable`). Reminder offsets are minutes before the visit
+         *     (15 to 10080, at most 3; only for `reservation.reminder`).
+         */
+        put: operations["putTenantCustomerNotificationSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-notifications/settings/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set an event back to the defaults
+         * @description `tenant.settings.write`. Removes the business's rule and texts of `event`.
+         */
+        post: operations["postTenantCustomerNotificationReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-notifications/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render a notification text with sample values
+         * @description `tenant.settings.read`. Sample customer and visit, the business's own name; `unknown` lists placeholders that are not variables.
+         */
+        post: operations["postTenantCustomerNotificationPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-notifications/deliveries/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Notification history metadata
+         * @description Table contract of `GET /v1/tenant/customer-notifications/deliveries` (`tenant.settings.read`).
+         */
+        get: operations["getTenantCustomerNotificationDeliveriesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/customer-notifications/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer notification history
+         * @description One row per channel attempt, newest first (`tenant.settings.read`),
+         *     inside the caller's branch scope. A channel without a ready provider
+         *     is `skipped`, never `sent`. Recipients are masked; the stored text
+         *     never holds a personal sign-in link.
+         */
+        get: operations["getTenantCustomerNotificationDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/cash/accounts": {
         parameters: {
             query?: never;
@@ -8740,6 +8855,129 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["CashAccount"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        CustomerNotificationRule: {
+            enabled: boolean;
+            /** @description Ordered; the next one runs when one fails or is skipped (with `fallback`). */
+            channels: ("sms" | "whatsapp" | "email")[];
+            fallback: boolean;
+            /** @description Minutes before the visit (reminder only). */
+            reminder_offsets: number[];
+        };
+        CustomerNotificationTemplate: {
+            /** @enum {string} */
+            channel: "sms" | "whatsapp" | "email";
+            /** @description E-mail only */
+            subject: string;
+            body: string;
+            custom: boolean;
+            default_subject: string;
+            default_body: string;
+        };
+        CustomerNotificationEvent: {
+            /** @enum {string} */
+            code: "reservation.requested" | "reservation.accepted" | "reservation.rejected" | "reservation.rescheduled" | "reservation.cancelled" | "reservation.reminder";
+            reminder: boolean;
+            variables: string[];
+            rule: components["schemas"]["CustomerNotificationRule"];
+            default_rule: components["schemas"]["CustomerNotificationRule"];
+            custom: boolean;
+            templates: components["schemas"]["CustomerNotificationTemplate"][];
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        CustomerNotificationChannel: {
+            /** @enum {string} */
+            name: "sms" | "whatsapp" | "email";
+            /** @description A provider can deliver now; otherwise sends are skipped. */
+            ready: boolean;
+        };
+        CustomerNotificationSettings: {
+            channels: components["schemas"]["CustomerNotificationChannel"][];
+            events: components["schemas"]["CustomerNotificationEvent"][];
+        };
+        CustomerNotificationSaveInput: {
+            event: string;
+            enabled: boolean;
+            channels: ("sms" | "whatsapp" | "email")[];
+            fallback: boolean;
+            reminder_offsets?: number[];
+            templates?: {
+                /** @enum {string} */
+                channel: "sms" | "whatsapp" | "email";
+                subject?: string;
+                body: string;
+            }[];
+        };
+        CustomerNotificationPreview: {
+            subject: string;
+            body: string;
+            unknown: string[];
+        };
+        CustomerNotificationDelivery: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: uuid */
+            dispatch_uuid: string;
+            event: string;
+            /** @enum {string} */
+            channel: "sms" | "whatsapp" | "email";
+            /** Format: int32 */
+            attempt_no: number;
+            /** @enum {string} */
+            status: "sending" | "sent" | "delivered" | "failed" | "skipped";
+            /** @enum {string} */
+            dispatch_status: "pending" | "sending" | "delivered" | "failed" | "skipped" | "cancelled";
+            provider: string;
+            provider_ref: string;
+            recipient_masked: string;
+            /** Format: uuid */
+            customer_uuid: string;
+            customer_name: string;
+            /** Format: uuid */
+            reservation_uuid?: string;
+            /** Format: int64 */
+            reservation_number?: number;
+            subject: string;
+            body: string;
+            error: string;
+            /** Format: date-time */
+            sent_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CustomerNotificationDeliveryPage: {
+            items: components["schemas"]["CustomerNotificationDelivery"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeCustomerNotificationSettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerNotificationSettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerNotificationEvent: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerNotificationEvent"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerNotificationPreview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerNotificationPreview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomerNotificationDeliveryPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomerNotificationDeliveryPage"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeCashAccountPage: {
@@ -21880,6 +22118,222 @@ export interface operations {
                 };
             };
             400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCustomerNotificationSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerNotificationSettings"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantCustomerNotificationSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerNotificationSaveInput"];
+            };
+        };
+        responses: {
+            /** @description The event with its new rule and texts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerNotificationEvent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCustomerNotificationReset: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example reservation.reminder */
+                    event: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The event with the default rule and texts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerNotificationEvent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCustomerNotificationPreview: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    event: string;
+                    /** @enum {string} */
+                    channel: "sms" | "whatsapp" | "email";
+                    subject?: string;
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Rendered text */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerNotificationPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCustomerNotificationDeliveriesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCustomerNotificationDeliveries: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `created_at`, `channel`, `status`, `event`; prefix `-` for descending. Default `-created_at`. */
+                sort?: string;
+                /** @description `sms`, `whatsapp`, `email`; comma-separate or repeat */
+                channel?: string;
+                /** @description `sending`, `sent`, `delivered`, `failed`, `skipped`; comma-separate or repeat */
+                status?: string;
+                /** @description Event codes; comma-separate or repeat */
+                event?: string;
+                customer_uuid?: string;
+                reservation_uuid?: string;
+                created_from?: string;
+                created_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description History page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerNotificationDeliveryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];

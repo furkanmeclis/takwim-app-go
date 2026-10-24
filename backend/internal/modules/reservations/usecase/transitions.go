@@ -101,7 +101,7 @@ func (s *Service) transition(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if err != nil {
 			return err
 		}
-		return event(ctx, tx.Q, updated, typ, row.Status, updated.Status, actorID, in.Note)
+		return s.event(ctx, tx.Q, updated, typ, row.Status, updated.Status, actorID, in.Note)
 	})
 	if err != nil {
 		return model.Reservation{}, err
@@ -246,7 +246,11 @@ func (s *Service) MarkPaid(ctx context.Context, orgID int64, id uuid.UUID, actor
 // hold lapsed (no decision within the review window, no payment within the
 // payment hold time) are cancelled. It runs in the transaction that expires
 // the holds, so the capacity and the record change together.
-func ExpireRequests(ctx context.Context, q *db.Queries, orgID int64, holdIDs []int64, _ time.Time) error {
+func ExpireRequests(ctx context.Context, q *db.Queries, orgID int64, holdIDs []int64, now time.Time) error {
+	return expireRequests(ctx, q, nil, orgID, holdIDs, now)
+}
+
+func expireRequests(ctx context.Context, q *db.Queries, n Notifier, orgID int64, holdIDs []int64, _ time.Time) error {
 	rows, err := q.ListReservationsByHolds(ctx, db.ListReservationsByHoldsParams{OrganizationID: orgID, HoldIds: holdIDs})
 	if err != nil {
 		return err
@@ -266,7 +270,7 @@ func ExpireRequests(ctx context.Context, q *db.Queries, orgID int64, holdIDs []i
 		if err != nil {
 			return err
 		}
-		if err := event(ctx, q, updated, "expired", row.Status, updated.Status, 0, reason); err != nil {
+		if err := recordEvent(ctx, q, n, updated, "expired", row.Status, updated.Status, 0, reason); err != nil {
 			return err
 		}
 	}
