@@ -350,6 +350,27 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["cashClosing"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts/"+ids["cashAccount"]+"/closings", map[string]any{
 			"counted_amount": "150", "note": m,
 		}), http.StatusCreated, "close cash day"), "uuid")
+		// Staff shares (TEC-917): a person without an account (the seed
+		// staff is the owner's account, whose work stays with the business),
+		// a product commission, a sale by that person and a payout from a
+		// bank account (the till's day is closed).
+		ids["shareStaff"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff", map[string]any{
+			"name": m + " Pay Personel", "branch_uuids": []string{ids["branch"]},
+		}), http.StatusCreated, "create share staff"), "uuid")
+		ids["shareRule"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff-shares/rules", map[string]any{
+			"staff_uuid": ids["shareStaff"], "item_type": "product", "basis": "percent", "rate": "10",
+			"valid_from": "2020-01-01", "note": m,
+		}), http.StatusCreated, "create share rule"), "uuid")
+		must(call(o, http.MethodPost, "/v1/tenant/stock-movements", map[string]any{
+			"kind": "sale", "branch_uuid": ids["branch"], "product_uuid": ids["product"], "variant_uuid": ids["variant"],
+			"quantity": 1, "staff_uuid": ids["shareStaff"], "reason": m,
+		}), http.StatusCreated, "stock sale with share")
+		ids["bankAccount"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts", map[string]any{
+			"branch_uuid": ids["branch"], "kind": "bank", "name": m + " Banka",
+		}), http.StatusCreated, "create bank account"), "uuid")
+		ids["sharePayout"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff-shares/payouts", map[string]any{
+			"staff_uuid": ids["shareStaff"], "cash_account_uuid": ids["bankAccount"], "amount": "5", "note": m,
+		}), http.StatusCreated, "share payout"), "uuid")
 		// The stock sale above is a product sale line with its ledger debit.
 		saleLines := must(call(o, http.MethodGet, "/v1/tenant/sales/lines", nil), http.StatusOK, "sale lines")
 		ids["saleLine"] = saleLines.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
@@ -564,7 +585,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"?customer=" + orgB.ids["customer"], "?staff=" + orgB.ids["staff"], "?q=" + orgB.marker},
 		"GET /v1/tenant/sales/entries": {"?branch=" + orgB.ids["branch"], "?reservation=" + orgB.ids["reservation"],
 			"?customer=" + orgB.ids["customer"], "?q=" + orgB.marker},
-		"GET /v1/tenant/sales/summary": {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/sales/summary":      {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/staff-shares/rules": {"?staff=" + orgB.ids["shareStaff"]},
+		"GET /v1/tenant/staff-shares/lines": {"?branch=" + orgB.ids["branch"], "?staff=" + orgB.ids["shareStaff"],
+			"?q=" + orgB.marker},
+		"GET /v1/tenant/staff-shares/payouts": {"?branch=" + orgB.ids["branch"], "?staff=" + orgB.ids["shareStaff"],
+			"?q=" + orgB.marker},
+		"GET /v1/tenant/staff-shares/summary": {"?branch=" + orgB.ids["branch"], "?staff=" + orgB.ids["shareStaff"]},
+		"GET /v1/tenant/staff-shares/me":      {"?date_from=2030-01-01&date_to=2030-01-31"},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -627,6 +655,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/cash/accounts/bulk", map[string]any{"action": "archive", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["cashAccount"]}}}, nil},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgA.ids["cashAccount"], "to_account_uuid": orgB.ids["cashAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgB.ids["cashAccount"], "to_account_uuid": orgA.ids["cashAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/staff-shares/rules", map[string]any{"staff_uuid": orgB.ids["shareStaff"], "item_type": "product",
+			"basis": "percent", "rate": "10"}, reject},
+		{"POST /v1/tenant/staff-shares/rules", map[string]any{"staff_uuid": orgA.ids["shareStaff"], "item_type": "service",
+			"service_uuid": orgB.ids["service"], "basis": "percent", "rate": "10"}, reject},
+		{"POST /v1/tenant/staff-shares/payouts", map[string]any{"staff_uuid": orgB.ids["shareStaff"],
+			"cash_account_uuid": orgA.ids["bankAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/staff-shares/payouts", map[string]any{"staff_uuid": orgA.ids["shareStaff"],
+			"cash_account_uuid": orgB.ids["bankAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/customers/bulk", map[string]any{"action": "delete", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["customer"]}}}, nil},
 		{"POST /v1/tenant/reservations/bulk", map[string]any{"action": "cancel", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["reservation"]}}}, nil},
 		{"POST /v1/tenant/availability/holds", map[string]any{"branch_uuid": orgB.ids["branch"], "lines": []map[string]any{{"service_uuid": orgA.ids["service"]}},
@@ -870,6 +906,10 @@ func paramKey(prev, name string) string {
 		return "saleLine"
 	case "entries/uuid":
 		return "ledgerEntry"
+	case "rules/uuid":
+		return "shareRule"
+	case "payouts/uuid":
+		return "sharePayout"
 	}
 	return ""
 }

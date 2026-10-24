@@ -1215,6 +1215,65 @@ type StaffBranch struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type StaffShareLine struct {
+	ID              int64              `json:"id"`
+	Uuid            uuid.UUID          `json:"uuid"`
+	OrganizationID  int64              `json:"organization_id"`
+	BranchID        int64              `json:"branch_id"`
+	StaffID         int64              `json:"staff_id"`
+	SaleLineID      int64              `json:"sale_line_id"`
+	ReservationID   pgtype.Int8        `json:"reservation_id"`
+	Kind            string             `json:"kind"`
+	ReversesShareID pgtype.Int8        `json:"reverses_share_id"`
+	ItemType        string             `json:"item_type"`
+	RuleID          pgtype.Int8        `json:"rule_id"`
+	RuleScope       string             `json:"rule_scope"`
+	Basis           string             `json:"basis"`
+	Rate            pgtype.Numeric     `json:"rate"`
+	FixedAmount     pgtype.Numeric     `json:"fixed_amount"`
+	BaseAmount      pgtype.Numeric     `json:"base_amount"`
+	ShareAmount     pgtype.Numeric     `json:"share_amount"`
+	Currency        string             `json:"currency"`
+	ShareDate       pgtype.Date        `json:"share_date"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffSharePayout struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	StaffID          int64              `json:"staff_id"`
+	BranchID         pgtype.Int8        `json:"branch_id"`
+	CashAccountID    int64              `json:"cash_account_id"`
+	CashMovementID   int64              `json:"cash_movement_id"`
+	Kind             string             `json:"kind"`
+	ReversesPayoutID pgtype.Int8        `json:"reverses_payout_id"`
+	Amount           pgtype.Numeric     `json:"amount"`
+	Currency         string             `json:"currency"`
+	PayoutDate       pgtype.Date        `json:"payout_date"`
+	Note             string             `json:"note"`
+	IdempotencyKey   pgtype.Text        `json:"idempotency_key"`
+	CreatedBy        pgtype.Int8        `json:"created_by"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffShareRule struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	StaffID        int64              `json:"staff_id"`
+	ItemType       string             `json:"item_type"`
+	ServiceID      pgtype.Int8        `json:"service_id"`
+	Basis          string             `json:"basis"`
+	Rate           pgtype.Numeric     `json:"rate"`
+	FixedAmount    pgtype.Numeric     `json:"fixed_amount"`
+	ValidFrom      pgtype.Date        `json:"valid_from"`
+	Note           string             `json:"note"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffTimeOff struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

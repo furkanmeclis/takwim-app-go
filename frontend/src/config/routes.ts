@@ -112,6 +112,9 @@ export const routes = {
     },
     calendar: (slug: string) => `/t/${encodeURIComponent(slug)}/calendar`,
     myAgenda: (slug: string) => `/t/${encodeURIComponent(slug)}/my-agenda`,
+    myShares: (slug: string) => `/t/${encodeURIComponent(slug)}/my-shares`,
+    staffShares: (slug: string) =>
+      `/t/${encodeURIComponent(slug)}/staff-shares`,
     cash: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/cash`,
       create: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/create`,

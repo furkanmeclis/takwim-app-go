@@ -21,6 +21,10 @@ type Querier interface {
 	AddStaffBranch(ctx context.Context, arg AddStaffBranchParams) error
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	BranchCodeTaken(ctx context.Context, arg BranchCodeTakenParams) (bool, error)
+	// Per branch and currency in [date_from, date_to]: revenue (net sales),
+	// the staff shares of it and what stays with the business (before costs
+	// and expenses).
+	BranchShareTotals(ctx context.Context, arg BranchShareTotalsParams) ([]BranchShareTotalsRow, error)
 	BranchSlugTaken(ctx context.Context, arg BranchSlugTakenParams) (bool, error)
 	// Balance before the day and the day's money in / out of one account.
 	// Closing differences of the day (and their reversals after a reopen) are
@@ -108,6 +112,9 @@ type Querier interface {
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountSaleLines(ctx context.Context, arg CountSaleLinesParams) (int64, error)
 	CountServices(ctx context.Context, arg CountServicesParams) (int64, error)
+	CountShareLines(ctx context.Context, arg CountShareLinesParams) (int64, error)
+	CountSharePayouts(ctx context.Context, arg CountSharePayoutsParams) (int64, error)
+	CountShareRules(ctx context.Context, arg CountShareRulesParams) (int64, error)
 	// The linked account counts only while the user is a member.
 	CountStaff(ctx context.Context, arg CountStaffParams) (int64, error)
 	CountStaffTimeOff(ctx context.Context, arg CountStaffTimeOffParams) (int64, error)
@@ -232,6 +239,7 @@ type Querier interface {
 	DeleteServiceBranch(ctx context.Context, arg DeleteServiceBranchParams) error
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
 	DeleteServiceStaffExcept(ctx context.Context, arg DeleteServiceStaffExceptParams) error
+	DeleteShareRule(ctx context.Context, arg DeleteShareRuleParams) (int64, error)
 	DeleteStaffTimeOff(ctx context.Context, arg DeleteStaffTimeOffParams) (int64, error)
 	DeleteStaleCustomerAccessLinks(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	DeleteStaleCustomerAuthEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error)
@@ -422,6 +430,20 @@ type Querier interface {
 	GetServicePoint(ctx context.Context, arg GetServicePointParams) (ServicePoint, error)
 	GetServicePublicImage(ctx context.Context, arg GetServicePublicImageParams) (GetServicePublicImageRow, error)
 	GetServiceSearchDocument(ctx context.Context, arg GetServiceSearchDocumentParams) (GetServiceSearchDocumentRow, error)
+	// ------------------------------------------------------------- share lines
+	GetShareLineBySaleLine(ctx context.Context, arg GetShareLineBySaleLineParams) (GetShareLineBySaleLineRow, error)
+	GetSharePayout(ctx context.Context, arg GetSharePayoutParams) (GetSharePayoutRow, error)
+	GetSharePayoutByIdempotencyKey(ctx context.Context, arg GetSharePayoutByIdempotencyKeyParams) (GetSharePayoutByIdempotencyKeyRow, error)
+	GetSharePayoutRow(ctx context.Context, arg GetSharePayoutRowParams) (GetSharePayoutRowRow, error)
+	GetShareRule(ctx context.Context, arg GetShareRuleParams) (GetShareRuleRow, error)
+	// TEC-917: staff share rules, the share of each sale line and share
+	// payouts. Every query takes the organization id.
+	// ------------------------------------------------------------------ lookups
+	// The sale line a share is calculated from.
+	GetShareSaleLine(ctx context.Context, arg GetShareSaleLineParams) (GetShareSaleLineRow, error)
+	GetShareServiceByUUID(ctx context.Context, arg GetShareServiceByUUIDParams) (GetShareServiceByUUIDRow, error)
+	GetShareStaffByUUID(ctx context.Context, arg GetShareStaffByUUIDParams) (GetShareStaffByUUIDRow, error)
+	GetShareStaffByUser(ctx context.Context, arg GetShareStaffByUserParams) (GetShareStaffByUserRow, error)
 	// The linked account counts only while the user is a member.
 	GetStaff(ctx context.Context, arg GetStaffParams) (GetStaffRow, error)
 	GetStaffIDsByUUIDs(ctx context.Context, arg GetStaffIDsByUUIDsParams) ([]GetStaffIDsByUUIDsRow, error)
@@ -482,6 +504,11 @@ type Querier interface {
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	// --------------------------------------------------------------- sale lines
 	InsertSaleLine(ctx context.Context, arg InsertSaleLineParams) (InsertSaleLineRow, error)
+	InsertShareLine(ctx context.Context, arg InsertShareLineParams) (InsertShareLineRow, error)
+	// ------------------------------------------------------------------ payouts
+	InsertSharePayout(ctx context.Context, arg InsertSharePayoutParams) (InsertSharePayoutRow, error)
+	// -------------------------------------------------------------------- rules
+	InsertShareRule(ctx context.Context, arg InsertShareRuleParams) (InsertShareRuleRow, error)
 	InsertStockMovement(ctx context.Context, arg InsertStockMovementParams) (StockMovement, error)
 	InsertStorageActivity(ctx context.Context, arg InsertStorageActivityParams) (StorageActivity, error)
 	InsertStorageLink(ctx context.Context, arg InsertStorageLinkParams) (StorageLink, error)
@@ -490,6 +517,9 @@ type Querier interface {
 	InsertStorageTrash(ctx context.Context, arg InsertStorageTrashParams) (StorageTrash, error)
 	InsertUserRole(ctx context.Context, arg InsertUserRoleParams) error
 	InvalidateActiveOTPs(ctx context.Context, arg InvalidateActiveOTPsParams) error
+	// The staff member is the account of a business owner (their own services
+	// stay in the business share).
+	IsShareStaffOwner(ctx context.Context, arg IsShareStaffOwnerParams) (bool, error)
 	LatestCashClosingDate(ctx context.Context, arg LatestCashClosingDateParams) (pgtype.Date, error)
 	// The last time the phone changed hands (no row: never).
 	LatestCustomerPhoneRelease(ctx context.Context, phoneE164 string) (pgtype.Timestamptz, error)
@@ -727,6 +757,14 @@ type Querier interface {
 	ListServiceUUIDs(ctx context.Context, arg ListServiceUUIDsParams) ([]uuid.UUID, error)
 	ListServices(ctx context.Context, arg ListServicesParams) ([]ListServicesRow, error)
 	ListServicesForExport(ctx context.Context, arg ListServicesForExportParams) ([]ListServicesForExportRow, error)
+	// A share is payable once its visit is paid in full (collections minus
+	// refunds cover the posted sales); a counter sale is payable at once.
+	ListShareLines(ctx context.Context, arg ListShareLinesParams) ([]ListShareLinesRow, error)
+	ListSharePayouts(ctx context.Context, arg ListSharePayoutsParams) ([]ListSharePayoutsRow, error)
+	ListShareRules(ctx context.Context, arg ListShareRulesParams) ([]ListShareRulesRow, error)
+	// The staff members a summary shows: those with sales or shares in the
+	// caller's branch scope, or with payouts from the caller's accounts.
+	ListShareSummaryStaff(ctx context.Context, arg ListShareSummaryStaffParams) ([]ListShareSummaryStaffRow, error)
 	ListSharedKeys(ctx context.Context, keys []string) ([]string, error)
 	// The linked account counts only while the user is a member.
 	ListStaff(ctx context.Context, arg ListStaffParams) ([]ListStaffRow, error)
@@ -794,6 +832,8 @@ type Querier interface {
 	// Claims a job for one provider call (one worker at a time; an expired
 	// claim of a crashed worker is free again).
 	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
+	// Serializes the payouts of one staff member.
+	LockShareStaff(ctx context.Context, arg LockShareStaffParams) (int64, error)
 	// Serializes the shift edits of one person (A04 overlap check).
 	LockStaff(ctx context.Context, arg LockStaffParams) (int64, error)
 	LockStockLevel(ctx context.Context, arg LockStockLevelParams) (StockLevel, error)
@@ -845,6 +885,10 @@ type Querier interface {
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
+	// The rule of a staff member for an item on a day: a rule of the service
+	// wins over the default of the item type; among them the latest start on
+	// or before the day.
+	ResolveShareRule(ctx context.Context, arg ResolveShareRuleParams) (ResolveShareRuleRow, error)
 	ResourceNameTaken(ctx context.Context, arg ResourceNameTakenParams) (bool, error)
 	// Bulk delete rollback.
 	RestoreCustomer(ctx context.Context, arg RestoreCustomerParams) (int64, error)
@@ -916,6 +960,18 @@ type Querier interface {
 	SoftDeleteServiceCategory(ctx context.Context, arg SoftDeleteServiceCategoryParams) (int64, error)
 	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
 	StaffAccountTaken(ctx context.Context, arg StaffAccountTakenParams) (bool, error)
+	// Paid to each staff member (payouts minus reversals): over every account
+	// and day (paid), and in [date_from, date_to] from the accounts inside the
+	// caller's branch scope (period_paid).
+	StaffPayoutTotals(ctx context.Context, arg StaffPayoutTotalsParams) ([]StaffPayoutTotalsRow, error)
+	// What each staff member earned and what of it is payable, over every
+	// branch and day (a person's balance is one figure).
+	StaffShareBalances(ctx context.Context, arg StaffShareBalancesParams) ([]StaffShareBalancesRow, error)
+	// ------------------------------------------------------------------ totals
+	// Per staff member and currency inside the caller's branch scope: the
+	// staff member's sales (net), the shares and the part still waiting for
+	// the collection, in [date_from, date_to].
+	StaffSharePeriodTotals(ctx context.Context, arg StaffSharePeriodTotalsParams) ([]StaffSharePeriodTotalsRow, error)
 	// SKUs are unique across products and variants of the organization.
 	StockCodeTaken(ctx context.Context, arg StockCodeTakenParams) (bool, error)
 	// One winner: only an attempt not succeeded yet moves.
@@ -963,6 +1019,7 @@ type Querier interface {
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	UpdateServiceCategory(ctx context.Context, arg UpdateServiceCategoryParams) (ServiceCategory, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)
+	UpdateShareRule(ctx context.Context, arg UpdateShareRuleParams) (int64, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) (Staff, error)
 	UpdateStaffShifts(ctx context.Context, arg UpdateStaffShiftsParams) (int64, error)
 	UpdateStaffTimeOff(ctx context.Context, arg UpdateStaffTimeOffParams) (StaffTimeOff, error)

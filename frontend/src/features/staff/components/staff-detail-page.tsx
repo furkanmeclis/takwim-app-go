@@ -24,6 +24,7 @@ import { StaffActivityCard } from "@/features/staff/components/staff-activity-ca
 import { StaffAssignmentsCard } from "@/features/staff/components/staff-assignments-card";
 import { StaffAvatar } from "@/features/staff/components/staff-avatar";
 import { StaffTimeOffCard } from "@/features/staff/components/staff-time-off-card";
+import { StaffShareRulesCard } from "@/features/staff-shares";
 import {
   useDeleteStaff,
   useStaffMember,
@@ -222,6 +223,7 @@ export function StaffDetailPage({ uuid }: { uuid: string }) {
             assignments={staff.assignments ?? []}
           />
           <StaffTimeOffCard staffUuid={uuid} />
+          <StaffShareRulesCard staffUuid={uuid} />
           <StaffActivityCard staffUuid={uuid} />
 
           <EntityDeleteDialog

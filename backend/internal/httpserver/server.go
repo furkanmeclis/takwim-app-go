@@ -131,6 +131,10 @@ import (
 	staffhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/handler"
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
+	staffsharesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares"
+	staffshareshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/handler"
+	staffsharesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
+	staffsharesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
 	storagemodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage"
 	storagehandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/handler"
 	storageusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/storage/usecase"
@@ -426,6 +430,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	salesSvc := salesusecase.New(salesrepository.NewPostgres(deps.DB, deps.Queries), cashSvc)
 	reservationsSvc.SetCompletionHook(salesSvc.RecordReservationTx)
 	productsSvc.SetSaleRecorder(salesmodule.ProductSaleRecorder(salesSvc))
+	// Staff shares (TEC-917): every sale line with a staff member gets its
+	// share in the line's transaction.
+	staffSharesSvc := staffsharesusecase.New(staffsharesrepository.NewPostgres(deps.DB, deps.Queries), cashSvc)
+	salesSvc.SetLineHook(staffSharesSvc.RecordLineTx)
 	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
 	availabilitySvc.SetBusySource(capacityHolds.Busy())
 	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
@@ -471,6 +479,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	customersmodule.RegisterLiveResources(tenantLive)
 	cashmodule.RegisterLiveResources(tenantLive)
 	salesmodule.RegisterLiveResources(tenantLive)
+	staffsharesmodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
@@ -628,6 +637,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	salesH := saleshandler.New(salesSvc, activityRec)
 	salesH.SetResourceEvents(resourceEvents)
 	salesmodule.RegisterRoutes(mux, salesH, tokens, loader, tenantResolver)
+	staffSharesH := staffshareshandler.New(staffSharesSvc, activityRec)
+	staffSharesH.SetResourceEvents(resourceEvents)
+	staffsharesmodule.RegisterRoutes(mux, staffSharesH, tokens, loader, tenantResolver)
 	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)

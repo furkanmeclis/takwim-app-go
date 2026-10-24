@@ -1,5 +1,7 @@
 import {
   Armchair,
+  BadgePercent,
+  HandCoins,
   ArrowLeftRight,
   CalendarCheck,
   CalendarClock,
@@ -312,6 +314,17 @@ export function tenantNav(slug: string): NavCatalog {
             module: "reservations",
           },
           {
+            id: "my-shares",
+            titleKey: "layout.nav_my_shares",
+            href: routes.tenant.myShares(slug),
+            icon: HandCoins,
+            anyPermission: [
+              permissions.tenant.earnings.read,
+              permissions.tenant.earnings.own,
+            ],
+            module: "staff_shares",
+          },
+          {
             id: "reservations",
             titleKey: "layout.nav_reservations",
             href: routes.tenant.reservations.root(slug),
@@ -384,6 +397,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: Wallet,
             permission: permissions.tenant.cash.read,
             module: "cash",
+          },
+          {
+            id: "staff-shares",
+            titleKey: "layout.nav_staff_shares",
+            href: routes.tenant.staffShares(slug),
+            icon: BadgePercent,
+            permission: permissions.tenant.earnings.read,
+            module: "staff_shares",
           },
         ],
       },

@@ -117,6 +117,8 @@
   "labels.tenant.finance.write": "Record cash and expenses",
   "labels.tenant.earnings.read": "View staff earnings",
   "labels.tenant.earnings.own": "View own earnings only",
+  "labels.tenant.earnings.manage": "Manage share rates",
+  "labels.tenant.earnings.pay": "Pay and reverse share payouts",
   "groups.tenant_integrations": "Integrations",
   "groups.tenant_reservations": "Reservations",
   "groups.tenant_schedules": "Schedules and resources",

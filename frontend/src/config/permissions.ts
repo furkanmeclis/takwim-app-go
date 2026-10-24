@@ -123,6 +123,8 @@ export const Permission = {
   TenantFinanceWrite: "tenant.finance.write",
   TenantEarningsRead: "tenant.earnings.read",
   TenantEarningsOwn: "tenant.earnings.own",
+  TenantEarningsManage: "tenant.earnings.manage",
+  TenantEarningsPay: "tenant.earnings.pay",
   TenantPriceOverride: "tenant.price.override",
   TenantDiscountApply: "tenant.discount.apply",
   TenantPaymentCollect: "tenant.payment.collect",
@@ -332,6 +334,8 @@ export const permissions = {
     earnings: {
       read: Permission.TenantEarningsRead,
       own: Permission.TenantEarningsOwn,
+      manage: Permission.TenantEarningsManage,
+      pay: Permission.TenantEarningsPay,
     },
     price: {
       override: Permission.TenantPriceOverride,

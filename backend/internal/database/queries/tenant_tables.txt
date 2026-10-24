@@ -45,3 +45,6 @@ customer_notification_templates
 customer_notification_dispatches
 customer_notification_deliveries
 payments
+staff_share_rules
+staff_share_lines
+staff_share_payouts
