@@ -15,6 +15,13 @@ export const WRITE_ANY = [
   permissions.tenant.reservations.own,
 ];
 
+/** Who sees the payment follow-up list (refund, collect or finance read). */
+export const FOLLOW_UP_ANY = [
+  permissions.tenant.payment.refund,
+  permissions.tenant.payment.collect,
+  permissions.tenant.finance.read,
+];
+
 export function useCanWriteReservations() {
   const { canAny } = usePermission();
   return canAny(WRITE_ANY);

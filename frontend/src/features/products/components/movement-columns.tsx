@@ -1,11 +1,14 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 
 import { StatusChip } from "@/components/common/status-chip";
+import { EntityRowActions } from "@/components/entity";
 import { createColumn } from "@/components/tables";
+import { Badge } from "@/components/ui/badge";
 import { routes } from "@/config/routes";
 import { MOVEMENT_KIND_LABEL_KEYS } from "@/features/products/constants";
 import { priceLabel, signedQuantity } from "@/features/products/lib/format";
@@ -31,16 +34,19 @@ const KIND_TONES: Record<MovementKind, "success" | "warning" | "default"> = {
  * Ledger columns (`GET /v1/tenant/stock-movements/meta`): `occurred_at`,
  * `quantity` and `kind` sort on the server; `kind`, `branch` and `staff`
  * are faceted filters. `withProduct` drops the product column on a
- * product's own page.
+ * product's own page. With `onReturn`, a sale not yet taken back offers
+ * the return (the caller checks the stock and refund permissions).
  */
 export function useMovementColumns({
   facets,
   withProduct = true,
   filters = true,
+  onReturn,
 }: {
   facets?: StockMovementFacets;
   withProduct?: boolean;
   filters?: boolean;
+  onReturn?: (movement: StockMovement) => void;
 }) {
   const { t, locale } = useLocale();
   const { slug } = useTenant();
@@ -77,10 +83,17 @@ export function useMovementColumns({
             }
           : {}),
         cell: ({ row }) => (
-          <StatusChip
-            label={t(MOVEMENT_KIND_LABEL_KEYS[row.original.kind])}
-            tone={KIND_TONES[row.original.kind]}
-          />
+          <span className="flex flex-wrap items-center gap-1">
+            <StatusChip
+              label={t(MOVEMENT_KIND_LABEL_KEYS[row.original.kind])}
+              tone={KIND_TONES[row.original.kind]}
+            />
+            {row.original.returned ? (
+              <Badge variant="outline">
+                {t("products.movements.returned")}
+              </Badge>
+            ) : null}
+          </span>
         ),
       }),
       ...(withProduct
@@ -248,6 +261,30 @@ export function useMovementColumns({
           <span className="line-clamp-2">{row.original.note}</span>
         ),
       }),
+      ...(onReturn
+        ? [
+            createColumn<StockMovement>({
+              id: "actions",
+              labelKey: "products.movements.columns.actions",
+              enableSorting: false,
+              enableHiding: false,
+              enableResizing: false,
+              cell: ({ row }) =>
+                row.original.kind === "sale" && !row.original.returned ? (
+                  <EntityRowActions
+                    actions={[
+                      {
+                        id: "return",
+                        label: t("products.movements.return.action"),
+                        icon: Undo2,
+                        onSelect: () => onReturn(row.original),
+                      },
+                    ]}
+                  />
+                ) : null,
+            }),
+          ]
+        : []),
     ];
     return columns as ColumnDef<StockMovement, unknown>[];
   }, [
@@ -256,6 +293,7 @@ export function useMovementColumns({
     facets?.staff,
     filters,
     locale,
+    onReturn,
     slug,
     t,
     withProduct,

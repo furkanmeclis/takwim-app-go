@@ -296,5 +296,9 @@
   "fields.tenant.staff_share_payouts.note": "Not",
   "fields.tenant.staff_share_payouts.reason": "Neden",
   "actions.reservations.product_added": "Randevuya ürün eklendi",
-  "actions.reservations.product_removed": "Randevudan ürün kaldırıldı"
+  "actions.reservations.product_removed": "Randevudan ürün kaldırıldı",
+  "actions.reservations.payment_collected": "Ödeme alındı",
+  "actions.reservations.refund_requested": "İade kaydedildi",
+  "actions.reservations.refund_resolved": "İade sonucu işlendi",
+  "actions.products.sale_returned": "Satış geri alındı"
 }

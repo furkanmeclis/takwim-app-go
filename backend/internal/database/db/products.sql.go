@@ -511,7 +511,11 @@ SELECT
     b.uuid AS branch_uuid, b.name AS branch_name,
     cb.uuid AS counterpart_branch_uuid, cb.name AS counterpart_branch_name,
     st.uuid AS staff_uuid, st.name AS staff_name,
-    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname
+    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname,
+    EXISTS (
+        SELECT 1 FROM stock_movements rm
+        WHERE rm.organization_id = m.organization_id AND rm.source = 'sale_return' AND rm.source_uuid = m.uuid
+    )::boolean AS returned
 FROM stock_movements m
 JOIN products p ON p.id = m.product_id AND p.organization_id = m.organization_id
 JOIN branches b ON b.id = m.branch_id AND b.organization_id = m.organization_id
@@ -564,6 +568,7 @@ type GetStockMovementRow struct {
 	CreatedByUuid         pgtype.UUID        `json:"created_by_uuid"`
 	CreatedByName         pgtype.Text        `json:"created_by_name"`
 	CreatedBySurname      pgtype.Text        `json:"created_by_surname"`
+	Returned              bool               `json:"returned"`
 }
 
 func (q *Queries) GetStockMovement(ctx context.Context, arg GetStockMovementParams) (GetStockMovementRow, error) {
@@ -606,6 +611,7 @@ func (q *Queries) GetStockMovement(ctx context.Context, arg GetStockMovementPara
 		&i.CreatedByUuid,
 		&i.CreatedByName,
 		&i.CreatedBySurname,
+		&i.Returned,
 	)
 	return i, err
 }
@@ -1472,7 +1478,11 @@ SELECT
     b.uuid AS branch_uuid, b.name AS branch_name,
     cb.uuid AS counterpart_branch_uuid, cb.name AS counterpart_branch_name,
     st.uuid AS staff_uuid, st.name AS staff_name,
-    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname
+    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname,
+    EXISTS (
+        SELECT 1 FROM stock_movements rm
+        WHERE rm.organization_id = m.organization_id AND rm.source = 'sale_return' AND rm.source_uuid = m.uuid
+    )::boolean AS returned
 FROM stock_movements m
 JOIN products p ON p.id = m.product_id AND p.organization_id = m.organization_id
 JOIN branches b ON b.id = m.branch_id AND b.organization_id = m.organization_id
@@ -1559,6 +1569,7 @@ type ListStockMovementsRow struct {
 	CreatedByUuid         pgtype.UUID        `json:"created_by_uuid"`
 	CreatedByName         pgtype.Text        `json:"created_by_name"`
 	CreatedBySurname      pgtype.Text        `json:"created_by_surname"`
+	Returned              bool               `json:"returned"`
 }
 
 func (q *Queries) ListStockMovements(ctx context.Context, arg ListStockMovementsParams) ([]ListStockMovementsRow, error) {
@@ -1621,6 +1632,7 @@ func (q *Queries) ListStockMovements(ctx context.Context, arg ListStockMovements
 			&i.CreatedByUuid,
 			&i.CreatedByName,
 			&i.CreatedBySurname,
+			&i.Returned,
 		); err != nil {
 			return nil, err
 		}

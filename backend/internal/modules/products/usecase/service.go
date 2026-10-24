@@ -104,6 +104,8 @@ type Service struct {
 	storage storage.Driver
 	// sales writes the sale line of a stock sale (TEC-916).
 	sales SaleRecorder
+	// reverse reverses the sale line of a returned stock sale (TEC-913).
+	reverse SaleReverser
 }
 
 // New builds the service. indexer may be nil.

@@ -296,5 +296,9 @@
   "fields.tenant.staff_share_payouts.note": "Note",
   "fields.tenant.staff_share_payouts.reason": "Reason",
   "actions.reservations.product_added": "Product added to a booking",
-  "actions.reservations.product_removed": "Product removed from a booking"
+  "actions.reservations.product_removed": "Product removed from a booking",
+  "actions.reservations.payment_collected": "Payment collected",
+  "actions.reservations.refund_requested": "Refund recorded",
+  "actions.reservations.refund_resolved": "Refund result recorded",
+  "actions.products.sale_returned": "Sale taken back"
 }

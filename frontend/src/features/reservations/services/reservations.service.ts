@@ -10,6 +10,11 @@ import type {
   ReservationActionRequest,
   ReservationAgenda,
   ReservationCalendar,
+  ListPaymentFollowUpsParams,
+  PaymentFollowUpFacets,
+  PaymentFollowUpPage,
+  RefundResolveRequest,
+  RefundResult,
   ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationFacets,
@@ -18,11 +23,13 @@ import type {
   ReservationPayments,
   ReservationProductOption,
   ReservationProductRequest,
+  ReservationRefundRequest,
   ReservationRescheduleRequest,
 } from "@/features/reservations/types";
 import { tenantRequest } from "@/lib/api/tenant-request";
 
 const BASE = "/v1/tenant/reservations";
+const FOLLOW_UPS = "/v1/tenant/payments/follow-ups";
 
 /**
  * Reservations of one organization (`X-Organization: {slug}`). Times are
@@ -148,6 +155,51 @@ export const reservationsService = {
       "DELETE",
       `${BASE}/${uuid}/products/${productUuid}`,
       { body, silent: true },
+    );
+  },
+
+  /**
+   * Pays a collection back: through the provider (online payments it can
+   * refund) or recorded by hand. `idempotency_key` makes a retry safe.
+   */
+  refund(slug: string, uuid: string, body: ReservationRefundRequest) {
+    return tenantRequest<RefundResult>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/refunds`,
+      { body },
+    );
+  },
+
+  /** Settles a provider refund whose result is unknown. */
+  resolveRefund(slug: string, uuid: string, body: RefundResolveRequest) {
+    return tenantRequest<RefundResult>(
+      slug,
+      "POST",
+      `/v1/tenant/refunds/${uuid}/resolve`,
+      { body },
+    );
+  },
+
+  followUps(slug: string, params: ListPaymentFollowUpsParams) {
+    return tenantRequest<PaymentFollowUpPage>(slug, "GET", FOLLOW_UPS, {
+      query: params,
+    });
+  },
+
+  followUpsMeta(slug: string) {
+    return tenantRequest<ResourceMeta>(slug, "GET", `${FOLLOW_UPS}/meta`);
+  },
+
+  followUpFacets(
+    slug: string,
+    params: Pick<ListPaymentFollowUpsParams, "q" | "branch">,
+  ) {
+    return tenantRequest<PaymentFollowUpFacets>(
+      slug,
+      "GET",
+      `${FOLLOW_UPS}/facets`,
+      { query: params },
     );
   },
 

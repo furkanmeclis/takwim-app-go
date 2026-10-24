@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
 import { Loading } from "@/components/common/loading";
+import { StatusChip } from "@/components/common/status-chip";
 import { Timeline } from "@/components/common/timeline";
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
 import {
@@ -358,6 +359,8 @@ export function CustomerReservationBody({
         />
       </EntitySectionCard>
 
+      <RefundsCard reservation={reservation} />
+
       <PoliciesCard reservation={reservation} />
 
       <EntitySectionCard
@@ -519,6 +522,117 @@ function LinesCard({ reservation }: { reservation: CustomerReservation }) {
           persistKey: "customer-panel-lines-v1",
         }}
       />
+    </EntitySectionCard>
+  );
+}
+
+type CustomerRefund = CustomerReservation["refunds"][number];
+
+const REFUND_STATUS = {
+  requested: {
+    key: "customer_panel.refunds.status.requested",
+    tone: "warning",
+  },
+  succeeded: {
+    key: "customer_panel.refunds.status.succeeded",
+    tone: "success",
+  },
+  failed: { key: "customer_panel.refunds.status.failed", tone: "danger" },
+} as const;
+
+/** Refunds of the visit: under way, paid back, or followed up by the business. */
+function RefundsCard({ reservation }: { reservation: CustomerReservation }) {
+  const { t, locale } = useLocale();
+  const zone = reservation.timezone;
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<CustomerRefund>({
+          accessorKey: "requested_at",
+          labelKey: "customer_panel.refunds.columns.requested_at",
+          enableSorting: false,
+          gridSecondary: true,
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {datetimeInZone(row.original.requested_at, zone, locale, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+          ),
+        }),
+        createColumn<CustomerRefund>({
+          accessorKey: "amount",
+          labelKey: "customer_panel.refunds.columns.amount",
+          enableSorting: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <span className="font-medium tabular-nums">
+              {amount(row.original.amount, row.original.currency, locale)}
+            </span>
+          ),
+        }),
+        createColumn<CustomerRefund>({
+          accessorKey: "status",
+          labelKey: "customer_panel.refunds.columns.status",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <StatusChip
+              label={t(REFUND_STATUS[row.original.status].key)}
+              tone={REFUND_STATUS[row.original.status].tone}
+            />
+          ),
+        }),
+        createColumn<CustomerRefund>({
+          id: "refunded_at",
+          accessorFn: (row) => row.refunded_at ?? "",
+          labelKey: "customer_panel.refunds.columns.refunded_at",
+          enableSorting: false,
+          cell: ({ row }) =>
+            row.original.refunded_at
+              ? datetimeInZone(row.original.refunded_at, zone, locale, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })
+              : "—",
+        }),
+      ] as ColumnDef<CustomerRefund, unknown>[],
+    [locale, t, zone],
+  );
+
+  if (!reservation.refunds.length) return null;
+  const open = reservation.refunds.some((r) => r.status !== "succeeded");
+
+  return (
+    <EntitySectionCard
+      title={t("customer_panel.refunds.title")}
+      badge={reservation.refunds.length}
+    >
+      <div className="space-y-3">
+        {open ? (
+          <Alert>
+            <AlertDescription>
+              {t("customer_panel.refunds.hint")}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <EntityTable
+          columns={columns}
+          data={reservation.refunds}
+          getRowId={(row) => row.uuid}
+          emptyTitle={t("customer_panel.refunds.empty")}
+          manual={{ filtering: false, sorting: false, pagination: false }}
+          features={{
+            rowSelection: false,
+            columnFilters: false,
+            facetedFilters: false,
+            globalFilter: false,
+            sorting: false,
+            pagination: false,
+            persistKey: "customer-panel-refunds-v1",
+          }}
+        />
+      </div>
     </EntitySectionCard>
   );
 }

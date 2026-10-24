@@ -132,6 +132,8 @@ export const routes = {
         `/t/${encodeURIComponent(slug)}/reservations/create`,
       detail: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/reservations/${uuid}`,
+      followUps: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/reservations/follow-ups`,
     },
     activity: (slug: string) => `/t/${encodeURIComponent(slug)}/activity`,
     exports: {

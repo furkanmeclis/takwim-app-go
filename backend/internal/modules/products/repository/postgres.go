@@ -22,6 +22,8 @@ var (
 	ErrVariantNameTaken = errors.New("variant name already used")
 	// ErrNegativeStock is returned when a write would leave stock below zero.
 	ErrNegativeStock = errors.New("stock cannot go below zero")
+	// ErrSaleReturned is returned when a sale already has its return movement.
+	ErrSaleReturned = errors.New("sale already returned")
 )
 
 // Postgres runs the products queries, alone or in one transaction.
@@ -76,6 +78,8 @@ func MapErr(err error) error {
 				return ErrCodeTaken
 			case "uq_product_variants_name":
 				return ErrVariantNameTaken
+			case "uq_stock_movements_sale_return":
+				return ErrSaleReturned
 			}
 		case "23514":
 			switch pgErr.ConstraintName {

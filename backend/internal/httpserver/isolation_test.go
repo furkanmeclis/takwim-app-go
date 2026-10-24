@@ -322,10 +322,11 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"kind": "receipt", "branch_uuid": ids["branch"], "product_uuid": ids["product"], "variant_uuid": ids["variant"],
 			"quantity": 5, "reason": m,
 		}), http.StatusCreated, "stock receipt")
-		must(call(o, http.MethodPost, "/v1/tenant/stock-movements", map[string]any{
+		sale := must(call(o, http.MethodPost, "/v1/tenant/stock-movements", map[string]any{
 			"kind": "sale", "branch_uuid": ids["branch"], "product_uuid": ids["product"], "variant_uuid": ids["variant"],
 			"quantity": 1, "staff_uuid": ids["staff"], "reason": m,
 		}), http.StatusCreated, "stock sale")
+		ids["stockMovement"] = sale.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
 		ids["customerPhone"] = map[bool]string{true: "+905320000001", false: "+905320000002"}[o == orgA]
 		ids["customer"] = str(must(call(o, http.MethodPost, "/v1/tenant/customers", map[string]any{
 			"first_name": m, "last_name": "Müşteri", "phone": ids["customerPhone"], "notes": m, "tags": []string{m},
@@ -351,8 +352,20 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["cashMovement"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts/"+ids["cashAccount"]+"/movements", map[string]any{
 			"direction": "in", "amount": "50", "description": m + " giriş",
 		}), http.StatusCreated, "create cash movement"), "uuid")
+		// Money taken for the reservation and part of it paid back (a
+		// refund row: the {uuid} of /v1/tenant/refunds).
+		must(call(o, http.MethodPost, "/v1/tenant/reservations/"+ids["reservation"]+"/collections", map[string]any{
+			"amount": "50", "method": "cash", "cash_account_uuid": ids["cashAccount"],
+		}), http.StatusCreated, "collect")
+		pay := must(call(o, http.MethodGet, "/v1/tenant/reservations/"+ids["reservation"]+"/payments", nil), http.StatusOK, "payments")
+		collection := pay.data.(map[string]any)["refund_collections"].([]any)[0].(map[string]any)["uuid"].(string)
+		refunded := must(call(o, http.MethodPost, "/v1/tenant/reservations/"+ids["reservation"]+"/refunds", map[string]any{
+			"collection_uuid": collection, "amount": "10", "channel": "manual", "method": "cash",
+			"cash_account_uuid": ids["cashAccount"], "reason": m, "idempotency_key": "iso-" + m,
+		}), http.StatusCreated, "refund")
+		ids["refund"] = refunded.data.(map[string]any)["refund"].(map[string]any)["uuid"].(string)
 		ids["cashClosing"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts/"+ids["cashAccount"]+"/closings", map[string]any{
-			"counted_amount": "150", "note": m,
+			"counted_amount": "190", "note": m,
 		}), http.StatusCreated, "close cash day"), "uuid")
 		// Staff shares (TEC-917): a person without an account (the seed
 		// staff is the owner's account, whose work stays with the business),
@@ -597,6 +610,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"?q=" + orgB.marker},
 		"GET /v1/tenant/staff-shares/summary": {"?branch=" + orgB.ids["branch"], "?staff=" + orgB.ids["shareStaff"]},
 		"GET /v1/tenant/staff-shares/me":      {"?date_from=2030-01-01&date_to=2030-01-31"},
+		"GET /v1/tenant/payments/follow-ups": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker,
+			"?kind=refund_pending,unpaid"},
+		"GET /v1/tenant/payments/follow-ups/facets": {"?branch=" + orgB.ids["branch"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -922,6 +938,10 @@ func paramKey(prev, name string) string {
 		return "shareRule"
 	case "payouts/uuid":
 		return "sharePayout"
+	case "stock-movements/uuid":
+		return "stockMovement"
+	case "refunds/uuid":
+		return "refund"
 	}
 	return ""
 }

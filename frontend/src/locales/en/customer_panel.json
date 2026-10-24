@@ -174,5 +174,15 @@
   "reassigned.description": "At the businesses you do not tick, earlier bookings and the name on record are hidden; bookings made from now on show. Sessions on other devices end. Nothing is deleted at the businesses.",
   "reassigned.keep_hint": "Tick the businesses whose bookings are yours.",
   "reassigned.submit": "Hide the earlier history",
-  "reassigned.done": "The previous holder's history is hidden."
+  "reassigned.done": "The previous holder's history is hidden.",
+  "refunds.title": "Refunds",
+  "refunds.empty": "No refunds",
+  "refunds.hint": "Refunds in progress reach your account within a few business days, depending on your bank. Contact the business with any question.",
+  "refunds.columns.requested_at": "Date",
+  "refunds.columns.amount": "Amount",
+  "refunds.columns.status": "Status",
+  "refunds.columns.refunded_at": "Refunded on",
+  "refunds.status.requested": "In progress",
+  "refunds.status.succeeded": "Refunded",
+  "refunds.status.failed": "Being followed up"
 }

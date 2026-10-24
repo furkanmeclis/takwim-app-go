@@ -394,7 +394,11 @@ SELECT
     b.uuid AS branch_uuid, b.name AS branch_name,
     cb.uuid AS counterpart_branch_uuid, cb.name AS counterpart_branch_name,
     st.uuid AS staff_uuid, st.name AS staff_name,
-    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname
+    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname,
+    EXISTS (
+        SELECT 1 FROM stock_movements rm
+        WHERE rm.organization_id = m.organization_id AND rm.source = 'sale_return' AND rm.source_uuid = m.uuid
+    )::boolean AS returned
 FROM stock_movements m
 JOIN products p ON p.id = m.product_id AND p.organization_id = m.organization_id
 JOIN branches b ON b.id = m.branch_id AND b.organization_id = m.organization_id
@@ -412,7 +416,11 @@ SELECT
     b.uuid AS branch_uuid, b.name AS branch_name,
     cb.uuid AS counterpart_branch_uuid, cb.name AS counterpart_branch_name,
     st.uuid AS staff_uuid, st.name AS staff_name,
-    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname
+    u.uuid AS created_by_uuid, u.name AS created_by_name, u.surname AS created_by_surname,
+    EXISTS (
+        SELECT 1 FROM stock_movements rm
+        WHERE rm.organization_id = m.organization_id AND rm.source = 'sale_return' AND rm.source_uuid = m.uuid
+    )::boolean AS returned
 FROM stock_movements m
 JOIN products p ON p.id = m.product_id AND p.organization_id = m.organization_id
 JOIN branches b ON b.id = m.branch_id AND b.organization_id = m.organization_id

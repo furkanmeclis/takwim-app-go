@@ -97,6 +97,44 @@ type Provider interface {
 	Acknowledge(w http.ResponseWriter)
 }
 
+// RefundRequest pays back (part of) a succeeded payment through the
+// provider (TEC-913).
+type RefundRequest struct {
+	// OrderRef is our reference of the refunded payment (CheckoutRequest.OrderRef).
+	OrderRef string
+	// ProviderPaymentID is the provider's reference of the payment, when it
+	// gave one.
+	ProviderPaymentID string
+	Amount            money.Money
+	Currency          string
+	// RefundRef is our reference of this refund (letters and digits): the
+	// provider keeps it with the refund where it supports one.
+	RefundRef string
+}
+
+// RefundResult is a refund the provider carried out.
+type RefundResult struct {
+	// ProviderRefundID is the provider's reference of the refund ("" when it
+	// gives none).
+	ProviderRefundID string
+	Test             bool
+}
+
+// Refunder is implemented by providers that refund through their API. The
+// call must classify its failure: a *ProviderError with Temporary false is a
+// definite refusal (nothing was refunded); a Temporary error or any other
+// error means the result is unknown, and the refund is not sent again
+// before a person checked the provider's panel.
+type Refunder interface {
+	Refund(ctx context.Context, account integrations.Account, in RefundRequest) (RefundResult, error)
+}
+
+// RefunderOf returns the refund call of a provider, when it has one.
+func RefunderOf(p Provider) (Refunder, bool) {
+	r, ok := p.(Refunder)
+	return r, ok
+}
+
 var (
 	// ErrInvalidSignature: a notification did not verify.
 	ErrInvalidSignature = errors.New("payments: invalid signature")

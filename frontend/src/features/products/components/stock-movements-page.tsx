@@ -14,13 +14,17 @@ import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { useMovementColumns } from "@/features/products/components/movement-columns";
+import { SaleReturnDialog } from "@/features/products/components/sale-return-dialog";
 import { StockMovementDialog } from "@/features/products/components/stock-movement-dialog";
 import { PRODUCTS_RESOURCE } from "@/features/products/constants";
 import {
   useStockMovementsFacets,
   useStockMovementsList,
 } from "@/features/products/hooks/use-products";
-import type { ListStockMovementsParams } from "@/features/products/types";
+import type {
+  ListStockMovementsParams,
+  StockMovement,
+} from "@/features/products/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantLiveList } from "@/features/tenant/lib/live";
 import { useLocale } from "@/providers/locale-provider";
@@ -46,6 +50,7 @@ export function StockMovementsPage() {
   const { slug, organization } = useTenant();
   const { can } = usePermission();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [returning, setReturning] = useState<StockMovement | null>(null);
 
   // Movements publish on the products channel (stock changed).
   const listState = useServerListState({
@@ -69,7 +74,14 @@ export function StockMovementsPage() {
 
   const listQuery = useStockMovementsList(listParams);
   const facetsQuery = useStockMovementsFacets();
-  const columns = useMovementColumns({ facets: facetsQuery.data });
+  // A return needs both the stock and the refund permission (API rule).
+  const canReturn =
+    can(permissions.tenant.products.stock) &&
+    can(permissions.tenant.payment.refund);
+  const columns = useMovementColumns({
+    facets: facetsQuery.data,
+    onReturn: canReturn ? setReturning : undefined,
+  });
 
   const total = listQuery.data?.total ?? 0;
   const pageCount = useMemo(() => {
@@ -157,6 +169,12 @@ export function StockMovementsPage() {
       />
 
       <StockMovementDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <SaleReturnDialog
+        movement={returning}
+        onOpenChange={(open) => {
+          if (!open) setReturning(null);
+        }}
+      />
     </EntityPage>
   );
 }

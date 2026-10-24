@@ -24,6 +24,8 @@ export type StockMovementPage = Schemas["TenantStockMovementPage"];
 export type StockMovementFacets = Schemas["TenantStockMovementFacets"];
 export type StockMovementRequest = Schemas["TenantStockMovementRequest"];
 export type StockMovementResult = Schemas["TenantStockMovementResult"];
+/** Body of `POST /v1/tenant/stock-movements/{uuid}/return`. */
+export type SaleReturnRequest = { reason: string; note?: string };
 
 export type ProductUnit = Product["unit"];
 export type StockStatus = ProductStock["status"];

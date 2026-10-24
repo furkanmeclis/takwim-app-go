@@ -174,5 +174,15 @@
   "reassigned.description": "İşaretlemediğiniz işletmelerde önceki randevular ve kayıtlı isim gizlenir; bundan sonra alınan randevular görünür. Diğer cihazlardaki oturumlar kapanır. İşletmelerdeki kayıtlar silinmez.",
   "reassigned.keep_hint": "Randevuları size ait olan işletmeleri işaretleyin.",
   "reassigned.submit": "Önceki geçmişi gizle",
-  "reassigned.done": "Önceki sahibin geçmişi gizlendi."
+  "reassigned.done": "Önceki sahibin geçmişi gizlendi.",
+  "refunds.title": "İadeler",
+  "refunds.empty": "İade yok",
+  "refunds.hint": "İşlenen iadeler bankanıza göre birkaç iş günü içinde hesabınıza geçer. Sorunuz olursa işletmeyle iletişime geçin.",
+  "refunds.columns.requested_at": "Tarih",
+  "refunds.columns.amount": "Tutar",
+  "refunds.columns.status": "Durum",
+  "refunds.columns.refunded_at": "İade tarihi",
+  "refunds.status.requested": "İşleniyor",
+  "refunds.status.succeeded": "İade edildi",
+  "refunds.status.failed": "İşletme takip ediyor"
 }

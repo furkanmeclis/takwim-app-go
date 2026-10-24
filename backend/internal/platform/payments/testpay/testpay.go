@@ -141,3 +141,22 @@ func Notify(account integrations.Account, orderRef, status string, amount money.
 	h.Set(SignatureHeader, Sign(account, body))
 	return h, body, nil
 }
+
+var _ payments.Refunder = (*Provider)(nil)
+
+// Refund implements payments.Refunder without any network call. Like card
+// test numbers, the amount picks the answer: an amount ending in .13 is
+// declined, one ending in .99 has an unknown result (a timeout); any other
+// is refunded.
+func (p *Provider) Refund(_ context.Context, _ integrations.Account, in payments.RefundRequest) (payments.RefundResult, error) {
+	if in.OrderRef == "" || in.RefundRef == "" || !in.Amount.IsPositive() {
+		return payments.RefundResult{}, &payments.ProviderError{Code: "invalid_request", Message: "order, refund reference and amount are required"}
+	}
+	switch in.Amount.Minor() % 100 {
+	case 13:
+		return payments.RefundResult{}, &payments.ProviderError{Code: "test_declined", Message: "refund declined by the test provider"}
+	case 99:
+		return payments.RefundResult{}, &payments.ProviderError{Message: "test provider timeout", Temporary: true}
+	}
+	return payments.RefundResult{ProviderRefundID: "test_refund_" + in.RefundRef, Test: true}, nil
+}

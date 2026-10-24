@@ -312,6 +312,12 @@ func (s *Service) RecordRefundTx(ctx context.Context, q *db.Queries, orgID int64
 	return id, nil
 }
 
+// InTx runs fn in one transaction of the ledger's database (the refund
+// flow, TEC-913, writes its request rows next to a lock on the collection).
+func (s *Service) InTx(ctx context.Context, fn func(q *db.Queries) error) error {
+	return s.repo.InTx(ctx, fn)
+}
+
 // RecordRefund is RecordRefundTx in its own transaction.
 func (s *Service) RecordRefund(ctx context.Context, orgID int64, in model.RefundInput) (model.LedgerEntry, error) {
 	var id uuid.UUID

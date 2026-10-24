@@ -520,6 +520,38 @@ func (h *Handler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusCreated, map[string]any{"items": res.Movements, "product": res.Product})
 }
 
+// ReturnMovement serves POST /v1/tenant/stock-movements/{uuid}/return:
+// the product of a stock sale is taken back (TEC-913) and its revenue line
+// reversed.
+func (h *Handler) ReturnMovement(w http.ResponseWriter, r *http.Request) {
+	scope := orgctx.Must(r.Context())
+	id, err := uuid.Parse(r.PathValue("uuid"))
+	if err != nil {
+		response.NotFound(w, r, "Stock movement was not found")
+		return
+	}
+	var in model.ReturnInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	p := authctx.MustPrincipal(r.Context())
+	res, err := h.svc.ReturnSale(r.Context(), scope.ID, p.UserInternal, id, in)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	m := res.Movements[0]
+	payload := map[string]any{
+		"name": res.Product.Name, "kind": model.KindReturn, "branch": m.Branch.Name, "movement_uuid": m.UUID.String(),
+		"sale_uuid": id.String(), "quantity": m.Quantity, "balance_after": m.BalanceAfter, "reason": m.Reason,
+	}
+	if m.Variant != nil {
+		payload["variant"] = m.Variant.Name
+	}
+	h.record(r, "products.sale_returned", res.Product, payload, nil)
+	response.JSON(w, r, http.StatusCreated, map[string]any{"items": res.Movements, "product": res.Product})
+}
+
 // diffView is the part of a product a catalog edit changes.
 func diffView(p model.Product) map[string]any {
 	return map[string]any{
@@ -636,6 +668,12 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, usecase.ErrNotFound):
 		response.NotFound(w, r, "Product was not found")
+	case errors.Is(err, usecase.ErrMovementNotFound):
+		response.NotFound(w, r, "Stock movement was not found")
+	case errors.Is(err, usecase.ErrNotReturnable):
+		response.Error(w, r, http.StatusConflict, "STOCK_NOT_RETURNABLE", err.Error())
+	case errors.Is(err, usecase.ErrAlreadyReturned):
+		response.Error(w, r, http.StatusConflict, "STOCK_ALREADY_RETURNED", err.Error())
 	case errors.Is(err, usecase.ErrVariantNotFound):
 		response.NotFound(w, r, "Product variant was not found")
 	case errors.Is(err, usecase.ErrImageNotFound):

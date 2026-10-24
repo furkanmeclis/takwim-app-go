@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { HandCoins } from "lucide-react";
+import { HandCoins, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
@@ -29,6 +29,11 @@ import {
   labelOf,
 } from "@/features/integrations/constants";
 import {
+  RefundDialog,
+  RefundsTable,
+  ResolveRefundDialog,
+} from "@/features/reservations/components/reservation-refunds";
+import {
   useCollectReservationPayment,
   useReservationPayments,
 } from "@/features/reservations/hooks/use-reservations";
@@ -40,6 +45,7 @@ import {
 } from "@/features/reservations/schemas/reservation-forms";
 import type {
   PaymentAttempt,
+  Refund,
   ReservationLedgerEntry,
   ReservationPayments,
 } from "@/features/reservations/types";
@@ -71,6 +77,8 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
   const { can } = usePermission();
   const query = useReservationPayments(uuid);
   const [collecting, setCollecting] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [resolving, setResolving] = useState<Refund | null>(null);
   const view = query.data;
   const money = (value: string | null | undefined) =>
     amount(value ?? "0", view?.currency ?? "TRY", locale);
@@ -207,21 +215,41 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
     Boolean(view?.can_collect) &&
     can(permissions.tenant.payment.collect) &&
     parseAmount(view?.remaining ?? "0") > 0;
+  const canRefundPermission = can(permissions.tenant.payment.refund);
+  const canRefund =
+    Boolean(view?.can_refund) &&
+    canRefundPermission &&
+    parseAmount(view?.refundable ?? "0") > 0;
 
   return (
     <EntitySectionCard
       title={t("reservations.detail.payments")}
       actions={
-        canCollect ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setCollecting(true)}
-          >
-            <HandCoins className="size-4" />
-            {t("reservations.payments.collect")}
-          </Button>
+        canCollect || canRefund ? (
+          <div className="flex flex-wrap gap-2">
+            {canCollect ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCollecting(true)}
+              >
+                <HandCoins className="size-4" />
+                {t("reservations.payments.collect")}
+              </Button>
+            ) : null}
+            {canRefund ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setRefunding(true)}
+              >
+                <Undo2 className="size-4" />
+                {t("reservations.refunds.action")}
+              </Button>
+            ) : null}
+          </div>
         ) : null
       }
     >
@@ -261,6 +289,15 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
                           key: "credit",
                           label: t("reservations.payments.credit"),
                           value: money(view.credit),
+                        },
+                      ]
+                    : []),
+                  ...(parseAmount(view.refundable) > 0
+                    ? [
+                        {
+                          key: "refundable",
+                          label: t("reservations.refunds.refundable"),
+                          value: money(view.refundable),
                         },
                       ]
                     : []),
@@ -316,6 +353,25 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
               />
             </div>
           ) : null}
+          {view.refunds.length > 0 ? (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">
+                {t("reservations.refunds.title")}
+              </h3>
+              {view.refunds.some((refund) => refund.needs_action) ? (
+                <Alert>
+                  <AlertDescription>
+                    {t("reservations.refunds.needs_action")}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              <RefundsTable
+                view={view}
+                canResolve={canRefundPermission}
+                onResolve={setResolving}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -324,6 +380,19 @@ export function ReservationPaymentsCard({ uuid }: { uuid: string }) {
         view={view}
         open={collecting}
         onOpenChange={setCollecting}
+      />
+      <RefundDialog
+        uuid={uuid}
+        view={view}
+        open={refunding}
+        onOpenChange={setRefunding}
+      />
+      <ResolveRefundDialog
+        reservationUUID={uuid}
+        refund={resolving}
+        onOpenChange={(open) => {
+          if (!open) setResolving(null);
+        }}
       />
     </EntitySectionCard>
   );

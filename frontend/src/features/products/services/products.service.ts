@@ -12,6 +12,7 @@ import type {
   ProductPatchRequest,
   ProductVariantCreateRequest,
   ProductVariantPatchRequest,
+  SaleReturnRequest,
   StockMovement,
   StockMovementFacets,
   StockMovementPage,
@@ -156,5 +157,18 @@ export const productsService = {
     return tenantRequest<StockMovementResult>(slug, "POST", MOVEMENTS, {
       body,
     });
+  },
+
+  /**
+   * Takes back every unit of a sale: a return movement plus the reversal
+   * of its revenue line. The money is refunded separately.
+   */
+  returnSale(slug: string, uuid: string, body: SaleReturnRequest) {
+    return tenantRequest<StockMovementResult>(
+      slug,
+      "POST",
+      `${MOVEMENTS}/${uuid}/return`,
+      { body },
+    );
   },
 };

@@ -27,6 +27,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 )
 
@@ -37,6 +38,9 @@ const (
 	CodeProvider         = "PAYMENT_PROVIDER_ERROR"
 	CodeNotCollectable   = "PAYMENT_NOT_COLLECTABLE"
 	CodeInvalidSignature = "PAYMENT_SIGNATURE_INVALID"
+	CodeRefundKeyReused  = "REFUND_IDEMPOTENCY_REUSED"
+	CodeRefundNotOpen    = "REFUND_NOT_OPEN"
+	CodeRefundReversed   = "REFUND_COLLECTION_REVERSED"
 )
 
 // maxNotificationBytes bounds a provider notification body.
@@ -100,6 +104,17 @@ func canCollect(r *http.Request) bool {
 	return scope.Has(rbac.PermTenantPaymentCollect) && entitlement.ForScope(scope).Allows(sector.ModuleCash)
 }
 
+// canRefund: the member may pay money back and the cash module is on.
+func canRefund(r *http.Request) bool {
+	scope := orgctx.Must(r.Context())
+	return scope.Has(rbac.PermTenantPaymentRefund) && entitlement.ForScope(scope).Allows(sector.ModuleCash)
+}
+
+// viewOptions are what the member may do on the payment view.
+func viewOptions(r *http.Request) usecase.ViewOptions {
+	return usecase.ViewOptions{Collect: canCollect(r), Refund: canRefund(r)}
+}
+
 func pathUUID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("uuid"))
 	if err != nil {
@@ -119,7 +134,7 @@ func (h *Handler) ReservationPayments(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := h.svc.ReservationPayments(r.Context(), orgctx.Must(r.Context()).ID, id, c, usecase.ViewOptions{Collect: canCollect(r)})
+	out, err := h.svc.ReservationPayments(r.Context(), orgctx.Must(r.Context()).ID, id, c, viewOptions(r))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -145,7 +160,7 @@ func (h *Handler) Collect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
-	out, err := h.svc.Collect(r.Context(), orgctx.Must(r.Context()).ID, id, c, p.UserInternal, in)
+	out, err := h.svc.Collect(r.Context(), orgctx.Must(r.Context()).ID, id, c, p.UserInternal, viewOptions(r), in)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -264,6 +279,20 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
 			Field: "cash_account_uuid", Message: err.Error(), Code: "closed",
 		}})
+	case errors.Is(err, cashusecase.ErrInsufficientFunds):
+		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), []response.Detail{{
+			Field: "cash_account_uuid", Message: err.Error(), Code: "insufficient_funds",
+		}})
+	case errors.Is(err, usecase.ErrIdempotencyReused):
+		response.Error(w, r, http.StatusConflict, CodeRefundKeyReused, err.Error())
+	case errors.Is(err, usecase.ErrRefundNotOpen):
+		response.Error(w, r, http.StatusConflict, CodeRefundNotOpen, err.Error())
+	case errors.Is(err, salesusecase.ErrAlreadyReversed):
+		response.Error(w, r, http.StatusConflict, CodeRefundReversed, err.Error())
+	case errors.Is(err, salesusecase.ErrRefundTooLarge):
+		response.ValidationError(w, r, []response.Detail{{Field: "amount", Code: "exceeds_refundable", Message: err.Error()}})
+	case errors.Is(err, salesusecase.ErrCurrencyMismatch):
+		response.ValidationError(w, r, []response.Detail{{Field: "cash_account_uuid", Code: "currency", Message: err.Error()}})
 	case errors.Is(err, usecase.ErrProvider):
 		response.Error(w, r, http.StatusBadGateway, CodeProvider, err.Error())
 	case errors.Is(err, usecase.ErrUnknownProvider):
@@ -282,6 +311,14 @@ func validationDetails(err error) []response.Detail {
 	if errors.As(err, &ve) {
 		out := make([]response.Detail, 0, len(ve.Details))
 		for _, d := range ve.Details {
+			out = append(out, response.Detail{Field: d.Field, Message: d.Message, Code: d.Code})
+		}
+		return out
+	}
+	var qve *apiquery.ValidationError
+	if errors.As(err, &qve) {
+		out := make([]response.Detail, 0, len(qve.Details))
+		for _, d := range qve.Details {
 			out = append(out, response.Detail{Field: d.Field, Message: d.Message, Code: d.Code})
 		}
 		return out

@@ -4354,6 +4354,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/stock-movements/{uuid}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take back the product of a sale
+         * @description A manager's operation (TEC-913): every unit of a `sale` movement
+         *     comes back to its branch as one `return` movement (`source`
+         *     `sale_return`) and the sale's revenue line is reversed, in one
+         *     transaction. A sale is returned once (`409 STOCK_ALREADY_RETURNED`);
+         *     any other movement is `409 STOCK_NOT_RETURNABLE`. `reason` is
+         *     required. Money paid for it is refunded separately. Needs
+         *     `tenant.products.stock` and `tenant.payment.refund`.
+         */
+        post: operations["postTenantStockMovementReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/customers/meta": {
         parameters: {
             query?: never;
@@ -4881,7 +4907,12 @@ export interface paths {
          *     `tenant.payment.collect` and the cash module, `collect_accounts`
          *     lists the tills and bank accounts of the visit's branch (and the
          *     business-wide ones) and `can_collect` says whether money can be
-         *     taken now. Needs `tenant.reservations.read` or `.own` (own visits).
+         *     taken now. `refunds` are the refund requests and `refundable` what
+         *     may still be paid back; for a member with `tenant.payment.refund`
+         *     and the cash module, `refund_collections` lists the live
+         *     collections with what is left of each and `refund_accounts` the
+         *     accounts a manual refund may leave (`can_refund`). Needs
+         *     `tenant.reservations.read` or `.own` (own visits).
          */
         get: operations["getTenantReservationPayments"];
         put?: never;
@@ -4914,6 +4945,146 @@ export interface paths {
          *     `tenant.reservations.read` or `.own`.
          */
         post: operations["postTenantReservationCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay money back
+         * @description Pays back (part of) one live collection of the visit, at most what
+         *     is left of it (the collection less its refunds and the refunds under
+         *     way; `amount` / `exceeds_refundable`). The request, the provider's
+         *     answer and the posting to the books are recorded apart (`status`,
+         *     `provider_status`, `ledger_entry_uuid` / `reflected_at`).
+         *
+         *     - `channel: provider` calls the refund API of the online payment's
+         *       provider (method `online`, out of the payment's online account;
+         *       `channel` / `unsupported` when the provider cannot). A confirmed
+         *       refund is posted at once (`succeeded`), a refusal is `failed`, an
+         *       unknown result (timeout, 5xx) stays `requested` with
+         *       `provider_status: uncertain` and is never sent again: settle it
+         *       with `POST /v1/tenant/refunds/{uuid}/resolve`.
+         *     - `channel: manual` records money handed back (`cash`, `card`,
+         *       `transfer`) or a refund made in the provider's own panel
+         *       (`online`) out of `cash_account_uuid` (an active till, bank or
+         *       online account of the branch or business-wide; a till pays out at
+         *       most what it holds, `409` `insufficient_funds`).
+         *
+         *     After the posting the visit's `payment_status` becomes `refunded`
+         *     (nothing paid any more) or `partially_refunded`; the visit itself
+         *     never changes. `idempotency_key` identifies the request: the same key
+         *     answers the same refund with `200` and `replayed: true` (sending
+         *     nothing), the key with another body `409 REFUND_IDEMPOTENCY_REUSED`.
+         *     Needs `tenant.payment.refund`, the cash module and
+         *     `tenant.reservations.read` or `.own`.
+         */
+        post: operations["postTenantReservationRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/refunds/{uuid}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle a refund with an unknown result
+         * @description For a provider refund still `requested` (unknown result, or confirmed
+         *     but not posted) after a person checked the provider's panel:
+         *     `succeeded` posts it now, `failed` ends it (a refund the provider
+         *     confirmed can only be posted: `outcome` / `confirmed`). A settled
+         *     refund is `409 REFUND_NOT_OPEN`. Needs `tenant.payment.refund`, the
+         *     cash module and the reservation's reach.
+         */
+        post: operations["postTenantRefundResolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/payments/follow-ups/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payment follow-up list metadata
+         * @description Table contract of `GET /v1/tenant/payments/follow-ups`.
+         */
+        get: operations["getTenantPaymentFollowUpsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/payments/follow-ups/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payment follow-up kinds
+         * @description Counts per `kind` with the `branch` and `q` filters (A14).
+         */
+        get: operations["getTenantPaymentFollowUpFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/payments/follow-ups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payment follow-up list
+         * @description Visits whose money needs a person (A14), in the caller's branch
+         *     scope: `refund_pending` (paid and then cancelled or rejected, or an
+         *     online payment that arrived after the visit was cancelled: `late`),
+         *     `refund_unverified` (a provider refund whose result is unknown),
+         *     `refund_failed` (the last refund failed while money is still held)
+         *     and `unpaid` (a completed visit not paid in full). `amount` is what
+         *     is to be refunded (paid less refunded) or, for `unpaid`, what is
+         *     still owed. `q` searches the customer's name or the reservation
+         *     number. Needs the reservations module and one of
+         *     `tenant.payment.refund`, `tenant.payment.collect`,
+         *     `tenant.finance.read`.
+         */
+        get: operations["getTenantPaymentFollowUps"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10621,6 +10792,8 @@ export interface components {
             uuid: string;
             /** @enum {string} */
             kind: "receipt" | "sale" | "return" | "adjustment" | "transfer_out" | "transfer_in";
+            /** @description A sale whose product was taken back (`POST /v1/tenant/stock-movements/{uuid}/return`). */
+            returned: boolean;
             quantity: number;
             balance_after: number;
             product: components["schemas"]["TenantStockRef"];
@@ -10636,7 +10809,10 @@ export interface components {
             staff: components["schemas"]["TenantStockRef"] | null;
             reason: string;
             note: string;
-            /** @example manual */
+            /**
+             * @description `manual`, or `sale_return` for the return of a sale.
+             * @example manual
+             */
             source: string;
             /** Format: date-time */
             occurred_at: string;
@@ -13354,7 +13530,7 @@ export interface components {
             uuid: string;
             name: string;
             /** @enum {string} */
-            kind: "cash" | "bank";
+            kind: "cash" | "bank" | "online";
             currency: string;
             /** @description false = a business-wide account. */
             branch: boolean;
@@ -13378,6 +13554,176 @@ export interface components {
             online: components["schemas"]["PaymentAttempt"][];
             can_collect: boolean;
             collect_accounts: components["schemas"]["CollectAccount"][];
+            refundable: components["schemas"]["MoneyAmount"];
+            refunds: components["schemas"]["Refund"][];
+            can_refund: boolean;
+            refund_collections: components["schemas"]["RefundCollection"][];
+            refund_accounts: components["schemas"]["CollectAccount"][];
+        };
+        /**
+         * @description One refund request with its three steps: the request, the
+         *     provider's answer (`provider_status`, empty for a manual refund) and
+         *     the posting to the books (`ledger_entry_uuid`, `reflected_at`).
+         *     `needs_action`: a provider refund still open after the provider was
+         *     asked (unknown result, or confirmed and not posted yet).
+         */
+        Refund: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            channel: "provider" | "manual";
+            provider: string;
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer" | "online" | "other";
+            amount: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** @enum {string} */
+            status: "requested" | "succeeded" | "failed";
+            /** @enum {string} */
+            provider_status: "" | "succeeded" | "failed" | "uncertain";
+            provider_refund_id: string;
+            failure_reason: string;
+            reason: string;
+            resolution_note: string;
+            /** Format: uuid */
+            collection_uuid: string;
+            cash_account: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+            /** Format: uuid */
+            ledger_entry_uuid: string | null;
+            requested_by: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            } | null;
+            /** Format: date-time */
+            provider_answered_at: string | null;
+            /** Format: date-time */
+            reflected_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            needs_action: boolean;
+        };
+        RefundCollection: {
+            /** Format: uuid */
+            uuid: string;
+            method: string;
+            /** Format: date */
+            entry_date: string;
+            amount: components["schemas"]["MoneyAmount"];
+            refunded: components["schemas"]["MoneyAmount"];
+            pending: components["schemas"]["MoneyAmount"];
+            refundable: components["schemas"]["MoneyAmount"];
+            cash_account: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+            /** @description The provider of the online payment behind it ("" = none). */
+            provider: string;
+            /** @description The provider's refund API can pay it back. */
+            provider_refund: boolean;
+        };
+        ReservationRefundRequest: {
+            /** Format: uuid */
+            collection_uuid: string;
+            amount: components["schemas"]["MoneyInput"];
+            /** @enum {string} */
+            channel: "provider" | "manual";
+            /**
+             * @description Manual refunds only.
+             * @enum {string}
+             */
+            method?: "cash" | "card" | "transfer" | "online";
+            /**
+             * Format: uuid
+             * @description Manual refunds only.
+             */
+            cash_account_uuid?: string | null;
+            reason?: string;
+            idempotency_key: string;
+        };
+        RefundResult: {
+            refund: components["schemas"]["Refund"];
+            payments: components["schemas"]["ReservationPayments"];
+            replayed: boolean;
+        };
+        EnvelopeRefundResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["RefundResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PaymentFollowUp: {
+            /**
+             * Format: uuid
+             * @description The reservation.
+             */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+            /** @enum {string} */
+            kind: "refund_pending" | "refund_failed" | "refund_unverified" | "unpaid";
+            status: string;
+            /** @enum {string} */
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            cancel_reason: string | null;
+            /** Format: date-time */
+            starts_at: string;
+            branch: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+            customer: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            } | null;
+            currency: string;
+            charged: components["schemas"]["MoneyAmount"];
+            collected: components["schemas"]["MoneyAmount"];
+            refunded: components["schemas"]["MoneyAmount"];
+            amount: components["schemas"]["MoneyAmount"];
+            /** @description An online payment arrived after the visit was cancelled. */
+            late: boolean;
+            /** Format: int64 */
+            open_refunds: number;
+            /** @enum {string} */
+            last_refund_status: "" | "requested" | "succeeded" | "failed";
+            last_refund_failure: string;
+            /** Format: date-time */
+            last_refund_at: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PaymentFollowUpPage: {
+            items: components["schemas"]["PaymentFollowUp"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopePaymentFollowUpPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["PaymentFollowUpPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopePaymentFollowUpFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                kind: {
+                    value: string;
+                    /** Format: int64 */
+                    count: number;
+                }[];
+            };
+            meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeReservationPayments: {
             /** @enum {boolean} */
@@ -13594,6 +13940,19 @@ export interface components {
                 to_status: string | null;
                 /** Format: date-time */
                 at: string;
+            }[];
+            /** @description Refunds of the visit, newest first: `requested` (under way), `succeeded` (paid back), `failed` (the business follows it up). */
+            refunds: {
+                /** Format: uuid */
+                uuid: string;
+                amount: components["schemas"]["MoneyAmount"];
+                currency: string;
+                /** @enum {string} */
+                status: "requested" | "succeeded" | "failed";
+                /** Format: date-time */
+                requested_at: string;
+                /** Format: date-time */
+                refunded_at: string | null;
             }[];
         };
         CustomerReservationPage: {
@@ -21749,6 +22108,47 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    postTenantStockMovementReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The return movement and the product with its new stock */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockMovementResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getTenantCustomersMeta: {
         parameters: {
             query?: never;
@@ -22741,6 +23141,224 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantReservationRefund: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservationRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description The same request again (replayed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeRefundResult"];
+                };
+            };
+            /** @description The refund and the payments after it */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeRefundResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantRefundResolve: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    outcome: "succeeded" | "failed";
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The refund and the payments after it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeRefundResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantPaymentFollowUpsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantPaymentFollowUpFacets: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["Q"];
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kind counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePaymentFollowUpFacets"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantPaymentFollowUps: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `starts_at`, `amount`, `number`, `updated_at`; prefix `-` for descending. Default: latest visit first. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description Follow-up kinds; comma-separate or repeat */
+                kind?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Follow-up page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopePaymentFollowUpPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
         };
     };
     postTenantReservationAccept: {

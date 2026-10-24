@@ -19,10 +19,13 @@ import type {
   ListReservationsParams,
   ReservationAction,
   ReservationActionRequest,
+  ListPaymentFollowUpsParams,
+  RefundResolveRequest,
   ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationNotesRequest,
   ReservationProductRequest,
+  ReservationRefundRequest,
   ReservationRescheduleRequest,
 } from "@/features/reservations/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -280,5 +283,103 @@ export function useCollectReservationPayment(uuid: string) {
       void invalidate();
       void queryClient.invalidateQueries({ queryKey: cashKeys.all(slug) });
     },
+  });
+}
+
+/**
+ * Pays money back on a visit. The answer carries the refund and the new
+ * money view; a refund whose provider result is unknown is a warning, not
+ * a success.
+ */
+export function useRefundReservationPayment(uuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: (body: ReservationRefundRequest) =>
+      reservationsService.refund(slug, uuid, body),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        reservationsKeys.payments(slug, uuid),
+        result.payments,
+      );
+      const { refund } = result;
+      if (refund.status === "succeeded") {
+        appToast.success(t("reservations.toast.refund_succeeded"));
+      } else if (refund.status === "failed") {
+        appToast.error(
+          t("reservations.toast.refund_failed", {
+            reason: refund.failure_reason || "—",
+          }),
+        );
+      } else {
+        appToast.warning(t("reservations.toast.refund_uncertain"));
+      }
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: cashKeys.all(slug) });
+    },
+  });
+}
+
+/** Settles a provider refund whose result was unknown. */
+export function useResolveRefund(reservationUUID: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({
+      uuid,
+      body,
+    }: {
+      uuid: string;
+      body: RefundResolveRequest;
+    }) => reservationsService.resolveRefund(slug, uuid, body),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        reservationsKeys.payments(slug, reservationUUID),
+        result.payments,
+      );
+      appToast.success(
+        t(
+          result.refund.status === "succeeded"
+            ? "reservations.toast.refund_resolved_succeeded"
+            : "reservations.toast.refund_resolved_failed",
+        ),
+      );
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: cashKeys.all(slug) });
+    },
+  });
+}
+
+export function usePaymentFollowUps(params: ListPaymentFollowUpsParams) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.followUpList(slug, params),
+    queryFn: () => reservationsService.followUps(slug, params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePaymentFollowUpsMeta() {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.followUpMeta(slug),
+    queryFn: () => reservationsService.followUpsMeta(slug),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function usePaymentFollowUpFacets(
+  params: Pick<ListPaymentFollowUpsParams, "q" | "branch">,
+) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.followUpFacets(slug, params),
+    queryFn: () => reservationsService.followUpFacets(slug, params),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 }

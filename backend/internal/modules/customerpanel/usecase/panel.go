@@ -335,6 +335,7 @@ func (s *Service) view(o owned) model.Reservation {
 		},
 		Actions: o.actions(now),
 		History: []model.HistoryEntry{},
+		Refunds: []model.Refund{},
 	}
 	for _, l := range r.Lines {
 		line := model.Line{
@@ -366,7 +367,32 @@ func (s *Service) Reservation(ctx context.Context, p Principal, id uuid.UUID) (m
 	if err != nil {
 		return model.Reservation{}, err
 	}
-	return s.view(o), nil
+	out := s.view(o)
+	refunds, err := s.q.ListCustomerRefunds(ctx, db.ListCustomerRefundsParams{OrganizationID: o.row.OrganizationID, ReservationID: o.row.ID})
+	if err != nil {
+		return model.Reservation{}, err
+	}
+	for _, f := range refunds {
+		r := model.Refund{
+			UUID: f.Uuid, Amount: money.FromNumericOrZero(f.Amount), Currency: f.Currency, Status: f.Status, RequestedAt: f.CreatedAt.Time,
+		}
+		if f.ReflectedAt.Valid {
+			t := f.ReflectedAt.Time
+			r.RefundedAt = &t
+		}
+		out.Refunds = append(out.Refunds, r)
+	}
+	if len(out.Refunds) > 0 {
+		// The refunds that are done are the refunded amount of the visit.
+		done := money.Zero()
+		for _, r := range out.Refunds {
+			if r.Status == "succeeded" && r.Currency == out.Money.Currency {
+				done = done.Add(r.Amount)
+			}
+		}
+		out.Money.Refunded = &done
+	}
+	return out, nil
 }
 
 // guard re-checks, on the locked record, that it is still the person's

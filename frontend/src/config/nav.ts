@@ -9,6 +9,7 @@ import {
   ConciergeBell,
   Gauge,
   History,
+  ReceiptText,
   PlugZap,
   Activity,
   Bell,
@@ -332,6 +333,18 @@ export function tenantNav(slug: string): NavCatalog {
             anyPermission: [
               permissions.tenant.reservations.read,
               permissions.tenant.reservations.own,
+            ],
+            module: "reservations",
+          },
+          {
+            id: "payment-follow-ups",
+            titleKey: "layout.nav_payment_follow_ups",
+            href: routes.tenant.reservations.followUps(slug),
+            icon: ReceiptText,
+            anyPermission: [
+              permissions.tenant.payment.refund,
+              permissions.tenant.payment.collect,
+              permissions.tenant.finance.read,
             ],
             module: "reservations",
           },

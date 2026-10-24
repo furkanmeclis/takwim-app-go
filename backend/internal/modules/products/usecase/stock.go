@@ -550,7 +550,7 @@ func mapMovement(row db.ListStockMovementsRow, currency string) model.Movement {
 		UUID: row.Uuid, Kind: row.Kind, Quantity: row.Quantity, BalanceAfter: row.BalanceAfter,
 		Product:  model.Ref{UUID: row.ProductUuid, Name: row.ProductName, SKU: row.ProductSku},
 		Branch:   model.Ref{UUID: row.BranchUuid, Name: row.BranchName},
-		Currency: currency, Reason: row.Reason, Note: row.Note, Source: row.Source,
+		Currency: currency, Reason: row.Reason, Note: row.Note, Source: row.Source, Returned: row.Returned,
 		OccurredAt: row.OccurredAt.Time, CreatedAt: row.CreatedAt.Time,
 	}
 	if row.VariantUuid.Valid {

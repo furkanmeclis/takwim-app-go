@@ -12,6 +12,7 @@ import type {
   ProductPatchRequest,
   ProductVariantCreateRequest,
   ProductVariantPatchRequest,
+  SaleReturnRequest,
   StockMovementRequest,
 } from "@/features/products/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -199,5 +200,13 @@ export function useRecordStockMovement() {
     (slug, body: StockMovementRequest) =>
       productsService.recordMovement(slug, body),
     "products.movements.toast.recorded",
+  );
+}
+
+export function useReturnSale() {
+  return useProductsMutation(
+    (slug, { uuid, body }: { uuid: string; body: SaleReturnRequest }) =>
+      productsService.returnSale(slug, uuid, body),
+    "products.movements.toast.returned",
   );
 }
