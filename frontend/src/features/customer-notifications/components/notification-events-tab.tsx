@@ -204,7 +204,8 @@ export function NotificationEventsTab() {
     <div className="space-y-4">
       {notReady.length ? (
         <Alert>
-          <AlertTitle>
+          {/* The channel list must stay readable at phone width. */}
+          <AlertTitle className="line-clamp-none">
             {t("customer_notifications.readiness.title", {
               channels: notReady.map((c) => channelLabel(t, c.name)).join(", "),
             })}

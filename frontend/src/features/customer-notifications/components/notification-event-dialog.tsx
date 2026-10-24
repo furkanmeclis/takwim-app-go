@@ -335,7 +335,7 @@ export function ChannelOrderField({
                     <Label htmlFor={id} className="min-w-0 flex-1">
                       {on ? (
                         <span className="text-muted-foreground tabular-nums">
-                          {index + 1}.
+                          {index + 1}.{" "}
                         </span>
                       ) : null}
                       {channelLabel(t, channel)}
