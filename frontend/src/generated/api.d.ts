@@ -6794,6 +6794,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/daily-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily summary of the home page
+         * @description The summary of one business day (TEC-926) for the tenant home page:
+         *     the caller's own visits and earnings when it has a staff record (an
+         *     owner who serves customers too), the visits, confirmations and money
+         *     of the whole branch scope with one row per branch, and what waits
+         *     for the business (visits to accept, confirmations of the day). The
+         *     figures are the same as the reports of that day. The caller's branch
+         *     scope and X-Branch (the header branch picker: one branch or every
+         *     branch) limit every section. Takes any of tenant.reservations.read,
+         *     tenant.reservations.own, tenant.finance.read, tenant.earnings.read
+         *     or tenant.earnings.own; a section the caller may not see is null:
+         *     own visits need tenant.reservations.read or .own, own earnings
+         *     tenant.earnings.read or .own with the staff shares module, business
+         *     visits and pending items tenant.reservations.read, money and branch
+         *     rows tenant.finance.read with the reports module.
+         */
+        get: operations["getTenantDailySummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/staff-shares/me": {
         parameters: {
             query?: never;
@@ -11761,6 +11794,119 @@ export interface components {
             days: components["schemas"]["ReportDay"][];
             /** @description Branch comparison (every active branch in scope, then the head office row when it has records) */
             branches: components["schemas"]["ReportBranch"][];
+        };
+        /** @description The money of the day in one currency (business_share = revenue - staff_share). */
+        DailySummaryMoney: {
+            currency: string;
+            /** @description Net revenue of the sale lines */
+            revenue: string;
+            /** @description Net collections (collected - refunded) */
+            collections: string;
+            staff_share: string;
+            /** @description What is left to the business after the staff shares */
+            business_share: string;
+            /** Format: int64 */
+            sale_count: number;
+        };
+        /** @description One line the caller serves on the day (cancelled and rejected visits left out). */
+        DailySummaryVisit: {
+            /** Format: uuid */
+            reservation_uuid: string;
+            /** Format: int64 */
+            number: number;
+            /** Format: int32 */
+            line_index: number;
+            service_name: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** @enum {string} */
+            status: "requested" | "active" | "in_service" | "completed" | "cancelled" | "rejected" | "no_show";
+            /** @enum {string} */
+            approval_status: "pending" | "accepted" | "rejected";
+            /** @enum {string} */
+            confirmation_status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
+            /** @enum {string} */
+            payment_status: "on_site" | "online_pending" | "paid" | "refund_pending" | "partially_refunded" | "refunded" | "failed";
+            /** Format: uuid */
+            branch_uuid: string;
+            branch_name: string;
+            customer_name: string;
+        };
+        DailySummaryEarning: {
+            currency: string;
+            /** @description Net of the sale lines the caller served */
+            sales: string;
+            /** @description The caller's share of them */
+            share: string;
+            /** Format: int64 */
+            sale_count: number;
+        };
+        DailySummary: {
+            /** Format: date */
+            date: string;
+            timezone: string;
+            currency: string;
+            /** @description The caller's staff record; null without one. */
+            staff: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            } | null;
+            /** @description The caller's own day; null without a staff record or the access. */
+            own: {
+                reservations: components["schemas"]["ReportReservations"];
+                visits: components["schemas"]["DailySummaryVisit"][];
+                /** @description One entry per currency (the business currency first); null without the earnings access. */
+                earnings: components["schemas"]["DailySummaryEarning"][] | null;
+            } | null;
+            /** @description The day of the branch scope; null without the reservations or finance read. */
+            business: {
+                /** @description Null without tenant.reservations.read. */
+                reservations: components["schemas"]["ReportReservations"] | null;
+                /** @description Null without tenant.reservations.read. */
+                confirmations: components["schemas"]["ReportConfirmations"] | null;
+                /** @description One entry per currency; null without the money access. */
+                money: components["schemas"]["DailySummaryMoney"][] | null;
+                /** @description One row per branch, then the head office row when it has records; null without the money access. */
+                branches: {
+                    /** @description Null on the head office row. */
+                    branch: {
+                        /** Format: uuid */
+                        uuid: string;
+                        code: string;
+                        name: string;
+                        is_active: boolean;
+                    } | null;
+                    reservations: components["schemas"]["ReportReservations"] | null;
+                    money: components["schemas"]["DailySummaryMoney"][];
+                }[] | null;
+            } | null;
+            /** @description What waits for the business; null without tenant.reservations.read. */
+            pending: {
+                /**
+                 * Format: int64
+                 * @description Visits waiting to be accepted or rejected (any date)
+                 */
+                approvals: number;
+                /**
+                 * Format: int64
+                 * @description Confirmations of the day still waiting for an answer
+                 */
+                confirmations_waiting: number;
+                /**
+                 * Format: int64
+                 * @description Confirmations of the day that need a person (change requested, left to the business, unreachable)
+                 */
+                confirmations_attention: number;
+            } | null;
+        };
+        EnvelopeDailySummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DailySummary"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeReport: {
             /** @enum {boolean} */
@@ -28391,6 +28537,48 @@ export interface operations {
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantDailySummary: {
+        parameters: {
+            query?: {
+                /** @description Business day (YYYY-MM-DD); defaults to today in the business time zone. */
+                date?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Daily summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDailySummary"];
                 };
             };
             400: components["responses"]["BadRequest"];

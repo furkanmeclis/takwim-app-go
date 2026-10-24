@@ -626,6 +626,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"?staff=" + orgB.ids["shareStaff"], "?branch=head_office," + orgB.ids["branch"]},
 		"GET /v1/tenant/reports/export": {"?branch=" + orgB.ids["branch"], "?staff=" + orgB.ids["staff"],
 			"?section=branches&branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/daily-summary": {"?date=2030-01-07", "?date=2030-01-08"},
 		"GET /v1/tenant/payments/follow-ups": {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker,
 			"?kind=refund_pending,unpaid"},
 		"GET /v1/tenant/payments/follow-ups/facets": {"?branch=" + orgB.ids["branch"]},

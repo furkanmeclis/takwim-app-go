@@ -17,9 +17,12 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 )
 
-// RegisterRoutes mounts /v1/tenant/reports. A nil resolver (tenancy off)
-// mounts nothing. The reports module must be on; reading takes
-// tenant.finance.read, the CSV also tenant.report.export.
+// RegisterRoutes mounts /v1/tenant/reports and the daily summary of the
+// home page. A nil resolver (tenancy off) mounts nothing. The reports
+// need the reports module and tenant.finance.read, the CSV also
+// tenant.report.export. The daily summary (TEC-926) takes any of the
+// reservation, finance or earnings reads and returns only the sections
+// they allow (its money also needs the reports module).
 func RegisterRoutes(
 	mux *http.ServeMux,
 	h *handler.Handler,
@@ -38,4 +41,10 @@ func RegisterRoutes(
 
 	mux.Handle("GET /v1/tenant/reports/summary", middleware.Chain(http.HandlerFunc(h.Summary), authn, org, module, read))
 	mux.Handle("GET /v1/tenant/reports/export", middleware.Chain(http.HandlerFunc(h.Export), authn, org, module, read, export))
+
+	daily := middleware.RequireAnyTenantPermission(
+		rbac.PermTenantReservationsRead, rbac.PermTenantReservationsOwn, rbac.PermTenantFinanceRead,
+		rbac.PermTenantEarningsRead, rbac.PermTenantEarningsOwn,
+	)
+	mux.Handle("GET /v1/tenant/daily-summary", middleware.Chain(http.HandlerFunc(h.Daily), authn, org, daily))
 }

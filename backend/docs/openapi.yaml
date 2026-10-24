@@ -11038,6 +11038,48 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/daily-summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantDailySummary
+      summary: Daily summary of the home page
+      description: |
+        The summary of one business day (TEC-926) for the tenant home page:
+        the caller's own visits and earnings when it has a staff record (an
+        owner who serves customers too), the visits, confirmations and money
+        of the whole branch scope with one row per branch, and what waits
+        for the business (visits to accept, confirmations of the day). The
+        figures are the same as the reports of that day. The caller's branch
+        scope and X-Branch (the header branch picker: one branch or every
+        branch) limit every section. Takes any of tenant.reservations.read,
+        tenant.reservations.own, tenant.finance.read, tenant.earnings.read
+        or tenant.earnings.own; a section the caller may not see is null:
+        own visits need tenant.reservations.read or .own, own earnings
+        tenant.earnings.read or .own with the staff shares module, business
+        visits and pending items tenant.reservations.read, money and branch
+        rows tenant.finance.read with the reports module.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: date
+          in: query
+          required: false
+          description: Business day (YYYY-MM-DD); defaults to today in the business time zone.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Daily summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDailySummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/staff-shares/me:
     get:
       tags: [Tenant]
@@ -17587,6 +17629,136 @@ components:
           type: array
           description: Branch comparison (every active branch in scope, then the head office row when it has records)
           items: { $ref: "#/components/schemas/ReportBranch" }
+
+    DailySummaryMoney:
+      type: object
+      description: The money of the day in one currency (business_share = revenue - staff_share).
+      required: [currency, revenue, collections, staff_share, business_share, sale_count]
+      properties:
+        currency: { type: string }
+        revenue: { type: string, description: "Net revenue of the sale lines" }
+        collections: { type: string, description: "Net collections (collected - refunded)" }
+        staff_share: { type: string }
+        business_share: { type: string, description: "What is left to the business after the staff shares" }
+        sale_count: { type: integer, format: int64 }
+
+    DailySummaryVisit:
+      type: object
+      description: One line the caller serves on the day (cancelled and rejected visits left out).
+      required: [reservation_uuid, number, line_index, service_name, starts_at, ends_at, status, approval_status,
+        confirmation_status, payment_status, branch_uuid, branch_name, customer_name]
+      properties:
+        reservation_uuid: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+        line_index: { type: integer, format: int32 }
+        service_name: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        status: { type: string, enum: [requested, active, in_service, completed, cancelled, rejected, no_show] }
+        approval_status: { type: string, enum: [pending, accepted, rejected] }
+        confirmation_status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        branch_uuid: { type: string, format: uuid }
+        branch_name: { type: string }
+        customer_name: { type: string }
+
+    DailySummaryEarning:
+      type: object
+      required: [currency, sales, share, sale_count]
+      properties:
+        currency: { type: string }
+        sales: { type: string, description: "Net of the sale lines the caller served" }
+        share: { type: string, description: "The caller's share of them" }
+        sale_count: { type: integer, format: int64 }
+
+    DailySummary:
+      type: object
+      required: [date, timezone, currency, staff, own, business, pending]
+      properties:
+        date: { type: string, format: date }
+        timezone: { type: string }
+        currency: { type: string }
+        staff:
+          description: The caller's staff record; null without one.
+          type: [object, "null"]
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        own:
+          description: The caller's own day; null without a staff record or the access.
+          type: [object, "null"]
+          required: [reservations, visits, earnings]
+          properties:
+            reservations: { $ref: "#/components/schemas/ReportReservations" }
+            visits:
+              type: array
+              items: { $ref: "#/components/schemas/DailySummaryVisit" }
+            earnings:
+              description: One entry per currency (the business currency first); null without the earnings access.
+              type: [array, "null"]
+              items: { $ref: "#/components/schemas/DailySummaryEarning" }
+        business:
+          description: The day of the branch scope; null without the reservations or finance read.
+          type: [object, "null"]
+          required: [reservations, confirmations, money, branches]
+          properties:
+            reservations:
+              description: Null without tenant.reservations.read.
+              oneOf:
+                - $ref: "#/components/schemas/ReportReservations"
+                - type: "null"
+            confirmations:
+              description: Null without tenant.reservations.read.
+              oneOf:
+                - $ref: "#/components/schemas/ReportConfirmations"
+                - type: "null"
+            money:
+              description: One entry per currency; null without the money access.
+              type: [array, "null"]
+              items: { $ref: "#/components/schemas/DailySummaryMoney" }
+            branches:
+              description: One row per branch, then the head office row when it has records; null without the money access.
+              type: [array, "null"]
+              items:
+                type: object
+                required: [branch, reservations, money]
+                properties:
+                  branch:
+                    description: Null on the head office row.
+                    type: [object, "null"]
+                    required: [uuid, code, name, is_active]
+                    properties:
+                      uuid: { type: string, format: uuid }
+                      code: { type: string }
+                      name: { type: string }
+                      is_active: { type: boolean }
+                  reservations:
+                    oneOf:
+                      - $ref: "#/components/schemas/ReportReservations"
+                      - type: "null"
+                  money:
+                    type: array
+                    items: { $ref: "#/components/schemas/DailySummaryMoney" }
+        pending:
+          description: What waits for the business; null without tenant.reservations.read.
+          type: [object, "null"]
+          required: [approvals, confirmations_waiting, confirmations_attention]
+          properties:
+            approvals: { type: integer, format: int64, description: "Visits waiting to be accepted or rejected (any date)" }
+            confirmations_waiting: { type: integer, format: int64, description: "Confirmations of the day still waiting for an answer" }
+            confirmations_attention:
+              type: integer
+              format: int64
+              description: Confirmations of the day that need a person (change requested, left to the business, unreachable)
+
+    EnvelopeDailySummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/DailySummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeReport:
       type: object

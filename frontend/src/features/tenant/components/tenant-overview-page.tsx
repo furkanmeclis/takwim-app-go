@@ -13,13 +13,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ConfirmationAlerts } from "@/features/confirmations/components/confirmation-alerts";
+import { permissions } from "@/config/permissions";
 import { BranchOverview } from "@/features/tenant/components/branch-overview";
+import { DailySummary } from "@/features/tenant/components/daily-summary";
 import { SectorOverviewCard } from "@/features/sectors/components/sector-overview-card";
 import { SECTOR_LABEL_KEYS } from "@/features/sectors/constants";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantRoleLabel } from "@/features/tenant/lib/role-label";
 import { date } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -31,11 +34,13 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 }
 
 /**
- * Landing page of the organization shell: the central panel of the branches
- * (in total and one by one), then the organization and your membership.
+ * Landing page of the organization shell: the daily summary (own day,
+ * business day, what waits), the central panel of the branches (in total
+ * and one by one), then the organization and your membership.
  */
 export function TenantOverviewPage() {
   const { t, locale } = useLocale();
+  const { can } = usePermission();
   const tenant = useTenant();
   const org = tenant.organization;
   const roleLabel = tenantRoleLabel(t, tenant.role);
@@ -50,7 +55,9 @@ export function TenantOverviewPage() {
 
       <ConfirmationAlerts />
 
-      <BranchOverview />
+      <DailySummary />
+
+      {can(permissions.tenant.branches.read) ? <BranchOverview /> : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
