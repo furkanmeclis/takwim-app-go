@@ -237,7 +237,8 @@ type MovementFacets struct {
 	Account []Facet `json:"account"`
 }
 
-// Closing is the daily closing of a till.
+// Closing is the daily closing of a till or the period closing of a bank /
+// online account.
 type Closing struct {
 	UUID         uuid.UUID   `json:"uuid"`
 	BusinessDate string      `json:"business_date"`
@@ -268,6 +269,10 @@ type ClosingPreview struct {
 	MovementCount  int64       `json:"movement_count"`
 	Closed         bool        `json:"closed"`
 	LastClosedDate *string     `json:"last_closed_date"`
+	// UnreconciledLines counts the statement lines of a bank / online
+	// account dated on or before the day that still wait for a decision;
+	// the period closes once it is zero.
+	UnreconciledLines int64 `json:"unreconciled_lines"`
 }
 
 // ClosingInput closes a day with the counted amount.

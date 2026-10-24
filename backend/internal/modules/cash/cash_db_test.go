@@ -351,8 +351,12 @@ func TestCashOverHTTP(t *testing.T) {
 	if pv["opening_amount"] != "100.00" || pv["total_in"] != "1000.00" || pv["total_out"] != "300.50" || pv["expected_amount"] != "799.50" {
 		t.Fatalf("preview = %v", pv)
 	}
-	want(call(owner, http.MethodPost, "/v1/tenant/cash/accounts/"+bankID+"/closings", map[string]any{"counted_amount": "1"}),
-		http.StatusConflict, "bank is not closed daily")
+	// A bank account closes a period instead (TEC-965); its preview counts
+	// the statement lines still to reconcile.
+	bpv := want(call(owner, http.MethodGet, "/v1/tenant/cash/accounts/"+bankID+"/closings/preview", nil), http.StatusOK, "bank preview").data
+	if bpv["unreconciled_lines"] != float64(0) {
+		t.Fatalf("bank preview = %v", bpv)
+	}
 	cl := want(call(carol, http.MethodPost, "/v1/tenant/cash/accounts/"+tillAID+"/closings", map[string]any{
 		"business_date": day(-1), "counted_amount": "789.50", "note": "10 TL eksik",
 	}), http.StatusCreated, "close yesterday").data

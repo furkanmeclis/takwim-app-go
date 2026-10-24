@@ -183,5 +183,6 @@
   "groups.tenant_classes": "Grup dersleri",
   "labels.tenant.session_packages.export": "Satılan paketleri dışa aktar",
   "labels.tenant.session_packages.bulk.activate": "Paket tanımlarını toplu aktifleştir",
-  "labels.tenant.session_packages.bulk.deactivate": "Paket tanımlarını toplu pasifleştir"
+  "labels.tenant.session_packages.bulk.deactivate": "Paket tanımlarını toplu pasifleştir",
+  "labels.tenant.cash.import": "Banka ekstresi / hakediş içe aktar"
 }

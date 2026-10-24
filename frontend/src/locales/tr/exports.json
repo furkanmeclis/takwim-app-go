@@ -86,5 +86,7 @@
   "resources.tenant.finance_entries": "Gelir ve gider kayıtları",
   "resources.tenant.staff_share_lines": "Çalışan payları",
   "resources.tenant.staff_share_payouts": "Pay ödemeleri",
-  "resources.tenant.customer_packages": "Satılan paketler"
+  "resources.tenant.customer_packages": "Satılan paketler",
+  "resources.tenant.cash_statements": "Ekstreler",
+  "resources.tenant.cash_statement_lines": "Ekstre satırları"
 }

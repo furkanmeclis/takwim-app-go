@@ -9,9 +9,16 @@ import type {
   CashAccountPatchRequest,
   CashClosingCreateRequest,
   CashMovementCreateRequest,
+  CashStatementCreateRequest,
+  CashStatementLineCreateRequest,
+  CashStatementLineMatchRequest,
+  CashStatementLinePostRequest,
+  CashStatementUpdateRequest,
   CashTransferRequest,
   ListCashAccountsParams,
   ListCashMovementsParams,
+  ListCashStatementLinesParams,
+  ListCashStatementsParams,
 } from "@/features/cash/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { useLocale } from "@/providers/locale-provider";
@@ -260,6 +267,244 @@ export function useReopenCashDay(accountUuid: string) {
     }) => cashService.reopenDay(slug, accountUuid, closingUuid, reason),
     onSuccess: () => {
       appToast.success(t("cash.toast.reopened"));
+      void invalidate();
+    },
+  });
+}
+
+// ---------------------------------------------------------------- statements
+
+export function useCashStatements(
+  params: ListCashStatementsParams,
+  enabled = true,
+) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.statementList(slug, params),
+    queryFn: () => cashService.listStatements(slug, params),
+    placeholderData: (previous) => previous,
+    enabled,
+  });
+}
+
+export function useCashStatement(uuid: string | null) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.statement(slug, uuid ?? ""),
+    queryFn: () => cashService.getStatement(slug, uuid!),
+    enabled: Boolean(uuid),
+  });
+}
+
+export function useCashStatementSummary(uuid: string) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.statementSummary(slug, uuid),
+    queryFn: () => cashService.statementSummary(slug, uuid),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useCashStatementLines(
+  uuid: string,
+  params: ListCashStatementLinesParams,
+) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.statementLines(slug, uuid, params),
+    queryFn: () => cashService.statementLines(slug, uuid, params),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useCashStatementLineFacets(uuid: string) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.statementLineFacets(slug, uuid),
+    queryFn: () => cashService.statementLineFacets(slug, uuid),
+    staleTime: 30_000,
+  });
+}
+
+export function useCashStatementLinesMeta() {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.linesMeta(slug),
+    queryFn: () => cashService.linesMeta(slug),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Movements close to a line (amount, date) for the manual match picker. */
+export function useCashLineCandidates(lineUuid: string | null, q: string) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: cashKeys.lineCandidates(slug, lineUuid ?? "", q),
+    queryFn: () => cashService.lineCandidates(slug, lineUuid!, q),
+    enabled: Boolean(lineUuid),
+    staleTime: 0,
+  });
+}
+
+export function useCreateCashStatement() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: (body: CashStatementCreateRequest) =>
+      cashService.createStatement(slug, body),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.statement_created"));
+      void invalidate();
+    },
+  });
+}
+
+export function useUpdateCashStatement() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: ({
+      uuid,
+      body,
+    }: {
+      uuid: string;
+      body: CashStatementUpdateRequest;
+    }) => cashService.updateStatement(slug, uuid, body),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.statement_updated"));
+      void invalidate();
+    },
+  });
+}
+
+export function useDeleteCashStatement() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: (uuid: string) => cashService.deleteStatement(slug, uuid),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.statement_deleted"));
+      void invalidate();
+    },
+  });
+}
+
+export function useAddCashStatementLine(statementUuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: (body: CashStatementLineCreateRequest) =>
+      cashService.addStatementLine(slug, statementUuid, body),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.line_added"));
+      void invalidate();
+    },
+  });
+}
+
+export function useAutoMatchCashStatement(statementUuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: () => cashService.autoMatch(slug, statementUuid),
+    onSuccess: (result) => {
+      appToast.success(
+        t("cash.toast.auto_matched", {
+          matched: result.matched,
+          pending: result.pending,
+        }),
+      );
+      void invalidate();
+    },
+  });
+}
+
+export function useMatchCashLine() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: ({
+      lineUuid,
+      body,
+    }: {
+      lineUuid: string;
+      body: CashStatementLineMatchRequest;
+    }) => cashService.matchLine(slug, lineUuid, body),
+    onSuccess: (line) => {
+      appToast.success(
+        t(
+          line.status === "difference"
+            ? "cash.toast.line_difference"
+            : "cash.toast.line_matched",
+        ),
+      );
+      void invalidate();
+    },
+  });
+}
+
+export function useResetCashLine() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: ({ lineUuid, reason }: { lineUuid: string; reason?: string }) =>
+      cashService.resetLine(slug, lineUuid, reason),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.line_reset"));
+      void invalidate();
+    },
+  });
+}
+
+export function usePostCashLine() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: ({
+      lineUuid,
+      body,
+    }: {
+      lineUuid: string;
+      body: CashStatementLinePostRequest;
+    }) => cashService.postLine(slug, lineUuid, body),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.line_posted"));
+      void invalidate();
+    },
+  });
+}
+
+export function useIgnoreCashLine() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: ({ lineUuid, reason }: { lineUuid: string; reason: string }) =>
+      cashService.ignoreLine(slug, lineUuid, reason),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.line_ignored"));
+      void invalidate();
+    },
+  });
+}
+
+export function useReverseCashLine() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCash();
+  return useMutation({
+    mutationFn: ({ lineUuid, reason }: { lineUuid: string; reason: string }) =>
+      cashService.reverseLine(slug, lineUuid, reason),
+    onSuccess: () => {
+      appToast.success(t("cash.toast.line_reversed"));
       void invalidate();
     },
   });

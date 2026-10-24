@@ -158,6 +158,8 @@ export const routes = {
       movements: (slug: string) =>
         `/t/${encodeURIComponent(slug)}/cash/movements`,
       daily: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/daily`,
+      statement: (slug: string, uuid: string, statementUuid: string) =>
+        `/t/${encodeURIComponent(slug)}/cash/${uuid}/statements/${statementUuid}`,
     },
     reservations: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/reservations`,

@@ -63,8 +63,20 @@
   "details.movement.not_reversible": "This movement cannot be reversed here; correct it from its source record.",
   "details.closing.not_latest": "Only the latest closing can be reopened.",
   "details.closing.reopened": "This closing is already reopened.",
-  "details.account.not_closable": "Only tills have a daily closing.",
   "details.status.balance_not_zero": "An account with a non-zero balance cannot be archived.",
   "details.to_account_uuid.currency_mismatch": "Transfers need two accounts in the same currency.",
-  "details.idempotency_key.reused": "This idempotency key was used for another record."
+  "details.idempotency_key.reused": "This idempotency key was used for another record.",
+  "details.account_uuid.not_reconcilable": "Statements belong to bank and online payment accounts only.",
+  "details.statement.closed": "This statement is locked by a period closing; reopen the closing first.",
+  "details.statement.has_postings": "A statement with posted lines cannot be deleted; reverse the postings first.",
+  "details.line.state": "This action is not possible in the line's current state.",
+  "details.movement_uuid.matched": "This movement is already matched with another statement line.",
+  "details.reference.taken": "This reference was already imported on the same account.",
+  "details.business_date.unreconciled_lines": "Statement lines up to this day are pending or in difference; finish the reconciliation first.",
+  "details.counter_account_uuid.required": "Pick the counter account for a payout.",
+  "details.movement_uuid.direction": "The movement must have the same direction as the statement line.",
+  "details.movement_uuid.other_account": "The movement does not belong to the statement's account.",
+  "details.movement_uuid.reversed": "A reversed movement cannot be matched.",
+  "details.counter_account_uuid.currency_mismatch": "The counter account has a different currency.",
+  "details.counter_account_uuid.same_account": "The counter account cannot be the statement's account."
 }

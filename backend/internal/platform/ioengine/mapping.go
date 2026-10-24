@@ -78,6 +78,16 @@ func scoreMatch(headerNorm, headerRaw, fieldKey, labelKey string, locale i18n.Lo
 		"description":      {"aciklama", "açıklama", "desc"},
 		"role_slugs":       {"roles", "roller", "role", "rol"},
 		"permission_slugs": {"permissions", "izinler", "permission", "izin"},
+		// Bank statements / provider settlement sheets (cash_statement_line).
+		"line_date":     {"tarih", "islem tarihi", "işlem tarihi", "valor", "valör", "date", "transaction date", "value date", "tarih saat"},
+		"amount":        {"tutar", "islem tutari", "işlem tutarı", "miktar", "amount", "net", "net tutar"},
+		"credit":        {"alacak", "giris", "giriş", "gelen", "yatan", "credit", "money in", "deposit"},
+		"debit":         {"borc", "borç", "cikis", "çıkış", "giden", "cekilen", "çekilen", "debit", "money out", "withdrawal"},
+		"direction":     {"yon", "yön", "islem turu", "borç/alacak", "borc/alacak", "type", "dr/cr"},
+		"fee":           {"komisyon", "komisyon tutari", "komisyon tutarı", "kesinti", "ucret", "ücret", "commission", "charge"},
+		"line_type":     {"islem tipi", "işlem tipi", "islem", "işlem", "transaction type", "kategori", "category"},
+		"reference":     {"referans", "referans no", "dekont no", "islem no", "işlem no", "transaction id", "ref", "reference no", "id"},
+		"balance_after": {"bakiye", "kalan bakiye", "balance", "running balance", "hesap bakiyesi"},
 	}
 	for _, a := range aliases[fieldKey] {
 		aNorm := normalizeKey(a)

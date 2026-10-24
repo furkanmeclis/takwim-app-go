@@ -268,6 +268,7 @@ func main() {
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
 		cashadapters.NewMovementsIO(cashSvc),
+		cashadapters.NewStatementLinesIO(cashSvc),
 		financeadapters.NewEntriesIO(financeSvc),
 		staffsharesadapters.NewLinesIO(staffSharesSvc),
 		staffsharesadapters.NewPayoutsIO(staffSharesSvc),

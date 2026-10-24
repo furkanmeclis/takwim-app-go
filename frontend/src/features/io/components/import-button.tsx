@@ -12,12 +12,14 @@ type ImportButtonProps = {
   resource: IoResource;
   onComplete?: () => void;
   disabled?: boolean;
+  presetDefaults?: Record<string, string>;
 };
 
 export function ImportButton({
   resource,
   onComplete,
   disabled,
+  presetDefaults,
 }: ImportButtonProps) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
@@ -35,6 +37,7 @@ export function ImportButton({
         resource={resource}
         open={open}
         onOpenChange={setOpen}
+        presetDefaults={presetDefaults}
         onComplete={() => {
           onComplete?.();
         }}

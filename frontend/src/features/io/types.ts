@@ -113,6 +113,7 @@ export type IoResource =
   | "tenant.reservations"
   | "tenant.cash_accounts"
   | "tenant.cash_movements"
+  | "tenant.cash_statement_lines"
   | "tenant.stock_movements"
   | "tenant.finance_entries"
   | "tenant.staff_share_lines"
@@ -136,6 +137,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.reservations": "/v1/tenant/reservations/export",
   "tenant.cash_accounts": "/v1/tenant/cash/accounts/export",
   "tenant.cash_movements": "/v1/tenant/cash/movements/export",
+  "tenant.cash_statement_lines": "/v1/tenant/cash/statement-lines/export",
   "tenant.stock_movements": "/v1/tenant/stock-movements/export",
   "tenant.finance_entries": "/v1/tenant/finance/entries/export",
   "tenant.staff_share_lines": "/v1/tenant/staff-shares/lines/export",
@@ -185,6 +187,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.stock_movements": {
     upload: "/v1/tenant/stock-movements/import",
     sample: "/v1/tenant/stock-movements/import/sample",
+  },
+  "tenant.cash_statement_lines": {
+    upload: "/v1/tenant/cash/statement-lines/import",
+    sample: "/v1/tenant/cash/statement-lines/import/sample",
   },
 };
 
@@ -296,6 +302,29 @@ export const IMPORT_SCHEMA: Partial<
     },
     { key: "reason", labelKey: "products.movements.fields.reason" },
     { key: "note", labelKey: "products.movements.fields.note" },
+  ],
+  // Bank statement / provider settlement rows of one statement (the
+  // statement uuid is a preset default of the wizard).
+  "tenant.cash_statement_lines": [
+    {
+      key: "statement_uuid",
+      labelKey: "cash.lines.import.statement_uuid",
+      required: true,
+    },
+    {
+      key: "line_date",
+      labelKey: "cash.lines.columns.line_date",
+      required: true,
+    },
+    { key: "description", labelKey: "cash.lines.columns.description" },
+    { key: "amount", labelKey: "cash.lines.import.amount" },
+    { key: "credit", labelKey: "cash.lines.import.credit" },
+    { key: "debit", labelKey: "cash.lines.import.debit" },
+    { key: "direction", labelKey: "cash.lines.columns.direction" },
+    { key: "fee", labelKey: "cash.lines.columns.fee" },
+    { key: "line_type", labelKey: "cash.lines.columns.line_type" },
+    { key: "reference", labelKey: "cash.lines.columns.reference" },
+    { key: "balance_after", labelKey: "cash.lines.columns.balance_after" },
   ],
   "tenant.services": [
     { key: "category", labelKey: "services.fields.category" },

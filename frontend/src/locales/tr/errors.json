@@ -63,8 +63,20 @@
   "details.movement.not_reversible": "Bu hareket buradan düzeltilemez; kaynağı olan kayıttan düzeltin.",
   "details.closing.not_latest": "Yalnızca en son kapanış yeniden açılabilir.",
   "details.closing.reopened": "Bu kapanış zaten yeniden açılmış.",
-  "details.account.not_closable": "Yalnızca kasa hesapları için gün kapanışı yapılır.",
   "details.status.balance_not_zero": "Bakiyesi sıfır olmayan hesap arşivlenemez.",
   "details.to_account_uuid.currency_mismatch": "Farklı para birimindeki hesaplar arasında transfer yapılamaz.",
-  "details.idempotency_key.reused": "Bu işlem anahtarı farklı bir kayıt için kullanılmış."
+  "details.idempotency_key.reused": "Bu işlem anahtarı farklı bir kayıt için kullanılmış.",
+  "details.account_uuid.not_reconcilable": "Ekstre yalnızca banka ve online ödeme hesaplarına eklenir.",
+  "details.statement.closed": "Bu ekstre dönem kapanışıyla kilitlenmiş; önce kapanışı yeniden açın.",
+  "details.statement.has_postings": "Deftere kaydedilmiş satırı olan ekstre silinemez; kayıtları ters kayıtla geri alın.",
+  "details.line.state": "Bu işlem satırın mevcut durumunda yapılamaz.",
+  "details.movement_uuid.matched": "Bu hareket başka bir ekstre satırıyla eşleşmiş.",
+  "details.reference.taken": "Bu referans aynı hesapta zaten içe aktarılmış.",
+  "details.business_date.unreconciled_lines": "Bu güne kadar bekleyen ya da farklı ekstre satırları var; önce mutabakatı tamamlayın.",
+  "details.counter_account_uuid.required": "Hakediş ödemesi için karşı hesabı seçin.",
+  "details.movement_uuid.direction": "Hareketin yönü ekstre satırıyla aynı olmalı.",
+  "details.movement_uuid.other_account": "Hareket bu ekstrenin hesabına ait değil.",
+  "details.movement_uuid.reversed": "Ters kayıtla düzeltilmiş bir hareketle eşleştirilemez.",
+  "details.counter_account_uuid.currency_mismatch": "Karşı hesabın para birimi farklı.",
+  "details.counter_account_uuid.same_account": "Karşı hesap ekstrenin hesabı olamaz."
 }

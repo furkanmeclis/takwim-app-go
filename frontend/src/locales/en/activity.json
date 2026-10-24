@@ -392,5 +392,17 @@
   "fields.tenant.classes.is_active": "Active",
   "resources.tenant.class_sessions": "Class sessions",
   "actions.products.sale_collected": "Sale money collected",
-  "actions.products.sale_refunded": "Sale money refunded"
+  "actions.products.sale_refunded": "Sale money refunded",
+  "resources.tenant.cash_statements": "Statements",
+  "resources.tenant.cash_statement_lines": "Statement lines",
+  "actions.cash_accounts.statement_created": "Statement created",
+  "actions.cash_accounts.statement_updated": "Statement updated",
+  "actions.cash_accounts.statement_deleted": "Statement deleted",
+  "actions.cash_accounts.auto_matched": "Statement auto-matched",
+  "actions.cash_accounts.line_added": "Statement line added",
+  "actions.cash_accounts.line_matched": "Statement line matched",
+  "actions.cash_accounts.line_reset": "Statement line match removed",
+  "actions.cash_accounts.line_posted": "Statement line posted",
+  "actions.cash_accounts.line_ignored": "Statement line ignored",
+  "actions.cash_accounts.line_reversed": "Statement line posting reversed"
 }

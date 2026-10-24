@@ -392,5 +392,17 @@
   "fields.tenant.classes.is_active": "Aktif",
   "resources.tenant.class_sessions": "Ders seansları",
   "actions.products.sale_collected": "Satış tahsilatı alındı",
-  "actions.products.sale_refunded": "Satış için para iadesi yapıldı"
+  "actions.products.sale_refunded": "Satış için para iadesi yapıldı",
+  "resources.tenant.cash_statements": "Ekstreler",
+  "resources.tenant.cash_statement_lines": "Ekstre satırları",
+  "actions.cash_accounts.statement_created": "Ekstre oluşturuldu",
+  "actions.cash_accounts.statement_updated": "Ekstre güncellendi",
+  "actions.cash_accounts.statement_deleted": "Ekstre silindi",
+  "actions.cash_accounts.auto_matched": "Ekstre otomatik eşleştirildi",
+  "actions.cash_accounts.line_added": "Ekstre satırı eklendi",
+  "actions.cash_accounts.line_matched": "Ekstre satırı eşleştirildi",
+  "actions.cash_accounts.line_reset": "Ekstre satırı eşleşmesi kaldırıldı",
+  "actions.cash_accounts.line_posted": "Ekstre satırı deftere kaydedildi",
+  "actions.cash_accounts.line_ignored": "Ekstre satırı yoksayıldı",
+  "actions.cash_accounts.line_reversed": "Ekstre satırı kaydı ters kayıtla düzeltildi"
 }

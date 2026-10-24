@@ -6722,19 +6722,24 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Daily closings of a till
-         * @description Newest day first, reopened closings included.
+         * Closings of an account
+         * @description Daily closings of a till or period closings of a bank / online account; newest day first, reopened closings included.
          */
         get: operations["getTenantCashAccountClosings"];
         put?: never;
         /**
-         * Close a day of a till
-         * @description `tenant.cash.close`. Only tills (`kind` = `cash`) are closed daily.
-         *     The expected balance (opening + money in - money out of the day) is
-         *     compared with `counted_amount`; the difference is posted as a
-         *     `closing_difference` movement so the book follows the count. The
-         *     day and every earlier day are then locked for movements. The day
-         *     must be after the latest closed day (`409 already_closed`).
+         * Close a day (till) or a period (bank / online account)
+         * @description `tenant.cash.close`. A till is closed with the counted cash; a bank
+         *     or online account closes a period with the balance its statement
+         *     states as `counted_amount` (may be negative), once every statement
+         *     line dated on or before the day is reconciled
+         *     (`409 unreconciled_lines`). The expected balance (opening + money in
+         *     - money out of the day) is compared with `counted_amount`; the
+         *     difference is posted as a `closing_difference` movement so the book
+         *     follows the statement. The day and every earlier day are then locked
+         *     for movements, and the fully reconciled statements of the account
+         *     are closed with it. The day must be after the latest closed day
+         *     (`409 already_closed`).
          */
         post: operations["postTenantCashAccountClosing"];
         delete?: never;
@@ -6772,8 +6777,8 @@ export interface paths {
         /**
          * Reopen the latest closed day
          * @description `tenant.cash.reopen` and a reason. Only the latest closed day of the
-         *     till reopens (`409 not_latest`); its difference movement is reversed
-         *     on the same day.
+         *     account reopens (`409 not_latest`); its difference movement is
+         *     reversed on the same day and the statements it closed open again.
          */
         post: operations["postTenantCashAccountClosingReopen"];
         delete?: never;
@@ -6922,6 +6927,457 @@ export interface paths {
          *     payout (online account to bank) is a transfer too.
          */
         post: operations["postTenantCashTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Statement list metadata
+         * @description Table contract of `GET /v1/tenant/cash/statements` (`tenant.cash.read`, `cash` module).
+         */
+        get: operations["getTenantCashStatementsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List bank statements and settlement reports
+         * @description Statements of the bank / online accounts in the caller's scope
+         *     (`tenant.cash.read`). A statement is one imported document (a bank
+         *     statement CSV / XLSX or a payment provider's settlement report) whose
+         *     lines are reconciled with the cash book. `q` searches the statement
+         *     and account names.
+         */
+        get: operations["getTenantCashStatements"];
+        put?: never;
+        /**
+         * Open a statement
+         * @description `tenant.cash.import`. Opens a statement on a bank or online account
+         *     of the caller's scope (a till is counted, not reconciled:
+         *     `400 not_reconcilable`). `source` defaults to `bank` for a bank
+         *     account and `provider` for an online account. `closing_balance` is
+         *     the balance the document states at the end of the period; the
+         *     summary compares it with the book. Lines are then imported with
+         *     `POST /v1/tenant/cash/statement-lines/import` (default
+         *     `statement_uuid`) or added one by one.
+         */
+        post: operations["postTenantCashStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a statement */
+        get: operations["getTenantCashStatement"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a statement
+         * @description `tenant.cash.import`. Removes an open statement with its lines. A
+         *     statement whose lines wrote movements is kept (`409 has_postings`):
+         *     the book is append-only, reverse the postings first.
+         */
+        delete: operations["deleteTenantCashStatement"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a statement
+         * @description `tenant.cash.import`. Name, period, stated balance and note of an
+         *     open statement; the account and source are fixed (`400 immutable`).
+         *     A statement closed by a period closing is read-only (`409 closed`).
+         */
+        patch: operations["patchTenantCashStatement"];
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements/{uuid}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reconciliation summary of a statement
+         * @description Line counts per status, sums, and the book balance of the account at
+         *     the period end against the balance the document states.
+         *     `reconciled` is true when no line is pending or in difference and
+         *     the balances agree.
+         */
+        get: operations["getTenantCashStatementSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements/{uuid}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lines of a statement
+         * @description Same filters as `GET /v1/tenant/cash/statement-lines`, limited to one statement.
+         */
+        get: operations["getTenantCashStatementLines"];
+        put?: never;
+        /**
+         * Add a line by hand
+         * @description `tenant.cash.import`. Appends one line to an open statement
+         *     (`409 closed` otherwise) and matches it with the book on the spot:
+         *     when exactly one unmatched movement of the account has the same
+         *     direction and amount within ±3 days, the line is `matched` (`auto`);
+         *     otherwise it stays `pending`. A repeated `reference` of the same
+         *     direction on the account is refused (`409 taken`), so a file
+         *     imported twice adds nothing. The fee of a provider line is posted as
+         *     an `expense` when the line is matched or posted.
+         */
+        post: operations["postTenantCashStatementLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements/{uuid}/lines/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Line status counts of a statement */
+        get: operations["getTenantCashStatementLineFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statements/{uuid}/auto-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-run the automatic matching
+         * @description `tenant.cash.write`. Tries the pending lines of an open statement
+         *     against the book again (after movements were posted). Returns how
+         *     many lines were checked, matched and left pending.
+         */
+        post: operations["postTenantCashStatementAutoMatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Statement line list metadata */
+        get: operations["getTenantCashStatementLinesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Statement lines across statements
+         * @description Lines of the statements in the caller's scope (`tenant.cash.read`).
+         *     `q` searches the description and reference.
+         */
+        get: operations["getTenantCashStatementLinesAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export statement lines
+         * @description Queues an export of statement lines (`tenant.cash.export`). `query`
+         *     honours `q`, `statement`, `status`, `line_type` and `direction`.
+         *     Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantCashStatementLinesExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a bank statement or settlement report
+         * @description Creates an import job (`tenant.cash.import`) that adds every row of
+         *     the file to one statement: `statement_uuid` comes from the import
+         *     defaults (the wizard is opened from the statement). A row has a
+         *     `line_date` (bank layouts such as `15.03.2026`, ISO dates and Excel
+         *     serials are read), a `description`, and either a signed `amount`
+         *     (negative = money out, or a `direction` column: `giriş / çıkış`,
+         *     `alacak / borç`, `credit / debit` …) or separate `credit` / `debit`
+         *     columns; optional `fee` (provider commission), `line_type`
+         *     (`payment`, `refund`, `fee`, `payout`, `other`, Turkish aliases
+         *     accepted), `reference` and `balance_after`. Amounts are read in
+         *     Turkish or English format (`1.250,50`, `1,250.50`, `-250,00 TL`).
+         *     Each row becomes a line and is matched with the book on the spot
+         *     (see `POST /v1/tenant/cash/statements/{uuid}/lines`); the dry run
+         *     shows whether it would match. A rollback removes lines that wrote
+         *     nothing into the book. Continue with
+         *     `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+         */
+        post: operations["postTenantCashStatementLinesImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a statement import sample */
+        get: operations["getTenantCashStatementLinesImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a statement line */
+        get: operations["getTenantCashStatementLine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Book movements a line may be matched with
+         * @description Unmatched movements of the line's account with the same direction,
+         *     dated within ±15 days, closest amount then closest date first (at
+         *     most 20). `q` searches the movement description.
+         */
+        get: operations["getTenantCashStatementLineCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match a line with a movement
+         * @description `tenant.cash.write`. Links a pending (or re-links a matched /
+         *     difference) line to a movement of the same account and direction
+         *     that is not reversed and not matched by another line
+         *     (`409 matched`). A movement of the same amount makes the line
+         *     `matched`; another amount makes it `difference` with
+         *     `difference_amount` = line amount - movement amount (gross vs net).
+         *     The fee of the line, if any, is posted as an `expense` dated on the
+         *     line.
+         */
+        post: operations["postTenantCashStatementLineMatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a line back to pending
+         * @description `tenant.cash.write`. A matched, difference or ignored line goes back
+         *     to `pending`; a fee posted with the match is reversed today. A posted
+         *     line is undone with `/reverse` instead (`409 state`).
+         */
+        post: operations["postTenantCashStatementLineReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}/post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a line into the book
+         * @description `tenant.cash.write`. Writes a pending line as a movement of its
+         *     account dated on the line through the module posting path, with the
+         *     idempotency key `cash_statement_line:{uuid}:{attempt}` so a retried
+         *     request never doubles it. `kind` is a module kind matching the
+         *     direction (`in`: `income` / `collection`; `out`: `expense` /
+         *     `refund` / `staff_payment`; default `income` / `expense`, `refund`
+         *     for a refund line). A `payout` line, or a `counter_account_uuid`,
+         *     posts a transfer between the statement account and the counter
+         *     account instead (provider → bank). The fee is posted as an
+         *     `expense`. Closed days and archived accounts refuse (`409`).
+         */
+        post: operations["postTenantCashStatementLinePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ignore a line
+         * @description `tenant.cash.write` and a reason. Leaves a pending, matched or
+         *     difference line out of the reconciliation (a duplicate, a provider's
+         *     own bookkeeping row); a fee posted with a match is reversed.
+         */
+        post: operations["postTenantCashStatementLineIgnore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/cash/statement-lines/{lineUuid}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a posted line
+         * @description `tenant.cash.write` and a reason. Reverses every movement the
+         *     line wrote (both legs of a payout transfer, the fee) and takes the
+         *     line back to `pending`; the next posting uses a new idempotency key.
+         *     Movements stay append-only.
+         */
+        post: operations["postTenantCashStatementLineReverse"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12426,7 +12882,248 @@ export interface components {
             kind: components["schemas"]["CashFacet"][];
             account: components["schemas"]["CashFacet"][];
         };
-        /** @description The daily closing of a till. */
+        /** @description One imported bank statement or provider settlement report of a bank / online account. */
+        CashStatement: {
+            /** Format: uuid */
+            uuid: string;
+            account: components["schemas"]["CashAccountRef"];
+            branch: components["schemas"]["CashBranchRef"] | null;
+            /** @enum {string} */
+            source: "bank" | "provider";
+            name: string;
+            currency: string;
+            /** Format: date */
+            period_from: string | null;
+            /** Format: date */
+            period_to: string | null;
+            /** @description Balance the document states at the period end */
+            closing_balance: string | null;
+            note: string;
+            /**
+             * @description closed = the period closing of the account covers it
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /** Format: uuid */
+            closing_uuid: string | null;
+            /** Format: int64 */
+            line_count: number;
+            /**
+             * Format: int64
+             * @description Lines pending or in difference
+             */
+            open_count: number;
+            created_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CashStatementCreateRequest: {
+            /**
+             * Format: uuid
+             * @description A bank or online account
+             */
+            account_uuid: string;
+            /**
+             * @description Default by account kind
+             * @enum {string}
+             */
+            source?: "bank" | "provider";
+            name: string;
+            /** Format: date */
+            period_from?: string;
+            /** Format: date */
+            period_to?: string;
+            /** @example 12450.00 */
+            closing_balance?: string;
+            note?: string;
+        };
+        CashStatementUpdateRequest: {
+            name?: string;
+            /** Format: date */
+            period_from?: string;
+            /** Format: date */
+            period_to?: string;
+            closing_balance?: string;
+            note?: string;
+        };
+        CashStatementPage: {
+            items: components["schemas"]["CashStatement"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CashStatementSummary: {
+            /** Format: int64 */
+            pending_count: number;
+            /** Format: int64 */
+            matched_count: number;
+            /** Format: int64 */
+            difference_count: number;
+            /** Format: int64 */
+            posted_count: number;
+            /** Format: int64 */
+            ignored_count: number;
+            total_in: string;
+            total_out: string;
+            total_fee: string;
+            /** @description Signed sum of the pending lines (in - out) */
+            pending_net: string;
+            /** @description Sum of difference_amount over difference lines */
+            difference_total: string;
+            /** Format: date */
+            first_date: string | null;
+            /** Format: date */
+            last_date: string | null;
+            /**
+             * Format: date
+             * @description Day the book balance is read on (period end, else last line)
+             */
+            balance_date: string;
+            book_balance: string;
+            closing_balance: string | null;
+            /** @description closing_balance - book_balance */
+            balance_difference: string | null;
+            reconciled: boolean;
+        };
+        CashStatementRef: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            status: "open" | "closed";
+        };
+        CashMovementRef: {
+            /** Format: uuid */
+            uuid: string;
+            kind: components["schemas"]["CashMovementKind"];
+            /** Format: date */
+            movement_date?: string;
+            amount?: string;
+            description?: string;
+            /** Format: uuid */
+            transfer_group?: string;
+        };
+        /** @enum {string} */
+        CashStatementLineStatus: "pending" | "matched" | "difference" | "posted" | "ignored";
+        /** @enum {string} */
+        CashStatementLineType: "payment" | "refund" | "fee" | "payout" | "other";
+        /** @description One row of a statement with its reconciliation state. */
+        CashStatementLine: {
+            /** Format: uuid */
+            uuid: string;
+            statement: components["schemas"]["CashStatementRef"];
+            account: components["schemas"]["CashAccountRef"];
+            line_no: number;
+            /** Format: date */
+            line_date: string;
+            /** @enum {string} */
+            direction: "in" | "out";
+            amount: string;
+            /** @description Provider commission on the line */
+            fee: string;
+            line_type: components["schemas"]["CashStatementLineType"];
+            description: string;
+            reference: string;
+            balance_after: string | null;
+            currency: string;
+            status: components["schemas"]["CashStatementLineStatus"];
+            /** @enum {string} */
+            match_method: "" | "auto" | "manual";
+            matched_movement: components["schemas"]["CashMovementRef"] | null;
+            /** @description line amount - movement amount while status = difference */
+            difference_amount: string;
+            posted_movement: components["schemas"]["CashMovementRef"] | null;
+            /** Format: uuid */
+            fee_movement_uuid: string | null;
+            /** @description Posting attempts; the idempotency key of each is cash_statement_line:{uuid}:{attempt} */
+            post_count: number;
+            note: string;
+            resolved_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            resolved_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CashStatementLineCreateRequest: {
+            /** Format: date */
+            line_date: string;
+            /** @enum {string} */
+            direction: "in" | "out";
+            /** @example 1250.00 */
+            amount: string;
+            /** @example 25.00 */
+            fee?: string;
+            line_type?: components["schemas"]["CashStatementLineType"];
+            description?: string;
+            reference?: string;
+            balance_after?: string;
+        };
+        CashStatementLinePage: {
+            items: components["schemas"]["CashStatementLine"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CashStatementLineFacets: {
+            status: components["schemas"]["CashFacet"][];
+        };
+        CashStatementLineMatchRequest: {
+            /** Format: uuid */
+            movement_uuid: string;
+            note?: string;
+        };
+        CashStatementLinePostRequest: {
+            /**
+             * @description Default by direction; not with a transfer
+             * @enum {string}
+             */
+            kind?: "income" | "collection" | "expense" | "refund" | "staff_payment";
+            /**
+             * Format: uuid
+             * @description Posts a transfer with this account (required for a payout line)
+             */
+            counter_account_uuid?: string;
+            /** @description Default: the line description or reference */
+            description?: string;
+            note?: string;
+        };
+        CashNoteRequest: {
+            reason?: string;
+        };
+        CashMatchCandidate: {
+            /** Format: uuid */
+            uuid: string;
+            kind: components["schemas"]["CashMovementKind"];
+            /** @enum {string} */
+            direction: "in" | "out";
+            amount: string;
+            currency: string;
+            /** Format: date */
+            movement_date: string;
+            description: string;
+            source_type: string;
+            counter_account: string;
+            /** @description |movement amount - line amount| */
+            amount_delta: string;
+            /** @description Days between the movement and the line */
+            day_delta: number;
+            /** @description Same amount */
+            exact: boolean;
+        };
+        CashMatchCandidateList: {
+            items: components["schemas"]["CashMatchCandidate"][];
+        };
+        CashAutoMatchResult: {
+            checked: number;
+            matched: number;
+            pending: number;
+        };
+        /** @description The daily closing of a till or the period closing of a bank / online account. */
         CashClosing: {
             /** Format: uuid */
             uuid: string;
@@ -12475,6 +13172,11 @@ export interface components {
             closed: boolean;
             /** Format: date */
             last_closed_date: string | null;
+            /**
+             * Format: int64
+             * @description Bank / online accounts: statement lines dated on or before the day still pending or in difference
+             */
+            unreconciled_lines: number;
         };
         CashClosingPage: {
             items: components["schemas"]["CashClosing"][];
@@ -13906,6 +14608,54 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["CashTransfer"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashStatement: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashStatement"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashStatementPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashStatementPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashStatementSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashStatementSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashStatementLine: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashStatementLine"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashStatementLinePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashStatementLinePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashStatementLineFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashStatementLineFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashMatchCandidateList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashMatchCandidateList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCashAutoMatchResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CashAutoMatchResult"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeCashClosing: {
@@ -19334,6 +20084,10 @@ export interface components {
         ResourceUUID: string;
         /** @description Cash account UUID. */
         CashAccountUUID: string;
+        /** @description Statement uuid */
+        CashStatementUUID: string;
+        /** @description Statement line uuid */
+        CashStatementLineUUID: string;
         /** @description Sale line UUID. */
         SaleLineUUID: string;
         /** @description Staff share rule UUID. */
@@ -31620,6 +32374,859 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashStatementsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashStatements: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `period_to`, `created_at`; prefix `-` for descending. Default: newest first. */
+                sort?: string;
+                /** @description Account uuids; comma-separate or repeat */
+                account?: string;
+                /** @description `bank` and / or `provider`; comma-separate or repeat */
+                source?: string;
+                /** @description `open` and / or `closed`; comma-separate or repeat */
+                status?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Statement page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCashStatement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashStatementCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Statement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashStatement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Statement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantCashStatement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    patchTenantCashStatement: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashStatementUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Statement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashStatementSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantCashStatementLines: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `line_no`, `line_date`, `amount`, `status`; prefix `-` for descending. Default: line order. */
+                sort?: string;
+                /** @description Line statuses; comma-separate or repeat */
+                status?: string;
+                /** @description Line types; comma-separate or repeat */
+                line_type?: string;
+                direction?: "in" | "out";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Line page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCashStatementLine: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashStatementLineCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Line */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashStatementLineFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLineFacets"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCashStatementAutoMatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement uuid */
+                uuid: components["parameters"]["CashStatementUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashAutoMatchResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCashStatementLinesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashStatementLinesAll: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `line_no`, `line_date`, `amount`, `status`; prefix `-` for descending. */
+                sort?: string;
+                /** @description Statement uuids; comma-separate or repeat */
+                statement?: string;
+                /** @description Line statuses; comma-separate or repeat */
+                status?: string;
+                /** @description Line types; comma-separate or repeat */
+                line_type?: string;
+                direction?: "in" | "out";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Line page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCashStatementLinesExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCashStatementLinesImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashStatementLinesImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCashStatementLine: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Line */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantCashStatementLineCandidates: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["Q"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashMatchCandidateList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCashStatementLineMatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashStatementLineMatchRequest"];
+            };
+        };
+        responses: {
+            /** @description The line after the decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantCashStatementLineReset: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The line after the decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantCashStatementLinePost: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashStatementLinePostRequest"];
+            };
+        };
+        responses: {
+            /** @description The line after the decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantCashStatementLineIgnore: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The line after the decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantCashStatementLineReverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Statement line uuid */
+                lineUuid: components["parameters"]["CashStatementLineUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The line after the decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCashStatementLine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };

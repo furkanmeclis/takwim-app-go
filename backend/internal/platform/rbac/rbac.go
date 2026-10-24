@@ -159,6 +159,7 @@ const (
 	PermTenantCashClose        = "tenant.cash.close"
 	PermTenantCashReopen       = "tenant.cash.reopen"
 	PermTenantCashExport       = "tenant.cash.export"
+	PermTenantCashImport       = "tenant.cash.import"
 	PermTenantCashBulkArchive  = "tenant.cash.bulk.archive"
 	PermTenantCashBulkActivate = "tenant.cash.bulk.activate"
 	// Sensitive actions of later tenant modules (TEC-689), separate from the

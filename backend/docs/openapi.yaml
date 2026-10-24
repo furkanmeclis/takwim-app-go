@@ -10691,8 +10691,8 @@ paths:
     get:
       tags: [Tenant]
       operationId: getTenantCashAccountClosings
-      summary: Daily closings of a till
-      description: Newest day first, reopened closings included.
+      summary: Closings of an account
+      description: Daily closings of a till or period closings of a bank / online account; newest day first, reopened closings included.
       security:
         - bearerAuth: []
       parameters:
@@ -10714,14 +10714,19 @@ paths:
     post:
       tags: [Tenant]
       operationId: postTenantCashAccountClosing
-      summary: Close a day of a till
+      summary: Close a day (till) or a period (bank / online account)
       description: |
-        `tenant.cash.close`. Only tills (`kind` = `cash`) are closed daily.
-        The expected balance (opening + money in - money out of the day) is
-        compared with `counted_amount`; the difference is posted as a
-        `closing_difference` movement so the book follows the count. The
-        day and every earlier day are then locked for movements. The day
-        must be after the latest closed day (`409 already_closed`).
+        `tenant.cash.close`. A till is closed with the counted cash; a bank
+        or online account closes a period with the balance its statement
+        states as `counted_amount` (may be negative), once every statement
+        line dated on or before the day is reconciled
+        (`409 unreconciled_lines`). The expected balance (opening + money in
+        - money out of the day) is compared with `counted_amount`; the
+        difference is posted as a `closing_difference` movement so the book
+        follows the statement. The day and every earlier day are then locked
+        for movements, and the fully reconciled statements of the account
+        are closed with it. The day must be after the latest closed day
+        (`409 already_closed`).
       security:
         - bearerAuth: []
       parameters:
@@ -10780,8 +10785,8 @@ paths:
       summary: Reopen the latest closed day
       description: |
         `tenant.cash.reopen` and a reason. Only the latest closed day of the
-        till reopens (`409 not_latest`); its difference movement is reversed
-        on the same day.
+        account reopens (`409 not_latest`); its difference movement is
+        reversed on the same day and the statements it closed open again.
       security:
         - bearerAuth: []
       parameters:
@@ -11022,6 +11027,728 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statements/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementsMeta
+      summary: Statement list metadata
+      description: Table contract of `GET /v1/tenant/cash/statements` (`tenant.cash.read`, `cash` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/statements:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatements
+      summary: List bank statements and settlement reports
+      description: |
+        Statements of the bank / online accounts in the caller's scope
+        (`tenant.cash.read`). A statement is one imported document (a bank
+        statement CSV / XLSX or a payment provider's settlement report) whose
+        lines are reconciled with the cash book. `q` searches the statement
+        and account names.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `period_to`, `created_at`; prefix `-` for descending. Default: newest first."
+          schema: { type: string }
+        - name: account
+          in: query
+          description: "Account uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: source
+          in: query
+          description: "`bank` and / or `provider`; comma-separate or repeat"
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "`open` and / or `closed`; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Statement page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatement
+      summary: Open a statement
+      description: |
+        `tenant.cash.import`. Opens a statement on a bank or online account
+        of the caller's scope (a till is counted, not reconciled:
+        `400 not_reconcilable`). `source` defaults to `bank` for a bank
+        account and `provider` for an online account. `closing_balance` is
+        the balance the document states at the end of the period; the
+        summary compares it with the book. Lines are then imported with
+        `POST /v1/tenant/cash/statement-lines/import` (default
+        `statement_uuid`) or added one by one.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashStatementCreateRequest"
+      responses:
+        "201":
+          description: Statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatement"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/statements/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatement
+      summary: Get a statement
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      responses:
+        "200":
+          description: Statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatement"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantCashStatement
+      summary: Update a statement
+      description: |
+        `tenant.cash.import`. Name, period, stated balance and note of an
+        open statement; the account and source are fixed (`400 immutable`).
+        A statement closed by a period closing is read-only (`409 closed`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashStatementUpdateRequest"
+      responses:
+        "200":
+          description: Statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatement"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantCashStatement
+      summary: Delete a statement
+      description: |
+        `tenant.cash.import`. Removes an open statement with its lines. A
+        statement whose lines wrote movements is kept (`409 has_postings`):
+        the book is append-only, reverse the postings first.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statements/{uuid}/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementSummary
+      summary: Reconciliation summary of a statement
+      description: |
+        Line counts per status, sums, and the book balance of the account at
+        the period end against the balance the document states.
+        `reconciled` is true when no line is pending or in difference and
+        the balances agree.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/cash/statements/{uuid}/lines:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLines
+      summary: Lines of a statement
+      description: Same filters as `GET /v1/tenant/cash/statement-lines`, limited to one statement.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `line_no`, `line_date`, `amount`, `status`; prefix `-` for descending. Default: line order."
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "Line statuses; comma-separate or repeat"
+          schema: { type: string }
+        - name: line_type
+          in: query
+          description: "Line types; comma-separate or repeat"
+          schema: { type: string }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [in, out] }
+      responses:
+        "200":
+          description: Line page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLinePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLine
+      summary: Add a line by hand
+      description: |
+        `tenant.cash.import`. Appends one line to an open statement
+        (`409 closed` otherwise) and matches it with the book on the spot:
+        when exactly one unmatched movement of the account has the same
+        direction and amount within ±3 days, the line is `matched` (`auto`);
+        otherwise it stays `pending`. A repeated `reference` of the same
+        direction on the account is refused (`409 taken`), so a file
+        imported twice adds nothing. The fee of a provider line is posted as
+        an `expense` when the line is matched or posted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashStatementLineCreateRequest"
+      responses:
+        "201":
+          description: Line
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statements/{uuid}/lines/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLineFacets
+      summary: Line status counts of a statement
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLineFacets"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/cash/statements/{uuid}/auto-match:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementAutoMatch
+      summary: Re-run the automatic matching
+      description: |
+        `tenant.cash.write`. Tries the pending lines of an open statement
+        against the book again (after movements were posted). Returns how
+        many lines were checked, matched and left pending.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementUUID"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashAutoMatchResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statement-lines/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLinesMeta
+      summary: Statement line list metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/statement-lines:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLinesAll
+      summary: Statement lines across statements
+      description: |
+        Lines of the statements in the caller's scope (`tenant.cash.read`).
+        `q` searches the description and reference.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `line_no`, `line_date`, `amount`, `status`; prefix `-` for descending."
+          schema: { type: string }
+        - name: statement
+          in: query
+          description: "Statement uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "Line statuses; comma-separate or repeat"
+          schema: { type: string }
+        - name: line_type
+          in: query
+          description: "Line types; comma-separate or repeat"
+          schema: { type: string }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [in, out] }
+      responses:
+        "200":
+          description: Line page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLinePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/cash/statement-lines/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLinesExport
+      summary: Export statement lines
+      description: |
+        Queues an export of statement lines (`tenant.cash.export`). `query`
+        honours `q`, `statement`, `status`, `line_type` and `direction`.
+        Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/statement-lines/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLinesImport
+      summary: Upload a bank statement or settlement report
+      description: |
+        Creates an import job (`tenant.cash.import`) that adds every row of
+        the file to one statement: `statement_uuid` comes from the import
+        defaults (the wizard is opened from the statement). A row has a
+        `line_date` (bank layouts such as `15.03.2026`, ISO dates and Excel
+        serials are read), a `description`, and either a signed `amount`
+        (negative = money out, or a `direction` column: `giriş / çıkış`,
+        `alacak / borç`, `credit / debit` …) or separate `credit` / `debit`
+        columns; optional `fee` (provider commission), `line_type`
+        (`payment`, `refund`, `fee`, `payout`, `other`, Turkish aliases
+        accepted), `reference` and `balance_after`. Amounts are read in
+        Turkish or English format (`1.250,50`, `1,250.50`, `-250,00 TL`).
+        Each row becomes a line and is matched with the book on the spot
+        (see `POST /v1/tenant/cash/statements/{uuid}/lines`); the dry run
+        shows whether it would match. A rollback removes lines that wrote
+        nothing into the book. Continue with
+        `/v1/tenant/imports/{uuid}/mapping`, `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/statement-lines/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLinesImportSample
+      summary: Download a statement import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLine
+      summary: Get a statement line
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+      responses:
+        "200":
+          description: Line
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}/candidates:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCashStatementLineCandidates
+      summary: Book movements a line may be matched with
+      description: |
+        Unmatched movements of the line's account with the same direction,
+        dated within ±15 days, closest amount then closest date first (at
+        most 20). `q` searches the movement description.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+        - $ref: "#/components/parameters/Q"
+      responses:
+        "200":
+          description: Candidates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashMatchCandidateList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}/match:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLineMatch
+      summary: Match a line with a movement
+      description: |
+        `tenant.cash.write`. Links a pending (or re-links a matched /
+        difference) line to a movement of the same account and direction
+        that is not reversed and not matched by another line
+        (`409 matched`). A movement of the same amount makes the line
+        `matched`; another amount makes it `difference` with
+        `difference_amount` = line amount - movement amount (gross vs net).
+        The fee of the line, if any, is posted as an `expense` dated on the
+        line.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashStatementLineMatchRequest"
+      responses:
+        "200":
+          description: The line after the decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}/reset:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLineReset
+      summary: Take a line back to pending
+      description: |
+        `tenant.cash.write`. A matched, difference or ignored line goes back
+        to `pending`; a fee posted with the match is reversed today. A posted
+        line is undone with `/reverse` instead (`409 state`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashNoteRequest"
+      responses:
+        "200":
+          description: The line after the decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}/post:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLinePost
+      summary: Post a line into the book
+      description: |
+        `tenant.cash.write`. Writes a pending line as a movement of its
+        account dated on the line through the module posting path, with the
+        idempotency key `cash_statement_line:{uuid}:{attempt}` so a retried
+        request never doubles it. `kind` is a module kind matching the
+        direction (`in`: `income` / `collection`; `out`: `expense` /
+        `refund` / `staff_payment`; default `income` / `expense`, `refund`
+        for a refund line). A `payout` line, or a `counter_account_uuid`,
+        posts a transfer between the statement account and the counter
+        account instead (provider → bank). The fee is posted as an
+        `expense`. Closed days and archived accounts refuse (`409`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashStatementLinePostRequest"
+      responses:
+        "200":
+          description: The line after the decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}/ignore:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLineIgnore
+      summary: Ignore a line
+      description: |
+        `tenant.cash.write` and a reason. Leaves a pending, matched or
+        difference line out of the reconciliation (a duplicate, a provider's
+        own bookkeeping row); a fee posted with a match is reversed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashReasonRequest"
+      responses:
+        "200":
+          description: The line after the decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/cash/statement-lines/{lineUuid}/reverse:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCashStatementLineReverse
+      summary: Undo a posted line
+      description: |
+        `tenant.cash.write` and a reason. Reverses every movement the
+        line wrote (both legs of a payout transfer, the fee) and takes the
+        line back to `pending`; the next posting uses a new idempotency key.
+        Movements stay append-only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CashStatementLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashReasonRequest"
+      responses:
+        "200":
+          description: The line after the decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCashStatementLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
   /v1/tenant/cash/daily-summary:
@@ -16330,6 +17057,18 @@ components:
       schema:
         type: string
         format: uuid
+    CashStatementUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Statement uuid
+      schema: { type: string, format: uuid }
+    CashStatementLineUUID:
+      name: lineUuid
+      in: path
+      required: true
+      description: Statement line uuid
+      schema: { type: string, format: uuid }
     SaleLineUUID:
       name: uuid
       in: path
@@ -19047,9 +19786,243 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CashFacet" }
 
+    CashStatement:
+      type: object
+      description: One imported bank statement or provider settlement report of a bank / online account.
+      required: [uuid, account, branch, source, name, currency, period_from, period_to, closing_balance, note, status, closing_uuid, line_count, open_count, created_by, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        account: { $ref: "#/components/schemas/CashAccountRef" }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/CashBranchRef"
+            - type: "null"
+        source: { type: string, enum: [bank, provider] }
+        name: { type: string }
+        currency: { type: string }
+        period_from: { type: [string, "null"], format: date }
+        period_to: { type: [string, "null"], format: date }
+        closing_balance: { type: [string, "null"], description: "Balance the document states at the period end" }
+        note: { type: string }
+        status: { type: string, enum: [open, closed], description: "closed = the period closing of the account covers it" }
+        closing_uuid: { type: [string, "null"], format: uuid }
+        line_count: { type: integer, format: int64 }
+        open_count: { type: integer, format: int64, description: "Lines pending or in difference" }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CashStatementCreateRequest:
+      type: object
+      required: [account_uuid, name]
+      properties:
+        account_uuid: { type: string, format: uuid, description: "A bank or online account" }
+        source: { type: string, enum: [bank, provider], description: "Default by account kind" }
+        name: { type: string, maxLength: 160 }
+        period_from: { type: string, format: date }
+        period_to: { type: string, format: date }
+        closing_balance: { type: string, example: "12450.00" }
+        note: { type: string, maxLength: 2000 }
+
+    CashStatementUpdateRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 160 }
+        period_from: { type: string, format: date }
+        period_to: { type: string, format: date }
+        closing_balance: { type: string }
+        note: { type: string, maxLength: 2000 }
+
+    CashStatementPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashStatement" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CashStatementSummary:
+      type: object
+      required: [pending_count, matched_count, difference_count, posted_count, ignored_count, total_in, total_out, total_fee, pending_net, difference_total, first_date, last_date, balance_date, book_balance, closing_balance, balance_difference, reconciled]
+      properties:
+        pending_count: { type: integer, format: int64 }
+        matched_count: { type: integer, format: int64 }
+        difference_count: { type: integer, format: int64 }
+        posted_count: { type: integer, format: int64 }
+        ignored_count: { type: integer, format: int64 }
+        total_in: { type: string }
+        total_out: { type: string }
+        total_fee: { type: string }
+        pending_net: { type: string, description: "Signed sum of the pending lines (in - out)" }
+        difference_total: { type: string, description: "Sum of difference_amount over difference lines" }
+        first_date: { type: [string, "null"], format: date }
+        last_date: { type: [string, "null"], format: date }
+        balance_date: { type: string, format: date, description: "Day the book balance is read on (period end, else last line)" }
+        book_balance: { type: string }
+        closing_balance: { type: [string, "null"] }
+        balance_difference: { type: [string, "null"], description: "closing_balance - book_balance" }
+        reconciled: { type: boolean }
+
+    CashStatementRef:
+      type: object
+      required: [uuid, status]
+      properties:
+        uuid: { type: string, format: uuid }
+        status: { type: string, enum: [open, closed] }
+
+    CashMovementRef:
+      type: object
+      required: [uuid, kind]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/CashMovementKind" }
+        movement_date: { type: string, format: date }
+        amount: { type: string }
+        description: { type: string }
+        transfer_group: { type: string, format: uuid }
+
+    CashStatementLineStatus:
+      type: string
+      enum: [pending, matched, difference, posted, ignored]
+
+    CashStatementLineType:
+      type: string
+      enum: [payment, refund, fee, payout, other]
+
+    CashStatementLine:
+      type: object
+      description: One row of a statement with its reconciliation state.
+      required: [uuid, statement, account, line_no, line_date, direction, amount, fee, line_type, description, reference, balance_after, currency, status, match_method, matched_movement, difference_amount, posted_movement, fee_movement_uuid, post_count, note, resolved_by, resolved_at, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        statement: { $ref: "#/components/schemas/CashStatementRef" }
+        account: { $ref: "#/components/schemas/CashAccountRef" }
+        line_no: { type: integer }
+        line_date: { type: string, format: date }
+        direction: { type: string, enum: [in, out] }
+        amount: { type: string }
+        fee: { type: string, description: "Provider commission on the line" }
+        line_type: { $ref: "#/components/schemas/CashStatementLineType" }
+        description: { type: string }
+        reference: { type: string }
+        balance_after: { type: [string, "null"] }
+        currency: { type: string }
+        status: { $ref: "#/components/schemas/CashStatementLineStatus" }
+        match_method: { type: string, enum: ["", auto, manual] }
+        matched_movement:
+          oneOf:
+            - $ref: "#/components/schemas/CashMovementRef"
+            - type: "null"
+        difference_amount: { type: string, description: "line amount - movement amount while status = difference" }
+        posted_movement:
+          oneOf:
+            - $ref: "#/components/schemas/CashMovementRef"
+            - type: "null"
+        fee_movement_uuid: { type: [string, "null"], format: uuid }
+        post_count: { type: integer, description: "Posting attempts; the idempotency key of each is cash_statement_line:{uuid}:{attempt}" }
+        note: { type: string }
+        resolved_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        resolved_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CashStatementLineCreateRequest:
+      type: object
+      required: [line_date, direction, amount]
+      properties:
+        line_date: { type: string, format: date }
+        direction: { type: string, enum: [in, out] }
+        amount: { type: string, example: "1250.00" }
+        fee: { type: string, example: "25.00" }
+        line_type: { $ref: "#/components/schemas/CashStatementLineType" }
+        description: { type: string, maxLength: 500 }
+        reference: { type: string, maxLength: 120 }
+        balance_after: { type: string }
+
+    CashStatementLinePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashStatementLine" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CashStatementLineFacets:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: array
+          items: { $ref: "#/components/schemas/CashFacet" }
+
+    CashStatementLineMatchRequest:
+      type: object
+      required: [movement_uuid]
+      properties:
+        movement_uuid: { type: string, format: uuid }
+        note: { type: string, maxLength: 500 }
+
+    CashStatementLinePostRequest:
+      type: object
+      properties:
+        kind: { type: string, enum: [income, collection, expense, refund, staff_payment], description: "Default by direction; not with a transfer" }
+        counter_account_uuid: { type: string, format: uuid, description: "Posts a transfer with this account (required for a payout line)" }
+        description: { type: string, maxLength: 500, description: "Default: the line description or reference" }
+        note: { type: string, maxLength: 500 }
+
+    CashNoteRequest:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 500 }
+
+    CashMatchCandidate:
+      type: object
+      required: [uuid, kind, direction, amount, currency, movement_date, description, source_type, counter_account, amount_delta, day_delta, exact]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/CashMovementKind" }
+        direction: { type: string, enum: [in, out] }
+        amount: { type: string }
+        currency: { type: string }
+        movement_date: { type: string, format: date }
+        description: { type: string }
+        source_type: { type: string }
+        counter_account: { type: string }
+        amount_delta: { type: string, description: "|movement amount - line amount|" }
+        day_delta: { type: integer, description: "Days between the movement and the line" }
+        exact: { type: boolean, description: "Same amount" }
+
+    CashMatchCandidateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CashMatchCandidate" }
+
+    CashAutoMatchResult:
+      type: object
+      required: [checked, matched, pending]
+      properties:
+        checked: { type: integer }
+        matched: { type: integer }
+        pending: { type: integer }
+
     CashClosing:
       type: object
-      description: The daily closing of a till.
+      description: The daily closing of a till or the period closing of a bank / online account.
       required: [uuid, business_date, currency, opening_amount, total_in, total_out, expected_amount, counted_amount, difference, note, status, closed_by, closed_at, reopened_by, reopened_at, reopen_reason]
       properties:
         uuid: { type: string, format: uuid }
@@ -19085,7 +20058,7 @@ components:
 
     CashClosingPreview:
       type: object
-      required: [business_date, currency, opening_amount, total_in, total_out, expected_amount, movement_count, closed, last_closed_date]
+      required: [business_date, currency, opening_amount, total_in, total_out, expected_amount, movement_count, closed, last_closed_date, unreconciled_lines]
       properties:
         business_date: { type: string, format: date }
         currency: { type: string }
@@ -19096,6 +20069,7 @@ components:
         movement_count: { type: integer, format: int64 }
         closed: { type: boolean, description: "The day is on or before the latest closed day" }
         last_closed_date: { type: [string, "null"], format: date }
+        unreconciled_lines: { type: integer, format: int64, description: "Bank / online accounts: statement lines dated on or before the day still pending or in difference" }
 
     CashClosingPage:
       type: object
@@ -20713,6 +21687,70 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/CashTransfer" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashStatement:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashStatement" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashStatementPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashStatementPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashStatementSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashStatementSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashStatementLine:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashStatementLine" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashStatementLinePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashStatementLinePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashStatementLineFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashStatementLineFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashMatchCandidateList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashMatchCandidateList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCashAutoMatchResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CashAutoMatchResult" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeCashClosing:

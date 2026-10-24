@@ -113,5 +113,6 @@
   "resources.tenant.service_bundles": "Bundles",
   "resources.tenant.products": "Products",
   "resources.tenant.stock_movements": "Stock movements",
-  "resources.tenant.customers": "Customers"
+  "resources.tenant.customers": "Customers",
+  "resources.tenant.cash_statement_lines": "Statement lines"
 }

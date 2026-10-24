@@ -4,6 +4,11 @@
 // between accounts, reversals, the daily closing of a till and the daily
 // summary. Later modules (payments, sales, income / expense, staff
 // payouts) post into the same book through usecase.Service.PostTx.
+//
+// Bank statements and provider settlement reports (TEC-965) are imported
+// as statements of a bank / online account, their lines reconciled with
+// the book (matched, posted through PostTx, or ignored) and the period of
+// the account closed against the stated balance.
 package cash
 
 import (
@@ -25,6 +30,9 @@ type EngineHandlers struct {
 	ExportAccounts  http.HandlerFunc
 	ExportMovements http.HandlerFunc
 	BulkAccounts    http.HandlerFunc
+	ExportLines     http.HandlerFunc
+	ImportLines     http.HandlerFunc
+	SampleLines     http.HandlerFunc
 }
 
 // RegisterRoutes mounts /v1/tenant/cash. A nil resolver (tenancy off)
@@ -86,6 +94,39 @@ func RegisterRoutes(
 
 	route("POST /v1/tenant/cash/transfers", h.Transfer, read, write)
 	route("GET /v1/tenant/cash/daily-summary", h.DailySummary, read)
+
+	// Statements (bank statement / provider settlement reconciliation).
+	// Static segments and the lines sub-tree come before /{uuid}.
+	imp := perm(rbac.PermTenantCashImport)
+	route("GET /v1/tenant/cash/statements/meta", h.StatementsMeta, read)
+	route("GET /v1/tenant/cash/statement-lines/meta", h.StatementLinesMeta, read)
+	route("GET /v1/tenant/cash/statement-lines", h.ListLines, read)
+	if engines.ExportLines != nil {
+		route("POST /v1/tenant/cash/statement-lines/export", engines.ExportLines, read, perm(rbac.PermTenantCashExport))
+	}
+	if engines.ImportLines != nil {
+		route("POST /v1/tenant/cash/statement-lines/import", engines.ImportLines, read, imp)
+	}
+	if engines.SampleLines != nil {
+		route("GET /v1/tenant/cash/statement-lines/import/sample", engines.SampleLines, read, imp)
+	}
+	route("GET /v1/tenant/cash/statement-lines/{lineUuid}", h.GetLine, read)
+	route("GET /v1/tenant/cash/statement-lines/{lineUuid}/candidates", h.LineCandidates, read)
+	route("POST /v1/tenant/cash/statement-lines/{lineUuid}/match", h.MatchLine, read, write)
+	route("POST /v1/tenant/cash/statement-lines/{lineUuid}/reset", h.ResetLine, read, write)
+	route("POST /v1/tenant/cash/statement-lines/{lineUuid}/post", h.PostLine, read, write)
+	route("POST /v1/tenant/cash/statement-lines/{lineUuid}/ignore", h.IgnoreLine, read, write)
+	route("POST /v1/tenant/cash/statement-lines/{lineUuid}/reverse", h.ReverseLine, read, write)
+	route("GET /v1/tenant/cash/statements", h.ListStatements, read)
+	route("POST /v1/tenant/cash/statements", h.CreateStatement, read, imp)
+	route("GET /v1/tenant/cash/statements/{uuid}", h.GetStatement, read)
+	route("PATCH /v1/tenant/cash/statements/{uuid}", h.PatchStatement, read, imp)
+	route("DELETE /v1/tenant/cash/statements/{uuid}", h.DeleteStatement, read, imp)
+	route("GET /v1/tenant/cash/statements/{uuid}/summary", h.StatementSummary, read)
+	route("GET /v1/tenant/cash/statements/{uuid}/lines", h.StatementLines, read)
+	route("POST /v1/tenant/cash/statements/{uuid}/lines", h.AddLine, read, imp)
+	route("GET /v1/tenant/cash/statements/{uuid}/lines/facets", h.StatementLineFacets, read)
+	route("POST /v1/tenant/cash/statements/{uuid}/auto-match", h.AutoMatch, read, write)
 }
 
 // ExportAccountQueryKeys / ExportMovementQueryKeys are the list filters an
@@ -93,17 +134,22 @@ func RegisterRoutes(
 var (
 	ExportAccountQueryKeys  = []string{"branch", "kind", "status"}
 	ExportMovementQueryKeys = []string{"account", "kind", "direction", "date_from", "date_to"}
+	ExportLineQueryKeys     = []string{"statement", "status", "line_type", "direction"}
 )
 
 // Engine slugs.
 const (
-	AccountsResource  = adapters.AccountsResource
-	MovementsResource = adapters.MovementsResource
+	AccountsResource       = adapters.AccountsResource
+	MovementsResource      = adapters.MovementsResource
+	StatementsResource     = adapters.StatementsResource
+	StatementLinesResource = adapters.StatementLinesResource
 )
 
-// RegisterLiveResources declares the account and movement list channels
-// (org:{org_uuid}:resource:tenant.cash_accounts / tenant.cash_movements).
+// RegisterLiveResources declares the account, movement, statement and
+// statement line list channels (org:{org_uuid}:resource:tenant.cash_*).
 func RegisterLiveResources(reg *resourceevents.Registry) {
 	reg.Register(AccountsResource, rbac.PermTenantCashRead)
 	reg.Register(MovementsResource, rbac.PermTenantCashRead)
+	reg.Register(StatementsResource, rbac.PermTenantCashRead)
+	reg.Register(StatementLinesResource, rbac.PermTenantCashRead)
 }

@@ -50,6 +50,8 @@ type ImportWizardProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onComplete?: () => void;
+  /** Defaults the page fixes (always sent, never shown in the defaults step). */
+  presetDefaults?: Record<string, string>;
 };
 
 type Step = "upload" | "mapping" | "defaults" | "preview" | "done";
@@ -117,11 +119,22 @@ export function ImportWizard({
   open,
   onOpenChange,
   onComplete,
+  presetDefaults,
 }: ImportWizardProps) {
   const { t, locale } = useLocale();
   const scope = useApiScope();
   const paths = IMPORT_PATHS[resource];
-  const schema = useMemo(() => IMPORT_SCHEMA[resource] ?? [], [resource]);
+  const schema = useMemo(
+    () =>
+      (IMPORT_SCHEMA[resource] ?? []).filter(
+        (field) => !presetDefaults || !(field.key in presetDefaults),
+      ),
+    [presetDefaults, resource],
+  );
+  const withPreset = useCallback(
+    (values: Record<string, string>) => ({ ...values, ...presetDefaults }),
+    [presetDefaults],
+  );
 
   const [step, setStep] = useState<Step>("upload");
   const [format, setFormat] = useState<ImportFormat>("xlsx");
@@ -158,13 +171,15 @@ export function ImportWizard({
       const merged = { ...baseMapping, ...suggested };
       const count = countMappedFields(merged);
       setMapping(merged);
-      setDefaults((prev) => applyAutoDefaults(resource, merged, prev));
+      setDefaults((prev) =>
+        withPreset(applyAutoDefaults(resource, merged, prev)),
+      );
       if (count > 0) {
         appToast.success(t("imports.toast.auto_mapped", { count }));
       }
       return count;
     },
-    [resource, schema, t],
+    [resource, schema, t, withPreset],
   );
 
   const downloadSample = async (sampleFormat: ImportFormat) => {
@@ -210,7 +225,7 @@ export function ImportWizard({
       }
       const matched = countMappedFields(uiMapping);
       setMapping(uiMapping);
-      setDefaults(applyAutoDefaults(resource, uiMapping, {}));
+      setDefaults(withPreset(applyAutoDefaults(resource, uiMapping, {})));
       setJob(created);
 
       if (matched > 0) {

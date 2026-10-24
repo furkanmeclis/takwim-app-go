@@ -53,15 +53,14 @@ func (s *Service) closingDate(ctx context.Context, raw *string, opening time.Tim
 	return d, nil
 }
 
-// PreviewClosing returns the expected state of a day of a till.
+// PreviewClosing returns the expected state of a day of an account: the
+// till before its count, a bank or online account before its period
+// closing (with the statement lines still waiting for reconciliation).
 func (s *Service) PreviewClosing(ctx context.Context, orgID int64, accountID uuid.UUID, rawDate *string) (model.ClosingPreview, error) {
 	q := s.repo.Q()
 	acc, err := s.loadAccount(ctx, q, orgID, accountID)
 	if err != nil {
 		return model.ClosingPreview{}, err
-	}
-	if acc.Kind != model.KindCash {
-		return model.ClosingPreview{}, ErrNotClosable
 	}
 	day, err := s.closingDate(ctx, rawDate, acc.OpeningDate.Time)
 	if err != nil {
@@ -75,6 +74,15 @@ func (s *Service) PreviewClosing(ctx context.Context, orgID int64, accountID uui
 		BusinessDate: formatDate(day), Currency: acc.Currency, Opening: t.opening, TotalIn: t.in, TotalOut: t.out,
 		Expected: t.expected, MovementCount: t.count,
 	}
+	if acc.Kind != model.KindCash {
+		n, err := q.CountUnreconciledCashStatementLines(ctx, db.CountUnreconciledCashStatementLinesParams{
+			OrganizationID: orgID, CashAccountID: acc.ID, Day: dateArg(day),
+		})
+		if err != nil {
+			return model.ClosingPreview{}, err
+		}
+		out.UnreconciledLines = n
+	}
 	if acc.LastClosedDate.Valid {
 		d := formatDate(acc.LastClosedDate.Time)
 		out.LastClosedDate = &d
@@ -83,18 +91,18 @@ func (s *Service) PreviewClosing(ctx context.Context, orgID int64, accountID uui
 	return out, nil
 }
 
-// Close closes a day of a till with the counted amount. The difference to
-// the expected balance is posted as a closing_difference movement so the
-// book follows the count; the day (and every earlier day) is locked for
-// movements afterwards.
+// Close closes a day of an account. A till is closed with the counted cash;
+// a bank or online account closes a period against the balance its
+// statement states (which may be negative), once every statement line dated
+// in the period is reconciled. The difference to the expected balance is
+// posted as a closing_difference movement so the book follows the count;
+// the day (and every earlier day) is locked for movements afterwards, and
+// the fully reconciled statements of the account are closed with it.
 func (s *Service) Close(ctx context.Context, orgID int64, accountID uuid.UUID, userID *int64, in model.ClosingInput) (model.Closing, error) {
 	q := s.repo.Q()
 	acc, err := s.loadAccount(ctx, q, orgID, accountID)
 	if err != nil {
 		return model.Closing{}, err
-	}
-	if acc.Kind != model.KindCash {
-		return model.Closing{}, ErrNotClosable
 	}
 	day, err := s.closingDate(ctx, in.BusinessDate, acc.OpeningDate.Time)
 	if err != nil {
@@ -103,7 +111,7 @@ func (s *Service) Close(ctx context.Context, orgID int64, accountID uuid.UUID, u
 	ve := &ValidationError{}
 	if in.Counted == nil {
 		ve.add("counted_amount", "required", "counted_amount is required")
-	} else if in.Counted.IsNegative() {
+	} else if in.Counted.IsNegative() && acc.Kind == model.KindCash {
 		ve.add("counted_amount", "negative", "counted_amount cannot be negative")
 	}
 	note := strings.TrimSpace(in.Note)
@@ -131,6 +139,17 @@ func (s *Service) Close(ctx context.Context, orgID int64, accountID uuid.UUID, u
 		if last.Valid && !day.After(last.Time) {
 			return ErrDayAlreadyClosed
 		}
+		if acc.Kind != model.KindCash {
+			n, err := q.CountUnreconciledCashStatementLines(ctx, db.CountUnreconciledCashStatementLinesParams{
+				OrganizationID: orgID, CashAccountID: acc.ID, Day: dateArg(day),
+			})
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return ErrUnreconciledLines
+			}
+		}
 		t, err := s.dayTotals(ctx, q, orgID, acc.ID, money.FromNumericOrZero(la.OpeningBalance), day)
 		if err != nil {
 			return err
@@ -146,6 +165,11 @@ func (s *Service) Close(ctx context.Context, orgID int64, accountID uuid.UUID, u
 			return mapRepoErr(err)
 		}
 		closingID = row.Uuid
+		if err := q.SetCashStatementClosing(ctx, db.SetCashStatementClosingParams{
+			ClosingID: pgtype.Int8{Int64: row.ID, Valid: true}, OrganizationID: orgID, CashAccountID: acc.ID, Day: dateArg(day),
+		}); err != nil {
+			return err
+		}
 		if diff.IsZero() {
 			return nil
 		}
@@ -166,8 +190,9 @@ func (s *Service) Close(ctx context.Context, orgID int64, accountID uuid.UUID, u
 	return s.GetClosing(ctx, orgID, accountID, closingID)
 }
 
-// Reopen reopens the latest closed day of a till. Its difference movement
-// is reversed on the same day, so the day reads as before the closing.
+// Reopen reopens the latest closed day of an account. Its difference
+// movement is reversed on the same day, so the day reads as before the
+// closing, and the statements it closed open again.
 func (s *Service) Reopen(ctx context.Context, orgID int64, accountID, closingID uuid.UUID, userID *int64, in model.ReopenInput) (model.Closing, error) {
 	q := s.repo.Q()
 	acc, err := s.loadAccount(ctx, q, orgID, accountID)
@@ -211,6 +236,11 @@ func (s *Service) Reopen(ctx context.Context, orgID int64, accountID, closingID 
 		}
 		if n == 0 {
 			return ErrClosingReopened
+		}
+		if err := q.ReopenCashStatementsOfClosing(ctx, db.ReopenCashStatementsOfClosingParams{
+			OrganizationID: orgID, ClosingID: pgtype.Int8{Int64: c.ID, Valid: true},
+		}); err != nil {
+			return err
 		}
 		if !c.DifferenceMovementID.Valid {
 			return nil

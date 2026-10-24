@@ -22,6 +22,7 @@ import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { AccountClosingsCard } from "@/features/cash/components/account-closings-card";
 import { AccountMovementsCard } from "@/features/cash/components/account-movements-card";
+import { AccountStatementsCard } from "@/features/cash/components/account-statements-card";
 import { CashAccountActivityCard } from "@/features/cash/components/cash-account-activity-card";
 import { ClosingDialog } from "@/features/cash/components/closing-dialog";
 import { MovementDialog } from "@/features/cash/components/movement-dialog";
@@ -180,7 +181,7 @@ export function CashAccountDetailPage({ uuid }: { uuid: string }) {
               hint={
                 account.kind === "cash"
                   ? t("cash.detail.closing_hint")
-                  : t("cash.detail.no_closing_hint")
+                  : t("cash.detail.period_closing_hint")
               }
             />
           </div>
@@ -248,12 +249,13 @@ export function CashAccountDetailPage({ uuid }: { uuid: string }) {
           </EntitySectionCard>
 
           <AccountMovementsCard account={account} onPost={setMovement} />
-          {account.kind === "cash" ? (
-            <AccountClosingsCard
-              account={account}
-              onCloseDay={() => setClosingOpen(true)}
-            />
+          {account.kind !== "cash" ? (
+            <AccountStatementsCard account={account} />
           ) : null}
+          <AccountClosingsCard
+            account={account}
+            onCloseDay={() => setClosingOpen(true)}
+          />
           <CashAccountActivityCard accountUuid={uuid} />
 
           <MovementDialog

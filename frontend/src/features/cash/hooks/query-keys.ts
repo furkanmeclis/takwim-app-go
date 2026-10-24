@@ -31,4 +31,24 @@ export const cashKeys = {
     [...cashKeys.movements(slug), "facets"] as const,
   daily: (slug: string, params: Record<string, unknown>) =>
     [...cashKeys.all(slug), "daily", params] as const,
+  statements: (slug: string) => [...cashKeys.all(slug), "statements"] as const,
+  statementList: (slug: string, params: Record<string, unknown>) =>
+    [...cashKeys.statements(slug), "list", params] as const,
+  statementsMeta: (slug: string) =>
+    [...cashKeys.statements(slug), "meta"] as const,
+  statement: (slug: string, uuid: string) =>
+    [...cashKeys.statements(slug), "detail", uuid] as const,
+  statementSummary: (slug: string, uuid: string) =>
+    [...cashKeys.statement(slug, uuid), "summary"] as const,
+  statementLines: (
+    slug: string,
+    uuid: string,
+    params: Record<string, unknown>,
+  ) => [...cashKeys.statement(slug, uuid), "lines", params] as const,
+  statementLineFacets: (slug: string, uuid: string) =>
+    [...cashKeys.statement(slug, uuid), "line-facets"] as const,
+  lines: (slug: string) => [...cashKeys.all(slug), "statement-lines"] as const,
+  linesMeta: (slug: string) => [...cashKeys.lines(slug), "meta"] as const,
+  lineCandidates: (slug: string, lineUuid: string, q: string) =>
+    [...cashKeys.lines(slug), "candidates", lineUuid, q] as const,
 };

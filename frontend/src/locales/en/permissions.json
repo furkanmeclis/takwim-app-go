@@ -183,5 +183,6 @@
   "groups.tenant_classes": "Group classes",
   "labels.tenant.session_packages.export": "Export sold packages",
   "labels.tenant.session_packages.bulk.activate": "Bulk activate package definitions",
-  "labels.tenant.session_packages.bulk.deactivate": "Bulk deactivate package definitions"
+  "labels.tenant.session_packages.bulk.deactivate": "Bulk deactivate package definitions",
+  "labels.tenant.cash.import": "Import bank statements / settlements"
 }
