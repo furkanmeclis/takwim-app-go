@@ -63,7 +63,13 @@ func (s *Service) RecordReservationTx(ctx context.Context, q *db.Queries, orgID,
 		} else if !isNotFound(err) {
 			return err
 		}
+		// A session of a package (TEC-920) is revenue at the session's
+		// value; postSaleEntry posts no debit for it (the package was
+		// charged when it was sold).
 		price := amountOf(l.UnitPrice)
+		if l.PackageAmount.Valid {
+			price = amountOf(l.PackageAmount)
+		}
 		idx := pgtype.Int4{Int32: l.LineIndex, Valid: true}
 		row, err := q.InsertSaleLine(ctx, db.InsertSaleLineParams{
 			OrganizationID: orgID, BranchID: r.BranchID, CustomerID: int8Of(r.CustomerID), Kind: model.LineSale,
@@ -171,7 +177,8 @@ func (s *Service) RecordProductSaleTx(ctx context.Context, q *db.Queries, orgID 
 }
 
 // postSaleEntry posts the ledger debit of a sale line (nothing for a line
-// of zero) and runs the line hook.
+// of zero, or for a service served on a package session: the package
+// charged the customer when it was sold) and runs the line hook.
 func (s *Service) postSaleEntry(ctx context.Context, q *db.Queries, orgID, lineID int64) error {
 	if err := s.afterLine(ctx, q, orgID, lineID); err != nil {
 		return err
@@ -183,6 +190,17 @@ func (s *Service) postSaleEntry(ctx context.Context, q *db.Queries, orgID, lineI
 	net := amountOf(line.NetAmount)
 	if !net.IsPositive() {
 		return nil
+	}
+	if line.SourceType == model.SourceReservation && line.ReservationID.Valid && line.LineIndex.Valid {
+		covered, err := q.IsPackageSessionLine(ctx, db.IsPackageSessionLineParams{
+			OrganizationID: orgID, ReservationID: line.ReservationID.Int64, LineIndex: line.LineIndex.Int32,
+		})
+		if err != nil {
+			return err
+		}
+		if covered {
+			return nil
+		}
 	}
 	_, err = q.InsertLedgerEntry(ctx, db.InsertLedgerEntryParams{
 		OrganizationID: orgID, BranchID: line.BranchID, CustomerID: line.CustomerID, ReservationID: line.ReservationID,

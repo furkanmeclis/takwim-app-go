@@ -400,6 +400,21 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		}), http.StatusCreated, "finance entry"), "uuid")
 		must(upload(o, http.MethodPut, "/v1/tenant/finance/entries/"+ids["financeEntry"]+"/document", "file", "fis.png", png, nil),
 			http.StatusOK, "finance document")
+		// Session packages (TEC-920): a definition, a package sold to the
+		// customer (paid into the bank account: the till's day is closed)
+		// and one of its sessions held by the reservation.
+		ids["sessionPackage"] = str(must(call(o, http.MethodPost, "/v1/tenant/session-packages", map[string]any{
+			"name": m + " Paket", "service_uuid": ids["service"], "total_sessions": 5, "price": "2500.00",
+			"branch_uuids": []string{ids["branch"]},
+		}), http.StatusCreated, "create session package"), "uuid")
+		ids["customerPackage"] = str(must(call(o, http.MethodPost, "/v1/tenant/customer-packages", map[string]any{
+			"package_uuid": ids["sessionPackage"], "customer_uuid": ids["customer"], "branch_uuid": ids["branch"],
+			"method": "transfer", "cash_account_uuid": ids["bankAccount"], "note": m, "idempotency_key": "iso-pkg-" + m,
+		}), http.StatusCreated, "sell session package"), "uuid")
+		applied := must(call(o, http.MethodPost, "/v1/tenant/reservations/"+ids["reservation"]+"/package-sessions", map[string]any{
+			"customer_package_uuid": ids["customerPackage"], "line_index": 0,
+		}), http.StatusOK, "apply package session")
+		ids["packageSession"] = applied.data.(map[string]any)["package_sessions"].([]any)[0].(map[string]any)["uuid"].(string)
 		// The stock sale above is a product sale line with its ledger debit.
 		saleLines := must(call(o, http.MethodGet, "/v1/tenant/sales/lines", nil), http.StatusOK, "sale lines")
 		ids["saleLine"] = saleLines.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
@@ -637,6 +652,12 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/finance/entries": {"?branch=" + orgB.ids["branch"], "?category=" + orgB.ids["financeCategory"],
 			"?staff=" + orgB.ids["shareStaff"], "?account=" + orgB.ids["bankAccount"], "?q=" + orgB.marker},
 		"GET /v1/tenant/finance/summary": {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/session-packages": {"?service=" + orgB.ids["service"], "?branch=" + orgB.ids["branch"],
+			"?q=" + orgB.marker},
+		"GET /v1/tenant/customer-packages": {"?customer=" + orgB.ids["customer"], "?package=" + orgB.ids["sessionPackage"],
+			"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker, "?q=" + orgB.ids["customerPhone"][3:]},
+		"GET /v1/tenant/customer-packages/facets":  {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/customer-packages/summary": {"?branch=" + orgB.ids["branch"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -699,6 +720,21 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/cash/accounts/bulk", map[string]any{"action": "archive", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["cashAccount"]}}}, nil},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgA.ids["cashAccount"], "to_account_uuid": orgB.ids["cashAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgB.ids["cashAccount"], "to_account_uuid": orgA.ids["cashAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/session-packages", map[string]any{"name": "X1", "service_uuid": orgB.ids["service"], "total_sessions": 5,
+			"price": "1", "branch_uuids": []string{orgA.ids["branch"]}}, reject},
+		{"POST /v1/tenant/session-packages", map[string]any{"name": "X2", "service_uuid": orgA.ids["service"], "total_sessions": 5,
+			"price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
+		{"POST /v1/tenant/customer-packages", map[string]any{"package_uuid": orgB.ids["sessionPackage"], "customer_uuid": orgA.ids["customer"],
+			"branch_uuid": orgA.ids["branch"], "method": "transfer", "cash_account_uuid": orgA.ids["bankAccount"], "idempotency_key": "iso-x1"}, reject},
+		{"POST /v1/tenant/customer-packages", map[string]any{"package_uuid": orgA.ids["sessionPackage"], "customer_uuid": orgB.ids["customer"],
+			"branch_uuid": orgA.ids["branch"], "method": "transfer", "cash_account_uuid": orgA.ids["bankAccount"], "idempotency_key": "iso-x2"}, reject},
+		{"POST /v1/tenant/customer-packages", map[string]any{"package_uuid": orgA.ids["sessionPackage"], "customer_uuid": orgA.ids["customer"],
+			"branch_uuid": orgB.ids["branch"], "method": "transfer", "cash_account_uuid": orgA.ids["bankAccount"], "idempotency_key": "iso-x3"}, reject},
+		{"POST /v1/tenant/customer-packages", map[string]any{"package_uuid": orgA.ids["sessionPackage"], "customer_uuid": orgA.ids["customer"],
+			"branch_uuid": orgA.ids["branch"], "method": "transfer", "cash_account_uuid": orgB.ids["bankAccount"], "idempotency_key": "iso-x4"}, reject},
+		{"POST /v1/tenant/customer-packages", map[string]any{"package_uuid": orgA.ids["sessionPackage"], "customer_uuid": orgA.ids["customer"],
+			"branch_uuid": orgA.ids["branch"], "method": "transfer", "cash_account_uuid": orgA.ids["bankAccount"], "staff_uuid": orgB.ids["staff"],
+			"idempotency_key": "iso-x5"}, reject},
 		{"POST /v1/tenant/staff-shares/rules", map[string]any{"staff_uuid": orgB.ids["shareStaff"], "item_type": "product",
 			"basis": "percent", "rate": "10"}, reject},
 		{"POST /v1/tenant/staff-shares/rules", map[string]any{"staff_uuid": orgA.ids["shareStaff"], "item_type": "service",
@@ -784,6 +820,12 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1, "staff_uuid": orgB.ids["staff"]}, reject},
 		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
 			"lines": []map[string]any{{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}}, reject},
+		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/package-sessions", map[string]any{
+			"customer_package_uuid": orgB.ids["customerPackage"], "line_index": 0}, reject},
+		{"PATCH /v1/tenant/session-packages/" + orgA.ids["sessionPackage"], map[string]any{"name": "X", "service_uuid": orgB.ids["service"],
+			"total_sessions": 5, "price": "1", "branch_uuids": []string{orgA.ids["branch"]}}, reject},
+		{"PATCH /v1/tenant/session-packages/" + orgA.ids["sessionPackage"], map[string]any{"name": "X", "service_uuid": orgA.ids["service"],
+			"total_sessions": 5, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 	}
 	for _, c := range ownCases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -990,6 +1032,12 @@ func paramKey(prev, name string) string {
 		return "financeCategory"
 	case "entries/entryUuid":
 		return "financeEntry"
+	case "session-packages/uuid":
+		return "sessionPackage"
+	case "customer-packages/uuid":
+		return "customerPackage"
+	case "package-sessions/sessionUuid":
+		return "packageSession"
 	}
 	return ""
 }

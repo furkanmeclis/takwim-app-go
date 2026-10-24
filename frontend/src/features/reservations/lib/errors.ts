@@ -9,6 +9,10 @@ const DETAIL_KEYS: Record<string, string> = {
   invalid_transition: "reservations.errors.invalid_transition",
   insufficient_stock: "reservations.errors.insufficient_stock",
   online_pending: "reservations.errors.online_pending",
+  no_sessions_left: "reservations.errors.no_sessions_left",
+  service_mismatch: "reservations.errors.service_mismatch",
+  already_on_package: "reservations.errors.already_on_package",
+  branch_not_allowed: "reservations.errors.branch_not_allowed",
 };
 
 /**

@@ -135,6 +135,10 @@ import (
 	serviceshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/handler"
 	servicesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
 	servicesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/usecase"
+	sessionpackagesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages"
+	sessionpackageshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/handler"
+	sessionpackagesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/repository"
+	sessionpackagesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sessionpackages/usecase"
 	settingsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings"
 	settingshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings/handler"
 	settingsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/settings/usecase"
@@ -468,6 +472,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// share in the line's transaction.
 	staffSharesSvc := staffsharesusecase.New(staffsharesrepository.NewPostgres(deps.DB, deps.Queries), cashSvc)
 	salesSvc.SetLineHook(staffSharesSvc.RecordLineTx)
+	sessionPackagesSvc := sessionpackagesusecase.New(sessionpackagesrepository.NewPostgres(deps.DB, deps.Queries), salesSvc)
 	// A product taken back reverses its sale line (TEC-913).
 	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
 	// Income and expense records (TEC-915): each posts its cash movement;
@@ -528,6 +533,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	salesmodule.RegisterLiveResources(tenantLive)
 	staffsharesmodule.RegisterLiveResources(tenantLive)
 	financemodule.RegisterLiveResources(tenantLive)
+	sessionpackagesmodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
@@ -694,6 +700,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	financemodule.RegisterRoutes(mux, financeH, financemodule.EngineHandlers{
 		ExportEntries: exportH.TenantExport(financemodule.EntriesResource, financemodule.ExportQueryKeys...),
 	}, tokens, loader, tenantResolver)
+	sessionPackagesH := sessionpackageshandler.New(sessionPackagesSvc, activityRec)
+	sessionPackagesH.SetResourceEvents(resourceEvents)
+	sessionpackagesmodule.RegisterRoutes(mux, sessionPackagesH, tokens, loader, tenantResolver)
 	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)

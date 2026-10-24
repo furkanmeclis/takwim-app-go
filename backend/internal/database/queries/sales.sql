@@ -21,10 +21,24 @@ FROM reservations r
 WHERE r.organization_id = sqlc.arg(organization_id) AND r.uuid = sqlc.arg(uuid);
 
 -- name: ListSalesReservationLines :many
-SELECT rl.line_index, rl.service_id, rl.service_name, rl.staff_id, rl.unit_price
+-- A line served on a package session (TEC-920) carries the session's
+-- value: that value is the line's revenue, and the package already
+-- charged the customer for it.
+SELECT rl.line_index, rl.service_id, rl.service_name, rl.staff_id, rl.unit_price,
+    ps.amount AS package_amount
 FROM reservation_lines rl
+LEFT JOIN package_sessions ps ON ps.organization_id = rl.organization_id AND ps.reservation_id = rl.reservation_id
+    AND ps.line_index = rl.line_index AND ps.status = 'consumed'
 WHERE rl.organization_id = sqlc.arg(organization_id) AND rl.reservation_id = sqlc.arg(reservation_id)
 ORDER BY rl.line_index;
+
+-- name: IsPackageSessionLine :one
+-- Whether a reservation line was served on a consumed package session.
+SELECT EXISTS (
+    SELECT 1 FROM package_sessions ps
+    WHERE ps.organization_id = sqlc.arg(organization_id) AND ps.reservation_id = sqlc.arg(reservation_id)
+      AND ps.line_index = sqlc.arg(line_index) AND ps.status = 'consumed'
+)::boolean AS covered;
 
 -- name: ListSalesReservationProducts :many
 -- Products handed over with a completed visit (TEC-919): each became one
@@ -338,10 +352,11 @@ WHERE e.organization_id = sqlc.arg(organization_id)
   );
 
 -- name: LedgerTotals :many
--- Charged (sale entries), collected and refunded per currency of one
--- reservation or one customer, reversals netted into the kind they undo.
+-- Charged (sale entries and sold session packages), collected and
+-- refunded per currency of one reservation or one customer, reversals
+-- netted into the kind they undo.
 SELECT e.currency::text AS currency,
-    COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+    COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) IN ('sale', 'package')
         THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::numeric AS charged,
     COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
         THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::numeric AS collected,

@@ -497,6 +497,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.NotFound(w, r, "Reservation was not found")
 	case errors.Is(err, usecase.ErrProductNotFound):
 		response.NotFound(w, r, "Reservation product was not found")
+	case errors.Is(err, usecase.ErrSessionNotFound):
+		response.NotFound(w, r, "Package session was not found")
 	case errors.Is(err, usecase.ErrPaymentPending):
 		conflict(w, r, "payment_status", "online_pending", err)
 	case errors.Is(err, availabilityusecase.ErrNotFound):

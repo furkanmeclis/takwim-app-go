@@ -47,10 +47,14 @@ const (
 	EntryCollection = "collection"
 	EntryRefund     = "refund"
 	EntryReversal   = "reversal"
+	// EntryPackage charges the customer for a sold session package
+	// (TEC-920): a debit without a sale line, since a package sale is not
+	// revenue (its sessions are, once used).
+	EntryPackage = "package"
 )
 
 // EntryKinds lists the ledger entry kinds.
-var EntryKinds = []string{EntrySale, EntryCollection, EntryRefund, EntryReversal}
+var EntryKinds = []string{EntrySale, EntryCollection, EntryRefund, EntryReversal, EntryPackage}
 
 // Directions of a ledger entry.
 const (

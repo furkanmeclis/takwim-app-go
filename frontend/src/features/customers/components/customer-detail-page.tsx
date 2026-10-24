@@ -30,6 +30,7 @@ import {
   sourceLabel,
   verificationLabel,
 } from "@/features/customers/lib/labels";
+import { CustomerPackagesCard } from "@/features/session-packages";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { date, datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -240,6 +241,8 @@ export function CustomerDetailPage({ uuid }: { uuid: string }) {
               ]}
             />
           </EntitySectionCard>
+
+          <CustomerPackagesCard customer={{ uuid, name: customer.full_name }} />
 
           <CustomerActivityCard customerUuid={uuid} />
 

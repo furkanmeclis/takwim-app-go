@@ -15,7 +15,6 @@ import (
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	orgsettings "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
-	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
 // Reschedule moves a request or an active booking to a new start (and,
@@ -164,19 +163,11 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if err != nil {
 			return err
 		}
-		total := money.Zero()
 		for i := range priced {
 			if i < len(before) && before[i].ServiceID == priced[i].ServiceID && before[i].StaffID == priced[i].StaffID {
 				priced[i].UnitPrice = before[i].UnitPrice
 			}
-			total = total.Add(money.FromNumericOrZero(priced[i].UnitPrice))
 		}
-		// The products of the visit stay as they are.
-		extra, err := productsTotal(ctx, tx.Q, orgID, row.ID)
-		if err != nil {
-			return err
-		}
-		total = total.Add(extra)
 		if err := tx.Q.DeleteReservationLines(ctx, db.DeleteReservationLinesParams{OrganizationID: orgID, ReservationID: row.ID}); err != nil {
 			return err
 		}
@@ -185,6 +176,17 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 			if err := tx.Q.CreateReservationLine(ctx, l); err != nil {
 				return err
 			}
+		}
+		// Package sessions (TEC-920) stay on lines that keep their service
+		// and day inside the validity; those lines are paid by the package.
+		// The total is the lines without a session plus the products, which
+		// stay as they are.
+		if err := reconcileSessions(ctx, tx.Q, orgID, row.ID); err != nil {
+			return err
+		}
+		total, err := visitTotal(ctx, tx.Q, orgID, row.ID)
+		if err != nil {
+			return err
 		}
 		updated, err := tx.Q.ReplaceReservationSchedule(ctx, db.ReplaceReservationScheduleParams{
 			OrganizationID: orgID, ID: row.ID, HoldID: pgInt8(created.ID), StartsAt: ts(created.Slot.StartsAt),

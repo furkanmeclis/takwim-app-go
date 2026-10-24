@@ -113,9 +113,15 @@ WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(
   AND status IN ('held', 'delivered');
 
 -- name: SumReservationLinePrices :one
-SELECT COALESCE(SUM(unit_price), 0)::numeric(14, 2) AS total
-FROM reservation_lines
-WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(reservation_id);
+-- Lines served on a package session (TEC-920) are paid by the package.
+SELECT COALESCE(SUM(rl.unit_price), 0)::numeric(14, 2) AS total
+FROM reservation_lines rl
+WHERE rl.organization_id = sqlc.arg(organization_id) AND rl.reservation_id = sqlc.arg(reservation_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM package_sessions ps
+    WHERE ps.organization_id = rl.organization_id AND ps.reservation_id = rl.reservation_id
+      AND ps.line_index = rl.line_index AND ps.status <> 'released'
+  );
 
 -- name: UpdateReservationProductsTotal :one
 -- A product added or removed: the new total and payment state.

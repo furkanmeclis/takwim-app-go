@@ -189,6 +189,9 @@ func (s *Service) Reject(ctx context.Context, orgID int64, id uuid.UUID, caller 
 		if err := releaseProducts(ctx, tx.Q, orgID, row.ID, "rejected"); err != nil {
 			return err
 		}
+		if err := releaseSessions(ctx, tx.Q, orgID, row.ID, "rejected"); err != nil {
+			return err
+		}
 		return s.release(ctx, tx, row, "rejected")
 	})
 }
@@ -215,6 +218,9 @@ func (s *Service) Cancel(ctx context.Context, orgID int64, id uuid.UUID, caller 
 		}
 		next.status, next.payment, next.cancelReason = model.StatusCancelled, payment, reason
 		if err := releaseProducts(ctx, tx.Q, orgID, row.ID, "cancelled"); err != nil {
+			return err
+		}
+		if err := releaseSessions(ctx, tx.Q, orgID, row.ID, "cancelled"); err != nil {
 			return err
 		}
 		return s.release(ctx, tx, row, "cancelled")
@@ -255,6 +261,11 @@ func (s *Service) Complete(ctx context.Context, orgID int64, id uuid.UUID, calle
 		if err := deliverProducts(ctx, tx.Q, orgID, row, actorID, tx.Now); err != nil {
 			return err
 		}
+		// Package sessions are used now (TEC-920); the hook writes their
+		// lines at the session's value.
+		if err := consumeSessions(ctx, tx.Q, orgID, row.ID, tx.Now); err != nil {
+			return err
+		}
 		if s.onComplete != nil {
 			return s.onComplete(ctx, tx.Q, orgID, row.ID, actorID)
 		}
@@ -271,6 +282,9 @@ func (s *Service) NoShow(ctx context.Context, orgID int64, id uuid.UUID, caller 
 			return ErrInvalidTransition
 		}
 		next.status = model.StatusNoShow
+		if err := releaseSessions(ctx, tx.Q, orgID, row.ID, "no_show"); err != nil {
+			return err
+		}
 		return releaseProducts(ctx, tx.Q, orgID, row.ID, "no_show")
 	})
 }
@@ -323,6 +337,9 @@ func expireRequests(ctx context.Context, q *db.Queries, n Notifier, orgID int64,
 			return err
 		}
 		if err := releaseProducts(ctx, q, orgID, row.ID, "expired"); err != nil {
+			return err
+		}
+		if err := releaseSessions(ctx, q, orgID, row.ID, "expired"); err != nil {
 			return err
 		}
 		if err := recordEvent(ctx, q, n, updated, "expired", row.Status, updated.Status, 0, reason); err != nil {

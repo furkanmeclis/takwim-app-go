@@ -22,6 +22,8 @@ import type {
   ReservationNotesRequest,
   ReservationPage,
   ReservationPayments,
+  ReservationPackageOption,
+  ReservationPackageSessionRequest,
   ReservationProductOption,
   ReservationProductRequest,
   ReservationRefundRequest,
@@ -160,6 +162,44 @@ export const reservationsService = {
       slug,
       "DELETE",
       `${BASE}/${uuid}/products/${productUuid}`,
+      { body, silent: true },
+    );
+  },
+
+  /** The customer's packages that can give a session to the visit's lines. */
+  packageOptions(slug: string, uuid: string) {
+    return tenantRequest<{ items: ReservationPackageOption[] }>(
+      slug,
+      "GET",
+      `${BASE}/${uuid}/package-options`,
+    );
+  },
+
+  /** Holds the next session of a package for a line (TEC-920). */
+  applyPackage(
+    slug: string,
+    uuid: string,
+    body: ReservationPackageSessionRequest,
+  ) {
+    return tenantRequest<Reservation>(
+      slug,
+      "POST",
+      `${BASE}/${uuid}/package-sessions`,
+      { body, silent: true },
+    );
+  },
+
+  /** Gives a held session back to its package. */
+  removePackageSession(
+    slug: string,
+    uuid: string,
+    sessionUuid: string,
+    body: ReservationActionRequest,
+  ) {
+    return tenantRequest<Reservation>(
+      slug,
+      "DELETE",
+      `${BASE}/${uuid}/package-sessions/${sessionUuid}`,
       { body, silent: true },
     );
   },

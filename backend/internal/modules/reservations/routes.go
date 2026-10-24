@@ -62,6 +62,11 @@ func RegisterRoutes(
 	route("GET /v1/tenant/reservations/{uuid}/product-options", h.ProductOptions, read)
 	route("POST /v1/tenant/reservations/{uuid}/products", h.AddProduct, write)
 	route("DELETE /v1/tenant/reservations/{uuid}/products/{productUuid}", h.RemoveProduct, write)
+	// Package sessions of the visit (TEC-920); the handlers also need the
+	// packages module.
+	route("GET /v1/tenant/reservations/{uuid}/package-options", h.PackageOptions, read)
+	route("POST /v1/tenant/reservations/{uuid}/package-sessions", h.ApplyPackage, write)
+	route("DELETE /v1/tenant/reservations/{uuid}/package-sessions/{sessionUuid}", h.RemovePackageSession, write)
 }
 
 // Resource is the resource slug of reservations.

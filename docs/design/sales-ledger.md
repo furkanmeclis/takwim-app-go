@@ -9,6 +9,8 @@ Revenue (ciro) is what the business delivered; collection (tahsilat) is the mone
 | `sale_lines`     | one service delivered (a line of a completed reservation) or product handed over (a stock sale): quantity, unit price, gross / discount / net (`NUMERIC`, per currency), staff, branch, customer, `sale_date`. `kind` `sale` or `reversal` (the exact negative of one sale line). Revenue of a day = sum of `net_amount` |
 | `ledger_entries` | what the customer owes and paid: `sale` (debit, mirrors a sale line), `collection` (credit, with its cash movement), `refund` (debit, pays back a collection, with its cash movement), `reversal` (opposite direction of one entry). Balance = debits - credits                                                          |
 
+A `package` entry (TEC-920, [session-packages.md](./session-packages.md)) is the debit of a package sold to a customer: it has no sale line and no reservation and is not revenue. A service paid by a package session is a sale line at the session value without its own `sale` debit, and the customer balance counts `sale` and `package` debits as charged.
+
 Both tables are **append-only**. Triggers refuse `UPDATE` and `DELETE` (except clearing references to a deleted customer, staff member or user, and the organization cascade); insert triggers check the rules below, so a bug in the application cannot break them.
 
 - A sale line is identified by its **accrual key** (`reservation:{uuid}:{line}` or `stock_movement:{uuid}`). A key has at most one live (unreversed) sale line, so one service or product is never revenue twice. `accrual_generation` counts the corrections.

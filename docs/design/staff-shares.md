@@ -71,9 +71,11 @@ All routes need the module and `tenant.earnings.read` or `tenant.earnings.own`. 
 - **Staff detail → Pay oranları**: the staff member's rules; add, edit and delete with `tenant.earnings.manage`.
 - **Paylarım**: today, the period, payable now and paid, then the member's own shares and payouts.
 
+Multi-session packages (TEC-920, [session-packages.md](./session-packages.md)): a service paid by a package session is a sale line at the session value (5 sessions for 2.500 TL → 500 TL), so its share base is the session value. The line has no ledger debit of its own (the package charge covers it), so the visit is fully paid and the share is payable.
+
 ## Not yet
 
-- Package sales: the packages module will split a package price over its services with `usecase.AllocateBase` (half-up rounding, remainder on the last part) before shares are calculated.
+- Service bundles (TEC-895): the bundles module will split a bundle price over its services with `usecase.AllocateBase` (half-up rounding, remainder on the last part) before shares are calculated.
 - Per-product rates (only a default product rate today) and an export of shares and payouts.
 
 ## Tests
