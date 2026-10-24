@@ -149,6 +149,7 @@ type Querier interface {
 	CountResources(ctx context.Context, arg CountResourcesParams) (int64, error)
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountSaleLines(ctx context.Context, arg CountSaleLinesParams) (int64, error)
+	CountServiceBundles(ctx context.Context, arg CountServiceBundlesParams) (int64, error)
 	CountServices(ctx context.Context, arg CountServicesParams) (int64, error)
 	CountSessionPackages(ctx context.Context, arg CountSessionPackagesParams) (int64, error)
 	CountShareLines(ctx context.Context, arg CountShareLinesParams) (int64, error)
@@ -230,6 +231,10 @@ type Querier interface {
 	CreateResourceClosure(ctx context.Context, arg CreateResourceClosureParams) (ResourceClosure, error)
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
 	CreateService(ctx context.Context, arg CreateServiceParams) (Service, error)
+	// Tenant resource: combined service bundles (TEC-895). Every query filters by
+	// organization_id. A bundle is business-level catalog data; its branches are
+	// the branches that offer it.
+	CreateServiceBundle(ctx context.Context, arg CreateServiceBundleParams) (ServiceBundle, error)
 	// Tenant resource: services (TEC-894). Every query filters by organization_id.
 	// The catalog is business-level; service_branches holds the branch offers
 	// and service_staff the staff who may perform a service.
@@ -285,6 +290,8 @@ type Querier interface {
 	DeleteResourceClosure(ctx context.Context, arg DeleteResourceClosureParams) (int64, error)
 	DeleteRole(ctx context.Context, argUuid uuid.UUID) error
 	DeleteServiceBranch(ctx context.Context, arg DeleteServiceBranchParams) error
+	DeleteServiceBundleBranch(ctx context.Context, arg DeleteServiceBundleBranchParams) error
+	DeleteServiceBundleItems(ctx context.Context, arg DeleteServiceBundleItemsParams) error
 	DeleteServicePoint(ctx context.Context, arg DeleteServicePointParams) (int64, error)
 	DeleteServiceStaffExcept(ctx context.Context, arg DeleteServiceStaffExceptParams) error
 	DeleteSessionPackageBranches(ctx context.Context, arg DeleteSessionPackageBranchesParams) error
@@ -485,6 +492,8 @@ type Querier interface {
 	GetRefundByUUID(ctx context.Context, arg GetRefundByUUIDParams) (GetRefundByUUIDRow, error)
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
 	GetReservationBranchTimezone(ctx context.Context, arg GetReservationBranchTimezoneParams) (string, error)
+	// The bundle a booking names, with whether the branch offers it.
+	GetReservationBundle(ctx context.Context, arg GetReservationBundleParams) (GetReservationBundleRow, error)
 	GetReservationConfirmation(ctx context.Context, arg GetReservationConfirmationParams) (ReservationConfirmation, error)
 	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
 	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)
@@ -530,6 +539,8 @@ type Querier interface {
 	GetSalesReservation(ctx context.Context, arg GetSalesReservationParams) (GetSalesReservationRow, error)
 	GetSalesReservationByUUID(ctx context.Context, arg GetSalesReservationByUUIDParams) (GetSalesReservationByUUIDRow, error)
 	GetService(ctx context.Context, arg GetServiceParams) (GetServiceRow, error)
+	GetServiceBundle(ctx context.Context, arg GetServiceBundleParams) (ServiceBundle, error)
+	GetServiceBundleByName(ctx context.Context, arg GetServiceBundleByNameParams) (ServiceBundle, error)
 	GetServiceByName(ctx context.Context, arg GetServiceByNameParams) (Service, error)
 	GetServiceCategory(ctx context.Context, arg GetServiceCategoryParams) (ServiceCategory, error)
 	GetServiceCategoryByName(ctx context.Context, arg GetServiceCategoryByNameParams) (ServiceCategory, error)
@@ -629,6 +640,8 @@ type Querier interface {
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	// --------------------------------------------------------------- sale lines
 	InsertSaleLine(ctx context.Context, arg InsertSaleLineParams) (InsertSaleLineRow, error)
+	InsertServiceBundleBranch(ctx context.Context, arg InsertServiceBundleBranchParams) error
+	InsertServiceBundleItem(ctx context.Context, arg InsertServiceBundleItemParams) error
 	// TEC-920: multi-session packages (definitions, packages sold to
 	// customers, their sessions on reservations). Every query takes the
 	// organization id.
@@ -699,6 +712,8 @@ type Querier interface {
 	ListBranchesForExport(ctx context.Context, arg ListBranchesForExportParams) ([]Branch, error)
 	ListBulkChangesForJob(ctx context.Context, jobID int64) ([]BulkChange, error)
 	ListBulkJobsForActor(ctx context.Context, arg ListBulkJobsForActorParams) ([]BulkJob, error)
+	// Services named as bundle contents (live ones of the organization).
+	ListBundleServicesByUUIDs(ctx context.Context, arg ListBundleServicesByUUIDsParams) ([]ListBundleServicesByUUIDsRow, error)
 	// Commitments of the given staff and resources overlapping [since, until):
 	// active holds that have not lapsed (a lapsed hold stops counting at its
 	// expiry, before the sweep) and confirmed bookings. exclude_hold_id
@@ -975,14 +990,23 @@ type Querier interface {
 	ListSalesBranchesByUUID(ctx context.Context, arg ListSalesBranchesByUUIDParams) ([]ListSalesBranchesByUUIDRow, error)
 	// A line served on a package session (TEC-920) carries the session's
 	// value: that value is the line's revenue, and the package already
-	// charged the customer for it.
+	// charged the customer for it. A bundle line (TEC-895) carries its list
+	// price next to its share of the bundle price.
 	ListSalesReservationLines(ctx context.Context, arg ListSalesReservationLinesParams) ([]ListSalesReservationLinesRow, error)
 	// Products handed over with a completed visit (TEC-919): each became one
 	// stock sale movement.
 	ListSalesReservationProducts(ctx context.Context, arg ListSalesReservationProductsParams) ([]ListSalesReservationProductsRow, error)
 	ListServiceBranchFacets(ctx context.Context, arg ListServiceBranchFacetsParams) ([]ListServiceBranchFacetsRow, error)
+	// Active offers of the given services in the given branches.
+	ListServiceBranchOffersFor(ctx context.Context, arg ListServiceBranchOffersForParams) ([]ListServiceBranchOffersForRow, error)
 	// Offers of the given services (list rows and the detail).
 	ListServiceBranches(ctx context.Context, arg ListServiceBranchesParams) ([]ListServiceBranchesRow, error)
+	// Branches offering live bundles, limited to the caller's branch scope.
+	ListServiceBundleBranchFacets(ctx context.Context, arg ListServiceBundleBranchFacetsParams) ([]ListServiceBundleBranchFacetsRow, error)
+	ListServiceBundleBranches(ctx context.Context, arg ListServiceBundleBranchesParams) ([]ListServiceBundleBranchesRow, error)
+	// The contents of the bundles with the catalog values of their services.
+	ListServiceBundleItems(ctx context.Context, arg ListServiceBundleItemsParams) ([]ListServiceBundleItemsRow, error)
+	ListServiceBundles(ctx context.Context, arg ListServiceBundlesParams) ([]ServiceBundle, error)
 	ListServiceCategories(ctx context.Context, organizationID int64) ([]ListServiceCategoriesRow, error)
 	ListServiceCategoryFacets(ctx context.Context, organizationID int64) ([]ListServiceCategoryFacetsRow, error)
 	ListServicePaymentModeFacets(ctx context.Context, organizationID int64) ([]ListServicePaymentModeFacetsRow, error)
@@ -1285,6 +1309,7 @@ type Querier interface {
 	SoftDeleteProductVariant(ctx context.Context, arg SoftDeleteProductVariantParams) (int64, error)
 	SoftDeleteResource(ctx context.Context, arg SoftDeleteResourceParams) (int64, error)
 	SoftDeleteService(ctx context.Context, arg SoftDeleteServiceParams) (int64, error)
+	SoftDeleteServiceBundle(ctx context.Context, arg SoftDeleteServiceBundleParams) (int64, error)
 	SoftDeleteServiceCategory(ctx context.Context, arg SoftDeleteServiceCategoryParams) (int64, error)
 	SoftDeleteSessionPackage(ctx context.Context, arg SoftDeleteSessionPackageParams) (int64, error)
 	SoftDeleteStaff(ctx context.Context, arg SoftDeleteStaffParams) (int64, error)
@@ -1318,6 +1343,8 @@ type Querier interface {
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
 	TouchBranch(ctx context.Context, arg TouchBranchParams) error
 	TouchCustomerSession(ctx context.Context, arg TouchCustomerSessionParams) error
+	// Raises updated_at after a change of the contents or branches only.
+	TouchServiceBundle(ctx context.Context, arg TouchServiceBundleParams) error
 	UncategorizeServices(ctx context.Context, arg UncategorizeServicesParams) error
 	UnlockRunnerJob(ctx context.Context, arg UnlockRunnerJobParams) error
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
@@ -1354,6 +1381,7 @@ type Querier interface {
 	UpdateResourceClosure(ctx context.Context, arg UpdateResourceClosureParams) (ResourceClosure, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, error)
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
+	UpdateServiceBundle(ctx context.Context, arg UpdateServiceBundleParams) (ServiceBundle, error)
 	UpdateServiceCategory(ctx context.Context, arg UpdateServiceCategoryParams) (ServiceCategory, error)
 	UpdateServicePoint(ctx context.Context, arg UpdateServicePointParams) (ServicePoint, error)
 	UpdateSessionPackage(ctx context.Context, arg UpdateSessionPackageParams) (int64, error)

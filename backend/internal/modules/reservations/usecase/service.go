@@ -257,8 +257,18 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 				return err
 			}
 		}
+		// A service bundle (TEC-895) books its services as separate lines,
+		// each with its own staff member and resources.
+		lineInputs := in.Lines
+		var bundle *bundlePlan
+		if in.BundleUUID != nil {
+			bundle, lineInputs, err = planBundle(ctx, tx.Q, orgID, in.BranchUUID, *in.BundleUUID, in.Lines, online)
+			if err != nil {
+				return err
+			}
+		}
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
-			BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: channel, StartsAt: in.StartsAt, Reason: p.holdReason,
+			BranchUUID: in.BranchUUID, Lines: lineInputs, Channel: channel, StartsAt: in.StartsAt, Reason: p.holdReason,
 			PartySize: in.PartySize, Zone: in.Zone,
 		}, caller, actorID)
 		if err != nil {
@@ -269,7 +279,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 				return err
 			}
 		}
-		lines, total, err := s.priceLines(ctx, tx, created.Slot, p.method)
+		lines, total, err := s.priceLines(ctx, tx, created.Slot, p.method, bundle)
 		if err != nil {
 			return err
 		}
@@ -348,7 +358,9 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 // times and the price (personal › branch offer › list price). An online
 // booking's payment method must be one every service takes (method empty =
 // panel, which collects at the counter whatever the service's mode).
-func (s *Service) priceLines(ctx context.Context, tx *availabilityusecase.Tx, slot availabilitymodel.Slot, method string) ([]db.CreateReservationLineParams, money.Money, error) {
+//
+// A bundle's price is spread over its lines (applyBundle).
+func (s *Service) priceLines(ctx context.Context, tx *availabilityusecase.Tx, slot availabilitymodel.Slot, method string, bundle *bundlePlan) ([]db.CreateReservationLineParams, money.Money, error) {
 	ve := &ValidationError{}
 	total := money.Zero()
 	out := make([]db.CreateReservationLineParams, 0, len(slot.Lines))
@@ -394,6 +406,9 @@ func (s *Service) priceLines(ctx context.Context, tx *availabilityusecase.Tx, sl
 			line.StaffName = pgtype.Text{String: l.Staff.Name, Valid: true}
 		}
 		out = append(out, line)
+	}
+	if bundle != nil && len(out) > 0 {
+		total = applyBundle(out, bundle)
 	}
 	// Nothing to collect online: a free booking (a restaurant table without
 	// a priced menu or event) is paid, if at all, at the business.
@@ -534,6 +549,17 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 			StartsAt: l.StartsAt.Time.UTC(), EndsAt: l.EndsAt.Time.UTC(), DurationMinutes: int(l.DurationMinutes),
 			BufferBeforeMinutes: int(l.BufferBeforeMinutes), BufferAfterMinutes: int(l.BufferAfterMinutes),
 			UnitPrice: money.FromNumericOrZero(l.UnitPrice),
+		}
+		if l.BundleName.Valid {
+			item.Bundle = &model.LineBundle{Name: l.BundleName.String}
+			if l.BundleUuid.Valid {
+				u := uuid.UUID(l.BundleUuid.Bytes)
+				item.Bundle.UUID = &u
+			}
+		}
+		if l.ListPrice.Valid {
+			lp := money.FromNumericOrZero(l.ListPrice)
+			item.ListPrice = &lp
 		}
 		if l.ServiceUuid.Valid {
 			u := uuid.UUID(l.ServiceUuid.Bytes)

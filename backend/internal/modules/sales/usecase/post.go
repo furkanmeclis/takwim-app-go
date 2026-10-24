@@ -67,16 +67,27 @@ func (s *Service) RecordReservationTx(ctx context.Context, q *db.Queries, orgID,
 		// value; postSaleEntry posts no debit for it (the package was
 		// charged when it was sold).
 		price := amountOf(l.UnitPrice)
+		// A bundle line (TEC-895) sells at its share of the bundle price:
+		// the list price is the gross and the bundle discount the
+		// difference, so earnings and revenue follow the net share. A
+		// package session on the line wins: the package paid for the
+		// service, so the line is the session's value with no discount.
+		unit, discount := price, money.Zero()
 		if l.PackageAmount.Valid {
 			price = amountOf(l.PackageAmount)
+			unit = price
+		} else if l.ListPrice.Valid {
+			if list := amountOf(l.ListPrice); list.Cmp(price) > 0 {
+				unit, discount = list, list.Sub(price)
+			}
 		}
 		idx := pgtype.Int4{Int32: l.LineIndex, Valid: true}
 		row, err := q.InsertSaleLine(ctx, db.InsertSaleLineParams{
 			OrganizationID: orgID, BranchID: r.BranchID, CustomerID: int8Of(r.CustomerID), Kind: model.LineSale,
 			ItemType: model.ItemService, SourceType: model.SourceReservation, SourceUuid: pgtype.UUID{Bytes: r.Uuid, Valid: true},
 			ReservationID: int8Of(r.ID), LineIndex: idx, ServiceID: l.ServiceID, StaffID: l.StaffID,
-			Description: clip(l.ServiceName, maxDescriptionLength), Quantity: 1, UnitPrice: price.Numeric(),
-			GrossAmount: price.Numeric(), DiscountAmount: money.Zero().Numeric(), NetAmount: price.Numeric(),
+			Description: clip(l.ServiceName, maxDescriptionLength), Quantity: 1, UnitPrice: unit.Numeric(),
+			GrossAmount: unit.Numeric(), DiscountAmount: discount.Numeric(), NetAmount: price.Numeric(),
 			Currency: r.Currency, SaleDate: dateArg(day), AccrualKey: key, CreatedBy: actor,
 		})
 		if err != nil {

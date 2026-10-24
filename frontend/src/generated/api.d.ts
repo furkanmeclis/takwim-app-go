@@ -3697,6 +3697,127 @@ export interface paths {
         patch: operations["patchTenantServiceCategory"];
         trace?: never;
     };
+    "/v1/tenant/service-bundles/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Service bundle list metadata
+         * @description Table contract of `GET /v1/tenant/service-bundles` (`tenant.services.read`, `services` module).
+         */
+        get: operations["getTenantServiceBundlesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Service bundle faceted filter options
+         * @description Branches offering bundles, inside the caller's scope, with counts.
+         */
+        get: operations["getTenantServiceBundlesFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List combined service bundles
+         * @description Combined service bundles (birleşik hizmet paketi, TEC-895) of the
+         *     `X-Organization` organization (`tenant.services.read`). A bundle sells
+         *     several services as one offer; `duration_minutes`, `list_price`,
+         *     `staff_required` and `resource_kinds` follow from its `items`. `q`
+         *     searches name and description.
+         */
+        get: operations["getTenantServiceBundles"];
+        put?: never;
+        /**
+         * Create a service bundle
+         * @description `tenant.services.write`. Names are unique in the organization,
+         *     case-insensitive (`409`). `service_uuids` are the contents in the
+         *     order of service (2–10, a service may repeat; group classes are
+         *     refused: `service_uuids.N` `group_class`). Every branch in
+         *     `branch_uuids` must be inside the caller's scope (`not_found`) and
+         *     offer every service of the bundle (`services_not_offered`).
+         */
+        post: operations["postTenantServiceBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a service bundle
+         * @description `branches[].editable` is false for branches outside the caller's scope. A uuid of another organization answers `404`.
+         */
+        get: operations["getTenantServiceBundle"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a service bundle (soft)
+         * @description `tenant.services.write`. Booked lines keep the bundle name.
+         */
+        delete: operations["deleteTenantServiceBundle"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a service bundle
+         * @description `tenant.services.write`. Omitted fields are unchanged.
+         *     `service_uuids` replaces the contents; `branch_uuids` replaces the
+         *     branches inside the caller's scope (branches outside it stay).
+         *     Bookings already made keep their lines and prices.
+         */
+        patch: operations["patchTenantServiceBundle"];
+        trace?: never;
+    };
+    "/v1/tenant/service-bundles/{uuid}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity of a service bundle */
+        get: operations["getTenantServiceBundleActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/services/meta": {
         parameters: {
             query?: never;
@@ -12615,6 +12736,105 @@ export interface components {
             data: components["schemas"]["TenantServiceFacets"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        TenantServiceBundleItem: {
+            position: number;
+            /** Format: uuid */
+            service_uuid: string;
+            service_name: string;
+            duration_minutes: number;
+            buffer_before_minutes: number;
+            buffer_after_minutes: number;
+            list_price: components["schemas"]["MoneyAmount"];
+            /** @description Share of the bundle price at catalog prices (in proportion to the list prices; the rounding remainder goes to the last item). */
+            allocated_price: components["schemas"]["MoneyAmount"];
+            /** @enum {string} */
+            staff_mode: "required" | "optional" | "none";
+            resource_kinds: ("chair" | "table" | "area" | "room" | "device" | "bay")[];
+            /** @description False when the service was deactivated or deleted. */
+            bookable: boolean;
+        };
+        TenantServiceBundle: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            price: components["schemas"]["MoneyAmount"];
+            list_price: components["schemas"]["MoneyAmount"];
+            discount: components["schemas"]["MoneyAmount"];
+            currency: string;
+            /** @description Sum of the catalog durations of the items. */
+            duration_minutes: number;
+            staff_required: boolean;
+            resource_kinds: ("chair" | "table" | "area" | "room" | "device" | "bay")[];
+            items: components["schemas"]["TenantServiceBundleItem"][];
+            branches: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                code: string;
+                editable: boolean;
+            }[];
+            show_online: boolean;
+            is_active: boolean;
+            bookable: boolean;
+            sort_order: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TenantServiceBundleCreateRequest: {
+            name: string;
+            description?: string;
+            price: components["schemas"]["MoneyInput"];
+            /** @description Default true on create. */
+            show_online?: boolean;
+            /** @description Default true on create. */
+            is_active?: boolean;
+            sort_order?: number;
+            service_uuids: string[];
+            branch_uuids?: string[];
+        };
+        TenantServiceBundlePatchRequest: {
+            name?: string;
+            description?: string;
+            price?: components["schemas"]["MoneyInput"];
+            /** @description Default true on create. */
+            show_online?: boolean;
+            /** @description Default true on create. */
+            is_active?: boolean;
+            sort_order?: number;
+            service_uuids?: string[];
+            branch_uuids?: string[];
+        };
+        TenantServiceBundlePage: {
+            items: components["schemas"]["TenantServiceBundle"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        TenantServiceBundleFacets: {
+            branch: components["schemas"]["TenantResourceFacet"][];
+        };
+        EnvelopeTenantServiceBundle: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantServiceBundle"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantServiceBundlePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantServiceBundlePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantServiceBundleFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantServiceBundleFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         /**
          * @description Stock summed over the branches of the caller's scope. `available` =
          *     `on_hand` − `reserved` (units held for appointments). `status` is
@@ -14585,6 +14805,17 @@ export interface components {
             staff_uuid?: string | null;
         };
         TenantReservationCreateRequest: {
+            /**
+             * Format: uuid
+             * @description Books a combined service bundle (TEC-895). `lines` must then be
+             *     the bundle's services in order (each with its own staff member)
+             *     or empty (any free staff member per service). The bundle must be
+             *     active and offered in the branch (`bundle_uuid` `inactive`,
+             *     `not_offered`, `not_bookable`; `lines` `bundle_mismatch`). The
+             *     bundle price is spread over the lines in proportion to their
+             *     prices; the rounding remainder goes to the last line.
+             */
+            bundle_uuid?: string | null;
             /** @description Number of people (restaurant; required when the sector books by party and a service takes a resource). Every resource must seat the party. */
             party_size?: number | null;
             /** @description Area of the branch (resource zone) the resources must be in; empty = any. */
@@ -14593,7 +14824,8 @@ export interface components {
             branch_uuid: string;
             /** Format: uuid */
             customer_uuid: string;
-            lines: components["schemas"]["TenantReservationLineInput"][];
+            /** @description Services in the order of service; required (at least one) unless `bundle_uuid` is given. */
+            lines?: components["schemas"]["TenantReservationLineInput"][];
             /** Format: date-time */
             starts_at: string;
             /**
@@ -14938,6 +15170,17 @@ export interface components {
                 buffer_before_minutes: number;
                 buffer_after_minutes: number;
                 unit_price: components["schemas"]["MoneyAmount"];
+                /** @description The service bundle the line was booked in (TEC-895); `unit_price` is then the line's share of the bundle price. */
+                bundle: {
+                    /**
+                     * Format: uuid
+                     * @description Null when the bundle was deleted (the name stays).
+                     */
+                    uuid: string | null;
+                    name: string;
+                } | null;
+                /** @description Price of the line before the bundle discount (bundle lines only). */
+                list_price: components["schemas"]["MoneyAmount"] | null;
             }[];
             products: components["schemas"]["TenantReservationProduct"][];
             /** @description Sessions of the customer's packages given to the lines (TEC-920), released ones included */
@@ -23213,6 +23456,280 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantServiceBundlesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantServiceBundlesFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantServiceBundleFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantServiceBundles: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `name`, `price`, `sort_order`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default: `sort_order`, name. */
+                sort?: string;
+                /** @description Branch uuids: bundles offered there; comma-separate or repeat */
+                branch?: string;
+                is_active?: boolean;
+                show_online?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bundle page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantServiceBundlePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantServiceBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantServiceBundleCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created bundle */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantServiceBundle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantServiceBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bundle */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantServiceBundle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantServiceBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantServiceBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantServiceBundlePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated bundle */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantServiceBundle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantServiceBundleActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeBranchActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getTenantServicesMeta: {

@@ -130,6 +130,10 @@ type CreateInput struct {
 	// Products are taken with the visit (TEC-919); their units are
 	// reserved in the branch's stock with the booking.
 	Products []ProductInput `json:"products"`
+	// BundleUUID books a combined service bundle (TEC-895): the lines are
+	// its services in order (empty lines = the bundle's services with any
+	// free staff member) and the bundle price is spread over them.
+	BundleUUID *uuid.UUID `json:"bundle_uuid"`
 }
 
 // States of a product of a visit (TEC-919).
@@ -296,6 +300,18 @@ type Line struct {
 	BufferBeforeMinutes int                        `json:"buffer_before_minutes"`
 	BufferAfterMinutes  int                        `json:"buffer_after_minutes"`
 	UnitPrice           money.Money                `json:"unit_price"`
+	// Bundle is set on a line booked as part of a service bundle; ListPrice
+	// is then the line's price before the bundle discount and UnitPrice its
+	// share of the bundle price.
+	Bundle    *LineBundle  `json:"bundle"`
+	ListPrice *money.Money `json:"list_price"`
+}
+
+// LineBundle names the bundle of a line; UUID is nil when the bundle was
+// deleted (the name stays).
+type LineBundle struct {
+	UUID *uuid.UUID `json:"uuid"`
+	Name string     `json:"name"`
 }
 
 // LineStaff is the staff member of a line; UUID is nil when the record was

@@ -43,13 +43,14 @@ RETURNING *;
 -- name: CreateReservationLine :exec
 INSERT INTO reservation_lines (
     organization_id, reservation_id, line_index, service_id, service_name, staff_id, staff_name, resources,
-    starts_at, ends_at, duration_minutes, buffer_before_minutes, buffer_after_minutes, unit_price
+    starts_at, ends_at, duration_minutes, buffer_before_minutes, buffer_after_minutes, unit_price,
+    bundle_id, bundle_name, list_price
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(reservation_id), sqlc.arg(line_index), sqlc.narg(service_id),
     sqlc.arg(service_name), sqlc.narg(staff_id), sqlc.narg(staff_name), sqlc.arg(resources), sqlc.arg(starts_at),
     sqlc.arg(ends_at), sqlc.arg(duration_minutes), sqlc.arg(buffer_before_minutes), sqlc.arg(buffer_after_minutes),
-    sqlc.arg(unit_price)
+    sqlc.arg(unit_price), sqlc.narg(bundle_id), sqlc.narg(bundle_name), sqlc.narg(list_price)
 );
 
 -- name: CreateReservationEvent :exec
@@ -83,10 +84,11 @@ SELECT DISTINCT staff_id::BIGINT FROM reservation_lines
 WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(reservation_id) AND staff_id IS NOT NULL;
 
 -- name: ListReservationLines :many
-SELECT l.*, s.uuid AS service_uuid, st.uuid AS staff_uuid
+SELECT l.*, s.uuid AS service_uuid, st.uuid AS staff_uuid, sbd.uuid AS bundle_uuid
 FROM reservation_lines l
 LEFT JOIN services s ON s.organization_id = l.organization_id AND s.id = l.service_id
 LEFT JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+LEFT JOIN service_bundles sbd ON sbd.organization_id = l.organization_id AND sbd.id = l.bundle_id
 WHERE l.organization_id = sqlc.arg(organization_id) AND l.reservation_id = sqlc.arg(reservation_id)
 ORDER BY l.line_index;
 
@@ -231,7 +233,7 @@ RETURNING *;
 DELETE FROM reservation_lines WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(reservation_id);
 
 -- name: ListReservationLinePrices :many
-SELECT line_index, service_id, staff_id, unit_price FROM reservation_lines
+SELECT line_index, service_id, staff_id, unit_price, bundle_id, bundle_name, list_price FROM reservation_lines
 WHERE organization_id = sqlc.arg(organization_id) AND reservation_id = sqlc.arg(reservation_id)
 ORDER BY line_index;
 

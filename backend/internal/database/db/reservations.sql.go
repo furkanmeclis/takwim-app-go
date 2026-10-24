@@ -294,13 +294,14 @@ func (q *Queries) CreateReservationEvent(ctx context.Context, arg CreateReservat
 const createReservationLine = `-- name: CreateReservationLine :exec
 INSERT INTO reservation_lines (
     organization_id, reservation_id, line_index, service_id, service_name, staff_id, staff_name, resources,
-    starts_at, ends_at, duration_minutes, buffer_before_minutes, buffer_after_minutes, unit_price
+    starts_at, ends_at, duration_minutes, buffer_before_minutes, buffer_after_minutes, unit_price,
+    bundle_id, bundle_name, list_price
 )
 VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
     $10, $11, $12, $13,
-    $14
+    $14, $15, $16, $17
 )
 `
 
@@ -319,6 +320,9 @@ type CreateReservationLineParams struct {
 	BufferBeforeMinutes int32              `json:"buffer_before_minutes"`
 	BufferAfterMinutes  int32              `json:"buffer_after_minutes"`
 	UnitPrice           pgtype.Numeric     `json:"unit_price"`
+	BundleID            pgtype.Int8        `json:"bundle_id"`
+	BundleName          pgtype.Text        `json:"bundle_name"`
+	ListPrice           pgtype.Numeric     `json:"list_price"`
 }
 
 func (q *Queries) CreateReservationLine(ctx context.Context, arg CreateReservationLineParams) error {
@@ -337,6 +341,9 @@ func (q *Queries) CreateReservationLine(ctx context.Context, arg CreateReservati
 		arg.BufferBeforeMinutes,
 		arg.BufferAfterMinutes,
 		arg.UnitPrice,
+		arg.BundleID,
+		arg.BundleName,
+		arg.ListPrice,
 	)
 	return err
 }
@@ -1217,7 +1224,7 @@ func (q *Queries) ListReservationEvents(ctx context.Context, arg ListReservation
 }
 
 const listReservationLinePrices = `-- name: ListReservationLinePrices :many
-SELECT line_index, service_id, staff_id, unit_price FROM reservation_lines
+SELECT line_index, service_id, staff_id, unit_price, bundle_id, bundle_name, list_price FROM reservation_lines
 WHERE organization_id = $1 AND reservation_id = $2
 ORDER BY line_index
 `
@@ -1228,10 +1235,13 @@ type ListReservationLinePricesParams struct {
 }
 
 type ListReservationLinePricesRow struct {
-	LineIndex int32          `json:"line_index"`
-	ServiceID pgtype.Int8    `json:"service_id"`
-	StaffID   pgtype.Int8    `json:"staff_id"`
-	UnitPrice pgtype.Numeric `json:"unit_price"`
+	LineIndex  int32          `json:"line_index"`
+	ServiceID  pgtype.Int8    `json:"service_id"`
+	StaffID    pgtype.Int8    `json:"staff_id"`
+	UnitPrice  pgtype.Numeric `json:"unit_price"`
+	BundleID   pgtype.Int8    `json:"bundle_id"`
+	BundleName pgtype.Text    `json:"bundle_name"`
+	ListPrice  pgtype.Numeric `json:"list_price"`
 }
 
 func (q *Queries) ListReservationLinePrices(ctx context.Context, arg ListReservationLinePricesParams) ([]ListReservationLinePricesRow, error) {
@@ -1248,6 +1258,9 @@ func (q *Queries) ListReservationLinePrices(ctx context.Context, arg ListReserva
 			&i.ServiceID,
 			&i.StaffID,
 			&i.UnitPrice,
+			&i.BundleID,
+			&i.BundleName,
+			&i.ListPrice,
 		); err != nil {
 			return nil, err
 		}
@@ -1260,10 +1273,11 @@ func (q *Queries) ListReservationLinePrices(ctx context.Context, arg ListReserva
 }
 
 const listReservationLines = `-- name: ListReservationLines :many
-SELECT l.id, l.organization_id, l.reservation_id, l.line_index, l.service_id, l.service_name, l.staff_id, l.staff_name, l.resources, l.starts_at, l.ends_at, l.duration_minutes, l.buffer_before_minutes, l.buffer_after_minutes, l.unit_price, l.vat_rate, l.staff_share_rate, s.uuid AS service_uuid, st.uuid AS staff_uuid
+SELECT l.id, l.organization_id, l.reservation_id, l.line_index, l.service_id, l.service_name, l.staff_id, l.staff_name, l.resources, l.starts_at, l.ends_at, l.duration_minutes, l.buffer_before_minutes, l.buffer_after_minutes, l.unit_price, l.vat_rate, l.staff_share_rate, l.bundle_id, l.bundle_name, l.list_price, s.uuid AS service_uuid, st.uuid AS staff_uuid, sbd.uuid AS bundle_uuid
 FROM reservation_lines l
 LEFT JOIN services s ON s.organization_id = l.organization_id AND s.id = l.service_id
 LEFT JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+LEFT JOIN service_bundles sbd ON sbd.organization_id = l.organization_id AND sbd.id = l.bundle_id
 WHERE l.organization_id = $1 AND l.reservation_id = $2
 ORDER BY l.line_index
 `
@@ -1291,8 +1305,12 @@ type ListReservationLinesRow struct {
 	UnitPrice           pgtype.Numeric     `json:"unit_price"`
 	VatRate             pgtype.Numeric     `json:"vat_rate"`
 	StaffShareRate      pgtype.Numeric     `json:"staff_share_rate"`
+	BundleID            pgtype.Int8        `json:"bundle_id"`
+	BundleName          pgtype.Text        `json:"bundle_name"`
+	ListPrice           pgtype.Numeric     `json:"list_price"`
 	ServiceUuid         pgtype.UUID        `json:"service_uuid"`
 	StaffUuid           pgtype.UUID        `json:"staff_uuid"`
+	BundleUuid          pgtype.UUID        `json:"bundle_uuid"`
 }
 
 func (q *Queries) ListReservationLines(ctx context.Context, arg ListReservationLinesParams) ([]ListReservationLinesRow, error) {
@@ -1322,8 +1340,12 @@ func (q *Queries) ListReservationLines(ctx context.Context, arg ListReservationL
 			&i.UnitPrice,
 			&i.VatRate,
 			&i.StaffShareRate,
+			&i.BundleID,
+			&i.BundleName,
+			&i.ListPrice,
 			&i.ServiceUuid,
 			&i.StaffUuid,
+			&i.BundleUuid,
 		); err != nil {
 			return nil, err
 		}

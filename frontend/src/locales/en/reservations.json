@@ -187,6 +187,7 @@
   "detail.history": "History",
   "detail.hold_expires": "Unless decided by {{at}}, this request is cancelled on its own and its time is freed.",
   "lines.time": "Time",
+  "lines.bundle": "{{name}} bundle",
   "lines.service": "Service",
   "lines.staff": "Staff",
   "lines.resources": "Resources",
@@ -470,5 +471,9 @@
   "form.section_questions": "Extra fields",
   "form.section_questions_desc": "Questions set in the business settings; the answers are stored on the booking.",
   "columns.custom_answers": "Extra fields",
-  "confirmation_task.sources.phone": "By phone (staff)"
+  "confirmation_task.sources.phone": "By phone (staff)",
+  "fields.bundle": "Service bundle",
+  "fields.bundle_none": "No bundle, pick services one by one",
+  "fields.bundle_hint": "Picking a bundle adds its services in order; you can choose the staff member of each service.",
+  "fields.bundle_price": "Bundle price {{price}}, spread over the services by their list prices."
 }

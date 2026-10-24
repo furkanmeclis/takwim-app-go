@@ -89,6 +89,15 @@ export const routes = {
       edit: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/services/${uuid}/edit`,
     },
+    serviceBundles: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/service-bundles`,
+      create: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/service-bundles/create`,
+      detail: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/service-bundles/${uuid}`,
+      edit: (slug: string, uuid: string) =>
+        `/t/${encodeURIComponent(slug)}/service-bundles/${uuid}/edit`,
+    },
     products: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/products`,
       create: (slug: string) =>

@@ -21,6 +21,9 @@ service_categories
 services
 service_branches
 service_staff
+service_bundles
+service_bundle_items
+service_bundle_branches
 customers
 customer_identity_links
 capacity_holds

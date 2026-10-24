@@ -130,6 +130,9 @@ import (
 	searchmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search"
 	searchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/handler"
 	searchusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/usecase"
+	servicebundlesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles"
+	servicebundleshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/handler"
+	servicebundlesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/usecase"
 	servicesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services"
 	servicesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/adapters"
 	serviceshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/handler"
@@ -530,6 +533,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffmodule.RegisterLiveResources(tenantLive)
 	resourcesmodule.RegisterLiveResources(tenantLive)
 	servicesmodule.RegisterLiveResources(tenantLive)
+	servicebundlesmodule.RegisterLiveResources(tenantLive)
 	productsmodule.RegisterLiveResources(tenantLive)
 	customersmodule.RegisterLiveResources(tenantLive)
 	cashmodule.RegisterLiveResources(tenantLive)
@@ -666,6 +670,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Sample: importH.TenantSample(servicesmodule.Resource),
 		Bulk:   bulkH.TenantExecute(servicesmodule.Resource),
 	}, tokens, loader, tenantResolver)
+	bundlesH := servicebundleshandler.New(
+		servicebundlesusecase.New(servicesrepository.NewPostgres(deps.DB, deps.Queries)), activityRec)
+	bundlesH.SetResourceEvents(resourceEvents)
+	servicebundlesmodule.RegisterRoutes(mux, bundlesH, tokens, loader, tenantResolver)
 	productsH := productshandler.New(productsSvc, activityRec)
 	productsH.SetResourceEvents(resourceEvents)
 	productsmodule.RegisterRoutes(mux, productsH, productsmodule.EngineHandlers{

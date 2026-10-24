@@ -155,7 +155,7 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 				return err
 			}
 		}
-		priced, _, err := s.priceLines(ctx, tx, created.Slot, "")
+		priced, _, err := s.priceLines(ctx, tx, created.Slot, "", nil)
 		if err != nil {
 			return err
 		}
@@ -163,8 +163,11 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if err != nil {
 			return err
 		}
+		// A bundle booking moved with the same services keeps its split
+		// (TEC-895); otherwise unchanged lines keep their price.
+		bundled := keepBundle(priced, before)
 		for i := range priced {
-			if i < len(before) && before[i].ServiceID == priced[i].ServiceID && before[i].StaffID == priced[i].StaffID {
+			if !bundled && i < len(before) && before[i].ServiceID == priced[i].ServiceID && before[i].StaffID == priced[i].StaffID {
 				priced[i].UnitPrice = before[i].UnitPrice
 			}
 		}

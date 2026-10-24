@@ -311,6 +311,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		cover := must(upload(o, http.MethodPut, "/v1/tenant/services/"+ids["service"]+"/image", "file", "cover.png",
 			png, nil), http.StatusOK, "upload service image")
 		ids["serviceImageURL"] = str(cover, "image_url")
+		ids["bundle"] = str(must(call(o, http.MethodPost, "/v1/tenant/service-bundles", map[string]any{
+			"name": m + " Paket", "price": "800.00", "service_uuids": []string{ids["service"], ids["service"]},
+			"branch_uuids": []string{ids["branch"]},
+		}), http.StatusCreated, "create service bundle"), "uuid")
 		ids["product"] = str(must(call(o, http.MethodPost, "/v1/tenant/products", map[string]any{
 			"name": m + " Ürün", "sku": m + "-SKU", "barcode": m + "-BAR", "price": "120.00", "cost": "60.00",
 			"branch_uuids": []string{ids["branch"]},
@@ -611,6 +615,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/integration-jobs": {"?status=failed"},
 		"GET /v1/tenant/services":         {"?category=" + orgB.ids["serviceCategory"], "?branch=" + orgB.ids["branch"]},
 		"GET /v1/tenant/products":         {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/service-bundles":  {"?branch=" + orgB.ids["branch"]},
 		"GET /v1/tenant/products/lookup":  {"?code=" + orgB.ids["productSKU"]},
 		"GET /v1/tenant/stock-movements": {"?branch=" + orgB.ids["branch"], "?product=" + orgB.ids["product"],
 			"?staff=" + orgB.ids["staff"]},
@@ -704,6 +709,11 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/services", map[string]any{"name": "X1", "duration_minutes": 30, "price": "1", "category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"POST /v1/tenant/services", map[string]any{"name": "X2", "duration_minutes": 30, "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/services/bulk", bulkIDs("service"), nil},
+		{"POST /v1/tenant/service-bundles", map[string]any{"name": "XB1", "price": "1", "service_uuids": []string{orgB.ids["service"], orgB.ids["service"]}}, reject},
+		{"POST /v1/tenant/service-bundles", map[string]any{"name": "XB2", "price": "1", "service_uuids": []string{orgA.ids["service"], orgA.ids["service"]},
+			"branch_uuids": []string{orgB.ids["branch"]}}, reject},
+		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgA.ids["branch"], "customer_uuid": orgA.ids["customer"],
+			"bundle_uuid": orgB.ids["bundle"], "starts_at": "2030-01-07T13:00:00+03:00"}, reject},
 		{"POST /v1/tenant/products", map[string]any{"name": "X", "sku": "ISO-X1", "price": "1", "branch_uuids": []string{orgB.ids["branch"]}}, reject},
 		{"POST /v1/tenant/products/bulk", bulkIDs("product"), nil},
 		{"POST /v1/tenant/stock-movements", map[string]any{"kind": "receipt", "branch_uuid": orgA.ids["branch"],
@@ -799,6 +809,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/resources/" + orgA.ids["resource"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
 		{"PATCH /v1/tenant/cash/accounts/" + orgA.ids["cashAccount"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
 		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
+		{"PATCH /v1/tenant/service-bundles/" + orgA.ids["bundle"], map[string]any{"service_uuids": []string{orgB.ids["service"], orgB.ids["service"]}}, reject},
+		{"PATCH /v1/tenant/service-bundles/" + orgA.ids["bundle"], map[string]any{"branch_uuids": []string{orgB.ids["home"]}}, reject},
 		{"PATCH /v1/tenant/finance/entries/" + orgA.ids["financeEntry"], map[string]any{"category_uuid": orgB.ids["financeCategory"]}, reject},
 		{"PATCH /v1/tenant/finance/entries/" + orgA.ids["financeEntry"], map[string]any{"staff_uuid": orgB.ids["shareStaff"]}, reject},
 		{"POST /v1/tenant/finance/entries/" + orgA.ids["financeEntry"] + "/correct", map[string]any{
@@ -998,6 +1010,8 @@ func paramKey(prev, name string) string {
 		return "service"
 	case "service-categories/uuid":
 		return "serviceCategory"
+	case "service-bundles/uuid":
+		return "bundle"
 	case "customers/uuid":
 		return "customer"
 	case "products/uuid":

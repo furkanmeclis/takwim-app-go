@@ -87,6 +87,8 @@ export function createBookingSchema(
       customer_uuid: z
         .string()
         .min(1, t("reservations.validation.customer_required")),
+      /** NO_BUNDLE or a combined service bundle (TEC-895). */
+      bundle_uuid: z.string(),
       lines: z
         .array(
           z.object({
@@ -243,6 +245,9 @@ export const ANY_STAFF = "any";
 
 /** Select value for "any area" of the branch. */
 export const ANY_ZONE = "any";
+
+/** Select value for "no bundle": the services are picked one by one. */
+export const NO_BUNDLE = "none";
 
 /** Select value for "no vehicle given" (car wash). */
 export const NO_VEHICLE = "none";
