@@ -250,6 +250,7 @@
   "actions.reservations.updated": "Reservation notes updated",
   "resources.tenant.cash_accounts": "Cash and bank accounts",
   "resources.tenant.cash_movements": "Cash movements",
+  "resources.tenant.stock_movements": "Stock movements",
   "actions.cash_accounts.created": "Account added",
   "actions.cash_accounts.updated": "Account updated",
   "actions.cash_accounts.movement_created": "Cash movement posted",

@@ -4470,6 +4470,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/stock-movements/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export stock movements
+         * @description Queues an export of the stock ledger of the caller's branches
+         *     (`tenant.products.read` and `tenant.products.export`, `products`
+         *     module). `query` honours the list filters: `q`, `sort`, `kind`,
+         *     `branch`, `product`, `staff`, `from` and `to` (RFC 3339). At most
+         *     50 000 rows. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantStockMovementsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a stock count import file
+         * @description Creates a bulk count import job (`tenant.products.read` and
+         *     `tenant.products.stock`). Each row names `branch_code`,
+         *     `stock_code` (the SKU or barcode of a product, or of a variant for
+         *     products with variants) and `counted_quantity` (0-100 000), with an
+         *     optional `reason` and `note`. A row writes one `adjustment`
+         *     movement (`source` `import`) that sets the branch stock to the
+         *     counted units; branches outside the requester's scope read as
+         *     unknown. The dry run shows the stock on hand changing to the counted
+         *     units. A rollback writes the opposite adjustment
+         *     (`import_rollback`) and is refused for a row whose units have left
+         *     the stock since. Continue with `/v1/tenant/imports/{uuid}/mapping`,
+         *     `/preview` and `/confirm`.
+         */
+        post: operations["postTenantStockMovementsImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/import/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a stock count import sample */
+        get: operations["getTenantStockMovementsImportSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/stock-movements": {
         parameters: {
             query?: never;
@@ -13241,7 +13313,7 @@ export interface components {
             reason: string;
             note: string;
             /**
-             * @description `manual`, or `sale_return` for the return of a sale.
+             * @description `manual` (panel), `sale_return` for the return of a sale, `reservation` for products handed over at a visit, `import` for a count from a stock count import, `import_rollback` for the adjustment that rolled such a count back.
              * @example manual
              */
             source: string;
@@ -25264,6 +25336,104 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantStockMovementsExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantStockMovementsImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportUploadForm"];
+            };
+        };
+        responses: {
+            /** @description Import job */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeImportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStockMovementsImportSample: {
+        parameters: {
+            query?: {
+                format?: "json" | "xlsx" | "csv" | "tsv";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sample file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantStockMovements: {

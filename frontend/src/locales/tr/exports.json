@@ -81,6 +81,7 @@
   "resources.tenant.products": "Ürünler",
   "resources.tenant.cash_accounts": "Kasa ve banka hesapları",
   "resources.tenant.cash_movements": "Kasa hareketleri",
+  "resources.tenant.stock_movements": "Stok hareketleri",
   "resources.tenant.finance_entries": "Gelir ve gider kayıtları",
   "resources.tenant.staff_share_lines": "Çalışan payları",
   "resources.tenant.staff_share_payouts": "Pay ödemeleri"

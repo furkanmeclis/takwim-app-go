@@ -72,6 +72,7 @@ var isolationAllowlist = map[string]string{
 	"POST /v1/tenant/services/import":                       "imports match names, category names and branch codes inside the organization (services DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/service-categories":                    "body has no foreign references (name, description, sort order)",
 	"POST /v1/tenant/products/import":                       "imports match stock codes and branch codes inside the organization (products DB tests); the job is the {uuid} cases",
+	"POST /v1/tenant/stock-movements/import":                "count imports match branch codes and stock codes inside the organization (products DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/customers":                             "body has no foreign references (name, contact, notes, tags, consent)",
 	"POST /v1/tenant/customers/import":                      "imports match phones inside the organization (customers DB tests); the job is the {uuid} cases",
 	"PATCH /v1/tenant/organization":                         "profile of the caller's organization (name only); no foreign references",

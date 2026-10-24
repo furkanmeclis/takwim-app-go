@@ -112,6 +112,7 @@ export type IoResource =
   | "tenant.reservations"
   | "tenant.cash_accounts"
   | "tenant.cash_movements"
+  | "tenant.stock_movements"
   | "tenant.finance_entries"
   | "tenant.staff_share_lines"
   | "tenant.staff_share_payouts"
@@ -132,6 +133,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.reservations": "/v1/tenant/reservations/export",
   "tenant.cash_accounts": "/v1/tenant/cash/accounts/export",
   "tenant.cash_movements": "/v1/tenant/cash/movements/export",
+  "tenant.stock_movements": "/v1/tenant/stock-movements/export",
   "tenant.finance_entries": "/v1/tenant/finance/entries/export",
   "tenant.staff_share_lines": "/v1/tenant/staff-shares/lines/export",
   "tenant.staff_share_payouts": "/v1/tenant/staff-shares/payouts/export",
@@ -171,6 +173,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.customers": {
     upload: "/v1/tenant/customers/import",
     sample: "/v1/tenant/customers/import/sample",
+  },
+  "tenant.stock_movements": {
+    upload: "/v1/tenant/stock-movements/import",
+    sample: "/v1/tenant/stock-movements/import/sample",
   },
 };
 
@@ -262,6 +268,26 @@ export const IMPORT_SCHEMA: Partial<
     { key: "show_online", labelKey: "products.fields.show_online" },
     { key: "is_active", labelKey: "products.fields.is_active" },
     { key: "description", labelKey: "products.fields.description" },
+  ],
+  // Bulk stock count: each row writes one count (adjustment) movement.
+  "tenant.stock_movements": [
+    {
+      key: "branch_code",
+      labelKey: "products.movements.import.branch_code",
+      required: true,
+    },
+    {
+      key: "stock_code",
+      labelKey: "products.movements.import.stock_code",
+      required: true,
+    },
+    {
+      key: "counted_quantity",
+      labelKey: "products.movements.fields.counted_quantity",
+      required: true,
+    },
+    { key: "reason", labelKey: "products.movements.fields.reason" },
+    { key: "note", labelKey: "products.movements.fields.note" },
   ],
   "tenant.services": [
     { key: "category", labelKey: "services.fields.category" },

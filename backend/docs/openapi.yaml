@@ -7273,6 +7273,102 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/stock-movements/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStockMovementsExport
+      summary: Export stock movements
+      description: |
+        Queues an export of the stock ledger of the caller's branches
+        (`tenant.products.read` and `tenant.products.export`, `products`
+        module). `query` honours the list filters: `q`, `sort`, `kind`,
+        `branch`, `product`, `staff`, `from` and `to` (RFC 3339). At most
+        50 000 rows. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/stock-movements/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStockMovementsImport
+      summary: Upload a stock count import file
+      description: |
+        Creates a bulk count import job (`tenant.products.read` and
+        `tenant.products.stock`). Each row names `branch_code`,
+        `stock_code` (the SKU or barcode of a product, or of a variant for
+        products with variants) and `counted_quantity` (0-100 000), with an
+        optional `reason` and `note`. A row writes one `adjustment`
+        movement (`source` `import`) that sets the branch stock to the
+        counted units; branches outside the requester's scope read as
+        unknown. The dry run shows the stock on hand changing to the counted
+        units. A rollback writes the opposite adjustment
+        (`import_rollback`) and is refused for a row whose units have left
+        the stock since. Continue with `/v1/tenant/imports/{uuid}/mapping`,
+        `/preview` and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/stock-movements/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStockMovementsImportSample
+      summary: Download a stock count import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/stock-movements:
     get:
       tags: [Tenant]
@@ -19652,7 +19748,7 @@ components:
             - type: "null"
         reason: { type: string }
         note: { type: string }
-        source: { type: string, example: manual, description: "`manual`, or `sale_return` for the return of a sale." }
+        source: { type: string, example: manual, description: "`manual` (panel), `sale_return` for the return of a sale, `reservation` for products handed over at a visit, `import` for a count from a stock count import, `import_rollback` for the adjustment that rolled such a count back." }
         occurred_at: { type: string, format: date-time }
         created_by:
           oneOf:

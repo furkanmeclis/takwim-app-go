@@ -7,6 +7,8 @@ import type {
 
 /** Resource slug shared by io / bulk / activity / live lists. */
 export const PRODUCTS_RESOURCE = "tenant.products" as const;
+/** Engine slug of the stock ledger (export, bulk count import). */
+export const STOCK_MOVEMENTS_RESOURCE = "tenant.stock_movements" as const;
 
 export const PRODUCT_UNITS: ProductUnit[] = [
   "piece",
