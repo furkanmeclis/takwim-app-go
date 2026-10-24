@@ -102,6 +102,8 @@ type Service struct {
 	repo    *repository.Postgres
 	indexer SearchIndexer
 	storage storage.Driver
+	// sales writes the sale line of a stock sale (TEC-916).
+	sales SaleRecorder
 }
 
 // New builds the service. indexer may be nil.

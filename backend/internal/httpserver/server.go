@@ -104,6 +104,10 @@ import (
 	resourceshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/handler"
 	resourcesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/repository"
 	resourcesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/resources/usecase"
+	salesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales"
+	saleshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/handler"
+	salesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/repository"
+	salesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/usecase"
 	searchmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search"
 	searchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/handler"
 	searchusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/usecase"
@@ -397,6 +401,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequests)
 	reservationsSvc := reservationsusecase.New(capacityHolds, deps.Queries, orgsettingsSvc)
 	reservationsSvc.SetSearchIndexer(searchIndexer)
+	// Sale lines and the customer ledger (TEC-916): a completed visit and a
+	// stock sale write their sale lines in the same transaction.
+	salesSvc := salesusecase.New(salesrepository.NewPostgres(deps.DB, deps.Queries), cashSvc)
+	reservationsSvc.SetCompletionHook(salesSvc.RecordReservationTx)
+	productsSvc.SetSaleRecorder(salesmodule.ProductSaleRecorder(salesSvc))
 	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
 	availabilitySvc.SetBusySource(capacityHolds.Busy())
 	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
@@ -432,6 +441,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	productsmodule.RegisterLiveResources(tenantLive)
 	customersmodule.RegisterLiveResources(tenantLive)
 	cashmodule.RegisterLiveResources(tenantLive)
+	salesmodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
@@ -586,6 +596,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}, tokens, loader, tenantResolver)
 	// Reservations (TEC-899 / TEC-900): the record on top of the capacity
 	// holds.
+	salesH := saleshandler.New(salesSvc, activityRec)
+	salesH.SetResourceEvents(resourceEvents)
+	salesmodule.RegisterRoutes(mux, salesH, tokens, loader, tenantResolver)
 	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)

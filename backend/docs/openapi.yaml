@@ -8977,6 +8977,412 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/sales/lines/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSaleLinesMeta
+      summary: Sale line list metadata
+      description: Table contract of `GET /v1/tenant/sales/lines` (`tenant.finance.read`, `finance` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/sales/lines:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSaleLines
+      summary: Sale lines (revenue)
+      description: |
+        Services delivered (a completed visit, one line per reservation line)
+        and products handed over (a stock sale), with their reversals, in the
+        caller's branch scope (`tenant.finance.read`). The net amounts of a
+        day are its revenue. `q` searches the description, the customer and
+        the staff member.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `sale_date`, `net_amount`, `kind`, `created_at`; prefix `-` for descending. Default: newest first."
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "`sale` and / or `reversal`; comma-separate or repeat"
+          schema: { type: string }
+        - name: item_type
+          in: query
+          description: "`service` and / or `product`; comma-separate or repeat"
+          schema: { type: string }
+        - name: reservation
+          in: query
+          schema: { type: string, format: uuid }
+        - name: customer
+          in: query
+          schema: { type: string, format: uuid }
+        - name: staff
+          in: query
+          description: "Staff uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Sale line page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSaleLinePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/sales/lines/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSaleLine
+      summary: One sale line
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/SaleLineUUID"
+      responses:
+        "200":
+          description: Sale line
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSaleLine"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/sales/lines/{uuid}/reverse:
+    post:
+      tags: [Tenant]
+      operationId: postTenantSaleLineReverse
+      summary: Reverse a sale line
+      description: |
+        `tenant.finance.write` and a reason. Writes the exact negative of a
+        live sale line dated today and reverses its ledger debit; the line
+        itself stays. A line is reversed once (`409 already_reversed`); a
+        reversal is not reversed (`409 not_reversible`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/SaleLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesReasonRequest"
+      responses:
+        "201":
+          description: The reversal line
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSaleLine"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/sales/lines/{uuid}/correct:
+    post:
+      tags: [Tenant]
+      operationId: postTenantSaleLineCorrect
+      summary: Correct a sale line
+      description: |
+        `tenant.finance.write` and a reason; a new `unit_price` also needs
+        `tenant.price.override`, a new `discount_amount` `tenant.discount.apply`.
+        The live line is reversed and a replacement for the same item is
+        written, both dated today, with their ledger postings: earlier days
+        keep their figures. `409 nothing_changed` when the values are the same.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/SaleLineUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleLineCorrectRequest"
+      responses:
+        "201":
+          description: The reversal and the replacement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSaleLineCorrection"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/sales/entries/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantLedgerEntriesMeta
+      summary: Ledger list metadata
+      description: Table contract of `GET /v1/tenant/sales/entries` (`tenant.finance.read`, `finance` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/sales/entries:
+    get:
+      tags: [Tenant]
+      operationId: getTenantLedgerEntries
+      summary: Customer ledger
+      description: |
+        What customers were charged (`sale`, debit), paid (`collection`,
+        credit) and paid back (`refund`, debit), with reversals, in the
+        caller's branch scope (`tenant.finance.read`). `q` searches the
+        description and the customer.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `entry_date`, `amount`, `kind`, `created_at`; prefix `-` for descending. Default: newest first."
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "Entry kinds; comma-separate or repeat"
+          schema: { type: string }
+        - name: reservation
+          in: query
+          schema: { type: string, format: uuid }
+        - name: customer
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Ledger page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeLedgerEntryPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/sales/entries/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantLedgerEntry
+      summary: One ledger entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/LedgerEntryUUID"
+      responses:
+        "200":
+          description: Ledger entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeLedgerEntry"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/sales/entries/{uuid}/reverse:
+    post:
+      tags: [Tenant]
+      operationId: postTenantLedgerEntryReverse
+      summary: Reverse a collection or refund
+      description: |
+        `tenant.finance.write` and a reason. Posts the opposite entry and the
+        reversal of its cash movement, both dated today. A sale entry is
+        reversed through its sale line (`409 reverse_sale_line`); a
+        collection with live refunds only after them (`409 has_refunds`);
+        an entry is reversed once (`409 already_reversed`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/LedgerEntryUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesReasonRequest"
+      responses:
+        "201":
+          description: The reversal entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeLedgerEntry"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/sales/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantSalesSummary
+      summary: Revenue, collections, transfers and staff payouts
+      description: |
+        The figures of a date range (default today; at most 366 days) per
+        currency and per day, each from its own source (A20): revenue from
+        the sale lines, collections and refunds from the ledger, transfers
+        between accounts and staff payouts from the cash book. A prepayment
+        is a collection on the day it was taken; the service is revenue on
+        the day it was delivered.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeSalesSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/sales/reservations/{uuid}/balance:
+    get:
+      tags: [Tenant]
+      operationId: getTenantReservationBalance
+      summary: What a visit costs and what was paid
+      description: |
+        Before completion the expected amount is the booked total of a
+        standing booking (0 once cancelled, rejected or not attended);
+        afterwards the net of its live sale lines. Paid = collected -
+        refunded; `remaining` is still owed, `credit` paid beyond it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: uuid
+          in: path
+          required: true
+          description: Reservation UUID.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Reservation balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeReservationBalance"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/sales/customers/{uuid}/balance:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomerBalance
+      summary: Ledger balance of a customer
+      description: Charged, collected, refunded, paid and balance per currency inside the caller's branch scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: uuid
+          in: path
+          required: true
+          description: Customer UUID.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Customer balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerBalance"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -10529,6 +10935,22 @@ components:
       in: path
       required: true
       description: Cash account UUID.
+      schema:
+        type: string
+        format: uuid
+    SaleLineUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Sale line UUID.
+      schema:
+        type: string
+        format: uuid
+    LedgerEntryUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Ledger entry UUID.
       schema:
         type: string
         format: uuid
@@ -12753,6 +13175,309 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/CashMovementList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    SalesRef:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+
+    SalesReservationRef:
+      type: object
+      required: [uuid, number]
+      properties:
+        uuid: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+
+    SaleLine:
+      type: object
+      description: One service delivered or product handed over (`sale`), or the exact negative of one (`reversal`). Append-only.
+      required: [uuid, kind, item_type, source_type, source_uuid, branch, customer, reservation, line_index, service_uuid, product_uuid, variant_uuid, staff, description, quantity, unit_price, gross_amount, discount_amount, net_amount, currency, sale_date, generation, reverses_uuid, reversed_by_uuid, replaces_uuid, replaced_by_uuid, reason, created_by, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [sale, reversal] }
+        item_type: { type: string, enum: [service, product] }
+        source_type: { type: string, enum: [reservation, stock_movement] }
+        source_uuid: { type: [string, "null"], format: uuid, description: "The reservation or the stock movement" }
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        customer:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        reservation:
+          oneOf:
+            - $ref: "#/components/schemas/SalesReservationRef"
+            - type: "null"
+        line_index: { type: [integer, "null"] }
+        service_uuid: { type: [string, "null"], format: uuid }
+        product_uuid: { type: [string, "null"], format: uuid }
+        variant_uuid: { type: [string, "null"], format: uuid }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        description: { type: string }
+        quantity: { type: integer }
+        unit_price: { type: string, example: "100.00" }
+        gross_amount: { type: string, example: "100.00", description: "Negative on a reversal" }
+        discount_amount: { type: string, example: "0.00" }
+        net_amount: { type: string, example: "100.00", description: "gross - discount; the revenue of sale_date" }
+        currency: { type: string }
+        sale_date: { type: string, format: date }
+        generation: { type: integer, description: "0 for the first sale of the item, +1 per correction" }
+        reverses_uuid: { type: [string, "null"], format: uuid }
+        reversed_by_uuid: { type: [string, "null"], format: uuid }
+        replaces_uuid: { type: [string, "null"], format: uuid }
+        replaced_by_uuid: { type: [string, "null"], format: uuid }
+        reason: { type: string }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    SaleLinePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SaleLine" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    SalesReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    SaleLineCorrectRequest:
+      type: object
+      required: [reason]
+      properties:
+        quantity: { type: integer, minimum: 1 }
+        unit_price: { type: string, example: "90.00" }
+        discount_amount: { type: string, example: "10.00" }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+
+    SaleLineCorrection:
+      type: object
+      required: [reversal, replacement]
+      properties:
+        reversal: { $ref: "#/components/schemas/SaleLine" }
+        replacement: { $ref: "#/components/schemas/SaleLine" }
+
+    LedgerEntry:
+      type: object
+      description: One append-only row of the customer ledger.
+      required: [uuid, kind, effective_kind, direction, amount, currency, entry_date, method, branch, customer, reservation, sale_line_uuid, cash_movement_uuid, cash_account, refunds_uuid, reverses_uuid, reversed_by_uuid, source_type, source_uuid, description, created_by, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [sale, collection, refund, reversal] }
+        effective_kind: { type: string, enum: [sale, collection, refund], description: "The kind a reversal undoes (the kind itself otherwise)" }
+        direction: { type: string, enum: [debit, credit] }
+        amount: { type: string, example: "100.00" }
+        currency: { type: string }
+        entry_date: { type: string, format: date }
+        method: { type: string, enum: ["", cash, card, transfer, online, other] }
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        customer:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        reservation:
+          oneOf:
+            - $ref: "#/components/schemas/SalesReservationRef"
+            - type: "null"
+        sale_line_uuid: { type: [string, "null"], format: uuid }
+        cash_movement_uuid: { type: [string, "null"], format: uuid }
+        cash_account:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        refunds_uuid: { type: [string, "null"], format: uuid, description: "The collection a refund pays back" }
+        reverses_uuid: { type: [string, "null"], format: uuid }
+        reversed_by_uuid: { type: [string, "null"], format: uuid }
+        source_type: { type: string }
+        source_uuid: { type: [string, "null"], format: uuid }
+        description: { type: string }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    LedgerEntryPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerEntry" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    SalesRevenue:
+      type: object
+      required: [gross, discount, reversed, net, service_net, product_net, sale_count]
+      properties:
+        gross: { type: string }
+        discount: { type: string }
+        reversed: { type: string, description: "Reversals and the old side of corrections (negative)" }
+        net: { type: string }
+        service_net: { type: string }
+        product_net: { type: string }
+        sale_count: { type: integer, format: int64 }
+
+    SalesCollections:
+      type: object
+      required: [collected, refunded, reversed, net, count]
+      properties:
+        collected: { type: string }
+        refunded: { type: string }
+        reversed: { type: string, description: "Net effect of reversed collections / refunds" }
+        net: { type: string }
+        count: { type: integer, format: int64 }
+
+    SalesFigures:
+      type: object
+      required: [currency, revenue, collections, transfers, staff_payments]
+      properties:
+        currency: { type: string }
+        revenue: { $ref: "#/components/schemas/SalesRevenue" }
+        collections: { $ref: "#/components/schemas/SalesCollections" }
+        transfers: { type: string, description: "Money moved between accounts (not revenue)" }
+        staff_payments: { type: string, description: "Staff payouts from the cash book (not an expense of the sale)" }
+
+    SalesSummary:
+      type: object
+      required: [date_from, date_to, totals, days]
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/SalesFigures" }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, figures]
+            properties:
+              date: { type: string, format: date }
+              figures:
+                type: array
+                items: { $ref: "#/components/schemas/SalesFigures" }
+
+    ReservationBalance:
+      type: object
+      required: [reservation, status, currency, booked_total, sales_posted, expected, collected, refunded, paid, remaining, credit, lines, entries]
+      properties:
+        reservation: { $ref: "#/components/schemas/SalesReservationRef" }
+        status: { type: string }
+        currency: { type: string }
+        booked_total: { type: string }
+        sales_posted: { type: boolean }
+        expected: { type: string }
+        collected: { type: string }
+        refunded: { type: string }
+        paid: { type: string }
+        remaining: { type: string }
+        credit: { type: string }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/SaleLine" }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerEntry" }
+
+    LedgerTotals:
+      type: object
+      required: [currency, charged, collected, refunded, paid, balance]
+      properties:
+        currency: { type: string }
+        charged: { type: string }
+        collected: { type: string }
+        refunded: { type: string }
+        paid: { type: string }
+        balance: { type: string, description: "charged - paid; negative = held for the customer" }
+
+    CustomerBalance:
+      type: object
+      required: [customer_uuid, totals]
+      properties:
+        customer_uuid: { type: string, format: uuid }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerTotals" }
+
+    EnvelopeSaleLine:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SaleLine" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeSaleLinePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SaleLinePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeSaleLineCorrection:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SaleLineCorrection" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeLedgerEntry:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/LedgerEntry" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeLedgerEntryPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/LedgerEntryPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeSalesSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SalesSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeReservationBalance:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ReservationBalance" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomerBalance:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomerBalance" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeCashMovementFacets:

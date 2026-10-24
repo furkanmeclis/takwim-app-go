@@ -347,6 +347,11 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["cashClosing"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts/"+ids["cashAccount"]+"/closings", map[string]any{
 			"counted_amount": "150", "note": m,
 		}), http.StatusCreated, "close cash day"), "uuid")
+		// The stock sale above is a product sale line with its ledger debit.
+		saleLines := must(call(o, http.MethodGet, "/v1/tenant/sales/lines", nil), http.StatusOK, "sale lines")
+		ids["saleLine"] = saleLines.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
+		entries := must(call(o, http.MethodGet, "/v1/tenant/sales/entries", nil), http.StatusOK, "ledger entries")
+		ids["ledgerEntry"] = entries.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
 		ids["exportJob"] = str(must(call(o, http.MethodPost, "/v1/tenant/branches/export", map[string]any{"format": "csv"}),
 			http.StatusAccepted, "export"), "uuid")
 		ids["importJob"] = str(must(upload(o, http.MethodPost, "/v1/tenant/branches/import", "file", "branches.csv",
@@ -550,6 +555,11 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/reservations/calendar": {"?from=2030-01-07&by=branch", "?from=2030-01-07&branch=" + orgB.ids["branch"],
 			"?from=2030-01-07&by=resource&branch=" + orgB.ids["branch"], "?from=2030-01-07&by=branch&branch=" + orgB.ids["branch"]},
 		"GET /v1/tenant/reservations/agenda": {"?from=2030-01-07&to=2030-01-13", "?from=2030-01-07&include_cancelled=true"},
+		"GET /v1/tenant/sales/lines": {"?branch=" + orgB.ids["branch"], "?reservation=" + orgB.ids["reservation"],
+			"?customer=" + orgB.ids["customer"], "?staff=" + orgB.ids["staff"], "?q=" + orgB.marker},
+		"GET /v1/tenant/sales/entries": {"?branch=" + orgB.ids["branch"], "?reservation=" + orgB.ids["reservation"],
+			"?customer=" + orgB.ids["customer"], "?q=" + orgB.marker},
+		"GET /v1/tenant/sales/summary": {"?branch=" + orgB.ids["branch"]},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -851,6 +861,10 @@ func paramKey(prev, name string) string {
 		return "cashClosing"
 	case "movements/uuid":
 		return "cashMovement"
+	case "lines/uuid":
+		return "saleLine"
+	case "entries/uuid":
+		return "ledgerEntry"
 	}
 	return ""
 }

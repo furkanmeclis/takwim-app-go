@@ -67,6 +67,7 @@ type Querier interface {
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountInvitations(ctx context.Context, arg CountInvitationsParams) (int64, error)
+	CountLedgerEntries(ctx context.Context, arg CountLedgerEntriesParams) (int64, error)
 	// Central panel (TEC-892): per-branch and total counts of the branches the
 	// caller sees (branch scope, narrowed by the X-Branch header).
 	CountMembersByBranch(ctx context.Context, arg CountMembersByBranchParams) ([]CountMembersByBranchRow, error)
@@ -83,10 +84,12 @@ type Querier interface {
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
 	CountProducts(ctx context.Context, arg CountProductsParams) (int64, error)
+	CountReservationSaleLines(ctx context.Context, arg CountReservationSaleLinesParams) (int64, error)
 	CountReservations(ctx context.Context, arg CountReservationsParams) (int64, error)
 	CountResourceClosures(ctx context.Context, arg CountResourceClosuresParams) (int64, error)
 	CountResources(ctx context.Context, arg CountResourcesParams) (int64, error)
 	CountRoles(ctx context.Context, q_ pgtype.Text) (int64, error)
+	CountSaleLines(ctx context.Context, arg CountSaleLinesParams) (int64, error)
 	CountServices(ctx context.Context, arg CountServicesParams) (int64, error)
 	// The linked account counts only while the user is a member.
 	CountStaff(ctx context.Context, arg CountStaffParams) (int64, error)
@@ -275,8 +278,15 @@ type Querier interface {
 	GetInvitationByUUID(ctx context.Context, arg GetInvitationByUUIDParams) (OrganizationInvitation, error)
 	GetInvitationPreviewByTokenHash(ctx context.Context, tokenHash string) (GetInvitationPreviewByTokenHashRow, error)
 	GetLatestCustomerOTPChallenge(ctx context.Context, phoneE164 string) (CustomerOtpChallenge, error)
+	GetLedgerEntry(ctx context.Context, arg GetLedgerEntryParams) (GetLedgerEntryRow, error)
+	GetLedgerEntryByIdempotencyKey(ctx context.Context, arg GetLedgerEntryByIdempotencyKeyParams) (GetLedgerEntryByIdempotencyKeyRow, error)
+	GetLedgerEntryBySaleLine(ctx context.Context, arg GetLedgerEntryBySaleLineParams) (GetLedgerEntryBySaleLineRow, error)
+	GetLedgerEntryRow(ctx context.Context, arg GetLedgerEntryRowParams) (GetLedgerEntryRowRow, error)
+	GetLedgerEntryRowByID(ctx context.Context, arg GetLedgerEntryRowByIDParams) (GetLedgerEntryRowByIDRow, error)
 	// The business's own record of an identity (customer panel, online booking).
 	GetLinkedCustomer(ctx context.Context, arg GetLinkedCustomerParams) (GetLinkedCustomerRow, error)
+	// The unreversed sale line of an item, if any.
+	GetLiveSaleLineByKey(ctx context.Context, arg GetLiveSaleLineByKeyParams) (GetLiveSaleLineByKeyRow, error)
 	GetLogPurgeRuleByUUID(ctx context.Context, argUuid uuid.UUID) (LogPurgeRule, error)
 	// A member account of the organization (staff link target).
 	GetMemberUserByUUID(ctx context.Context, arg GetMemberUserByUUIDParams) (GetMemberUserByUUIDRow, error)
@@ -332,6 +342,19 @@ type Querier interface {
 	GetRoleByUUID(ctx context.Context, argUuid uuid.UUID) (Role, error)
 	GetRunnerJob(ctx context.Context, arg GetRunnerJobParams) (GetRunnerJobRow, error)
 	GetRunnerJobByUUID(ctx context.Context, arg GetRunnerJobByUUIDParams) (GetRunnerJobByUUIDRow, error)
+	GetSaleLine(ctx context.Context, arg GetSaleLineParams) (GetSaleLineRow, error)
+	GetSaleLineRow(ctx context.Context, arg GetSaleLineRowParams) (GetSaleLineRowRow, error)
+	GetSaleLineRowByID(ctx context.Context, arg GetSaleLineRowByIDParams) (GetSaleLineRowByIDRow, error)
+	GetSalesCashMovement(ctx context.Context, arg GetSalesCashMovementParams) (GetSalesCashMovementRow, error)
+	GetSalesCashMovementByID(ctx context.Context, arg GetSalesCashMovementByIDParams) (GetSalesCashMovementByIDRow, error)
+	// TEC-916: sale lines (revenue) and the customer ledger (what was charged,
+	// collected and refunded). Every query takes the organization id.
+	// ------------------------------------------------------------------ lookups
+	// Time zone (branch override, else the business) and currency of a branch.
+	GetSalesClock(ctx context.Context, arg GetSalesClockParams) (GetSalesClockRow, error)
+	GetSalesCustomerByUUID(ctx context.Context, arg GetSalesCustomerByUUIDParams) (GetSalesCustomerByUUIDRow, error)
+	GetSalesReservation(ctx context.Context, arg GetSalesReservationParams) (GetSalesReservationRow, error)
+	GetSalesReservationByUUID(ctx context.Context, arg GetSalesReservationByUUIDParams) (GetSalesReservationByUUIDRow, error)
 	GetService(ctx context.Context, arg GetServiceParams) (GetServiceRow, error)
 	GetServiceByName(ctx context.Context, arg GetServiceByNameParams) (Service, error)
 	GetServiceCategory(ctx context.Context, arg GetServiceCategoryParams) (ServiceCategory, error)
@@ -379,11 +402,15 @@ type Querier interface {
 	// (organization_id NULL = platform job) and every query names the scope.
 	InsertIntegrationAccount(ctx context.Context, arg InsertIntegrationAccountParams) (int64, error)
 	InsertIntegrationAttempt(ctx context.Context, arg InsertIntegrationAttemptParams) (InsertIntegrationAttemptRow, error)
+	// ----------------------------------------------------------- ledger entries
+	InsertLedgerEntry(ctx context.Context, arg InsertLedgerEntryParams) (InsertLedgerEntryRow, error)
 	InsertNotificationHistory(ctx context.Context, arg InsertNotificationHistoryParams) (NotificationHistory, error)
 	InsertOrganizationSettingsVersion(ctx context.Context, arg InsertOrganizationSettingsVersionParams) (OrganizationSettingsVersion, error)
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (OutboxEvent, error)
 	InsertPushTicket(ctx context.Context, arg InsertPushTicketParams) error
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
+	// --------------------------------------------------------------- sale lines
+	InsertSaleLine(ctx context.Context, arg InsertSaleLineParams) (InsertSaleLineRow, error)
 	InsertStockMovement(ctx context.Context, arg InsertStockMovementParams) (StockMovement, error)
 	InsertStorageActivity(ctx context.Context, arg InsertStorageActivityParams) (StorageActivity, error)
 	InsertStorageLink(ctx context.Context, arg InsertStorageLinkParams) (StorageLink, error)
@@ -394,6 +421,9 @@ type Querier interface {
 	InvalidateActiveOTPs(ctx context.Context, arg InvalidateActiveOTPsParams) error
 	LatestCashClosingDate(ctx context.Context, arg LatestCashClosingDateParams) (pgtype.Date, error)
 	LatestOrganizationSettingsVersion(ctx context.Context, organizationID int64) (int32, error)
+	// Charged (sale entries), collected and refunded per currency of one
+	// reservation or one customer, reversals netted into the kind they undo.
+	LedgerTotals(ctx context.Context, arg LedgerTotalsParams) ([]LedgerTotalsRow, error)
 	ListActivePublicKeys(ctx context.Context, keys []string) ([]string, error)
 	ListActivePublicLinks(ctx context.Context) ([]StorageLink, error)
 	ListActivePushDevicesByUser(ctx context.Context, userID int64) ([]PushDevice, error)
@@ -493,6 +523,7 @@ type Querier interface {
 	// status: 'pending' (open, not expired), 'expired' (open, past expires_at),
 	// 'accepted', 'revoked'.
 	ListInvitations(ctx context.Context, arg ListInvitationsParams) ([]ListInvitationsRow, error)
+	ListLedgerEntries(ctx context.Context, arg ListLedgerEntriesParams) ([]ListLedgerEntriesRow, error)
 	// Members without a staff record yet.
 	ListLinkableMembers(ctx context.Context, organizationID int64) ([]ListLinkableMembersRow, error)
 	ListLiveOrganizationIDs(ctx context.Context) ([]int64, error)
@@ -587,6 +618,9 @@ type Querier interface {
 	ListRolesFiltered(ctx context.Context, arg ListRolesFilteredParams) ([]Role, error)
 	ListRolesForExport(ctx context.Context, q_ pgtype.Text) ([]Role, error)
 	ListRolesForUserIDs(ctx context.Context, userIds []int64) ([]ListRolesForUserIDsRow, error)
+	ListSaleLines(ctx context.Context, arg ListSaleLinesParams) ([]ListSaleLinesRow, error)
+	ListSalesBranchesByUUID(ctx context.Context, arg ListSalesBranchesByUUIDParams) ([]ListSalesBranchesByUUIDRow, error)
+	ListSalesReservationLines(ctx context.Context, arg ListSalesReservationLinesParams) ([]ListSalesReservationLinesRow, error)
 	ListServiceBranchFacets(ctx context.Context, arg ListServiceBranchFacetsParams) ([]ListServiceBranchFacetsRow, error)
 	// Offers of the given services (list rows and the detail).
 	ListServiceBranches(ctx context.Context, arg ListServiceBranchesParams) ([]ListServiceBranchesRow, error)
@@ -655,6 +689,8 @@ type Querier interface {
 	// directions cannot deadlock).
 	LockCashAccounts(ctx context.Context, arg LockCashAccountsParams) ([]LockCashAccountsRow, error)
 	LockInvitationByTokenHash(ctx context.Context, tokenHash string) (OrganizationInvitation, error)
+	// Serializes the refunds and the reversal of one collection.
+	LockLedgerEntry(ctx context.Context, arg LockLedgerEntryParams) (int64, error)
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
 	// Claims a job for one provider call (one worker at a time; an expired
 	// claim of a crashed worker is free again).
@@ -698,6 +734,8 @@ type Querier interface {
 	PingDB(ctx context.Context) (int32, error)
 	ProductVariantNameTaken(ctx context.Context, arg ProductVariantNameTakenParams) (bool, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
+	// Amount paid back from one collection (refunds minus reversed refunds).
+	RefundedOfCollection(ctx context.Context, arg RefundedOfCollectionParams) (pgtype.Numeric, error)
 	ReleaseCapacityHold(ctx context.Context, arg ReleaseCapacityHoldParams) (CapacityHold, error)
 	RemoveStaffBranch(ctx context.Context, arg RemoveStaffBranchParams) error
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
@@ -723,6 +761,16 @@ type Querier interface {
 	RevokeStorageLink(ctx context.Context, argUuid uuid.UUID) (StorageLink, error)
 	// Resend: a new token (the old link stops working) and a fresh expiry.
 	RotateInvitationToken(ctx context.Context, arg RotateInvitationTokenParams) (OrganizationInvitation, error)
+	// Transfers between accounts and staff payouts per day and currency from
+	// the cash book (reversals netted); neither is revenue.
+	SalesCashByDay(ctx context.Context, arg SalesCashByDayParams) ([]SalesCashByDayRow, error)
+	// Money taken and paid back per day and currency; reversals of either are
+	// netted on the day they were posted.
+	SalesCollectionsByDay(ctx context.Context, arg SalesCollectionsByDayParams) ([]SalesCollectionsByDayRow, error)
+	// ------------------------------------------------------------------ summary
+	// Revenue per business day and currency: sales at their gross price, the
+	// discounts, the reversals (negative) and the net.
+	SalesRevenueByDay(ctx context.Context, arg SalesRevenueByDayParams) ([]SalesRevenueByDayRow, error)
 	// Stores the outcome of a provider call and releases the claim.
 	SaveRunnerJob(ctx context.Context, arg SaveRunnerJobParams) error
 	ServiceNameTaken(ctx context.Context, arg ServiceNameTakenParams) (bool, error)

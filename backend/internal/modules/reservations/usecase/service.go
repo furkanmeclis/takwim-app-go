@@ -87,6 +87,8 @@ type Service struct {
 	q        *db.Queries
 	settings availabilityusecase.SettingsReader
 	indexer  SearchIndexer
+	// onComplete writes the sale lines of a completed visit (TEC-916).
+	onComplete CompletionHook
 }
 
 // New builds the service. The capacity writer must also run ExpireRequests
