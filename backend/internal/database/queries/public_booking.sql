@@ -108,3 +108,20 @@ SELECT DISTINCT branch_id, zone::TEXT AS zone FROM resources
 WHERE organization_id = sqlc.arg(organization_id) AND branch_id = ANY(sqlc.arg(branch_ids)::BIGINT[])
   AND deleted_at IS NULL AND is_active AND show_online AND zone <> '' AND kind IN ('table', 'area')
 ORDER BY branch_id, zone;
+
+-- name: ListPublicClassSessionStaff :many
+-- The person serving the bookings of each group session (service, start)
+-- of a branch in [since, until), from its first live booking: a session
+-- that has bookings keeps their trainer when the timetable's trainer
+-- changes (TEC-990).
+SELECT DISTINCT ON (l.service_id, l.starts_at)
+    l.service_id::BIGINT AS service_id, l.starts_at, st.uuid AS staff_uuid,
+    COALESCE(st.name, l.staff_name, '')::TEXT AS staff_name
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+LEFT JOIN staff st ON st.organization_id = l.organization_id AND st.id = l.staff_id
+WHERE l.organization_id = sqlc.arg(organization_id) AND r.branch_id = sqlc.arg(branch_id)
+  AND l.service_id = ANY(sqlc.arg(service_ids)::BIGINT[]) AND l.staff_id IS NOT NULL
+  AND r.status NOT IN ('cancelled', 'rejected')
+  AND l.starts_at >= sqlc.arg(since) AND l.starts_at < sqlc.arg(until)
+ORDER BY l.service_id, l.starts_at, r.created_at, r.id;

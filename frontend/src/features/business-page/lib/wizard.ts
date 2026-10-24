@@ -3,10 +3,12 @@ import type {
   PublicBranch,
   PublicBusiness,
   PublicCheckout,
+  PublicClassSession,
   PublicBookingProduct,
   PublicLineInput,
   PublicProduct,
   PublicService,
+  PublicSlot,
   PublicVehicle,
   WizardStep,
 } from "@/features/business-page/types";
@@ -125,6 +127,38 @@ export function toggleService(
   if (isGroup(uuid)) return [uuid];
   const rest = picked.filter((v) => !isGroup(v));
   return rest.length >= MAX_LINES ? rest : [...rest, uuid];
+}
+
+/** Local dates "from" … "to" (inclusive) of a timetable window. */
+export function windowDays(from: string, to: string) {
+  const out: string[] = [];
+  for (let day = from; day <= to && out.length < 62;) {
+    out.push(day);
+    const next = new Date(`${day}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    day = next.toISOString().slice(0, 10);
+  }
+  return out;
+}
+
+/**
+ * A bookable class session as the slot the checkout holds: its start with
+ * the trainer (the API assigns the session's own when none is known).
+ */
+export function sessionSlot(session: PublicClassSession): PublicSlot {
+  return {
+    starts_at: session.starts_at,
+    ends_at: session.ends_at,
+    lines: [
+      {
+        service_uuid: session.service.uuid,
+        starts_at: session.starts_at,
+        ends_at: session.ends_at,
+        staff: session.trainer,
+        seats_left: session.seats_left,
+      },
+    ],
+  };
 }
 
 /** Seats a customer may take in a session: 1 up to the class's capacity. */

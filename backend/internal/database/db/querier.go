@@ -1024,6 +1024,11 @@ type Querier interface {
 	ListPublicBranchZones(ctx context.Context, arg ListPublicBranchZonesParams) ([]ListPublicBranchZonesRow, error)
 	// Active branches shown on the customer screens.
 	ListPublicBranches(ctx context.Context, organizationID int64) ([]ListPublicBranchesRow, error)
+	// The person serving the bookings of each group session (service, start)
+	// of a branch in [since, until), from its first live booking: a session
+	// that has bookings keeps their trainer when the timetable's trainer
+	// changes (TEC-990).
+	ListPublicClassSessionStaff(ctx context.Context, arg ListPublicClassSessionStaffParams) ([]ListPublicClassSessionStaffRow, error)
 	// Active branch offers of services (branch price / duration overrides).
 	ListPublicServiceOffers(ctx context.Context, organizationID int64) ([]ListPublicServiceOffersRow, error)
 	// Who may perform which service, with personal price / duration.

@@ -12,6 +12,17 @@ export type PublicAvailabilityRequest = Schemas["PublicAvailabilityRequest"];
 export type PublicAvailability = Schemas["PublicAvailability"];
 export type PublicDay = PublicAvailability["days"][number];
 export type PublicSlot = PublicDay["slots"][number];
+/** Class timetable of a branch (TEC-990). */
+export type PublicClassTimetable = Schemas["PublicClassTimetable"];
+export type PublicClassSession = Schemas["PublicClassSession"];
+export type PublicClassesQuery = {
+  branch_uuid: string;
+  service_uuid?: string;
+  from: string;
+  to: string;
+  party_size: number;
+  channel: "web" | "widget";
+};
 export type PublicCheckoutRequest = Schemas["PublicCheckoutRequest"];
 export type PublicCheckout = Schemas["PublicCheckout"];
 export type PublicBookingRequest = Schemas["PublicBookingRequest"];

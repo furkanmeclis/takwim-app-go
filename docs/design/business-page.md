@@ -73,7 +73,11 @@ The steps follow the sector flow of the profile (`flow`); see [sectors.md](./sec
    - Arrows move the window, never before today and never past `latest_date`.
    - A day without free starts is greyed out; its status says why (closed, full, too soon, too far, nobody available).
    - **Large parties.** Online bookings seat a party at one table and never join tables. When a picked day is `full` or has nobody available for the party, the page tells the customer to call. It shows the branch's phone (else the business's) with a call button. A closed, too-soon or too-far day shows no such hint.
-   - **Group classes** (TEC-971). Above the days a − / + picker asks how many places to take (1 by default, at most `group_capacity`); it goes as `party_size` on availability and the checkout, so the reservation holds that many seats. Each start shows its free seats (`seats_left`); a session without enough free seats is not offered (API). Changing the places clears the picked time.
+   - **Group classes** (TEC-971, TEC-990). A group class has no free time grid: the step shows its **class timetable** (`GET …/classes` with the class's `service_uuid`). Above the days a − / + picker asks how many places to take (1 by default, at most `group_capacity`); it goes as `party_size` on the timetable and the checkout, so the reservation holds that many seats. Changing the places clears the picked session.
+     - The day strip counts each day's bookable sessions; the picked day lists every session as a card: time, class, trainer, studio and the free seats.
+     - A session that cannot be booked stays in the list, greyed out, with why: full, cancelled (struck through), started, booking closed (too soon), not open yet (too far) or not bookable. Only `open` sessions can be picked; the state is the API's.
+     - A session with its own seats says so ("Bu seansa özel kontenjan"); a booked session whose trainer is no longer the timetable's says the trainer changed. Without a known trainer the card says the trainer is assigned at booking.
+     - The person step is skipped for a group class: each session has its trainer, and the checkout line goes without `staff_uuid`, so the engine books the session's own.
    - The first day with free starts is picked by itself.
    - Picking a time shows the planned lines with the assigned people.
 8. **Hold.** "Devam" on the time calls `POST …/checkouts` with a fresh `Idempotency-Key`. The countdown of `expires_at` (`booking.checkout_minutes`) shows on the next steps.
@@ -122,7 +126,7 @@ While the API answers `can_pay_online`, a "Şimdi öde" button opens the provide
 ## Not in this issue
 
 - **Theme settings.** Colours, fonts, cover and texts set in the panel need a settings model and an API field; that is TEC-966. The page reads only the logo and branch photos today.
-- **Packages step.** It comes with its catalog module. Recurring class sessions and a class timetable (TEC-970) are not read yet: a group class is a service with `group_capacity`, and its sessions are the starts the slot engine offers. The product step (TEC-919) is minimal: after the time, when the sector flow has `products` and the branch sells some online, the customer may tick products and set a quantity (at most `max_quantity`); the summary and the status page list them and the total includes them. A product that ran out before the booking sends the customer back to the step (`insufficient_stock`).
+- **Packages step.** It comes with its catalog module; a signed-in customer pays a line, a class session too, with a package session on the summary (TEC-984). The class timetable is read since TEC-990 (see the day step). The product step (TEC-919) is minimal: after the time, when the sector flow has `products` and the branch sells some online, the customer may tick products and set a quantity (at most `max_quantity`); the summary and the status page list them and the total includes them. A product that ran out before the booking sends the customer back to the step (`insufficient_stock`).
 - **Phone OTP and the customer panel** (TEC-909 / TEC-910). The online payment redirect is TEC-912 ([payments.md](./payments.md)).
 
 ## Embedding and pre-selection (TEC-908)

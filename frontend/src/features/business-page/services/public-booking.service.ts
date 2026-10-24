@@ -11,6 +11,8 @@ import type {
   PublicBusiness,
   PublicCheckout,
   PublicCheckoutRequest,
+  PublicClassesQuery,
+  PublicClassTimetable,
   PublicProduct,
   PublicReservation,
   PublicService,
@@ -119,6 +121,12 @@ export const publicBookingService = {
   availability(slug: string, body: PublicAvailabilityRequest) {
     return request<PublicAvailability>("POST", slug, "/availability", {
       body,
+    });
+  },
+  /** Sessions of the branch's group classes and whether each books (TEC-990). */
+  classes(slug: string, query: PublicClassesQuery) {
+    return request<PublicClassTimetable>("GET", slug, "/classes", {
+      query: { ...query, party_size: String(query.party_size) },
     });
   },
   /** Holds the picked slot; the key keeps a retried call from holding twice. */

@@ -6,6 +6,7 @@ import { publicBookingService } from "@/features/business-page/services/public-b
 import type {
   PublicAvailabilityRequest,
   PublicBusiness,
+  PublicClassesQuery,
 } from "@/features/business-page/types";
 
 export const publicBookingKeys = {
@@ -31,6 +32,11 @@ export const publicBookingKeys = {
     ...publicBookingKeys.all(slug),
     "availability",
     body,
+  ],
+  classes: (slug: string, query: PublicClassesQuery | null) => [
+    ...publicBookingKeys.all(slug),
+    "classes",
+    query,
   ],
   reservation: (slug: string, uuid: string) => [
     ...publicBookingKeys.all(slug),
@@ -98,6 +104,20 @@ export function usePublicAvailability(
     queryKey: publicBookingKeys.availability(slug, body),
     queryFn: () => publicBookingService.availability(slug, body!),
     enabled: body !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  });
+}
+
+/** Class timetable of the branch (TEC-990; null query = not asked yet). */
+export function usePublicClasses(
+  slug: string,
+  query: PublicClassesQuery | null,
+) {
+  return useQuery({
+    queryKey: publicBookingKeys.classes(slug, query),
+    queryFn: () => publicBookingService.classes(slug, query!),
+    enabled: query !== null,
     placeholderData: keepPreviousData,
     staleTime: 15_000,
   });
