@@ -186,5 +186,21 @@
   "alerts.show": "Takip gerekenleri göster",
   "nav.info_title": "Teyit takibi",
   "nav.info_description": "Yaklaşan randevularda {{count}} teyit yanıtı bekleniyor.",
-  "nav.send_failed": "Gönderim hatası"
+  "nav.send_failed": "Gönderim hatası",
+  "attempts.call_value": "{{request}}. istek, {{call}}. tekrar arama (tur {{round}})",
+  "responses.reasons.invalid_key": "Geçersiz tuşa basıldı",
+  "validation.call_window_overlap": "Arama saatleri gönderim saatleriyle en az {{window}} dakika örtüşmeli.",
+  "calls.title": "Otomatik arama",
+  "calls.hint": "Arama randevuyu sesli okur; müşteri 1 ile gelir, 2 ile iptal eder, 3 ile başka saat ister. Telefonun açılması teyit sayılmaz.",
+  "calls.own_window": "Aramalar için ayrı saat aralığı",
+  "calls.own_window_hint": "Kapalıysa aramalar gönderim saatlerinde yapılır. Bu saatler dışındaki istekler diğer kanallardan gider.",
+  "calls.window": "Arama saatleri",
+  "calls.same_as_window": "Gönderim saatleri ({{window}})",
+  "calls.retries": "Tekrar arama",
+  "calls.retries_hint": "Açılmayan, meşgul olan veya tuşlama yapılmayan arama, son yanıt saatinden önce bu kadar kez tekrarlanır.",
+  "calls.retries_count": "{{count}} kez",
+  "calls.no_retry": "Tekrar aranmaz",
+  "calls.retries_value": "{{count}} kez, {{minutes}} dakika arayla",
+  "calls.wait": "Tekrar aramadan önce",
+  "calls.wait_value": "{{minutes}} dakika"
 }

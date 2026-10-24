@@ -15,6 +15,9 @@ export const FIRST_REQUEST_PRESETS = [
 ];
 /** Minutes before the visit offered for the follow-up (0 = none). */
 export const FOLLOW_UP_PRESETS = [0, 30, 60, 120, 180, 360, 720, 1440, 2880];
+/** Minutes offered between a missed call and the next one. */
+export const CALL_RETRY_PRESETS = [15, 30, 45, 60, 90, 120, 180, 240];
+
 /** Minutes before the visit offered for the last answer (0 = the start). */
 export const DEADLINE_PRESETS = [0, 30, 60, 120, 180, 360, 720, 1440];
 
@@ -67,6 +70,31 @@ export function windowLabel(t: Translate, rule: ConfirmationRule) {
   return t("confirmations.timing.window_value", {
     start: clock(rule.window_start_minute),
     end: clock(rule.window_end_minute),
+  });
+}
+
+/** The hours a call may ring (the request hours when the rule has none). */
+export function callWindowLabel(t: Translate, rule: ConfirmationRule) {
+  if (
+    rule.call_window_start_minute == null ||
+    rule.call_window_end_minute == null
+  ) {
+    return t("confirmations.calls.same_as_window", {
+      window: windowLabel(t, rule),
+    });
+  }
+  return t("confirmations.timing.window_value", {
+    start: clock(rule.call_window_start_minute),
+    end: clock(rule.call_window_end_minute),
+  });
+}
+
+/** "1 tekrar arama, 30 dakika sonra" or "Tekrar aranmaz". */
+export function callRetriesLabel(t: Translate, rule: ConfirmationRule) {
+  if (rule.call_retries === 0) return t("confirmations.calls.no_retry");
+  return t("confirmations.calls.retries_value", {
+    count: rule.call_retries,
+    minutes: rule.call_retry_minutes,
   });
 }
 

@@ -47,9 +47,27 @@ func (e *ValidationError) orNil() error {
 	return e
 }
 
-// Channels are the channels a confirmation may use, in display order.
-// Voice calls join with TEC-923.
+// Channels are the channels a confirmation may use, in display order (the
+// automatic voice call included, TEC-923).
 var Channels = channel.Known
+
+// windowField checks a pair of window bounds (minutes of the day).
+func windowField(ve *ValidationError, prefix string, start, end *int) {
+	switch {
+	case (start == nil) != (end == nil):
+		ve.add(prefix+"window_end_minute", "required", "the window needs a start and an end")
+	case start != nil:
+		s, e := *start, *end
+		switch {
+		case s < 0 || s > 1439:
+			ve.add(prefix+"window_start_minute", "out_of_range", "window start must be a time of the day")
+		case e < 1 || e > 1440:
+			ve.add(prefix+"window_end_minute", "out_of_range", "window end must be a time of the day")
+		case e-s < model.MinWindowMinutes:
+			ve.add(prefix+"window_end_minute", "too_short", "the window must be at least an hour")
+		}
+	}
+}
 
 // Validate checks a rule: known channels, timings that leave the customer
 // time to answer and a deadline that is not after the start (requirements
@@ -93,19 +111,19 @@ func Validate(r model.Rule) error {
 	case r.MaxAttempts > 1 && r.FollowUpMinutes == 0:
 		ve.add("max_attempts", "needs_follow_up", "more than one attempt needs a follow-up time")
 	}
-	switch {
-	case (r.WindowStartMinute == nil) != (r.WindowEndMinute == nil):
-		ve.add("window_end_minute", "required", "the window needs a start and an end")
-	case r.WindowStartMinute != nil:
-		s, e := *r.WindowStartMinute, *r.WindowEndMinute
-		switch {
-		case s < 0 || s > 1439:
-			ve.add("window_start_minute", "out_of_range", "window start must be a time of the day")
-		case e < 1 || e > 1440:
-			ve.add("window_end_minute", "out_of_range", "window end must be a time of the day")
-		case e-s < model.MinWindowMinutes:
-			ve.add("window_end_minute", "too_short", "the window must be at least an hour")
-		}
+	windowField(ve, "", r.WindowStartMinute, r.WindowEndMinute)
+	windowField(ve, "call_", r.CallWindowStartMinute, r.CallWindowEndMinute)
+	// Calls must have time to ring inside the request hours.
+	if slices.Contains(r.Channels, channel.VoiceCall) && r.WindowStartMinute != nil && r.WindowEndMinute != nil &&
+		r.CallWindowStartMinute != nil && r.CallWindowEndMinute != nil &&
+		min(*r.WindowEndMinute, *r.CallWindowEndMinute)-max(*r.WindowStartMinute, *r.CallWindowStartMinute) < model.MinWindowMinutes {
+		ve.add("call_window_end_minute", "no_overlap", "call hours must overlap the request hours by at least an hour")
+	}
+	if r.CallRetries < 0 || r.CallRetries > model.MaxCallRetries {
+		ve.add("call_retries", "out_of_range", "extra calls must be 0 to 3")
+	}
+	if r.CallRetryMinutes < model.MinCallRetryMinutes || r.CallRetryMinutes > model.MaxCallRetryMinutes {
+		ve.add("call_retry_minutes", "out_of_range", "the wait before calling again must be 15 minutes to 4 hours")
 	}
 	if r.OnNoAnswer != model.OnNoAnswerCancel && r.OnNoAnswer != model.OnNoAnswerFlag {
 		ve.add("on_no_answer", "invalid", "on_no_answer must be cancel or flag")
@@ -126,7 +144,19 @@ func ruleOf(row db.ConfirmationSetting) model.Rule {
 		s, e := int(row.WindowStartMinute.Int32), int(row.WindowEndMinute.Int32)
 		r.WindowStartMinute, r.WindowEndMinute = &s, &e
 	}
+	r.CallRetries, r.CallRetryMinutes = int(row.CallRetries), int(row.CallRetryMinutes)
+	if row.CallWindowStartMinute.Valid && row.CallWindowEndMinute.Valid {
+		s, e := int(row.CallWindowStartMinute.Int32), int(row.CallWindowEndMinute.Int32)
+		r.CallWindowStartMinute, r.CallWindowEndMinute = &s, &e
+	}
 	return r
+}
+
+func int4(v *int) pgtype.Int4 {
+	if v == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*v), Valid: true}
 }
 
 func updated(t pgtype.Timestamptz) *time.Time {
@@ -164,6 +194,8 @@ func (e *Engine) Settings(ctx context.Context, scope orgctx.Scope) (model.Settin
 		Limits: model.Limits{
 			MinResponseMinutes: model.MinResponseMinutes, MinFirstRequestMinutes: model.MinFirstRequestMinutes,
 			MaxMinutes: model.MaxMinutes, MaxAttempts: model.MaxAttempts, MinWindowMinutes: model.MinWindowMinutes,
+			MaxCallRetries: model.MaxCallRetries, MinCallRetryMinutes: model.MinCallRetryMinutes,
+			MaxCallRetryMinutes: model.MaxCallRetryMinutes,
 		},
 	}
 	for _, c := range Channels {
@@ -200,7 +232,8 @@ func settingOf(r db.ListConfirmationSettingsRow) db.ConfirmationSetting {
 		Fallback: r.Fallback, FirstRequestMinutes: r.FirstRequestMinutes, FollowUpMinutes: r.FollowUpMinutes,
 		MaxAttempts: r.MaxAttempts, DeadlineMinutes: r.DeadlineMinutes, WindowStartMinute: r.WindowStartMinute,
 		WindowEndMinute: r.WindowEndMinute, OnNoAnswer: r.OnNoAnswer, UpdatedBy: r.UpdatedBy,
-		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CallWindowStartMinute: r.CallWindowStartMinute,
+		CallWindowEndMinute: r.CallWindowEndMinute, CallRetries: r.CallRetries, CallRetryMinutes: r.CallRetryMinutes,
 	}
 }
 
@@ -226,6 +259,10 @@ func (e *Engine) branchID(ctx context.Context, scope orgctx.Scope, id *uuid.UUID
 // Save stores a rule. Existing tasks keep the rule they were planned with;
 // new and moved bookings use the new one.
 func (e *Engine) Save(ctx context.Context, scope orgctx.Scope, actorID int64, in model.SaveInput) (model.Settings, error) {
+	if in.CallRetryMinutes == 0 {
+		// A client that does not know the call rules yet.
+		in.CallRetryMinutes = model.DefaultCallRetryMinutes
+	}
 	if err := Validate(in.Rule); err != nil {
 		return model.Settings{}, err
 	}
@@ -237,7 +274,9 @@ func (e *Engine) Save(ctx context.Context, scope orgctx.Scope, actorID int64, in
 		OrganizationID: scope.ID, BranchID: branch, Enabled: in.Enabled, Channels: in.Channels, Fallback: in.Fallback,
 		FirstRequestMinutes: int32(in.FirstRequestMinutes), FollowUpMinutes: int32(in.FollowUpMinutes),
 		MaxAttempts: int32(in.MaxAttempts), DeadlineMinutes: int32(in.DeadlineMinutes), OnNoAnswer: in.OnNoAnswer,
-		UpdatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
+		UpdatedBy:             pgtype.Int8{Int64: actorID, Valid: actorID > 0},
+		CallWindowStartMinute: int4(in.CallWindowStartMinute), CallWindowEndMinute: int4(in.CallWindowEndMinute),
+		CallRetries: int32(in.CallRetries), CallRetryMinutes: int32(in.CallRetryMinutes),
 	}
 	if in.WindowStartMinute != nil && in.WindowEndMinute != nil {
 		p.WindowStartMinute = pgtype.Int4{Int32: int32(*in.WindowStartMinute), Valid: true}

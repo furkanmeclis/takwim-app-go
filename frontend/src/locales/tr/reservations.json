@@ -475,5 +475,6 @@
   "fields.bundle": "Birleşik paket",
   "fields.bundle_none": "Paket yok, hizmetleri tek tek seç",
   "fields.bundle_hint": "Paket seçilince içindeki hizmetler sırasıyla eklenir; her hizmetin çalışanını ayrı seçebilirsiniz.",
-  "fields.bundle_price": "Paket fiyatı {{price}}; hizmetlere liste fiyatı oranında dağıtılır."
+  "fields.bundle_price": "Paket fiyatı {{price}}; hizmetlere liste fiyatı oranında dağıtılır.",
+  "confirmation_task.sources.voice_call": "Otomatik arama (tuşlama)"
 }

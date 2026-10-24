@@ -23,6 +23,16 @@ type window struct {
 
 func (w window) open() bool { return w.start == nil || w.end == nil }
 
+// contains reports whether t is inside the window.
+func (w window) contains(t time.Time) bool {
+	if w.open() {
+		return true
+	}
+	local := t.In(w.loc)
+	minute := local.Hour()*60 + local.Minute()
+	return minute >= *w.start && minute < *w.end
+}
+
 // shift moves t into the window: unchanged inside it, else the next
 // opening (the same day before it opens, the next day after it closes).
 func (w window) shift(t time.Time) time.Time {

@@ -1,7 +1,7 @@
 // Package channel is the contract between the customer notification engine
 // (TEC-911) and the adapters that deliver its messages: SMS, e-mail and
-// WhatsApp (TEC-922, the business's own Meta account); voice calls with
-// TEC-923.
+// WhatsApp (TEC-922, the business's own Meta account) and automatic voice
+// calls (TEC-923, the business's own voice provider account).
 //
 // A new channel is one type implementing Channel, registered on the engine
 // with Engine.Register. The engine never names a provider: rules list
@@ -14,7 +14,7 @@
 // final result through the Reporter handed to them by SetReporter
 // (ReportingChannel). A report that never comes fails the attempt after the
 // engine's receipt timeout, so the next channel runs. A delivery or read
-// report is never an answer to the message.
+// report, or a picked up call, is never an answer to the message.
 package channel
 
 import (
@@ -30,11 +30,29 @@ const (
 	SMS      = "sms"
 	WhatsApp = "whatsapp"
 	Email    = "email"
+	// VoiceCall is the automatic call with keys (TEC-923); the name is also
+	// its integration kind and usage metric.
+	VoiceCall = "voice_call"
 )
 
-// Known lists every channel a rule may use, in display order. A known
+// Known lists every channel the engine sends on, in display order. A known
 // channel may have no adapter in a process (it is then skipped).
-var Known = []string{SMS, WhatsApp, Email}
+var Known = []string{SMS, WhatsApp, Email, VoiceCall}
+
+// Messages are the channels of the notification settings page: a voice
+// call carries only the confirmation request, whose channels come from the
+// confirmation settings.
+var Messages = []string{SMS, WhatsApp, Email}
+
+// IsMessage reports whether name is one of Messages.
+func IsMessage(name string) bool {
+	for _, k := range Messages {
+		if k == name {
+			return true
+		}
+	}
+	return false
+}
 
 // IsKnown reports whether name is a known channel.
 func IsKnown(name string) bool {
@@ -128,7 +146,12 @@ type Report struct {
 	Delivered      bool
 	// Read: the customer opened the message (implies Delivered). It is
 	// recorded as a receipt time only, never as an answer.
-	Read        bool
+	Read bool
+	// Unanswered: the message reached the customer (a call was picked up,
+	// implies Delivered) but brought no answer the channel could take (no
+	// key or an invalid one). The receipt is recorded and the attempt counts
+	// as delivered, yet the rule's next channel still runs.
+	Unanswered  bool
 	ProviderRef string
 	Error       string
 	// At is the provider's time of the report (zero = now).

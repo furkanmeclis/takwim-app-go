@@ -27,6 +27,8 @@ import { routes } from "@/config/routes";
 import { ConfirmationRuleDialog } from "@/features/confirmations/components/confirmation-rule-dialog";
 import {
   ON_NO_ANSWER_KEYS,
+  callRetriesLabel,
+  callWindowLabel,
   deadlineLabel,
   followUpLabel,
   timingSummary,
@@ -428,6 +430,20 @@ function RuleSummary({ rule }: { rule: ConfirmationRule }) {
               label: t("confirmations.editor.window"),
               value: windowLabel(t, rule),
             },
+            ...(rule.channels.includes("voice_call")
+              ? [
+                  {
+                    key: "call_window",
+                    label: t("confirmations.calls.window"),
+                    value: callWindowLabel(t, rule),
+                  },
+                  {
+                    key: "call_retries",
+                    label: t("confirmations.calls.retries"),
+                    value: callRetriesLabel(t, rule),
+                  },
+                ]
+              : []),
             {
               key: "on_no_answer",
               label: t("confirmations.editor.on_no_answer"),

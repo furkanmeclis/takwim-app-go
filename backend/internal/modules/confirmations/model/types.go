@@ -53,6 +53,8 @@ const (
 	SourceVisitLink = "visit_link"
 	// SourceWhatsApp: a button of the WhatsApp request (TEC-922).
 	SourceWhatsApp = "whatsapp"
+	// SourceVoiceCall: a key pressed on the confirmation call (TEC-923).
+	SourceVoiceCall = "voice_call"
 )
 
 // Limits of the settings.
@@ -70,6 +72,13 @@ const (
 	MinWindowMinutes = 60
 	// MaxChangeNote bounds the customer's change request note.
 	MaxChangeNote = 500
+	// MaxCallRetries bounds the extra calls of one task (a call not
+	// answered or without a valid key is made again).
+	MaxCallRetries = 3
+	// MinCallRetryMinutes / MaxCallRetryMinutes bound the wait before a
+	// call is made again.
+	MinCallRetryMinutes = 15
+	MaxCallRetryMinutes = 240
 )
 
 // Rule is when and how customers of a branch are asked to confirm.
@@ -96,20 +105,37 @@ type Rule struct {
 	WindowStartMinute *int   `json:"window_start_minute"`
 	WindowEndMinute   *int   `json:"window_end_minute"`
 	OnNoAnswer        string `json:"on_no_answer"`
+	// CallWindowStartMinute / CallWindowEndMinute are the local hours an
+	// automatic call may ring (TEC-923); nil = the request window. A
+	// request due outside them goes out on the other channels.
+	CallWindowStartMinute *int `json:"call_window_start_minute"`
+	CallWindowEndMinute   *int `json:"call_window_end_minute"`
+	// CallRetries is how many more calls a task may make when a call is
+	// not answered or brings no valid key; CallRetryMinutes is the wait
+	// before the next one.
+	CallRetries      int `json:"call_retries"`
+	CallRetryMinutes int `json:"call_retry_minutes"`
 }
 
 func intPtr(v int) *int { return &v }
 
 // DefaultRule is the starting template (requirements §9): first request
 // 24 hours, follow-up 3 hours, last answer 2 hours before; SMS then
-// e-mail; requests between 09:00 and 21:00; cancel on no answer.
+// e-mail; requests between 09:00 and 21:00; cancel on no answer. When the
+// business adds the voice call: calls between 10:00 and 20:00, one more
+// call 30 minutes after a call without an answer.
 func DefaultRule() Rule {
 	return Rule{
 		Enabled: true, Channels: []string{"sms", "email"}, Fallback: true,
 		FirstRequestMinutes: 24 * 60, FollowUpMinutes: 180, MaxAttempts: 2, DeadlineMinutes: 120,
 		WindowStartMinute: intPtr(9 * 60), WindowEndMinute: intPtr(21 * 60), OnNoAnswer: OnNoAnswerCancel,
+		CallWindowStartMinute: intPtr(10 * 60), CallWindowEndMinute: intPtr(20 * 60), CallRetries: 1, CallRetryMinutes: 30,
 	}
 }
+
+// DefaultCallRetryMinutes is the wait before a call is made again when a
+// saved rule names none.
+const DefaultCallRetryMinutes = 30
 
 // Ref names a branch.
 type Ref struct {
@@ -140,6 +166,9 @@ type Limits struct {
 	MaxMinutes             int `json:"max_minutes"`
 	MaxAttempts            int `json:"max_attempts"`
 	MinWindowMinutes       int `json:"min_window_minutes"`
+	MaxCallRetries         int `json:"max_call_retries"`
+	MinCallRetryMinutes    int `json:"min_call_retry_minutes"`
+	MaxCallRetryMinutes    int `json:"max_call_retry_minutes"`
 }
 
 // Settings is the confirmation settings page.

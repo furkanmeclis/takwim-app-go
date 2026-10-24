@@ -65,10 +65,16 @@ export function ConfirmationAttemptsTable({
         enableSorting: false,
         gridSecondary: true,
         cell: ({ row }) =>
-          t("confirmations.attempts.request_value", {
-            request: row.original.request,
-            round: row.original.round,
-          }),
+          row.original.call > 0
+            ? t("confirmations.attempts.call_value", {
+                request: row.original.request,
+                round: row.original.round,
+                call: row.original.call,
+              })
+            : t("confirmations.attempts.request_value", {
+                request: row.original.request,
+                round: row.original.round,
+              }),
       }),
       createColumn<ConfirmationAttempt>({
         id: "channel",

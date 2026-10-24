@@ -186,5 +186,21 @@
   "alerts.show": "Show bookings to follow up",
   "nav.info_title": "Confirmation follow-up",
   "nav.info_description": "{{count}} upcoming visits are waiting for a confirmation answer.",
-  "nav.send_failed": "Send errors"
+  "nav.send_failed": "Send errors",
+  "attempts.call_value": "Request {{request}}, call again {{call}} (round {{round}})",
+  "responses.reasons.invalid_key": "An invalid key was pressed",
+  "validation.call_window_overlap": "Call hours must overlap the request hours by at least {{window}} minutes.",
+  "calls.title": "Automatic call",
+  "calls.hint": "The call reads out the visit; the customer presses 1 to confirm, 2 to cancel, 3 to ask for another time. Picking up is not a confirmation.",
+  "calls.own_window": "Separate hours for calls",
+  "calls.own_window_hint": "Off: calls ring in the request hours. Requests outside these hours go out on the other channels.",
+  "calls.window": "Call hours",
+  "calls.same_as_window": "Request hours ({{window}})",
+  "calls.retries": "Call again",
+  "calls.retries_hint": "A call that is not answered, busy or without a key is made again this many times before the deadline.",
+  "calls.retries_count": "{{count}} times",
+  "calls.no_retry": "No second call",
+  "calls.retries_value": "{{count}} times, {{minutes}} minutes apart",
+  "calls.wait": "Wait before calling again",
+  "calls.wait_value": "{{minutes}} minutes"
 }

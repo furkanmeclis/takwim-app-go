@@ -1,7 +1,8 @@
 // Package adapters connects the customer notification engine (TEC-911) to
 // the platform senders: SMS through sms.Sender, e-mail through the SMTP
 // mailer. WhatsApp is its own module (modules/whatsapp, TEC-922, the
-// business's Cloud API account); voice calls come with TEC-923.
+// business's Cloud API account), and so are voice calls (modules/voicecall,
+// TEC-923, the business's Netgsm account).
 package adapters
 
 import (

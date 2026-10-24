@@ -67,6 +67,6 @@ All behind `RequireOrganization`; reads need `tenant.integrations.read` (owner, 
 
 ## 8. Open items
 
-- Real adapters: SMS providers (their issue). The WhatsApp Cloud API (`meta`) arrived with TEC-922 ([confirmations.md](./confirmations.md#channels-tec-922)); its replies go through `HandleInbound` (kind `whatsapp.reply`). Payment providers (`testpay`, `paytr`) arrived with TEC-912 ([payments.md](./payments.md)); their webhooks go through `HandleInbound` (kind `payment.webhook`).
+- Real adapters: SMS providers (their issue). The WhatsApp Cloud API (`meta`) arrived with TEC-922 ([confirmations.md](./confirmations.md#channels-tec-922)); its replies go through `HandleInbound` (kind `whatsapp.reply`). The Netgsm voice call (`voice_call` / `netgsm`) arrived with TEC-923 ([confirmations.md](./confirmations.md#voice-call-tec-923)); each call result goes through `HandleInbound` (kind `voice_call.result`). Payment providers (`testpay`, `paytr`) arrived with TEC-912 ([payments.md](./payments.md)); their webhooks go through `HandleInbound` (kind `payment.webhook`).
 - A step-up gate on connect / rotate / retry once the tenant shell has a step-up policy.
 - Retention of `integration_attempts`.

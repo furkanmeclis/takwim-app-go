@@ -15,10 +15,12 @@
 //     channel moves on to the next one when the rule allows fallback.
 //   - A channel without an adapter or a ready provider is logged as
 //     skipped, never as sent.
-//   - A channel with delivery reports (WhatsApp, TEC-922) keeps its attempt
-//     open until the report; delivery and read times are recorded apart
-//     from the acceptance. A report that never comes fails the attempt
-//     after the receipt timeout so the next channel runs.
+//   - A channel with delivery reports (WhatsApp, TEC-922; voice calls,
+//     TEC-923) keeps its attempt open until the report; delivery and read
+//     times are recorded apart from the acceptance. A report that never
+//     comes fails the attempt after the receipt timeout so the next channel
+//     runs. A call picked up without a valid key is delivered, yet the next
+//     channel runs too (it is no answer).
 //   - Events set with SetResourceEvents (the confirmation request, TEC-981)
 //     tell the panel's live reservation lists about every send result and
 //     delivery report of their dispatches, so the confirmation list, its
@@ -819,8 +821,9 @@ func (e *Engine) ReportDelivery(ctx context.Context, r channel.Report) {
 // tells that the dispatch went back to pending for its next channel, which
 // the worker's scan sends (a webhook in the API process only records).
 // Delivery and read times are recorded even when the attempt ended before
-// (a late report); they never answer anything. An unknown delivery is no
-// error.
+// (a late report); they never answer anything. An unanswered report (a
+// call picked up without a valid key) records the receipt and still moves
+// the dispatch to its next channel. An unknown delivery is no error.
 func (e *Engine) RecordDelivery(ctx context.Context, r channel.Report) (int64, bool, error) {
 	d, found, next, err := e.recordDelivery(ctx, r)
 	if err != nil || !found {
@@ -852,7 +855,7 @@ func (e *Engine) recordDelivery(ctx context.Context, r channel.Report) (db.Custo
 	if err != nil {
 		return disp, false, false, err
 	}
-	if r.Read {
+	if r.Read || r.Unanswered {
 		r.Delivered = true
 	}
 	status := DeliveryDelivered
@@ -889,14 +892,18 @@ func (e *Engine) recordDelivery(ctx context.Context, r channel.Report) (db.Custo
 		if d.Status != DispatchSending || int(d.NextChannelIndex) >= len(d.Channels) || d.Channels[d.NextChannelIndex] != dl.Channel {
 			return nil
 		}
-		if r.Delivered {
+		if r.Delivered && !r.Unanswered {
 			return q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
 				OrganizationID: orgID, ID: d.ID, Status: DispatchDelivered, NextChannelIndex: d.NextChannelIndex,
 				LastError: d.LastError, CompletedAt: ts(now),
 			})
 		}
 		reason := r.Error
-		if reason == "" {
+		switch {
+		case reason != "":
+		case r.Unanswered:
+			reason = "no answer"
+		default:
 			reason = "not delivered"
 		}
 		next, err = e.advance(ctx, q, orgID, d, dl.Channel, reason)

@@ -8040,6 +8040,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/voice/netgsm/{account}/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's voice call integration account (Netgsm). */
+                account: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Result of a confirmation call
+         * @description Netgsm posts the result of one confirmation call (TEC-923) to the
+         *     address given with the call: `d` names the attempt and `s` is its
+         *     token, which only this server can make (`401` otherwise). The order
+         *     id (`bulkid`) must be the attempt's. A key pressed on an answered
+         *     call answers the current request like a visit link button: `1`
+         *     confirms, `2` cancels under the business's cancel rules, `3` asks
+         *     for a change; any other key is recorded as `invalid_key`. A picked
+         *     up call is never a confirmation: without a valid key, and when the
+         *     call is not answered, busy or unreachable, the request runs on the
+         *     rule's next channel and the call is made again within the rule's
+         *     extra calls. Every key is recorded with its result
+         *     (`ConfirmationResponse`, channel `voice_call`) and each result is
+         *     handled once (`integration_jobs`). An unknown or non-Netgsm account,
+         *     or `VOICE_NETGSM_ENABLED` off: `404`. `200` when handled (also a
+         *     repeated delivery), `500` to have it sent again. Limit: 600 per
+         *     minute per account.
+         */
+        post: operations["postVoiceCallWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/payments/paytr/notify": {
         parameters: {
             query?: never;
@@ -9647,7 +9685,7 @@ export interface components {
         };
         IntegrationProvider: {
             /** @enum {string} */
-            kind: "payment" | "sms" | "whatsapp" | "email";
+            kind: "payment" | "sms" | "whatsapp" | "email" | "voice_call";
             provider: string;
             fields: components["schemas"]["IntegrationField"][];
             modes: ("sandbox" | "live")[];
@@ -9665,7 +9703,7 @@ export interface components {
             /** Format: uuid */
             uuid: string;
             /** @enum {string} */
-            kind: "payment" | "sms" | "whatsapp" | "email";
+            kind: "payment" | "sms" | "whatsapp" | "email" | "voice_call";
             provider: string;
             display_name: string;
             /** @enum {string} */
@@ -11105,8 +11143,8 @@ export interface components {
         };
         ConfirmationRule: {
             enabled: boolean;
-            /** @description In order; the first is the primary channel. */
-            channels: ("sms" | "whatsapp" | "email")[];
+            /** @description In order; the first is the primary channel. `voice_call`: the automatic call with keys (TEC-923). */
+            channels: ("sms" | "whatsapp" | "email" | "voice_call")[];
             /** @description Try the next channel when one fails. */
             fallback: boolean;
             /** @description Minutes before the start. */
@@ -11121,6 +11159,18 @@ export interface components {
             window_end_minute: number | null;
             /** @enum {string} */
             on_no_answer: "cancel" | "flag";
+            /**
+             * @description Local minute of the day calls may start ringing; null = the
+             *     request window. With `voice_call` listed and both windows set,
+             *     they must overlap by `min_window_minutes`. A request due outside
+             *     the call hours goes out on the other channels.
+             */
+            call_window_start_minute: number | null;
+            call_window_end_minute: number | null;
+            /** @description Extra calls when a call is not answered or brings no valid key (per planning). */
+            call_retries: number;
+            /** @description Wait before the next call; 0 on save = 30. */
+            call_retry_minutes: number;
         };
         ConfirmationSaveInput: components["schemas"]["ConfirmationRule"] & {
             /**
@@ -11144,7 +11194,7 @@ export interface components {
         ConfirmationSettings: {
             channels: {
                 /** @enum {string} */
-                name: "sms" | "whatsapp" | "email";
+                name: "sms" | "whatsapp" | "email" | "voice_call";
                 ready: boolean;
             }[];
             default: components["schemas"]["ConfirmationRule"];
@@ -11159,6 +11209,9 @@ export interface components {
                 max_minutes: number;
                 max_attempts: number;
                 min_window_minutes: number;
+                max_call_retries: number;
+                min_call_retry_minutes: number;
+                max_call_retry_minutes: number;
             };
         };
         EnvelopeConfirmationSettings: {
@@ -11248,7 +11301,7 @@ export interface components {
             deadline_at: string;
             /** @enum {string|null} */
             answer: "confirm" | "cancel" | "change" | null;
-            /** @description panel, visit_link, whatsapp (a button of the request), phone (recorded by a member); voice later */
+            /** @description panel, visit_link, whatsapp (a button of the request), voice_call (a key of the call), phone (recorded by a member) */
             answer_channel: string | null;
             /** Format: date-time */
             answered_at: string | null;
@@ -11327,6 +11380,8 @@ export interface components {
         ConfirmationAttempt: {
             round: number;
             request: number;
+            /** @description A call made again after a missed one (1, 2 …); 0 = the request itself. */
+            call: number;
             /** @description The channel's result (sending, sent, delivered, failed, skipped) or the request's own status without a channel. */
             status: string;
             /** @enum {string} */
@@ -11346,7 +11401,7 @@ export interface components {
             sent_at: string | null;
             /**
              * Format: date-time
-             * @description From the provider's delivery report (WhatsApp). Never an answer.
+             * @description From the provider's delivery report (WhatsApp), or the call was picked up. Never an answer.
              */
             delivered_at: string | null;
             /**
@@ -11363,7 +11418,7 @@ export interface components {
             /** Format: uuid */
             dispatch_uuid: string;
             dispatch_error: string;
-            /** @description The customer's replies to this message on its channel (WhatsApp buttons), oldest first. */
+            /** @description The customer's replies to this message on its channel (WhatsApp buttons, call keys), oldest first. */
             responses: components["schemas"]["ConfirmationResponse"][];
         };
         ConfirmationResponse: {
@@ -11377,7 +11432,7 @@ export interface components {
              *     answer the booking does not take now (`reason`: `answered`,
              *     `status`, `cutoff`, `request_outdated`, `not_open`,
              *     `reservation_not_found` …). `ignored`: not an answer from the
-             *     customer (`other_number`, `not_an_answer`,
+             *     customer (`other_number`, `not_an_answer`, `invalid_key`,
              *     `not_confirmation_request`).
              * @enum {string}
              */
@@ -11438,7 +11493,7 @@ export interface components {
             dispatch_uuid: string;
             event: string;
             /** @enum {string} */
-            channel: "sms" | "whatsapp" | "email";
+            channel: "sms" | "whatsapp" | "email" | "voice_call";
             /** Format: int32 */
             attempt_no: number;
             /** @enum {string} */
@@ -21054,7 +21109,7 @@ export interface operations {
                 sort?: string;
                 /** @description active, disabled */
                 status?: string;
-                /** @description payment, sms, whatsapp, email */
+                /** @description payment, sms, whatsapp, email, voice_call */
                 kind?: string;
                 /** @description Provider codes */
                 provider?: string;
@@ -21105,7 +21160,7 @@ export interface operations {
                      * @description Defaults to the provider's kind.
                      * @enum {string}
                      */
-                    kind?: "payment" | "sms" | "whatsapp" | "email";
+                    kind?: "payment" | "sms" | "whatsapp" | "email" | "voice_call";
                     /** @description Provider code of a registered adapter (`GET /v1/tenant/integrations/meta`); `log` = development provider (no network call). */
                     provider: string;
                     display_name: string;
@@ -27500,7 +27555,7 @@ export interface operations {
                 q?: components["parameters"]["Q"];
                 /** @description One of `created_at`, `channel`, `status`, `event`; prefix `-` for descending. Default `-created_at`. */
                 sort?: string;
-                /** @description `sms`, `whatsapp`, `email`; comma-separate or repeat */
+                /** @description `sms`, `whatsapp`, `email`, `voice_call`; comma-separate or repeat */
                 channel?: string;
                 /** @description `sending`, `sent`, `delivered`, `failed`, `skipped`; comma-separate or repeat */
                 status?: string;
@@ -31744,6 +31799,65 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Handled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        success: true;
+                        data: {
+                            /** @enum {string} */
+                            status?: "ok";
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postVoiceCallWebhook: {
+        parameters: {
+            query: {
+                /** @description The attempt (delivery uuid). */
+                d: string;
+                /** @description The attempt's token. */
+                s: string;
+            };
+            header?: never;
+            path: {
+                /** @description The business's voice call integration account (Netgsm). */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    bulkid?: string | number;
+                    callee?: string;
+                    /** @description 1 answered, 2 not answered, 3 unreachable, 7 busy */
+                    state?: number | string;
+                    answer_time?: string;
+                    hangup_time?: string;
+                    detail?: {
+                        /** @description The key pressed; null or -1 = none */
+                        push_button?: string | number | null;
+                    } & {
+                        [key: string]: unknown;
+                    };
+                } & {
                     [key: string]: unknown;
                 };
             };

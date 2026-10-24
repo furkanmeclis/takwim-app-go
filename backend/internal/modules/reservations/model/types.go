@@ -61,7 +61,7 @@ type Confirmation struct {
 	NextAttemptAt   *time.Time  `json:"next_attempt_at"`
 	DeadlineAt      time.Time   `json:"deadline_at"`
 	// Answer: confirm, cancel or change, with the channel it came on
-	// (panel, visit_link; whatsapp / voice later).
+	// (panel, visit_link, whatsapp, voice_call, phone).
 	Answer            *string    `json:"answer"`
 	AnswerChannel     *string    `json:"answer_channel"`
 	AnsweredAt        *time.Time `json:"answered_at"`

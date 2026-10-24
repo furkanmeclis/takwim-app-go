@@ -113,5 +113,6 @@
   "history.sent_at": "Sent",
   "history.finished_at": "Result",
   "history.text": "Text sent",
-  "events.confirmation_request": "Booking confirmation request"
+  "events.confirmation_request": "Booking confirmation request",
+  "channels.voice_call": "Automatic call"
 }

@@ -31,8 +31,8 @@ const (
 	// ChannelNotReady: the channel exists but no provider can deliver;
 	// its sends are recorded as skipped.
 	ChannelNotReady = "not_ready"
-	// ChannelUnavailable: the channel has no adapter in this version yet
-	// (voice calls until their issue lands).
+	// ChannelUnavailable: the channel has no adapter in this version (every
+	// channel has one since voice calls, TEC-923; kept for the contract).
 	ChannelUnavailable = "unavailable"
 )
 

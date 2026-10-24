@@ -804,8 +804,8 @@ type Querier interface {
 	// Businesses with notices to send (the worker's scan).
 	ListDueCustomerNotificationOrganizations(ctx context.Context, nowAt pgtype.Timestamptz) ([]int64, error)
 	ListDuePushTickets(ctx context.Context, arg ListDuePushTicketsParams) ([]ListDuePushTicketsRow, error)
-	// Tasks with an attempt or a deadline due (the worker's scan; every
-	// business, or one when organization_id is given).
+	// Tasks with an attempt, a call made again (TEC-923) or a deadline due (the
+	// worker's scan; every business, or one when organization_id is given).
 	ListDueReservationConfirmations(ctx context.Context, arg ListDueReservationConfirmationsParams) ([]ListDueReservationConfirmationsRow, error)
 	// The sweep: runner jobs whose next call is due, across organizations
 	// (each row carries its organization_id; the runner re-scopes from it).

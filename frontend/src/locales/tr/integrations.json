@@ -250,5 +250,10 @@
   "fields.template_name": "Teyit şablonunun adı",
   "fields.template_language": "Şablon dili (ör. tr)",
   "webhook.label": "Webhook adresi",
-  "webhook.hint": "Meta uygulamanızda WhatsApp > Yapılandırma bölümüne bu adresi ve doğrulama anahtarını girin, \"messages\" alanına abone olun. Teslim bilgileri ve müşterinin düğme yanıtları buraya gelir."
+  "webhook.hint": "Meta uygulamanızda WhatsApp > Yapılandırma bölümüne bu adresi ve doğrulama anahtarını girin, \"messages\" alanına abone olun. Teslim bilgileri ve müşterinin düğme yanıtları buraya gelir.",
+  "providers.netgsm": "Netgsm sesli mesaj",
+  "provider_hints.netgsm": "Netgsm hesabınızın kullanıcı kodunu (abone numarası) ve API şifresini girin; hesabınızda sesli mesaj ve tuşlama hizmetinin açık olması gerekir. Takwim teyit aramasını bu hesapla yapar; arama sonucunun döneceği adres her aramada otomatik verilir, Netgsm panelinde ayrıca bir ayar gerekmez.",
+  "fields.usercode": "Kullanıcı kodu (abone numarası)",
+  "kinds.voice_call": "Sesli arama",
+  "jobs.kinds.voice_call_result": "Arama sonucu"
 }

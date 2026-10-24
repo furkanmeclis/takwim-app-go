@@ -257,9 +257,12 @@ export function NotificationEventDialog({
 export function ChannelOrderField({
   readiness,
   disabled,
+  channels = NOTIFICATION_CHANNELS,
 }: {
   readiness: Record<string, boolean>;
   disabled: boolean;
+  /** Channels offered (default: the message channels). */
+  channels?: readonly string[];
 }) {
   const { t } = useLocale();
   const {
@@ -273,10 +276,8 @@ export function ChannelOrderField({
       control={control}
       name="channels"
       render={({ field }) => {
-        const selected = field.value ?? [];
-        const rest = NOTIFICATION_CHANNELS.filter(
-          (channel) => !selected.includes(channel),
-        );
+        const selected: string[] = field.value ?? [];
+        const rest = channels.filter((channel) => !selected.includes(channel));
         const move = (index: number, delta: number) => {
           const next = [...selected];
           const target = index + delta;

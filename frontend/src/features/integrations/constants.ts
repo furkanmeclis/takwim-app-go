@@ -27,6 +27,7 @@ export const INTEGRATION_FIELD_LABEL_KEYS: Record<string, string> = {
   verify_token: "integrations.fields.verify_token",
   template_name: "integrations.fields.template_name",
   template_language: "integrations.fields.template_language",
+  usercode: "integrations.fields.usercode",
 };
 
 export const INTEGRATION_PROVIDER_LABEL_KEYS: Record<string, string> = {
@@ -34,6 +35,7 @@ export const INTEGRATION_PROVIDER_LABEL_KEYS: Record<string, string> = {
   testpay: "integrations.providers.testpay",
   paytr: "integrations.providers.paytr",
   meta: "integrations.providers.meta",
+  netgsm: "integrations.providers.netgsm",
 };
 
 export const INTEGRATION_KIND_LABEL_KEYS: Record<string, string> = {
@@ -41,6 +43,7 @@ export const INTEGRATION_KIND_LABEL_KEYS: Record<string, string> = {
   whatsapp: "integrations.kinds.whatsapp",
   email: "integrations.kinds.email",
   payment: "integrations.kinds.payment",
+  voice_call: "integrations.kinds.voice_call",
 };
 
 /** Connect form hint per provider (where the organization finds its keys). */
@@ -49,6 +52,7 @@ export const INTEGRATION_PROVIDER_HINT_KEYS: Record<string, string> = {
   testpay: "integrations.provider_hints.testpay",
   paytr: "integrations.provider_hints.paytr",
   meta: "integrations.provider_hints.meta",
+  netgsm: "integrations.provider_hints.netgsm",
 };
 
 /**
@@ -121,6 +125,7 @@ export const INTEGRATION_JOB_KIND_LABEL_KEYS: Record<string, string> = {
   "email.send": "integrations.jobs.kinds.email_send",
   "payment.refund": "integrations.jobs.kinds.payment_refund",
   "payment.webhook": "integrations.jobs.kinds.payment_webhook",
+  "voice_call.result": "integrations.jobs.kinds.voice_call_result",
 };
 
 export const ATTEMPT_OPERATION_LABEL_KEYS: Record<string, string> = {

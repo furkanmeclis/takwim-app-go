@@ -145,9 +145,12 @@ type Summary struct {
 type Attempt struct {
 	// Round and Request name the request ("r2:a1": second planning, first
 	// request).
-	Round   int    `json:"round"`
-	Request int    `json:"request"`
-	Status  string `json:"status"`
+	Round   int `json:"round"`
+	Request int `json:"request"`
+	// Call numbers a call made again after a missed one (TEC-923); 0 = the
+	// request itself.
+	Call   int    `json:"call"`
+	Status string `json:"status"`
 	// DispatchStatus is the request's own status (pending, sending,
 	// delivered, failed, skipped, cancelled).
 	DispatchStatus string    `json:"dispatch_status"`
@@ -168,7 +171,7 @@ type Attempt struct {
 	DispatchUUID    uuid.UUID  `json:"dispatch_uuid"`
 	DispatchMessage string     `json:"dispatch_error"`
 	// Responses are the customer's replies to this message on its channel
-	// (a WhatsApp button), with what was done with each.
+	// (a WhatsApp button, a key of the call), with what was done with each.
 	Responses []Response `json:"responses"`
 }
 

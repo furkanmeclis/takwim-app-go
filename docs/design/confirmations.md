@@ -1,4 +1,4 @@
-# Customer confirmations (TEC-921, TEC-922, TEC-924, TEC-981)
+# Customer confirmations (TEC-921, TEC-922, TEC-923, TEC-924, TEC-981)
 
 The Konfirmasyon add-on: before a visit the business asks the customer to confirm it, on its channels in order, a set number of times, and cancels or flags the booking when no answer comes by the deadline. The customer answers in the customer panel or on the single-visit link of the message: "Geleceğim", "Değişiklik iste" or cancel. Everything is gated by the `confirmation` module (`sector.ModuleConfirmation`, an add-on, entitlements.md); without it no task is planned, no request is sent and no answer is offered.
 
@@ -179,8 +179,48 @@ Both carry the single-visit link (`/panel/v#<token>`, issued at send time). The 
 
 `TestLiveTemplate` in `platform/whatsapp/meta` sends the confirmation template from a real number when `WHATSAPP_IT_PHONE_NUMBER_ID`, `WHATSAPP_IT_ACCESS_TOKEN` and `WHATSAPP_IT_TO` (and `WHATSAPP_IT_TEMPLATE` / `WHATSAPP_IT_LANGUAGE` if not the defaults) are set; the end-to-end check is then a booking of a test business with the account connected: the request arrives, the status reaches `delivered` / `read` in the attempts table, and each button gives its answer. SMS and e-mail follow with their providers (TEC-884).
 
+## Voice call (TEC-923)
+
+The automatic call with keys (K-006, A10): `voice_call` is a channel of the confirmation rule like the others (order, fallback). The call reads out the visit and takes one key: **1** Geleceğim, **2** cancel, **3** another time. Picking up is never a confirmation, and neither is no key or another key.
+
+| Area             | Path                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Netgsm adapter   | `backend/internal/platform/voice/netgsm` (integration adapter, call order XML, result parsing)                     |
+| Channel, webhook | `backend/internal/modules/voicecall` (`usecase/channel.go`, `usecase/service.go`, `handler`)                       |
+| Calls again      | `confirmations/usecase/engine.go` (`CallMissed`, `call`, call hours in `attempt`)                                  |
+| Migration        | `000070_confirmation_voice_calls` (call rules on `confirmation_settings` and `reservation_confirmations`)          |
+| Tests            | `customerpanel/voicecall_db_test.go`, `platform/voice/netgsm/netgsm_test.go`, `confirmations/usecase/plan_test.go` |
+| Web              | rule dialog "Otomatik arama" section, attempts table (calls made again), Ayarlar → Entegrasyonlar                  |
+
+- **Account.** The business connects its own Netgsm account in Ayarlar → Entegrasyonlar (`kind = voice_call`, provider `netgsm`, registered when `VOICE_NETGSM_ENABLED=true`): user code and API password; voice messages with key presses must be on for the account. The connection check asks for the last hour's report (no call). Without an account the channel is not ready and every call is `skipped`.
+- **Call.** Only the confirmation request is called (any other notice is `skipped`). The catalog's voice text (`catalog.Event.Voice`) is read out: the customer, the business, the date and time of the visit and the three keys. Each key answers with a short text that promises nothing the business's rules could refuse ("İptal isteğinizi aldık…"). The order rings for 30 seconds, starting now; Netgsm needs a window of at least an hour. Only Turkish numbers are called.
+- **Result.** Netgsm posts each call's result to `POST /v1/public/voice/netgsm/{account}/webhook?d=<attempt>&s=<token>`, the address given with the call (`VOICE_WEBHOOK_BASE_URL`, default `PUBLIC_FRONTEND_URL` + `/api`). Netgsm signs nothing, so `s` is a keyed hash of the account and the attempt (`FieldCipher.BlindIndex`, purpose `voice.webhook`) that only this server can make (`401` otherwise); the order id must be the attempt's. Each result is handled once (`integration_jobs`, kind `voice_call.result`).
+
+| Result                          | Attempt                                                            | Then                                          |
+| ------------------------------- | ------------------------------------------------------------------ | --------------------------------------------- |
+| answered, key 1 / 2 / 3         | `delivered` (`delivered_at` = answered)                            | the answer (below)                            |
+| answered, no key / another key  | `delivered` with the error, no answer (another key: `invalid_key`) | the next channel runs; the call is made again |
+| not answered, busy, unreachable | `failed`                                                           | the next channel runs; the call is made again |
+| no result within 30 minutes     | `failed` (`no delivery report`, the receipt timeout)               | the next channel runs                         |
+
+- **Answer.** Like a WhatsApp button: the key acts only for the customer's number and the booking's current request (`RequestCurrent`), through `customerpanel.ChannelAnswer` (source `voice_call`): 1 and 3 through `Engine.Answer`, 2 through the ordinary cancel under the business's cancel cutoff (a paid booking goes to `refund_pending` there and the refund is followed like any cancel). Each key is a `customer_notification_responses` row (channel `voice_call`, `provider_ref` = the order id).
+- A picked up call without an answer counts as reached for the deadline: the K-007 cancel applies when no answer comes. Calls that never got through do not count, so a booking only called and never reached is `unreachable`, never cancelled.
+
+### Call hours and calls made again
+
+| Rule field                                            | Means                                                                                                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `call_window_start_minute` / `call_window_end_minute` | local hours a call may ring; null = the request window. With the call listed and both windows set, they must overlap by an hour. Template 10:00–20:00 |
+| `call_retries` (0–3)                                  | extra calls per planning when a call is missed (not answered, busy, unreachable, no valid key). Template 1                                            |
+| `call_retry_minutes` (15–240)                         | the wait before the next one. Template 30                                                                                                             |
+
+- The task keeps the call rules from planning (the call hours as they apply: the rule's own, else the request hours), `calls_made` and `next_call_at`.
+- A request due outside the call hours goes out without the call (the other channels). A request whose only channel is the call waits for the call hours when an answer still fits before the deadline.
+- A missed call of the latest request plans the next one (`Engine.CallMissed`): after the wait, moved into the call hours, at least 30 minutes before the deadline and not within 15 minutes of the next planned request (which calls anyway). The worker makes it as its own dispatch of the same request on the call alone (key `r<round>:a<n>:c<k>`), so the dispatch guard and the answer check treat it as that request. An answer, a change request, a new request or a new planning stops it.
+- The attempts table shows such a call as "n. istek, k. tekrar arama" (`call`).
+
 ## Not here yet
 
-- Voice / IVR (TEC-923) on the same channel port.
 - Live list events for delivery failures and provider reports (TEC-981).
-- Editing the confirmation message text (the catalog's Turkish default is used, TEC-979); the WhatsApp text is the business's approved template.
+- Editing the confirmation message text (the catalog's Turkish default is used, TEC-979, the call text included); the WhatsApp text is the business's approved template.
+- Twilio as a second voice provider (TEC-986); polling Netgsm's report when a result never arrives (the receipt timeout runs the next channel).
