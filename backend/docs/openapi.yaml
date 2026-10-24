@@ -11194,6 +11194,15 @@ paths:
         days. Needs the reports module and tenant.finance.read; the caller's
         branch scope (and X-Branch) limits every figure, and a member
         without every branch never sees head office records.
+
+        Package sales (TEC-983) are a separate section of each money entry
+        (`packages`): packages sold (the price is a collection, never
+        revenue), sessions used (their value is already service revenue of
+        the visits), refunds and rights lost on packages whose last valid
+        day is in the range and past. Sales, refunds and expiries count on
+        the selling branch, sessions on the visit's branch. The rights open
+        today (`package_balance`) are on the totals and branch rows, not
+        bound to the range. A staff filter leaves the package section out.
       security:
         - bearerAuth: []
       parameters:
@@ -11225,7 +11234,9 @@ paths:
         day and a total row (section=days, default) or one row per branch,
         the head office row and a total row (section=branches). Amounts use
         a dot as the decimal separator; with several currencies there is one
-        row per currency and the counts sit on the first one. Column titles
+        row per currency and the counts sit on the first one. Both sections
+        carry the package sales columns (package_*); the branch section also
+        the rights open today. Column titles
         follow locale (tr default). Needs tenant.report.export as well; the
         export is written to the activity log.
       security:
@@ -18317,7 +18328,7 @@ components:
         product_cost - staff_share - expenses (other income, transfers,
         collections and staff payouts are outside it).
       required: [currency, revenue, collections, transfers, staff_share, staff_payments, business_share, product_cost,
-        income, expenses, operational_result]
+        income, expenses, operational_result, packages]
       properties:
         currency: { type: string }
         revenue: { $ref: "#/components/schemas/SalesRevenue" }
@@ -18330,6 +18341,46 @@ components:
         income: { type: string, description: "Other income from the cash book (not revenue)" }
         expenses: { type: string, description: "Expenses from the cash book (staff payouts excluded)" }
         operational_result: { type: string }
+        packages: { $ref: "#/components/schemas/ReportPackages" }
+
+    ReportPackageFigure:
+      type: object
+      required: [count, sessions, amount]
+      properties:
+        count: { type: integer, format: int64, description: "Packages (sessions for used)" }
+        sessions: { type: integer, format: int64 }
+        amount: { type: string }
+
+    ReportPackages:
+      type: object
+      description: |
+        Package sales of the range, apart from revenue (A19, A20). sold: the
+        packages sold and the money taken; used: the sessions consumed on
+        completed visits and their value (already in revenue.service_net);
+        refunded: the money paid back and the sessions the refund closed;
+        expired: the sessions and value left on packages whose last valid
+        day is in the range and past.
+      required: [sold, used, refunded, expired]
+      properties:
+        sold: { $ref: "#/components/schemas/ReportPackageFigure" }
+        used: { $ref: "#/components/schemas/ReportPackageFigure" }
+        refunded: { $ref: "#/components/schemas/ReportPackageFigure" }
+        expired: { $ref: "#/components/schemas/ReportPackageFigure" }
+
+    ReportPackageBalance:
+      type: object
+      description: |
+        The rights open today on valid packages (not refunded, not used up,
+        not expired) of one currency, by selling branch: the free sessions
+        and their value, and the sessions held by upcoming visits.
+      required: [currency, packages, open_sessions, open_amount, held_sessions, held_amount]
+      properties:
+        currency: { type: string }
+        packages: { type: integer, format: int64 }
+        open_sessions: { type: integer, format: int64 }
+        open_amount: { type: string }
+        held_sessions: { type: integer, format: int64 }
+        held_amount: { type: string }
 
     ReportStock:
       type: object
@@ -18378,7 +18429,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/ReportFigures"
         - type: object
-          required: [branch, stock]
+          required: [branch, stock, package_balance]
           properties:
             branch:
               description: The branch; null on the head office row (records of accounts without a branch).
@@ -18390,6 +18441,10 @@ components:
                 name: { type: string }
                 is_active: { type: boolean }
             stock: { $ref: "#/components/schemas/ReportStock" }
+            package_balance:
+              type: array
+              description: One entry per currency; the business currency first and always present.
+              items: { $ref: "#/components/schemas/ReportPackageBalance" }
 
     Report:
       type: object
@@ -18415,14 +18470,18 @@ components:
             omitted_for_staff:
               type: array
               description: Money figures left out (zero) because a staff filter cannot narrow them
-              items: { type: string, enum: [collections, transfers, income, expenses] }
+              items: { type: string, enum: [collections, transfers, income, expenses, packages] }
         totals:
           allOf:
             - $ref: "#/components/schemas/ReportFigures"
             - type: object
-              required: [stock]
+              required: [stock, package_balance]
               properties:
                 stock: { $ref: "#/components/schemas/ReportStock" }
+                package_balance:
+                  type: array
+                  description: One entry per currency; the business currency first and always present.
+                  items: { $ref: "#/components/schemas/ReportPackageBalance" }
         days:
           type: array
           description: Days of the range with any record, oldest first

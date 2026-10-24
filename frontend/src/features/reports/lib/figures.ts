@@ -1,4 +1,16 @@
-import type { ReportFigures, ReportMoney } from "@/features/reports/types";
+import type {
+  ReportFigures,
+  ReportMoney,
+  ReportPackageBalance,
+} from "@/features/reports/types";
+
+/** The open package rights of the business currency (always listed first). */
+export function mainBalance(
+  balance: ReportPackageBalance[],
+  currency: string,
+): ReportPackageBalance | undefined {
+  return balance.find((b) => b.currency === currency) ?? balance[0];
+}
 
 /**
  * The money of the business currency (the API lists it first and always

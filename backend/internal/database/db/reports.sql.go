@@ -401,6 +401,367 @@ func (q *Queries) ReportConfirmations(ctx context.Context, arg ReportConfirmatio
 	return items, nil
 }
 
+const reportPackageBalance = `-- name: ReportPackageBalance :many
+SELECT cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS package_count,
+    COALESCE(SUM(cp.total_sessions - COALESCE(u.consumed, 0) - COALESCE(u.held, 0)), 0)::bigint AS open_sessions,
+    COALESCE(SUM(cp.price - COALESCE(u.consumed_amount, 0) - COALESCE(u.held_amount, 0)), 0)::numeric(14, 2) AS open_amount,
+    COALESCE(SUM(COALESCE(u.held, 0)), 0)::bigint AS held_sessions,
+    COALESCE(SUM(COALESCE(u.held_amount, 0)), 0)::numeric(14, 2) AS held_amount
+FROM customer_packages cp
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) FILTER (WHERE ps.status = 'consumed') AS consumed,
+           COUNT(*) FILTER (WHERE ps.status = 'held') AS held,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'consumed') AS consumed_amount,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'held') AS held_amount
+    FROM package_sessions ps
+    WHERE ps.organization_id = cp.organization_id AND ps.customer_package_id = cp.id
+) u ON TRUE
+WHERE cp.organization_id = $1 AND cp.status = 'active'
+  AND (cp.expires_on IS NULL OR cp.expires_on >= $2::date)
+  AND COALESCE(u.consumed, 0) < cp.total_sessions
+  AND ($3::bigint[] IS NULL OR cp.branch_id = ANY($3::bigint[]))
+  AND ($4::bigint[] IS NULL OR cp.branch_id = ANY($4::bigint[]))
+GROUP BY cp.branch_id, cp.currency
+ORDER BY cp.branch_id, cp.currency
+`
+
+type ReportPackageBalanceParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	Today           pgtype.Date `json:"today"`
+	BranchIds       []int64     `json:"branch_ids"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+}
+
+type ReportPackageBalanceRow struct {
+	BranchID     int64          `json:"branch_id"`
+	Currency     string         `json:"currency"`
+	PackageCount int64          `json:"package_count"`
+	OpenSessions int64          `json:"open_sessions"`
+	OpenAmount   pgtype.Numeric `json:"open_amount"`
+	HeldSessions int64          `json:"held_sessions"`
+	HeldAmount   pgtype.Numeric `json:"held_amount"`
+}
+
+// TEC-983: the rights open today per selling branch and currency: valid
+// packages (not refunded, not used up, not expired) with the sessions and
+// value still free and those held by upcoming visits.
+func (q *Queries) ReportPackageBalance(ctx context.Context, arg ReportPackageBalanceParams) ([]ReportPackageBalanceRow, error) {
+	rows, err := q.db.Query(ctx, reportPackageBalance,
+		arg.OrganizationID,
+		arg.Today,
+		arg.BranchIds,
+		arg.FilterBranchIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportPackageBalanceRow{}
+	for rows.Next() {
+		var i ReportPackageBalanceRow
+		if err := rows.Scan(
+			&i.BranchID,
+			&i.Currency,
+			&i.PackageCount,
+			&i.OpenSessions,
+			&i.OpenAmount,
+			&i.HeldSessions,
+			&i.HeldAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportPackageExpiries = `-- name: ReportPackageExpiries :many
+SELECT cp.expires_on::date AS expires_on, cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS expired_count,
+    COALESCE(SUM(cp.total_sessions - COALESCE(u.consumed, 0) - COALESCE(u.held, 0)), 0)::bigint AS expired_sessions,
+    COALESCE(SUM(cp.price - COALESCE(u.consumed_amount, 0) - COALESCE(u.held_amount, 0)), 0)::numeric(14, 2) AS expired_amount
+FROM customer_packages cp
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) FILTER (WHERE ps.status = 'consumed') AS consumed,
+           COUNT(*) FILTER (WHERE ps.status = 'held') AS held,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'consumed') AS consumed_amount,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'held') AS held_amount
+    FROM package_sessions ps
+    WHERE ps.organization_id = cp.organization_id AND ps.customer_package_id = cp.id
+) u ON TRUE
+WHERE cp.organization_id = $1 AND cp.status = 'active'
+  AND cp.expires_on IS NOT NULL
+  AND cp.expires_on BETWEEN $2::date AND $3::date
+  AND cp.expires_on < $4::date
+  AND COALESCE(u.consumed, 0) < cp.total_sessions
+  AND ($5::bigint[] IS NULL OR cp.branch_id = ANY($5::bigint[]))
+  AND ($6::bigint[] IS NULL OR cp.branch_id = ANY($6::bigint[]))
+GROUP BY cp.expires_on, cp.branch_id, cp.currency
+ORDER BY cp.expires_on, cp.branch_id, cp.currency
+`
+
+type ReportPackageExpiriesParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	DateFrom        pgtype.Date `json:"date_from"`
+	DateTo          pgtype.Date `json:"date_to"`
+	Today           pgtype.Date `json:"today"`
+	BranchIds       []int64     `json:"branch_ids"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+}
+
+type ReportPackageExpiriesRow struct {
+	ExpiresOn       pgtype.Date    `json:"expires_on"`
+	BranchID        int64          `json:"branch_id"`
+	Currency        string         `json:"currency"`
+	ExpiredCount    int64          `json:"expired_count"`
+	ExpiredSessions int64          `json:"expired_sessions"`
+	ExpiredAmount   pgtype.Numeric `json:"expired_amount"`
+}
+
+// TEC-983: rights lost per day: packages (not refunded, not used up) whose
+// last valid day (expires_on) is in the range and already past, with the
+// sessions and value left on them. Held sessions are left out (their
+// visit consumes or releases them).
+func (q *Queries) ReportPackageExpiries(ctx context.Context, arg ReportPackageExpiriesParams) ([]ReportPackageExpiriesRow, error) {
+	rows, err := q.db.Query(ctx, reportPackageExpiries,
+		arg.OrganizationID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.Today,
+		arg.BranchIds,
+		arg.FilterBranchIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportPackageExpiriesRow{}
+	for rows.Next() {
+		var i ReportPackageExpiriesRow
+		if err := rows.Scan(
+			&i.ExpiresOn,
+			&i.BranchID,
+			&i.Currency,
+			&i.ExpiredCount,
+			&i.ExpiredSessions,
+			&i.ExpiredAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportPackageRefunds = `-- name: ReportPackageRefunds :many
+SELECT cp.refunded_on::date AS refunded_on, cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS refunded_count,
+    COALESCE(SUM(cp.total_sessions - COALESCE(u.consumed, 0)), 0)::bigint AS refunded_sessions,
+    COALESCE(SUM(cp.refund_amount), 0)::numeric(14, 2) AS refunded_amount
+FROM customer_packages cp
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) AS consumed FROM package_sessions ps
+    WHERE ps.organization_id = cp.organization_id AND ps.customer_package_id = cp.id AND ps.status = 'consumed'
+) u ON TRUE
+WHERE cp.organization_id = $1 AND cp.status = 'refunded'
+  AND cp.refunded_on BETWEEN $2::date AND $3::date
+  AND ($4::bigint[] IS NULL OR cp.branch_id = ANY($4::bigint[]))
+  AND ($5::bigint[] IS NULL OR cp.branch_id = ANY($5::bigint[]))
+GROUP BY cp.refunded_on, cp.branch_id, cp.currency
+ORDER BY cp.refunded_on, cp.branch_id, cp.currency
+`
+
+type ReportPackageRefundsParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	DateFrom        pgtype.Date `json:"date_from"`
+	DateTo          pgtype.Date `json:"date_to"`
+	BranchIds       []int64     `json:"branch_ids"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+}
+
+type ReportPackageRefundsRow struct {
+	RefundedOn       pgtype.Date    `json:"refunded_on"`
+	BranchID         int64          `json:"branch_id"`
+	Currency         string         `json:"currency"`
+	RefundedCount    int64          `json:"refunded_count"`
+	RefundedSessions int64          `json:"refunded_sessions"`
+	RefundedAmount   pgtype.Numeric `json:"refunded_amount"`
+}
+
+// TEC-983: packages refunded per day (refunded_on), selling branch and
+// currency: the money paid back and the sessions the refund closed.
+func (q *Queries) ReportPackageRefunds(ctx context.Context, arg ReportPackageRefundsParams) ([]ReportPackageRefundsRow, error) {
+	rows, err := q.db.Query(ctx, reportPackageRefunds,
+		arg.OrganizationID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.BranchIds,
+		arg.FilterBranchIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportPackageRefundsRow{}
+	for rows.Next() {
+		var i ReportPackageRefundsRow
+		if err := rows.Scan(
+			&i.RefundedOn,
+			&i.BranchID,
+			&i.Currency,
+			&i.RefundedCount,
+			&i.RefundedSessions,
+			&i.RefundedAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportPackageSales = `-- name: ReportPackageSales :many
+SELECT cp.sold_on, cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS sold_count,
+    COALESCE(SUM(cp.total_sessions), 0)::bigint AS sold_sessions,
+    COALESCE(SUM(cp.price), 0)::numeric(14, 2) AS sold_amount
+FROM customer_packages cp
+WHERE cp.organization_id = $1
+  AND cp.sold_on BETWEEN $2::date AND $3::date
+  AND ($4::bigint[] IS NULL OR cp.branch_id = ANY($4::bigint[]))
+  AND ($5::bigint[] IS NULL OR cp.branch_id = ANY($5::bigint[]))
+GROUP BY cp.sold_on, cp.branch_id, cp.currency
+ORDER BY cp.sold_on, cp.branch_id, cp.currency
+`
+
+type ReportPackageSalesParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	DateFrom        pgtype.Date `json:"date_from"`
+	DateTo          pgtype.Date `json:"date_to"`
+	BranchIds       []int64     `json:"branch_ids"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+}
+
+type ReportPackageSalesRow struct {
+	SoldOn       pgtype.Date    `json:"sold_on"`
+	BranchID     int64          `json:"branch_id"`
+	Currency     string         `json:"currency"`
+	SoldCount    int64          `json:"sold_count"`
+	SoldSessions int64          `json:"sold_sessions"`
+	SoldAmount   pgtype.Numeric `json:"sold_amount"`
+}
+
+// TEC-983: packages sold per day (sold_on), selling branch and currency.
+// The price is money taken (a collection), never revenue: the revenue of
+// a package comes from its sessions on completed visits (sale lines).
+func (q *Queries) ReportPackageSales(ctx context.Context, arg ReportPackageSalesParams) ([]ReportPackageSalesRow, error) {
+	rows, err := q.db.Query(ctx, reportPackageSales,
+		arg.OrganizationID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.BranchIds,
+		arg.FilterBranchIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportPackageSalesRow{}
+	for rows.Next() {
+		var i ReportPackageSalesRow
+		if err := rows.Scan(
+			&i.SoldOn,
+			&i.BranchID,
+			&i.Currency,
+			&i.SoldCount,
+			&i.SoldSessions,
+			&i.SoldAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportPackageUsage = `-- name: ReportPackageUsage :many
+SELECT ps.consumed_on::date AS consumed_on, r.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS used_sessions,
+    COALESCE(SUM(ps.amount), 0)::numeric(14, 2) AS used_amount
+FROM package_sessions ps
+JOIN customer_packages cp ON cp.organization_id = ps.organization_id AND cp.id = ps.customer_package_id
+JOIN reservations r ON r.organization_id = ps.organization_id AND r.id = ps.reservation_id
+WHERE ps.organization_id = $1 AND ps.status = 'consumed'
+  AND ps.consumed_on BETWEEN $2::date AND $3::date
+  AND ($4::bigint[] IS NULL OR r.branch_id = ANY($4::bigint[]))
+  AND ($5::bigint[] IS NULL OR r.branch_id = ANY($5::bigint[]))
+GROUP BY ps.consumed_on, r.branch_id, cp.currency
+ORDER BY ps.consumed_on, r.branch_id, cp.currency
+`
+
+type ReportPackageUsageParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	DateFrom        pgtype.Date `json:"date_from"`
+	DateTo          pgtype.Date `json:"date_to"`
+	BranchIds       []int64     `json:"branch_ids"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+}
+
+type ReportPackageUsageRow struct {
+	ConsumedOn   pgtype.Date    `json:"consumed_on"`
+	BranchID     int64          `json:"branch_id"`
+	Currency     string         `json:"currency"`
+	UsedSessions int64          `json:"used_sessions"`
+	UsedAmount   pgtype.Numeric `json:"used_amount"`
+}
+
+// TEC-983: sessions consumed per day (consumed_on), visit branch and
+// currency; their value is already in the service revenue of the visits.
+func (q *Queries) ReportPackageUsage(ctx context.Context, arg ReportPackageUsageParams) ([]ReportPackageUsageRow, error) {
+	rows, err := q.db.Query(ctx, reportPackageUsage,
+		arg.OrganizationID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.BranchIds,
+		arg.FilterBranchIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportPackageUsageRow{}
+	for rows.Next() {
+		var i ReportPackageUsageRow
+		if err := rows.Scan(
+			&i.ConsumedOn,
+			&i.BranchID,
+			&i.Currency,
+			&i.UsedSessions,
+			&i.UsedAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reportReservations = `-- name: ReportReservations :many
 WITH rv AS (
     SELECT r.branch_id, r.status, r.source,

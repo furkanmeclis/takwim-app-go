@@ -1186,6 +1186,25 @@ type Querier interface {
 	// state (the state the confirmation list shows: change_requested and the
 	// outcome of an expired task stand apart).
 	ReportConfirmations(ctx context.Context, arg ReportConfirmationsParams) ([]ReportConfirmationsRow, error)
+	// TEC-983: the rights open today per selling branch and currency: valid
+	// packages (not refunded, not used up, not expired) with the sessions and
+	// value still free and those held by upcoming visits.
+	ReportPackageBalance(ctx context.Context, arg ReportPackageBalanceParams) ([]ReportPackageBalanceRow, error)
+	// TEC-983: rights lost per day: packages (not refunded, not used up) whose
+	// last valid day (expires_on) is in the range and already past, with the
+	// sessions and value left on them. Held sessions are left out (their
+	// visit consumes or releases them).
+	ReportPackageExpiries(ctx context.Context, arg ReportPackageExpiriesParams) ([]ReportPackageExpiriesRow, error)
+	// TEC-983: packages refunded per day (refunded_on), selling branch and
+	// currency: the money paid back and the sessions the refund closed.
+	ReportPackageRefunds(ctx context.Context, arg ReportPackageRefundsParams) ([]ReportPackageRefundsRow, error)
+	// TEC-983: packages sold per day (sold_on), selling branch and currency.
+	// The price is money taken (a collection), never revenue: the revenue of
+	// a package comes from its sessions on completed visits (sale lines).
+	ReportPackageSales(ctx context.Context, arg ReportPackageSalesParams) ([]ReportPackageSalesRow, error)
+	// TEC-983: sessions consumed per day (consumed_on), visit branch and
+	// currency; their value is already in the service revenue of the visits.
+	ReportPackageUsage(ctx context.Context, arg ReportPackageUsageParams) ([]ReportPackageUsageRow, error)
 	// Reservations per local start day (branch time zone, else the
 	// business's), branch, status and channel. With a staff filter: the visits
 	// with a line of one of the staff members.

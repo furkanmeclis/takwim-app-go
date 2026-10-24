@@ -6,11 +6,16 @@ import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { createColumn } from "@/components/tables";
 import { amountTone, useCashAmount } from "@/features/cash/lib/format";
-import { mainMoney, percent } from "@/features/reports/lib/figures";
+import {
+  mainBalance,
+  mainMoney,
+  percent,
+} from "@/features/reports/lib/figures";
 import type {
   ReportBranch,
   ReportDay,
   ReportMoney,
+  ReportPackages,
 } from "@/features/reports/types";
 import { cn } from "@/lib/utils";
 import { date as formatDate } from "@/lib/utils/format";
@@ -353,6 +358,128 @@ export function useReportStockColumns() {
       }),
     ] as ColumnDef<ReportBranch, unknown>[];
   }, [money]);
+}
+
+type PackageAmountKey = "sold" | "used" | "refunded" | "expired";
+
+function usePackageColumns<T extends ReportDay | ReportBranch>(
+  currency: string,
+) {
+  const money = useCashAmount();
+  return useMemo(() => {
+    const packagesOf = (row: T): ReportPackages | undefined =>
+      mainMoney(row, currency)?.packages;
+    const amount = (id: string, key: PackageAmountKey, secondary = false) =>
+      createColumn<T>({
+        id,
+        accessorFn: (row) => packagesOf(row)?.[key].amount ?? "",
+        labelKey: `reports.columns.${id}`,
+        enableSorting: false,
+        gridSecondary: secondary,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {money(packagesOf(row.original)?.[key].amount, currency)}
+          </span>
+        ),
+      });
+    const count = (id: string, value: (p: ReportPackages) => number) =>
+      createColumn<T>({
+        id,
+        accessorFn: (row) => {
+          const p = packagesOf(row);
+          return p ? value(p) : 0;
+        },
+        labelKey: `reports.columns.${id}`,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const p = packagesOf(row.original);
+          return <span className="tabular-nums">{p ? value(p) : 0}</span>;
+        },
+      });
+    return [
+      count("package_sold_count", (p) => p.sold.count),
+      amount("package_sold_amount", "sold", true),
+      count("package_used_sessions", (p) => p.used.sessions),
+      amount("package_used_amount", "used"),
+      amount("package_refunded_amount", "refunded"),
+      count("package_expired_sessions", (p) => p.expired.sessions),
+      amount("package_expired_amount", "expired"),
+    ];
+  }, [currency, money]);
+}
+
+/** Package activity per day: sales, sessions used, refunds, expiries. */
+export function useReportPackageDayColumns(currency: string) {
+  const { locale } = useLocale();
+  const packageColumns = usePackageColumns<ReportDay>(currency);
+  return useMemo(
+    () =>
+      [
+        createColumn<ReportDay>({
+          accessorKey: "date",
+          labelKey: "reports.columns.date",
+          enableSorting: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <span className="font-medium">
+              {formatDate(row.original.date, undefined, locale)}
+            </span>
+          ),
+        }),
+        ...packageColumns,
+      ] as ColumnDef<ReportDay, unknown>[],
+    [locale, packageColumns],
+  );
+}
+
+/** Packages per branch: the period's activity and the rights left today. */
+export function useReportPackageBranchColumns(currency: string) {
+  const money = useCashAmount();
+  const packageColumns = usePackageColumns<ReportBranch>(currency);
+  return useMemo(
+    () =>
+      [
+        createColumn<ReportBranch>({
+          id: "branch",
+          accessorFn: branchId,
+          labelKey: "reports.columns.branch",
+          enableSorting: false,
+          gridPrimary: true,
+          cell: ({ row }) => <BranchName row={row.original} />,
+        }),
+        ...packageColumns,
+        createColumn<ReportBranch>({
+          id: "package_open_sessions",
+          accessorFn: (row) =>
+            mainBalance(row.package_balance, currency)?.open_sessions ?? 0,
+          labelKey: "reports.columns.package_open_sessions",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {mainBalance(row.original.package_balance, currency)
+                ?.open_sessions ?? 0}
+            </span>
+          ),
+        }),
+        createColumn<ReportBranch>({
+          id: "package_open_amount",
+          accessorFn: (row) =>
+            mainBalance(row.package_balance, currency)?.open_amount ?? "",
+          labelKey: "reports.columns.package_open_amount",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {money(
+                mainBalance(row.original.package_balance, currency)
+                  ?.open_amount,
+                currency,
+              )}
+            </span>
+          ),
+        }),
+      ] as ColumnDef<ReportBranch, unknown>[],
+    [currency, money, packageColumns],
+  );
 }
 
 export { branchId };
