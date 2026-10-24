@@ -9467,7 +9467,8 @@ export interface paths {
         post?: never;
         /**
          * Remove a class
-         * @description Soft delete. A class with booked future sessions is `409` `sessions` / `has_bookings`.
+         * @description Soft delete. A class with booked future sessions is `409` `sessions` / `has_bookings` (the booked sessions
+         *     follow as `sessions` / `booked_session` details, their local date in `message`).
          */
         delete: operations["deleteTenantClass"];
         options?: never;
@@ -9476,7 +9477,9 @@ export interface paths {
          * Change a class
          * @description The whole class (as on create). A change that would leave a booked future session outside the timetable
          *     (other weekday, time, branch or service, a shorter validity, inactive) is `409` `sessions` / `has_bookings`:
-         *     cancel or move those bookings first. A new trainer or area applies to sessions without bookings.
+         *     cancel or move those bookings first (the booked sessions follow as `sessions` / `booked_session` details,
+         *     their local date in `message`; move their bookings with `POST .../sessions/{date}/move`). A new trainer or
+         *     area applies to sessions without bookings.
          */
         patch: operations["patchTenantClass"];
         trace?: never;
@@ -9535,6 +9538,38 @@ export interface paths {
          *     `past`.
          */
         post: operations["postTenantClassSessionCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/classes/{uuid}/sessions/{date}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a session's bookings to another session of the class
+         * @description `tenant.classes.write` and `tenant.reservations.write` (TEC-994). The open bookings (requests and active
+         *     bookings) of the session are moved to the session of the same class on `to_date` in one bulk run
+         *     (`tenant.class_sessions` / `move_bookings`), each through the reservation's own reschedule under the
+         *     booking lock: the seat is held in the target, lines keep their trainer and price, package sessions stay
+         *     where the validity allows and the customer gets the rescheduled notice. A booking that finds no seat left
+         *     (or its trainer or area busy) stays where it was and is listed in `move.issues` (`slot_taken`); a booking
+         *     changed meanwhile is skipped (`stale`). The run keeps a bulk job also when it runs inline, so it can be
+         *     rolled back in the bulk window with `POST /v1/tenant/bulk/{uuid}/rollback`: each booking is moved back,
+         *     unless it changed since or the source session is no longer open. The session itself stays on the timetable
+         *     (cancel it afterwards when it is empty). Without open bookings `move` is null.
+         *
+         *     `to_date` must be another date of the class with an open session: `400` `to_date` / `required`, `invalid`,
+         *     `same_session`, `not_found` (no session of the class that day), `cancelled`, `past`, `full`.
+         */
+        post: operations["postTenantClassSessionMove"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17957,6 +17992,8 @@ export interface components {
             attendees: components["schemas"]["ClassAttendee"][];
             /** @description The caller's run that cancelled the session's bookings while it can be rolled back. */
             cancellation: components["schemas"]["ClassSessionCancellation"] | null;
+            /** @description The caller's run that moved the session's bookings away while it can be rolled back (TEC-994). */
+            move: components["schemas"]["ClassSessionMove"] | null;
         };
         ClassSessionCancelInput: {
             reason?: string;
@@ -17990,6 +18027,62 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["ClassSessionCancelResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ClassSessionMoveInput: {
+            /**
+             * Format: date
+             * @description Local date of the target session of the same class
+             */
+            to_date: string;
+            /** @description Language of the run's report (tr when empty) */
+            locale?: string;
+        };
+        /** @description One booking the move left where it was. */
+        ClassSessionMoveIssue: {
+            /** Format: uuid */
+            reservation_uuid: string;
+            /** @description The booking's number (#12) */
+            label: string;
+            /** @description slot_taken (no seat, trainer or area busy), stale, invalid_transition, not_in_session, not_found … */
+            error: string;
+            skipped: boolean;
+        };
+        /** @description A run that moved a session's bookings to another session of the class (TEC-994). */
+        ClassSessionMove: {
+            /**
+             * Format: uuid
+             * @description The bulk job (rollback: POST /v1/tenant/bulk/{uuid}/rollback)
+             */
+            job_uuid: string;
+            /**
+             * Format: date
+             * @description Local date of the target session
+             */
+            to_date: string;
+            total: number;
+            succeeded: number;
+            failed: number;
+            skipped: number;
+            issues: components["schemas"]["ClassSessionMoveIssue"][];
+            /**
+             * Format: date-time
+             * @description End of the undo window; null = nothing to undo
+             */
+            rollback_until: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ClassSessionMoveResult: {
+            session: components["schemas"]["ClassSessionDetail"];
+            target: components["schemas"]["ClassSessionDetail"];
+            /** @description The run over the session's bookings (null when it had none open). */
+            move: components["schemas"]["ClassSessionMove"] | null;
+        };
+        EnvelopeClassSessionMoveResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassSessionMoveResult"];
             meta: components["schemas"]["ResponseMeta"];
         };
         ClassSessionChangeInput: {
@@ -35604,6 +35697,45 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantClassSessionMove: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                /** @description Local date of the class session (branch time zone) */
+                date: components["parameters"]["ClassSessionDate"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassSessionMoveInput"];
+            };
+        };
+        responses: {
+            /** @description Both sessions and the run over the bookings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSessionMoveResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getTenantClassSessions: {

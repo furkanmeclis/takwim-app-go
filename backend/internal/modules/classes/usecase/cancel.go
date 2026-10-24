@@ -17,6 +17,7 @@ import (
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/timetable"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
 )
 
 // Cancelling a session with its bookings (TEC-989):
@@ -139,9 +140,9 @@ func (s *Service) ReopenSessionIn(ctx context.Context, q *db.Queries, orgID int6
 // CancelJob answers the caller's latest run that cancelled the bookings of
 // a session while it can still be rolled back (nil: none).
 func (s *Service) CancelJob(ctx context.Context, orgID, actorID int64, id uuid.UUID, date string) (*model.SessionCancellation, error) {
-	row, err := s.q.GetClassSessionCancelJob(ctx, db.GetClassSessionCancelJobParams{
-		OrganizationID: pgtype.Int8{Int64: orgID, Valid: true}, Resource: model.SessionsSlug, ActorID: actorID,
-		ClassUuid: id.String(), SessionDate: date,
+	row, err := s.q.GetClassSessionBulkJob(ctx, db.GetClassSessionBulkJobParams{
+		OrganizationID: pgtype.Int8{Int64: orgID, Valid: true}, Resource: model.SessionsSlug, Action: model.CancelBookingsAction,
+		ActorID: actorID, ClassUuid: id.String(), SessionDate: date,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -149,23 +150,30 @@ func (s *Service) CancelJob(ctx context.Context, orgID, actorID int64, id uuid.U
 	if err != nil {
 		return nil, err
 	}
-	var until *time.Time
-	if row.RollbackUntil.Valid {
-		t := row.RollbackUntil.Time.UTC()
-		until = &t
-	}
-	c := cancellation(row.Uuid, row.ResultJson, until, row.CreatedAt.Time)
+	c := cancellation(row.Uuid, row.ResultJson, rollbackUntil(row.RollbackUntil), row.CreatedAt.Time)
 	return &c, nil
+}
+
+func rollbackUntil(v pgtype.Timestamptz) *time.Time {
+	if !v.Valid {
+		return nil
+	}
+	t := v.Time.UTC()
+	return &t
+}
+
+// runSummary is the stored summary of a bulk run.
+type runSummary struct {
+	Total     int                    `json:"total"`
+	Succeeded int                    `json:"succeeded"`
+	Failed    int                    `json:"failed"`
+	Skipped   int                    `json:"skipped"`
+	Issues    []bulkengine.BulkIssue `json:"issues"`
 }
 
 // cancellation reads the summary of a bulk run into a session cancellation.
 func cancellation(job uuid.UUID, result []byte, rollbackUntil *time.Time, createdAt time.Time) model.SessionCancellation {
-	var sum struct {
-		Total     int `json:"total"`
-		Succeeded int `json:"succeeded"`
-		Failed    int `json:"failed"`
-		Skipped   int `json:"skipped"`
-	}
+	var sum runSummary
 	_ = json.Unmarshal(result, &sum)
 	return model.SessionCancellation{
 		JobUUID: job, Total: sum.Total, Succeeded: sum.Succeeded, Failed: sum.Failed, Skipped: sum.Skipped,

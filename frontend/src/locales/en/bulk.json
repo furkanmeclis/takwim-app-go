@@ -69,5 +69,6 @@
   "actions.session_packages.activate": "Activate packages",
   "actions.session_packages.deactivate": "Deactivate packages",
   "confirm.session_packages.deactivate": "Deactivate {{count}} selected package definitions? They can no longer be sold; sold packages are not affected.",
-  "actions.class_sessions.cancel_bookings": "Cancel session bookings"
+  "actions.class_sessions.cancel_bookings": "Cancel session bookings",
+  "actions.class_sessions.move_bookings": "Move session bookings"
 }

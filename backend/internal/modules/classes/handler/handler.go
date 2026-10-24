@@ -213,19 +213,22 @@ func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, out)
 }
 
-// sessionDetail is a session with its bookings and the caller's run that
-// cancelled them, while it can be rolled back.
+// sessionDetail is a session with its bookings and the caller's runs that
+// cancelled or moved them, while they can be rolled back.
 func (h *Handler) sessionDetail(r *http.Request, id uuid.UUID, date string) (model.SessionDetail, error) {
 	orgID := orgctx.Must(r.Context()).ID
 	out, err := h.svc.SessionDetail(r.Context(), orgID, id, date)
 	if err != nil {
 		return out, err
 	}
+	pr := authctx.MustPrincipal(r.Context())
 	if out.Cancelled {
-		pr := authctx.MustPrincipal(r.Context())
 		if out.Cancellation, err = h.svc.CancelJob(r.Context(), orgID, pr.UserInternal, id, date); err != nil {
 			return out, err
 		}
+	}
+	if out.Move, err = h.svc.MoveJob(r.Context(), orgID, pr.UserInternal, id, date); err != nil {
+		return out, err
 	}
 	return out, nil
 }
@@ -410,7 +413,16 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, usecase.ErrSessionNotFound):
 		response.NotFound(w, r, "Class session was not found")
 	case errors.Is(err, usecase.ErrHasBookings):
-		conflict(w, r, "sessions", "has_bookings", err)
+		// The booked sessions follow as booked_session details, so the
+		// panel can offer to move their bookings (TEC-994).
+		details := []response.Detail{{Field: "sessions", Message: err.Error(), Code: "has_bookings"}}
+		var hb *usecase.HasBookingsError
+		if errors.As(err, &hb) {
+			for _, d := range hb.Dates {
+				details = append(details, response.Detail{Field: "sessions", Message: d, Code: "booked_session"})
+			}
+		}
+		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, err.Error(), details)
 	case errors.Is(err, usecase.ErrBelowBooked):
 		conflict(w, r, "capacity", "below_booked", err)
 	case errors.Is(err, usecase.ErrPast):

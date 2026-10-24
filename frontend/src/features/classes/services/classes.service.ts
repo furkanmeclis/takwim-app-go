@@ -9,6 +9,8 @@ import type {
   ClassSessionCancelResult,
   ClassSessionChangeInput,
   ClassSessionDetail,
+  ClassSessionMoveInput,
+  ClassSessionMoveResult,
   ClassSessionPage,
   ListClassSessionsParams,
   ListClassesParams,
@@ -107,8 +109,31 @@ export const classesService = {
     );
   },
 
-  /** Rolls a session cancel back: the session opens with its bookings. */
-  undoCancel(slug: string, jobUuid: string) {
+  /**
+   * Moves the session's open bookings to another session of the class in
+   * one bulk run (TEC-994): seats are held in the target, customers get the
+   * rescheduled notice; bookings that find no seat stay and are listed in
+   * `move.issues`. The run can be rolled back with `undoRun`.
+   */
+  moveSessionBookings(
+    slug: string,
+    uuid: string,
+    date: string,
+    body: ClassSessionMoveInput,
+  ) {
+    return tenantRequest<ClassSessionMoveResult>(
+      slug,
+      "POST",
+      `${CLASSES}/${uuid}/sessions/${date}/move`,
+      { body, silent: true },
+    );
+  },
+
+  /**
+   * Rolls a session run back: a cancel opens the session with its bookings,
+   * a move brings the bookings back.
+   */
+  undoRun(slug: string, jobUuid: string) {
     return tenantRequest<BulkJob>(slug, "POST", `${BULK}/${jobUuid}/rollback`, {
       silent: true,
     });

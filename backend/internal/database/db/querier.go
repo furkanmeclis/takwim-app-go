@@ -393,9 +393,9 @@ type Querier interface {
 	GetClassSchedule(ctx context.Context, arg GetClassScheduleParams) (GetClassScheduleRow, error)
 	// A live service with its offer in the branch (sb.* NULL = not offered).
 	GetClassService(ctx context.Context, arg GetClassServiceParams) (GetClassServiceRow, error)
-	// The caller's latest bulk run that cancelled the bookings of one session
-	// (TEC-989) and can still be rolled back.
-	GetClassSessionCancelJob(ctx context.Context, arg GetClassSessionCancelJobParams) (GetClassSessionCancelJobRow, error)
+	// The caller's latest bulk run of one action over the bookings of one
+	// session (cancel, TEC-989; move, TEC-994) that can still be rolled back.
+	GetClassSessionBulkJob(ctx context.Context, arg GetClassSessionBulkJobParams) (GetClassSessionBulkJobRow, error)
 	// A live staff member who may perform the service and works in the branch.
 	GetClassTrainer(ctx context.Context, arg GetClassTrainerParams) (GetClassTrainerRow, error)
 	GetCollectAccount(ctx context.Context, arg GetCollectAccountParams) (GetCollectAccountRow, error)

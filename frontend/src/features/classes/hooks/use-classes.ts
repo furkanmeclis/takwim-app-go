@@ -180,21 +180,87 @@ export function useCancelClassSession() {
 }
 
 /**
- * Rolls a session cancel back: the session opens again and its bookings
- * are taken back (a booking changed since stays cancelled).
+ * Moves the session's open bookings to another session of the class
+ * (TEC-994). The answer carries both sessions as they are now and the run
+ * that can be rolled back; bookings that found no seat stay listed in the
+ * source session.
  */
-export function useUndoClassSessionCancel() {
+export function useMoveClassSessionBookings() {
+  const { slug } = useTenant();
+  const { t, locale } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateClasses();
+  return useMutation({
+    mutationFn: async ({
+      uuid,
+      date,
+      toDate,
+    }: {
+      uuid: string;
+      date: string;
+      toDate: string;
+    }) => {
+      try {
+        return await classesService.moveSessionBookings(slug, uuid, date, {
+          to_date: toDate,
+          locale,
+        });
+      } catch (error) {
+        throw localizeClassError(error, t);
+      }
+    },
+    onSuccess: (result, { uuid, date }) => {
+      queryClient.setQueryData(
+        classesKeys.session(slug, uuid, date),
+        result.session,
+      );
+      queryClient.setQueryData(
+        classesKeys.session(slug, uuid, result.target.date),
+        result.target,
+      );
+      const run = result.move;
+      if (!run) {
+        appToast.info(t("classes.toast.nothing_to_move"));
+      } else if (run.failed + run.skipped > 0) {
+        appToast.warning(
+          t("classes.toast.bookings_moved_partial", {
+            succeeded: run.succeeded,
+            total: run.total,
+            left: run.failed + run.skipped,
+          }),
+        );
+      } else {
+        appToast.success(
+          t("classes.toast.bookings_moved", { count: run.succeeded }),
+        );
+      }
+      void invalidate();
+    },
+    onError: (error) => reportClassError(error, t),
+  });
+}
+
+/**
+ * Rolls a session run back. A cancel: the session opens again and its
+ * bookings are taken back. A move: the bookings come back to the session.
+ * A booking changed since stays as it is.
+ */
+export function useUndoClassSessionRun(kind: "cancel" | "move") {
   const { slug } = useTenant();
   const { t } = useLocale();
   const invalidate = useInvalidateClasses();
   return useMutation({
     mutationFn: ({ jobUuid }: { jobUuid: string }) =>
-      classesService.undoCancel(slug, jobUuid),
+      classesService.undoRun(slug, jobUuid),
     onSuccess: (job) => {
-      if (job.status === "rolled_back") {
-        appToast.success(t("classes.toast.cancel_undone"));
+      const whole = job.status === "rolled_back";
+      if (kind === "cancel") {
+        if (whole) appToast.success(t("classes.toast.cancel_undone"));
+        else appToast.warning(t("classes.toast.cancel_undone_partial"));
+      } else if (whole) {
+        appToast.success(t("classes.toast.move_undone"));
       } else {
-        appToast.warning(t("classes.toast.cancel_undone_partial"));
+        appToast.warning(t("classes.toast.move_undone_partial"));
       }
       void invalidate();
     },

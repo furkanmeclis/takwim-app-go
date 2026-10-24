@@ -289,47 +289,52 @@ func (q *Queries) GetClassService(ctx context.Context, arg GetClassServiceParams
 	return i, err
 }
 
-const getClassSessionCancelJob = `-- name: GetClassSessionCancelJob :one
-SELECT j.uuid, j.result_json, j.rollback_until, j.created_at
+const getClassSessionBulkJob = `-- name: GetClassSessionBulkJob :one
+SELECT j.uuid, j.result_json, j.target_json, j.rollback_until, j.created_at
 FROM bulk_jobs j
 WHERE j.organization_id = $1 AND j.resource = $2
-  AND j.actor_id = $3 AND j.status = 'completed'
+  AND j.action = $3
+  AND j.actor_id = $4 AND j.status = 'completed'
   AND j.rollback_until > NOW()
-  AND j.target_json -> 'params' ->> 'class' = $4::text
-  AND j.target_json -> 'params' ->> 'date' = $5::text
+  AND j.target_json -> 'params' ->> 'class' = $5::text
+  AND j.target_json -> 'params' ->> 'date' = $6::text
 ORDER BY j.created_at DESC, j.id DESC
 LIMIT 1
 `
 
-type GetClassSessionCancelJobParams struct {
+type GetClassSessionBulkJobParams struct {
 	OrganizationID pgtype.Int8 `json:"organization_id"`
 	Resource       string      `json:"resource"`
+	Action         string      `json:"action"`
 	ActorID        int64       `json:"actor_id"`
 	ClassUuid      string      `json:"class_uuid"`
 	SessionDate    string      `json:"session_date"`
 }
 
-type GetClassSessionCancelJobRow struct {
+type GetClassSessionBulkJobRow struct {
 	Uuid          uuid.UUID          `json:"uuid"`
 	ResultJson    []byte             `json:"result_json"`
+	TargetJson    []byte             `json:"target_json"`
 	RollbackUntil pgtype.Timestamptz `json:"rollback_until"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
-// The caller's latest bulk run that cancelled the bookings of one session
-// (TEC-989) and can still be rolled back.
-func (q *Queries) GetClassSessionCancelJob(ctx context.Context, arg GetClassSessionCancelJobParams) (GetClassSessionCancelJobRow, error) {
-	row := q.db.QueryRow(ctx, getClassSessionCancelJob,
+// The caller's latest bulk run of one action over the bookings of one
+// session (cancel, TEC-989; move, TEC-994) that can still be rolled back.
+func (q *Queries) GetClassSessionBulkJob(ctx context.Context, arg GetClassSessionBulkJobParams) (GetClassSessionBulkJobRow, error) {
+	row := q.db.QueryRow(ctx, getClassSessionBulkJob,
 		arg.OrganizationID,
 		arg.Resource,
+		arg.Action,
 		arg.ActorID,
 		arg.ClassUuid,
 		arg.SessionDate,
 	)
-	var i GetClassSessionCancelJobRow
+	var i GetClassSessionBulkJobRow
 	err := row.Scan(
 		&i.Uuid,
 		&i.ResultJson,
+		&i.TargetJson,
 		&i.RollbackUntil,
 		&i.CreatedAt,
 	)
