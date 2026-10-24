@@ -619,6 +619,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		reservationsadapters.NewIO(reservationsSvc),
 		cashadapters.NewAccountsIO(cashSvc),
 		cashadapters.NewMovementsIO(cashSvc),
+		cashadapters.NewStatementLinesIO(cashSvc),
 		financeadapters.NewEntriesIO(financeSvc),
 		staffsharesadapters.NewLinesIO(staffSharesSvc),
 		staffsharesadapters.NewPayoutsIO(staffSharesSvc),
@@ -750,6 +751,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		ExportAccounts:  exportH.TenantExport(cashmodule.AccountsResource, cashmodule.ExportAccountQueryKeys...),
 		ExportMovements: exportH.TenantExport(cashmodule.MovementsResource, cashmodule.ExportMovementQueryKeys...),
 		BulkAccounts:    bulkH.TenantExecute(cashmodule.AccountsResource),
+		ExportLines:     exportH.TenantExport(cashmodule.StatementLinesResource, cashmodule.ExportLineQueryKeys...),
+		ImportLines:     importH.TenantUpload(cashmodule.StatementLinesResource),
+		SampleLines:     importH.TenantSample(cashmodule.StatementLinesResource),
 	}, tokens, loader, tenantResolver)
 	// Reservations (TEC-899 / TEC-900): the record on top of the capacity
 	// holds.

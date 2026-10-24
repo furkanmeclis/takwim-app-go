@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import {
   CASH_ACCOUNT_KINDS,
+  CASH_STATEMENT_LINE_TYPES,
+  CASH_STATEMENT_SOURCES,
   HEAD_OFFICE,
   MAX_DESCRIPTION,
   MAX_NOTE,
@@ -14,6 +16,14 @@ import type {
   CashAccountKind,
   CashClosingCreateRequest,
   CashMovementCreateRequest,
+  CashStatement,
+  CashStatementCreateRequest,
+  CashStatementLineCreateRequest,
+  CashStatementLinePostRequest,
+  CashStatementLineType,
+  CashStatementPostKind,
+  CashStatementSource,
+  CashStatementUpdateRequest,
   CashTransferRequest,
 } from "@/features/cash/types";
 
@@ -229,10 +239,15 @@ export function transferFormToRequest(
 
 // ---------------------------------------------------------------- closing
 
-export function createClosingFormSchema(t: Translate) {
+export function createClosingFormSchema(t: Translate, signed = false) {
   return z.object({
     business_date: z.string().min(1, t("cash.validation.date_required")),
-    counted_amount: amountField(t, false),
+    counted_amount: signed
+      ? z
+          .string()
+          .trim()
+          .refine((v) => SIGNED_AMOUNT.test(v), t("cash.validation.amount"))
+      : amountField(t, false),
     note: z.string().max(MAX_NOTE),
   });
 }
@@ -260,3 +275,174 @@ export function createReasonFormSchema(t: Translate) {
 export type ReasonFormValues = z.infer<
   ReturnType<typeof createReasonFormSchema>
 >;
+
+// ---------------------------------------------------------------- statement
+
+export function createStatementFormSchema(t: Translate) {
+  return z
+    .object({
+      source: z.enum(CASH_STATEMENT_SOURCES as [string, ...string[]]),
+      name: z
+        .string()
+        .trim()
+        .min(1, t("cash.validation.statement_name_required"))
+        .max(160, t("cash.validation.statement_name_max")),
+      period_from: z.string(),
+      period_to: z.string(),
+      closing_balance: z
+        .string()
+        .trim()
+        .refine(
+          (v) => v === "" || SIGNED_AMOUNT.test(v),
+          t("cash.validation.amount"),
+        ),
+      note: z.string().max(MAX_NOTE),
+    })
+    .refine(
+      (v) => !v.period_from || !v.period_to || v.period_from <= v.period_to,
+      {
+        path: ["period_to"],
+        message: t("cash.validation.period_order"),
+      },
+    );
+}
+
+export type StatementFormValues = z.infer<
+  ReturnType<typeof createStatementFormSchema>
+>;
+
+export function statementFormDefaults(
+  statement: CashStatement | null,
+  source: CashStatementSource,
+): StatementFormValues {
+  return {
+    source: statement?.source ?? source,
+    name: statement?.name ?? "",
+    period_from: statement?.period_from ?? "",
+    period_to: statement?.period_to ?? "",
+    closing_balance: statement?.closing_balance ?? "",
+    note: statement?.note ?? "",
+  };
+}
+
+export function statementFormToCreate(
+  values: StatementFormValues,
+  accountUuid: string,
+): CashStatementCreateRequest {
+  return {
+    account_uuid: accountUuid,
+    source: values.source as CashStatementSource,
+    name: values.name.trim(),
+    period_from: values.period_from || undefined,
+    period_to: values.period_to || undefined,
+    closing_balance: values.closing_balance
+      ? normalizeAmount(values.closing_balance)
+      : undefined,
+    note: values.note,
+  };
+}
+
+/**
+ * Edit sends every editable field; an emptied period clears it on the API.
+ * The stated balance is an amount, so it is only sent when filled.
+ */
+export function statementFormToUpdate(
+  values: StatementFormValues,
+): CashStatementUpdateRequest {
+  return {
+    name: values.name.trim(),
+    period_from: values.period_from,
+    period_to: values.period_to,
+    closing_balance: values.closing_balance
+      ? normalizeAmount(values.closing_balance)
+      : undefined,
+    note: values.note,
+  };
+}
+
+// ---------------------------------------------------------------- statement line
+
+export function createLineFormSchema(t: Translate) {
+  return z.object({
+    line_date: z.string().min(1, t("cash.validation.date_required")),
+    direction: z.enum(["in", "out"]),
+    amount: amountField(t, true),
+    fee: z
+      .string()
+      .trim()
+      .refine((v) => v === "" || AMOUNT.test(v), t("cash.validation.amount")),
+    line_type: z.enum(CASH_STATEMENT_LINE_TYPES as [string, ...string[]]),
+    description: z
+      .string()
+      .trim()
+      .max(MAX_DESCRIPTION, t("cash.validation.description_max")),
+    reference: z.string().trim().max(120, t("cash.validation.reference_max")),
+    balance_after: z
+      .string()
+      .trim()
+      .refine(
+        (v) => v === "" || SIGNED_AMOUNT.test(v),
+        t("cash.validation.amount"),
+      ),
+  });
+}
+
+export type LineFormValues = z.infer<ReturnType<typeof createLineFormSchema>>;
+
+export function lineFormToRequest(
+  values: LineFormValues,
+): CashStatementLineCreateRequest {
+  return {
+    line_date: values.line_date,
+    direction: values.direction,
+    amount: normalizeAmount(values.amount),
+    fee: values.fee ? normalizeAmount(values.fee) : undefined,
+    line_type: values.line_type as CashStatementLineType,
+    description: values.description.trim(),
+    reference: values.reference.trim(),
+    balance_after: values.balance_after
+      ? normalizeAmount(values.balance_after)
+      : undefined,
+  };
+}
+
+// ---------------------------------------------------------------- post line
+
+export function createPostLineFormSchema(t: Translate) {
+  return z
+    .object({
+      mode: z.enum(["movement", "transfer"]),
+      kind: z.string(),
+      counter_account_uuid: z.string(),
+      description: z
+        .string()
+        .trim()
+        .max(MAX_DESCRIPTION, t("cash.validation.description_max")),
+      note: z.string().max(MAX_NOTE),
+    })
+    .refine((v) => v.mode !== "transfer" || v.counter_account_uuid !== "", {
+      path: ["counter_account_uuid"],
+      message: t("cash.validation.account_required"),
+    });
+}
+
+export type PostLineFormValues = z.infer<
+  ReturnType<typeof createPostLineFormSchema>
+>;
+
+export function postLineFormToRequest(
+  values: PostLineFormValues,
+): CashStatementLinePostRequest {
+  if (values.mode === "transfer") {
+    return {
+      counter_account_uuid: values.counter_account_uuid,
+      description: values.description.trim() || undefined,
+      note: values.note,
+    };
+  }
+  return {
+    kind: (values.kind || undefined) as CashStatementPostKind | undefined,
+    description: values.description.trim() || undefined,
+    note: values.note,
+  };
+}

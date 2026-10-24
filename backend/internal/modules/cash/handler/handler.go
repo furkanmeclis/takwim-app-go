@@ -592,6 +592,22 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.NotFound(w, r, "Movement was not found")
 	case errors.Is(err, usecase.ErrClosingNotFound):
 		response.NotFound(w, r, "Closing was not found")
+	case errors.Is(err, usecase.ErrStatementNotFound):
+		response.NotFound(w, r, "Statement was not found")
+	case errors.Is(err, usecase.ErrLineNotFound):
+		response.NotFound(w, r, "Statement line was not found")
+	case errors.Is(err, usecase.ErrStatementClosed):
+		conflict(w, r, "statement", "closed", err)
+	case errors.Is(err, usecase.ErrStatementHasPostings):
+		conflict(w, r, "statement", "has_postings", err)
+	case errors.Is(err, usecase.ErrLineState):
+		conflict(w, r, "line", "state", err)
+	case errors.Is(err, usecase.ErrMovementMatched):
+		conflict(w, r, "movement_uuid", "matched", err)
+	case errors.Is(err, usecase.ErrReferenceTaken):
+		conflict(w, r, "reference", "taken", err)
+	case errors.Is(err, usecase.ErrUnreconciledLines):
+		conflict(w, r, "business_date", "unreconciled_lines", err)
 	case errors.Is(err, usecase.ErrNameTaken):
 		conflict(w, r, "name", "taken", err)
 	case errors.Is(err, usecase.ErrInsufficientFunds):
@@ -610,8 +626,6 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		conflict(w, r, "closing", "not_latest", err)
 	case errors.Is(err, usecase.ErrClosingReopened):
 		conflict(w, r, "closing", "reopened", err)
-	case errors.Is(err, usecase.ErrNotClosable):
-		conflict(w, r, "account", "not_closable", err)
 	case errors.Is(err, usecase.ErrBalanceNotZero):
 		conflict(w, r, "status", "balance_not_zero", err)
 	case errors.Is(err, usecase.ErrCurrencyMismatch):

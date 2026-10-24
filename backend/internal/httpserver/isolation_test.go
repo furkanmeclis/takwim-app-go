@@ -76,6 +76,7 @@ var isolationAllowlist = map[string]string{
 	"POST /v1/tenant/stock-movements/import":                "count imports match branch codes and stock codes inside the organization (products DB tests); the job is the {uuid} cases",
 	"POST /v1/tenant/customers":                             "body has no foreign references (name, contact, notes, tags, consent)",
 	"POST /v1/tenant/customers/import":                      "imports match phones inside the organization (customers DB tests); the job is the {uuid} cases",
+	"POST /v1/tenant/cash/statement-lines/import":           "rows name the statement by uuid and the adapter loads it inside the organization (cash DB tests); the job is the {uuid} cases",
 	"PATCH /v1/tenant/organization":                         "profile of the caller's organization (name only); no foreign references",
 	"PUT /v1/tenant/organization/logo":                      "logo of the caller's organization; the key is built from the scope (storage prefix check)",
 	"DELETE /v1/tenant/organization/logo":                   "logo of the caller's organization; no ids",
@@ -399,6 +400,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		ids["bankAccount"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts", map[string]any{
 			"branch_uuid": ids["branch"], "kind": "bank", "name": m + " Banka",
 		}), http.StatusCreated, "create bank account"), "uuid")
+		// Bank statement reconciliation (TEC-965): a statement of the bank
+		// account with one line waiting for a decision.
+		ids["statement"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/statements", map[string]any{
+			"account_uuid": ids["bankAccount"], "name": m + " Ekstre", "period_from": "2026-01-01", "period_to": "2026-01-31",
+		}), http.StatusCreated, "create statement"), "uuid")
+		ids["statementLine"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/statements/"+ids["statement"]+"/lines", map[string]any{
+			"line_date": "2026-01-15", "direction": "in", "amount": "7.77", "description": m + " satır", "reference": "ISO-" + m,
+		}), http.StatusCreated, "add statement line"), "uuid")
 		ids["sharePayout"] = str(must(call(o, http.MethodPost, "/v1/tenant/staff-shares/payouts", map[string]any{
 			"staff_uuid": ids["shareStaff"], "cash_account_uuid": ids["bankAccount"], "amount": "5", "note": m,
 		}), http.StatusCreated, "share payout"), "uuid")
@@ -654,6 +663,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		"GET /v1/tenant/cash/accounts":                    {"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker},
 		"GET /v1/tenant/cash/movements":                   {"?account=" + orgB.ids["cashAccount"], "?q=" + orgB.marker},
 		"GET /v1/tenant/cash/daily-summary":               {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/cash/statements":                  {"?account=" + orgB.ids["bankAccount"], "?q=" + orgB.marker},
+		"GET /v1/tenant/cash/statement-lines":             {"?statement=" + orgB.ids["statement"], "?q=" + orgB.marker},
 		"GET /v1/tenant/reservations": {"?q=" + orgB.ids["customerPhone"][3:], "?branch=" + orgB.ids["branch"],
 			"?staff=" + orgB.ids["staff"], "?customer_uuid=" + orgB.ids["customer"]},
 		"GET /v1/tenant/reservations/calendar": {"?from=2030-01-07&by=branch", "?from=2030-01-07&branch=" + orgB.ids["branch"],
@@ -777,6 +788,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/cash/accounts/bulk", map[string]any{"action": "archive", "target": map[string]any{"scope": "ids", "ids": []string{orgB.ids["cashAccount"]}}}, nil},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgA.ids["cashAccount"], "to_account_uuid": orgB.ids["cashAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/cash/transfers", map[string]any{"from_account_uuid": orgB.ids["cashAccount"], "to_account_uuid": orgA.ids["cashAccount"], "amount": "1"}, reject},
+		{"POST /v1/tenant/cash/statements", map[string]any{"account_uuid": orgB.ids["bankAccount"], "name": "X"}, reject},
 		{"POST /v1/tenant/session-packages/bulk", bulkIDs("sessionPackage"), nil},
 		{"POST /v1/tenant/reservations", map[string]any{"branch_uuid": orgA.ids["branch"], "customer_uuid": orgA.ids["customer"],
 			"lines": []map[string]any{{"service_uuid": orgA.ids["service"]}}, "starts_at": "2030-01-07T15:00:00+03:00",
@@ -873,6 +885,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"account_uuid": orgB.ids["member"]}, reject},
 		{"PATCH /v1/tenant/resources/" + orgA.ids["resource"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
 		{"PATCH /v1/tenant/cash/accounts/" + orgA.ids["cashAccount"], map[string]any{"branch_uuid": orgB.ids["home"]}, reject},
+		{"PATCH /v1/tenant/cash/statements/" + orgA.ids["statement"], map[string]any{"account_uuid": orgB.ids["bankAccount"]}, reject},
+		{"POST /v1/tenant/cash/statement-lines/" + orgA.ids["statementLine"] + "/match", map[string]any{"movement_uuid": orgB.ids["cashMovement"]}, reject},
+		{"POST /v1/tenant/cash/statement-lines/" + orgA.ids["statementLine"] + "/post", map[string]any{"counter_account_uuid": orgB.ids["cashAccount"]}, reject},
 		{"PATCH /v1/tenant/services/" + orgA.ids["service"], map[string]any{"category_uuid": orgB.ids["serviceCategory"]}, reject},
 		{"PATCH /v1/tenant/service-bundles/" + orgA.ids["bundle"], map[string]any{"service_uuids": []string{orgB.ids["service"], orgB.ids["service"]}}, reject},
 		{"PATCH /v1/tenant/service-bundles/" + orgA.ids["bundle"], map[string]any{"branch_uuids": []string{orgB.ids["home"]}}, reject},
@@ -1097,6 +1112,10 @@ func paramKey(prev, name string) string {
 		return "cashMovement"
 	case "lines/uuid":
 		return "saleLine"
+	case "statements/uuid":
+		return "statement"
+	case "statement-lines/lineUuid":
+		return "statementLine"
 	case "entries/uuid":
 		return "ledgerEntry"
 	case "rules/uuid":

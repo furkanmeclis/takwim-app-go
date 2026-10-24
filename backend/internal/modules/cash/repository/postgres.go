@@ -26,6 +26,12 @@ var (
 	ErrDayAlreadyClosed = errors.New("day already closed")
 	// ErrIdempotencyKey is returned when the idempotency key was used before.
 	ErrIdempotencyKey = errors.New("idempotency key used")
+	// ErrMovementMatched is returned when a statement line matches a movement
+	// another line holds already.
+	ErrMovementMatched = errors.New("movement matched by another line")
+	// ErrReferenceTaken is returned when the account has a statement line with
+	// the same reference and direction already.
+	ErrReferenceTaken = errors.New("reference imported already")
 )
 
 // Postgres runs the cash queries, alone or in one transaction.
@@ -83,6 +89,10 @@ func MapErr(err error) error {
 			return ErrDayAlreadyClosed
 		case "uq_cash_movements_idempotency":
 			return ErrIdempotencyKey
+		case "uq_cash_statement_lines_movement":
+			return ErrMovementMatched
+		case "uq_cash_statement_lines_reference":
+			return ErrReferenceTaken
 		}
 	}
 	return err

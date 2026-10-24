@@ -56,6 +56,9 @@ export function AccountClosingsCard({
   const [target, setTarget] = useState<CashClosing | null>(null);
   const total = query.data?.total ?? 0;
   const latest = account.last_closed_date;
+  // Tills count cash day by day; bank / online accounts close a period
+  // against the statement once its lines are reconciled.
+  const till = account.kind === "cash";
 
   const columns = [
     createColumn<CashClosing>({
@@ -78,7 +81,9 @@ export function AccountClosingsCard({
     }),
     createColumn<CashClosing>({
       accessorKey: "counted_amount",
-      labelKey: "cash.closing.counted_amount",
+      labelKey: till
+        ? "cash.closing.counted_amount"
+        : "cash.closing.statement_amount",
       enableSorting: false,
       cell: ({ row }) =>
         money(row.original.counted_amount, row.original.currency),
@@ -166,14 +171,14 @@ export function AccountClosingsCard({
 
   return (
     <EntitySectionCard
-      title={t("cash.detail.closings")}
+      title={t(till ? "cash.detail.closings" : "cash.detail.period_closings")}
       badge={query.data ? total : undefined}
       actions={
         account.status === "active" ? (
           <PermissionGuard permission={permissions.tenant.cash.close}>
             <Button type="button" size="sm" onClick={onCloseDay}>
               <Lock className="size-4" />
-              {t("cash.actions.close_day")}
+              {t(till ? "cash.actions.close_day" : "cash.actions.close_period")}
             </Button>
           </PermissionGuard>
         ) : null
@@ -187,7 +192,11 @@ export function AccountClosingsCard({
         isError={query.isError}
         onRetry={() => void query.refetch()}
         emptyTitle={t("cash.closing.empty_title")}
-        emptyDescription={t("cash.closing.empty_description")}
+        emptyDescription={t(
+          till
+            ? "cash.closing.empty_description"
+            : "cash.closing.empty_description_period",
+        )}
         pageCount={Math.max(1, Math.ceil(total / pagination.pageSize))}
         manual={{ filtering: false, sorting: false, pagination: true }}
         state={{ pagination, onPaginationChange: setPagination }}

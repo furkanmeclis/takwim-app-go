@@ -60,3 +60,59 @@ export type ListCashMovementsParams = {
   date_from?: string;
   date_to?: string;
 };
+
+// ---------------------------------------------------------------- statements
+
+export type CashStatement = Schemas["CashStatement"];
+export type CashStatementPage = Schemas["CashStatementPage"];
+export type CashStatementSummary = Schemas["CashStatementSummary"];
+export type CashStatementCreateRequest = Schemas["CashStatementCreateRequest"];
+export type CashStatementUpdateRequest = Schemas["CashStatementUpdateRequest"];
+export type CashStatementSource = CashStatement["source"];
+export type CashStatementStatus = CashStatement["status"];
+export type CashStatementLine = Schemas["CashStatementLine"];
+export type CashStatementLinePage = Schemas["CashStatementLinePage"];
+export type CashStatementLineFacets = Schemas["CashStatementLineFacets"];
+export type CashStatementLineStatus = Schemas["CashStatementLineStatus"];
+export type CashStatementLineType = Schemas["CashStatementLineType"];
+export type CashStatementLineCreateRequest =
+  Schemas["CashStatementLineCreateRequest"];
+export type CashStatementLineMatchRequest =
+  Schemas["CashStatementLineMatchRequest"];
+export type CashStatementLinePostRequest =
+  Schemas["CashStatementLinePostRequest"];
+export type CashStatementPostKind = NonNullable<
+  CashStatementLinePostRequest["kind"]
+>;
+export type CashMatchCandidate = Schemas["CashMatchCandidate"];
+export type CashMatchCandidateList = Schemas["CashMatchCandidateList"];
+export type CashAutoMatchResult = Schemas["CashAutoMatchResult"];
+
+/** List query of `GET /v1/tenant/cash/statements`. */
+export type ListCashStatementsParams = {
+  limit: number;
+  offset: number;
+  sort?: string;
+  q?: string;
+  /** Comma-separated account uuids. */
+  account?: string;
+  /** Comma-separated sources. */
+  source?: string;
+  /** Comma-separated statuses. */
+  status?: string;
+};
+
+/** List query of `GET /v1/tenant/cash/statement-lines` (and a statement's lines). */
+export type ListCashStatementLinesParams = {
+  limit: number;
+  offset: number;
+  sort?: string;
+  q?: string;
+  /** Comma-separated statement uuids. */
+  statement?: string;
+  /** Comma-separated line statuses. */
+  status?: string;
+  /** Comma-separated line types. */
+  line_type?: string;
+  direction?: CashDirection;
+};

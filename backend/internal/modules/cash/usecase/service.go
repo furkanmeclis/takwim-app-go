@@ -62,7 +62,6 @@ var (
 	ErrDayAlreadyClosed  = errors.New("the day is closed already")
 	ErrNotLatestClosing  = errors.New("only the latest closed day can be reopened")
 	ErrClosingReopened   = errors.New("the closing was reopened already")
-	ErrNotClosable       = errors.New("only a till (cash account) is closed daily")
 	ErrBalanceNotZero    = errors.New("an account is archived with a zero balance only")
 	ErrCurrencyMismatch  = errors.New("the accounts have different currencies")
 	ErrIdempotencyReused = errors.New("the idempotency key was used for another posting")
@@ -690,6 +689,10 @@ func mapRepoErr(err error) error {
 		return ErrDayClosed
 	case errors.Is(e, repository.ErrDayAlreadyClosed):
 		return ErrDayAlreadyClosed
+	case errors.Is(e, repository.ErrMovementMatched):
+		return ErrMovementMatched
+	case errors.Is(e, repository.ErrReferenceTaken):
+		return ErrReferenceTaken
 	default:
 		return e
 	}

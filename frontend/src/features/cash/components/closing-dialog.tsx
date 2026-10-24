@@ -85,9 +85,12 @@ export function ClosingDialog({
     day,
     open && Boolean(account),
   );
-  const schema = useMemo(() => createClosingFormSchema(t), [t]);
+  const till = account?.kind === "cash";
+  const schema = useMemo(() => createClosingFormSchema(t, !till), [t, till]);
   const data = preview.data;
   const currency = account?.currency;
+  const unreconciled = data?.unreconciled_lines ?? 0;
+  const blocked = !data || data.closed || (!till && unreconciled > 0);
 
   return (
     <AppDialog
@@ -96,10 +99,17 @@ export function ClosingDialog({
         if (!next) setDay(today);
         onOpenChange(next);
       }}
-      title={t("cash.closing_dialog.title")}
+      title={t(
+        till ? "cash.closing_dialog.title" : "cash.closing_dialog.period_title",
+      )}
       description={
         account
-          ? t("cash.closing_dialog.description", { name: account.name })
+          ? t(
+              till
+                ? "cash.closing_dialog.description"
+                : "cash.closing_dialog.period_description",
+              { name: account.name },
+            )
           : undefined
       }
       className="sm:max-w-lg"
@@ -115,9 +125,13 @@ export function ClosingDialog({
           <Button
             type="submit"
             form={FORM_ID}
-            disabled={close.isPending || !data || data.closed}
+            disabled={close.isPending || blocked}
           >
-            {t("cash.closing_dialog.submit")}
+            {t(
+              till
+                ? "cash.closing_dialog.submit"
+                : "cash.closing_dialog.period_submit",
+            )}
           </Button>
         </>
       }
@@ -171,6 +185,15 @@ export function ClosingDialog({
                     </AlertDescription>
                   </Alert>
                 ) : null}
+                {!till && data && unreconciled > 0 ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      {t("cash.closing_dialog.unreconciled", {
+                        count: unreconciled,
+                      })}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
                 {data ? (
                   <div className="bg-muted/40 space-y-2 rounded-lg border p-4">
                     <Row
@@ -186,7 +209,11 @@ export function ClosingDialog({
                       value={money(data.total_out, currency)}
                     />
                     <Row
-                      label={t("cash.closing.expected_amount")}
+                      label={t(
+                        till
+                          ? "cash.closing.expected_amount"
+                          : "cash.closing.book_balance",
+                      )}
                       value={money(data.expected_amount, currency)}
                       className="text-base"
                     />
@@ -200,10 +227,17 @@ export function ClosingDialog({
                 <AppInput
                   name="counted_amount"
                   inputMode="decimal"
-                  label={t("cash.fields.counted_amount", {
-                    currency: currency ?? "",
-                  })}
-                  description={t("cash.fields.counted_amount_hint")}
+                  label={t(
+                    till
+                      ? "cash.fields.counted_amount"
+                      : "cash.fields.statement_amount",
+                    { currency: currency ?? "" },
+                  )}
+                  description={t(
+                    till
+                      ? "cash.fields.counted_amount_hint"
+                      : "cash.fields.statement_amount_hint",
+                  )}
                 />
                 {difference != null ? (
                   <Row

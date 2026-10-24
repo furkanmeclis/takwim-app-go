@@ -26,6 +26,9 @@ type Querier interface {
 	// and expenses).
 	BranchShareTotals(ctx context.Context, arg BranchShareTotalsParams) ([]BranchShareTotalsRow, error)
 	BranchSlugTaken(ctx context.Context, arg BranchSlugTakenParams) (bool, error)
+	// Book balance of an account at the end of a day (opening + movements
+	// dated on or before it).
+	CashAccountBalanceAt(ctx context.Context, arg CashAccountBalanceAtParams) (pgtype.Numeric, error)
 	// Balance before the day and the day's money in / out of one account.
 	// Closing differences of the day (and their reversals after a reopen) are
 	// left out of the day's totals: they follow a count, not a payment.
@@ -36,6 +39,9 @@ type Querier interface {
 	// money in / out split into transfers, closing differences and the rest,
 	// and the closing of the day.
 	CashDailySummary(ctx context.Context, arg CashDailySummaryParams) ([]CashDailySummaryRow, error)
+	CashStatementLineStatusFacets(ctx context.Context, arg CashStatementLineStatusFacetsParams) ([]CashStatementLineStatusFacetsRow, error)
+	// Line counts and sums per reconciliation status of one statement.
+	CashStatementSummary(ctx context.Context, arg CashStatementSummaryParams) (CashStatementSummaryRow, error)
 	// Moves a pending / failed job to processing (one worker at a time).
 	ClaimIntegrationJob(ctx context.Context, arg ClaimIntegrationJobParams) (int64, error)
 	ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]OutboxEvent, error)
@@ -79,6 +85,11 @@ type Querier interface {
 	CountCashAccounts(ctx context.Context, arg CountCashAccountsParams) (int64, error)
 	CountCashClosings(ctx context.Context, arg CountCashClosingsParams) (int64, error)
 	CountCashMovements(ctx context.Context, arg CountCashMovementsParams) (int64, error)
+	CountCashStatementLines(ctx context.Context, arg CountCashStatementLinesParams) (int64, error)
+	// Lines of a statement that wrote movements (a statement with postings is
+	// kept: the movements stay in the book).
+	CountCashStatementPostings(ctx context.Context, arg CountCashStatementPostingsParams) (int64, error)
+	CountCashStatements(ctx context.Context, arg CountCashStatementsParams) (int64, error)
 	CountClassSchedules(ctx context.Context, arg CountClassSchedulesParams) (int64, error)
 	// Requests of the current round a channel really sent (accepted by a
 	// provider): an expired task without one is unreachable, never cancelled.
@@ -181,6 +192,8 @@ type Querier interface {
 	CountTenantMembers(ctx context.Context, arg CountTenantMembersParams) (int64, error)
 	CountUncategorizedServices(ctx context.Context, organizationID int64) (int64, error)
 	CountUnreadInappForUser(ctx context.Context, arg CountUnreadInappForUserParams) (int64, error)
+	// Pending / difference lines of an account dated on or before a day.
+	CountUnreconciledCashStatementLines(ctx context.Context, arg CountUnreconciledCashStatementLinesParams) (int64, error)
 	CountUsers(ctx context.Context, arg CountUsersParams) (int64, error)
 	CountUsersWithRole(ctx context.Context, roleSlug string) (int64, error)
 	// Tenant resource: branches and service points.
@@ -287,6 +300,8 @@ type Querier interface {
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
 	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
 	DeleteCapacityAllocations(ctx context.Context, arg DeleteCapacityAllocationsParams) error
+	DeleteCashStatement(ctx context.Context, arg DeleteCashStatementParams) (int64, error)
+	DeleteCashStatementLine(ctx context.Context, arg DeleteCashStatementLineParams) (int64, error)
 	DeleteClassSessionChange(ctx context.Context, arg DeleteClassSessionChangeParams) error
 	DeleteConfirmationSettings(ctx context.Context, arg DeleteConfirmationSettingsParams) (int64, error)
 	DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCustomerIdentityLinkParams) (int64, error)
@@ -387,6 +402,8 @@ type Querier interface {
 	GetCashClosing(ctx context.Context, arg GetCashClosingParams) (GetCashClosingRow, error)
 	GetCashMovement(ctx context.Context, arg GetCashMovementParams) (GetCashMovementRow, error)
 	GetCashMovementByIdempotencyKey(ctx context.Context, arg GetCashMovementByIdempotencyKeyParams) (GetCashMovementByIdempotencyKeyRow, error)
+	GetCashStatement(ctx context.Context, arg GetCashStatementParams) (GetCashStatementRow, error)
+	GetCashStatementLine(ctx context.Context, arg GetCashStatementLineParams) (GetCashStatementLineRow, error)
 	// ------------------------------------------------------------ form lookups
 	GetClassBranch(ctx context.Context, arg GetClassBranchParams) (GetClassBranchRow, error)
 	GetClassResource(ctx context.Context, arg GetClassResourceParams) (GetClassResourceRow, error)
@@ -657,6 +674,12 @@ type Querier interface {
 	InsertCashClosing(ctx context.Context, arg InsertCashClosingParams) (InsertCashClosingRow, error)
 	// ------------------------------------------------------------ movements
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	// Bank statements / provider settlement reports and their reconciliation
+	// lines (TEC-965). Every query filters by organization_id; the branch scope
+	// is applied through the statement's branch_id like the cash tables.
+	InsertCashStatement(ctx context.Context, arg InsertCashStatementParams) (InsertCashStatementRow, error)
+	// --------------------------------------------------------------- lines
+	InsertCashStatementLine(ctx context.Context, arg InsertCashStatementLineParams) (InsertCashStatementLineRow, error)
 	// TEC-970: the class timetable (class_schedules) and single-session
 	// changes (class_session_changes). Every query takes the organization id;
 	// joined tables are matched by alias.organization_id too.
@@ -804,8 +827,16 @@ type Querier interface {
 	ListCashAccountUUIDs(ctx context.Context, arg ListCashAccountUUIDsParams) ([]uuid.UUID, error)
 	ListCashAccounts(ctx context.Context, arg ListCashAccountsParams) ([]ListCashAccountsRow, error)
 	ListCashClosings(ctx context.Context, arg ListCashClosingsParams) ([]ListCashClosingsRow, error)
+	// Movements of an account a statement line may be matched with: same
+	// direction, dated inside the window, not reversed, not a reversal, not
+	// matched by another line. Ordered by amount closeness, then date closeness.
+	ListCashMatchCandidates(ctx context.Context, arg ListCashMatchCandidatesParams) ([]ListCashMatchCandidatesRow, error)
 	ListCashMovementKindFacets(ctx context.Context, arg ListCashMovementKindFacetsParams) ([]ListCashMovementKindFacetsRow, error)
 	ListCashMovements(ctx context.Context, arg ListCashMovementsParams) ([]ListCashMovementsRow, error)
+	// Pending lines of a statement (auto-match pass), in line order.
+	ListCashStatementLineIDs(ctx context.Context, arg ListCashStatementLineIDsParams) ([]ListCashStatementLineIDsRow, error)
+	ListCashStatementLines(ctx context.Context, arg ListCashStatementLinesParams) ([]ListCashStatementLinesRow, error)
+	ListCashStatements(ctx context.Context, arg ListCashStatementsParams) ([]ListCashStatementsRow, error)
 	ListCashTransferLegs(ctx context.Context, arg ListCashTransferLegsParams) ([]ListCashTransferLegsRow, error)
 	// The branches, classes and trainers that appear in the timetable, for
 	// the list filters (kind = branch | service | staff).
@@ -1231,6 +1262,7 @@ type Querier interface {
 	// Locks the accounts in id order (concurrent transfers in opposite
 	// directions cannot deadlock).
 	LockCashAccounts(ctx context.Context, arg LockCashAccountsParams) ([]LockCashAccountsRow, error)
+	LockCashStatementLine(ctx context.Context, arg LockCashStatementLineParams) (LockCashStatementLineRow, error)
 	// Another worker holding the row: no row (it sends it).
 	LockCustomerNotificationDispatch(ctx context.Context, arg LockCustomerNotificationDispatchParams) (CustomerNotificationDispatch, error)
 	LockCustomerNotificationDispatchWait(ctx context.Context, arg LockCustomerNotificationDispatchWaitParams) (CustomerNotificationDispatch, error)
@@ -1308,6 +1340,8 @@ type Querier interface {
 	PlanReservationConfirmation(ctx context.Context, arg PlanReservationConfirmationParams) (ReservationConfirmation, error)
 	ProductVariantNameTaken(ctx context.Context, arg ProductVariantNameTakenParams) (bool, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
+	// Widens the statement period to cover its lines.
+	RefreshCashStatementPeriod(ctx context.Context, arg RefreshCashStatementPeriodParams) error
 	RefundCustomerPackage(ctx context.Context, arg RefundCustomerPackageParams) error
 	// Amount paid back from one collection (refunds minus reversed refunds).
 	RefundedOfCollection(ctx context.Context, arg RefundedOfCollectionParams) (pgtype.Numeric, error)
@@ -1319,6 +1353,7 @@ type Querier interface {
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
 	RenewCapacityHold(ctx context.Context, arg RenewCapacityHoldParams) (CapacityHold, error)
 	ReopenCashClosing(ctx context.Context, arg ReopenCashClosingParams) (int64, error)
+	ReopenCashStatementsOfClosing(ctx context.Context, arg ReopenCashStatementsOfClosingParams) error
 	// A change of time / services / staff: the new commitment and times.
 	ReplaceReservationSchedule(ctx context.Context, arg ReplaceReservationScheduleParams) (Reservation, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
@@ -1382,6 +1417,7 @@ type Querier interface {
 	// Packages of a customer that can give a session to a visit in a branch:
 	// active, not used up, valid on the visit day and usable in the branch.
 	ReservationPackageOptions(ctx context.Context, arg ReservationPackageOptionsParams) ([]ReservationPackageOptionsRow, error)
+	ResetCashStatementLine(ctx context.Context, arg ResetCashStatementLineParams) (int64, error)
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
 	// A person settled an unknown result: the provider did not refund.
@@ -1438,6 +1474,12 @@ type Querier interface {
 	SetBranchActive(ctx context.Context, arg SetBranchActiveParams) (Branch, error)
 	SetBranchImageSort(ctx context.Context, arg SetBranchImageSortParams) (int64, error)
 	SetCashAccountStatus(ctx context.Context, arg SetCashAccountStatusParams) error
+	// Closes the open statements of an account whose lines are all resolved
+	// and dated on or before the closed day.
+	SetCashStatementClosing(ctx context.Context, arg SetCashStatementClosingParams) error
+	SetCashStatementLineIgnored(ctx context.Context, arg SetCashStatementLineIgnoredParams) (int64, error)
+	SetCashStatementLineMatched(ctx context.Context, arg SetCashStatementLineMatchedParams) (int64, error)
+	SetCashStatementLinePosted(ctx context.Context, arg SetCashStatementLinePostedParams) (int64, error)
 	// Number change: the identity keeps its uuid and history; the phone is only
 	// its lookup key. The unique phone refuses a phone with its own identity.
 	SetCustomerIdentityPhone(ctx context.Context, arg SetCustomerIdentityPhoneParams) (int64, error)
@@ -1542,6 +1584,7 @@ type Querier interface {
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error)
 	UpdateCashAccount(ctx context.Context, arg UpdateCashAccountParams) (int64, error)
+	UpdateCashStatement(ctx context.Context, arg UpdateCashStatementParams) (int64, error)
 	UpdateClassSchedule(ctx context.Context, arg UpdateClassScheduleParams) (int64, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	// The send result of an attempt still in flight.

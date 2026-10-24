@@ -236,6 +236,54 @@ type CashMovement struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type CashStatement struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	CashAccountID  int64              `json:"cash_account_id"`
+	BranchID       pgtype.Int8        `json:"branch_id"`
+	Source         string             `json:"source"`
+	Name           string             `json:"name"`
+	PeriodFrom     pgtype.Date        `json:"period_from"`
+	PeriodTo       pgtype.Date        `json:"period_to"`
+	ClosingBalance pgtype.Numeric     `json:"closing_balance"`
+	Note           string             `json:"note"`
+	Status         string             `json:"status"`
+	ClosingID      pgtype.Int8        `json:"closing_id"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CashStatementLine struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	StatementID       int64              `json:"statement_id"`
+	CashAccountID     int64              `json:"cash_account_id"`
+	LineNo            int32              `json:"line_no"`
+	LineDate          pgtype.Date        `json:"line_date"`
+	Direction         string             `json:"direction"`
+	Amount            pgtype.Numeric     `json:"amount"`
+	Fee               pgtype.Numeric     `json:"fee"`
+	LineType          string             `json:"line_type"`
+	Description       string             `json:"description"`
+	Reference         string             `json:"reference"`
+	BalanceAfter      pgtype.Numeric     `json:"balance_after"`
+	Status            string             `json:"status"`
+	MatchMethod       string             `json:"match_method"`
+	MatchedMovementID pgtype.Int8        `json:"matched_movement_id"`
+	DifferenceAmount  pgtype.Numeric     `json:"difference_amount"`
+	PostedMovementID  pgtype.Int8        `json:"posted_movement_id"`
+	FeeMovementID     pgtype.Int8        `json:"fee_movement_id"`
+	PostCount         int32              `json:"post_count"`
+	Note              string             `json:"note"`
+	ResolvedBy        pgtype.Int8        `json:"resolved_by"`
+	ResolvedAt        pgtype.Timestamptz `json:"resolved_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ClassSchedule struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

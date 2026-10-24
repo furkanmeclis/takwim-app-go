@@ -16,10 +16,25 @@ import type {
   CashMovementFacets,
   CashMovementList,
   CashMovementPage,
+  CashAutoMatchResult,
+  CashMatchCandidateList,
+  CashStatement,
+  CashStatementCreateRequest,
+  CashStatementLine,
+  CashStatementLineCreateRequest,
+  CashStatementLineFacets,
+  CashStatementLineMatchRequest,
+  CashStatementLinePage,
+  CashStatementLinePostRequest,
+  CashStatementPage,
+  CashStatementSummary,
+  CashStatementUpdateRequest,
   CashTransfer,
   CashTransferRequest,
   ListCashAccountsParams,
   ListCashMovementsParams,
+  ListCashStatementLinesParams,
+  ListCashStatementsParams,
 } from "@/features/cash/types";
 import type { ResourceMeta } from "@/features/io/types";
 import { tenantRequest } from "@/lib/api/tenant-request";
@@ -27,6 +42,8 @@ import { tenantRequest } from "@/lib/api/tenant-request";
 const BASE = "/v1/tenant/cash";
 const ACCOUNTS = `${BASE}/accounts`;
 const MOVEMENTS = `${BASE}/movements`;
+const STATEMENTS = `${BASE}/statements`;
+const LINES = `${BASE}/statement-lines`;
 
 type Paging = { limit: number; offset: number };
 
@@ -179,6 +196,156 @@ export const cashService = {
       "GET",
       `${BASE}/daily-summary`,
       { query: params },
+    );
+  },
+
+  // ---------------------------------------------------------- statements
+
+  listStatements(slug: string, params: ListCashStatementsParams) {
+    return tenantRequest<CashStatementPage>(slug, "GET", STATEMENTS, {
+      query: params,
+    });
+  },
+
+  statementsMeta(slug: string) {
+    return tenantRequest<ResourceMeta>(slug, "GET", `${STATEMENTS}/meta`);
+  },
+
+  getStatement(slug: string, uuid: string) {
+    return tenantRequest<CashStatement>(slug, "GET", `${STATEMENTS}/${uuid}`);
+  },
+
+  createStatement(slug: string, body: CashStatementCreateRequest) {
+    return tenantRequest<CashStatement>(slug, "POST", STATEMENTS, { body });
+  },
+
+  updateStatement(
+    slug: string,
+    uuid: string,
+    body: CashStatementUpdateRequest,
+  ) {
+    return tenantRequest<CashStatement>(
+      slug,
+      "PATCH",
+      `${STATEMENTS}/${uuid}`,
+      { body },
+    );
+  },
+
+  deleteStatement(slug: string, uuid: string) {
+    return tenantRequest<void>(slug, "DELETE", `${STATEMENTS}/${uuid}`);
+  },
+
+  statementSummary(slug: string, uuid: string) {
+    return tenantRequest<CashStatementSummary>(
+      slug,
+      "GET",
+      `${STATEMENTS}/${uuid}/summary`,
+    );
+  },
+
+  statementLines(
+    slug: string,
+    uuid: string,
+    params: ListCashStatementLinesParams,
+  ) {
+    return tenantRequest<CashStatementLinePage>(
+      slug,
+      "GET",
+      `${STATEMENTS}/${uuid}/lines`,
+      { query: params },
+    );
+  },
+
+  statementLineFacets(slug: string, uuid: string) {
+    return tenantRequest<CashStatementLineFacets>(
+      slug,
+      "GET",
+      `${STATEMENTS}/${uuid}/lines/facets`,
+    );
+  },
+
+  addStatementLine(
+    slug: string,
+    uuid: string,
+    body: CashStatementLineCreateRequest,
+  ) {
+    return tenantRequest<CashStatementLine>(
+      slug,
+      "POST",
+      `${STATEMENTS}/${uuid}/lines`,
+      { body },
+    );
+  },
+
+  autoMatch(slug: string, uuid: string) {
+    return tenantRequest<CashAutoMatchResult>(
+      slug,
+      "POST",
+      `${STATEMENTS}/${uuid}/auto-match`,
+      { body: {} },
+    );
+  },
+
+  linesMeta(slug: string) {
+    return tenantRequest<ResourceMeta>(slug, "GET", `${LINES}/meta`);
+  },
+
+  lineCandidates(slug: string, lineUuid: string, q?: string) {
+    return tenantRequest<CashMatchCandidateList>(
+      slug,
+      "GET",
+      `${LINES}/${lineUuid}/candidates`,
+      { query: { q: q || undefined } },
+    );
+  },
+
+  matchLine(
+    slug: string,
+    lineUuid: string,
+    body: CashStatementLineMatchRequest,
+  ) {
+    return tenantRequest<CashStatementLine>(
+      slug,
+      "POST",
+      `${LINES}/${lineUuid}/match`,
+      { body },
+    );
+  },
+
+  resetLine(slug: string, lineUuid: string, reason?: string) {
+    return tenantRequest<CashStatementLine>(
+      slug,
+      "POST",
+      `${LINES}/${lineUuid}/reset`,
+      { body: { reason: reason ?? "" } },
+    );
+  },
+
+  postLine(slug: string, lineUuid: string, body: CashStatementLinePostRequest) {
+    return tenantRequest<CashStatementLine>(
+      slug,
+      "POST",
+      `${LINES}/${lineUuid}/post`,
+      { body },
+    );
+  },
+
+  ignoreLine(slug: string, lineUuid: string, reason: string) {
+    return tenantRequest<CashStatementLine>(
+      slug,
+      "POST",
+      `${LINES}/${lineUuid}/ignore`,
+      { body: { reason } },
+    );
+  },
+
+  reverseLine(slug: string, lineUuid: string, reason: string) {
+    return tenantRequest<CashStatementLine>(
+      slug,
+      "POST",
+      `${LINES}/${lineUuid}/reverse`,
+      { body: { reason } },
     );
   },
 };
