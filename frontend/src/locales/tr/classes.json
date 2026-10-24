@@ -162,5 +162,20 @@
   "session_dialog.restore_description": "Seans yeniden rezervasyona açılır. Eğitmen veya alan o saatte doluysa seans rezerve edilemez.",
   "columns.start_time": "Başlangıç",
   "columns.note": "Not",
-  "columns.uuid": "Kimlik"
+  "columns.uuid": "Kimlik",
+  "actions.cancel_with_bookings": "Seansı ve rezervasyonları iptal et",
+  "actions.cancel_remaining": "Kalan rezervasyonları iptal et",
+  "actions.undo_cancel": "İptali geri al",
+  "session_dialog.cancel_bookings_title": "Seansı ve rezervasyonları iptal et",
+  "session_dialog.cancel_bookings_description": "Seans iptal edilir ve {{count}} rezervasyon tek işlemde iptal edilir. Müşterilere iptal bildirimi gönderilir; kontenjan ve paket seansları serbest kalır, alınmış ödemeler iadeye düşer. İşlemi 24 saat içinde bu sayfadan geri alabilirsiniz.",
+  "session_dialog.cancel_bookings_description_seats": "Seans iptal edilir ve rezerve edilen {{booked}} yerin rezervasyonları tek işlemde iptal edilir. Müşterilere iptal bildirimi gönderilir; kontenjan ve paket seansları serbest kalır, alınmış ödemeler iadeye düşer. İşlemi 24 saat içinde seans sayfasından geri alabilirsiniz.",
+  "session_dialog.undo_title": "İptali geri al",
+  "session_dialog.undo_description": "Seans yeniden açılır ve iptal edilen rezervasyonlar geri alınır; müşterilere randevularının geçerli olduğu bildirilir. Bu arada değişen, saati dolan, paketinde seans kalmayan veya ürünü stokta olmayan rezervasyonlar iptal kalır.",
+  "toast.session_cancelled_with_bookings": "Seans ve {{count}} rezervasyon iptal edildi",
+  "toast.session_cancelled_partial": "Seans iptal edildi; {{total}} rezervasyondan {{succeeded}} tanesi iptal edildi. Kalanları seans sayfasından iptal edebilirsiniz.",
+  "toast.cancel_undone": "İptal geri alındı; seans ve rezervasyonlar yeniden açık",
+  "toast.cancel_undone_partial": "İptal kısmen geri alındı; bazı rezervasyonlar iptal kaldı",
+  "fields.cancelled_bookings": "İptal edilen rezervasyonlar",
+  "fields.undo_until": "Geri alma süresi",
+  "session.cancelled_bookings_value": "{{total}} rezervasyondan {{succeeded}}"
 }

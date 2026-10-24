@@ -12,6 +12,65 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const copyReleasedReservationProduct = `-- name: CopyReleasedReservationProduct :one
+INSERT INTO reservation_products (
+    organization_id, reservation_id, branch_id, product_id, variant_id, product_name, variant_name, sku,
+    quantity, unit_price, unit_cost, staff_id, source, created_by
+)
+SELECT rp.organization_id, rp.reservation_id, rp.branch_id, rp.product_id, rp.variant_id, rp.product_name,
+    rp.variant_name, rp.sku, rp.quantity, rp.unit_price, rp.unit_cost, rp.staff_id, rp.source, $1
+FROM reservation_products rp
+WHERE rp.organization_id = $2 AND rp.reservation_id = $3
+  AND rp.uuid = $4 AND rp.status = 'released'
+RETURNING id, uuid, organization_id, reservation_id, branch_id, product_id, variant_id, product_name, variant_name, sku, quantity, unit_price, unit_cost, staff_id, status, release_reason, stock_movement_uuid, source, delivered_at, released_at, created_by, created_at, updated_at
+`
+
+type CopyReleasedReservationProductParams struct {
+	CreatedBy      pgtype.Int8 `json:"created_by"`
+	OrganizationID int64       `json:"organization_id"`
+	ReservationID  int64       `json:"reservation_id"`
+	Uuid           uuid.UUID   `json:"uuid"`
+}
+
+// A cancelled visit taken back (TEC-989): a product line it released is
+// held again as a new line with the same price snapshot (a released line
+// stays final). The caller reserves the units.
+func (q *Queries) CopyReleasedReservationProduct(ctx context.Context, arg CopyReleasedReservationProductParams) (ReservationProduct, error) {
+	row := q.db.QueryRow(ctx, copyReleasedReservationProduct,
+		arg.CreatedBy,
+		arg.OrganizationID,
+		arg.ReservationID,
+		arg.Uuid,
+	)
+	var i ReservationProduct
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ReservationID,
+		&i.BranchID,
+		&i.ProductID,
+		&i.VariantID,
+		&i.ProductName,
+		&i.VariantName,
+		&i.Sku,
+		&i.Quantity,
+		&i.UnitPrice,
+		&i.UnitCost,
+		&i.StaffID,
+		&i.Status,
+		&i.ReleaseReason,
+		&i.StockMovementUuid,
+		&i.Source,
+		&i.DeliveredAt,
+		&i.ReleasedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deliverReservationProduct = `-- name: DeliverReservationProduct :exec
 UPDATE reservation_products
 SET status = 'delivered', stock_movement_uuid = $1, delivered_at = $2

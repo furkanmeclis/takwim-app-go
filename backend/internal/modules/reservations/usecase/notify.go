@@ -19,7 +19,7 @@ type Change struct {
 	Version int32
 	// Type is the event type: created, accepted, rejected, cancelled,
 	// expired, rescheduled, paid, started, completed, no_show,
-	// notes_updated.
+	// notes_updated, reinstated (a cancellation taken back).
 	Type           string
 	From, To       string
 	ApprovalStatus string

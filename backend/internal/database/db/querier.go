@@ -61,6 +61,10 @@ type Querier interface {
 	// A completed visit uses its held sessions; the business day is the day
 	// the visit ended (never later than now) in the branch's time zone.
 	ConsumeReservationPackageSessions(ctx context.Context, arg ConsumeReservationPackageSessionsParams) (int64, error)
+	// A cancelled visit taken back (TEC-989): a product line it released is
+	// held again as a new line with the same price snapshot (a released line
+	// stays final). The caller reserves the units.
+	CopyReleasedReservationProduct(ctx context.Context, arg CopyReleasedReservationProductParams) (ReservationProduct, error)
 	CountActiveCustomerSessions(ctx context.Context, arg CountActiveCustomerSessionsParams) (int64, error)
 	CountActivityEvents(ctx context.Context, arg CountActivityEventsParams) (int64, error)
 	CountAllBulkJobs(ctx context.Context) (int64, error)
@@ -389,6 +393,9 @@ type Querier interface {
 	GetClassSchedule(ctx context.Context, arg GetClassScheduleParams) (GetClassScheduleRow, error)
 	// A live service with its offer in the branch (sb.* NULL = not offered).
 	GetClassService(ctx context.Context, arg GetClassServiceParams) (GetClassServiceRow, error)
+	// The caller's latest bulk run that cancelled the bookings of one session
+	// (TEC-989) and can still be rolled back.
+	GetClassSessionCancelJob(ctx context.Context, arg GetClassSessionCancelJobParams) (GetClassSessionCancelJobRow, error)
 	// A live staff member who may perform the service and works in the branch.
 	GetClassTrainer(ctx context.Context, arg GetClassTrainerParams) (GetClassTrainerRow, error)
 	GetCollectAccount(ctx context.Context, arg GetCollectAccountParams) (GetCollectAccountRow, error)

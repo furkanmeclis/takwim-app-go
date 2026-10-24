@@ -82,6 +82,7 @@ export const EVENT_LABEL_KEYS: Record<string, string> = {
   paid: "reservations.events.paid",
   expired: "reservations.events.expired",
   rescheduled: "reservations.events.rescheduled",
+  reinstated: "reservations.events.reinstated",
   notes_updated: "reservations.events.notes_updated",
   payment_recorded: "reservations.events.payment_recorded",
   late_payment: "reservations.events.late_payment",
@@ -108,6 +109,7 @@ export const CANCEL_REASON_KEYS: Record<string, string> = {
   payment_timeout: "reservations.cancel_reasons.payment_timeout",
   customer_cancelled: "reservations.cancel_reasons.customer_cancelled",
   confirmation_timeout: "reservations.cancel_reasons.confirmation_timeout",
+  class_cancelled: "reservations.cancel_reasons.class_cancelled",
 };
 
 /** Which actions a state allows (mirrors the API's transitions). */

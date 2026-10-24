@@ -21,6 +21,8 @@ import (
 	cashadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/adapters"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	classesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/adapters"
+	classesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/usecase"
 	confirmationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/usecase"
 	customernotifyadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/adapters"
 	customernotifycatalog "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/catalog"
@@ -280,6 +282,7 @@ func main() {
 		sessionpackagesadapters.NewBulk(sessionPackagesSvc),
 		customersadapters.NewBulk(customersSvc),
 		reservationsadapters.NewBulk(reservationsSvc),
+		classesadapters.NewSessionBulk(classesusecase.New(queries, reservationHolds), reservationsSvc),
 		cashadapters.NewBulk(cashSvc),
 		orgadapters.NewBulk(jobScopes),
 	)

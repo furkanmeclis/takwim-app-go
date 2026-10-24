@@ -188,6 +188,19 @@ DELETE FROM class_session_changes
 WHERE organization_id = sqlc.arg(organization_id) AND schedule_id = sqlc.arg(schedule_id)
   AND session_date = sqlc.arg(session_date);
 
+-- name: GetClassSessionCancelJob :one
+-- The caller's latest bulk run that cancelled the bookings of one session
+-- (TEC-989) and can still be rolled back.
+SELECT j.uuid, j.result_json, j.rollback_until, j.created_at
+FROM bulk_jobs j
+WHERE j.organization_id = sqlc.arg(organization_id) AND j.resource = sqlc.arg(resource)
+  AND j.actor_id = sqlc.arg(actor_id) AND j.status = 'completed'
+  AND j.rollback_until > NOW()
+  AND j.target_json -> 'params' ->> 'class' = sqlc.arg(class_uuid)::text
+  AND j.target_json -> 'params' ->> 'date' = sqlc.arg(session_date)::text
+ORDER BY j.created_at DESC, j.id DESC
+LIMIT 1;
+
 -- name: ListClassSessionSeats :many
 -- Seats booked per group session (service, branch, start) in [since,
 -- until): active holds that have not lapsed and confirmed bookings.

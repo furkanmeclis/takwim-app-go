@@ -41,6 +41,11 @@ type ExecuteInput struct {
 	Action   string
 	Target   bulkengine.BulkTarget
 	Locale   string
+	// Record keeps a job row for a run of a reversible action that is
+	// small enough to run inline, so it can be rolled back like a queued
+	// one (a module running the action itself, TEC-989). The result then
+	// carries the completed job in Job.
+	Record bool
 }
 
 type ExecuteResult struct {
@@ -130,6 +135,9 @@ func (s *Service) Execute(ctx context.Context, actorID int64, in ExecuteInput) (
 	}
 	locale := string(i18n.Normalize(in.Locale))
 	targetJSON, _ := json.Marshal(in.Target)
+	if len(targets) <= s.cfg.SyncMax && in.Record && def.Reversible {
+		return s.executeRecorded(ctx, actorID, orgID, locale, targetJSON, adapter, def, in, targets)
+	}
 	if len(targets) <= s.cfg.SyncMax {
 		summary, affected, err := s.applyTargets(bulkengine.WithParams(ctx, in.Target.Params), 0, adapter, def, in.Action, targets)
 		if err != nil {
@@ -177,6 +185,52 @@ func (s *Service) Execute(ctx context.Context, actorID int64, in ExecuteInput) (
 		return ExecuteResult{}, err
 	}
 	return ExecuteResult{Async: true, Job: mapBulkJob(row)}, nil
+}
+
+// executeRecorded runs a small reversible run inline on a job row: the
+// changes are kept, so the job can be rolled back in its window. No
+// completion notice is sent (the caller is waiting for the answer).
+func (s *Service) executeRecorded(ctx context.Context, actorID int64, orgID pgtype.Int8, locale string, targetJSON []byte,
+	adapter bulkengine.BulkAdapter, def bulkengine.BulkActionDef, in ExecuteInput, targets []string,
+) (ExecuteResult, error) {
+	row, err := s.q.CreateBulkJob(ctx, db.CreateBulkJobParams{
+		Resource: in.Resource, Action: in.Action, ActorID: actorID,
+		Locale: locale, Status: "queued", TargetJson: targetJSON,
+		OrganizationID: orgID,
+	})
+	if err != nil {
+		return ExecuteResult{}, err
+	}
+	if _, err := s.q.MarkBulkJobProcessing(ctx, row.ID); err != nil {
+		return ExecuteResult{}, err
+	}
+	summary, affected, err := s.applyTargets(bulkengine.WithParams(ctx, in.Target.Params), row.ID, adapter, def, in.Action, targets)
+	if err != nil {
+		return ExecuteResult{}, s.failBulk(ctx, row.ID, err.Error())
+	}
+	resultJSON, _ := json.Marshal(summary)
+	var rollbackUntil pgtype.Timestamptz
+	if summary.Succeeded > 0 {
+		rollbackUntil = pgtype.Timestamptz{
+			Time:  time.Now().UTC().Add(time.Duration(s.cfg.RollbackHours) * time.Hour),
+			Valid: true,
+		}
+	}
+	completed, err := s.q.MarkBulkJobCompleted(ctx, db.MarkBulkJobCompletedParams{
+		ID: row.ID, ResultJson: resultJSON, RollbackUntil: rollbackUntil,
+	})
+	if err != nil {
+		return ExecuteResult{}, err
+	}
+	if s.activity != nil {
+		uid := actorID
+		s.activity.Record(ctx, &uid, "bulk.completed", in.Resource, &completed.Uuid, map[string]any{
+			"action": in.Action, "total": summary.Total,
+			"succeeded": summary.Succeeded, "failed": summary.Failed, "skipped": summary.Skipped, "sync": true,
+		}, nil)
+	}
+	s.publishBulk(ctx, in.Resource, affected)
+	return ExecuteResult{Async: false, Job: mapBulkJob(completed), Summary: summary}, nil
 }
 
 func (s *Service) ProcessBulk(ctx context.Context, jobID int64) error {

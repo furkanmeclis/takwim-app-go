@@ -36,6 +36,7 @@ func RegisterRoutes(
 	module := middleware.RequireModule(sector.ModuleClasses)
 	read := middleware.RequireTenantPermission(rbac.PermTenantClassesRead)
 	write := middleware.RequireTenantPermission(rbac.PermTenantClassesWrite)
+	reservationsWrite := middleware.RequireTenantPermission(rbac.PermTenantReservationsWrite)
 	route := func(pattern string, fn http.HandlerFunc, guards ...func(http.Handler) http.Handler) {
 		mux.Handle(pattern, middleware.Chain(fn, append([]func(http.Handler) http.Handler{authn, org, module}, guards...)...))
 	}
@@ -51,6 +52,8 @@ func RegisterRoutes(
 	route("DELETE /v1/tenant/classes/{uuid}", h.Delete, read, write)
 	route("GET /v1/tenant/classes/{uuid}/sessions/{date}", h.Session, read)
 	route("PATCH /v1/tenant/classes/{uuid}/sessions/{date}", h.ChangeSession, read, write)
+	// Cancelling a session with its bookings also cancels reservations.
+	route("POST /v1/tenant/classes/{uuid}/sessions/{date}/cancel", h.CancelSession, read, write, reservationsWrite)
 
 	route("GET /v1/tenant/class-sessions", h.Sessions, read)
 }

@@ -14,6 +14,10 @@ export type ClassSessionPage = Schemas["ClassSessionPage"];
 export type ClassSessionDetail = Schemas["ClassSessionDetail"];
 export type ClassAttendee = Schemas["ClassAttendee"];
 export type ClassSessionChangeInput = Schemas["ClassSessionChangeInput"];
+export type ClassSessionCancelInput = Schemas["ClassSessionCancelInput"];
+export type ClassSessionCancelResult = Schemas["ClassSessionCancelResult"];
+export type ClassSessionCancellation = Schemas["ClassSessionCancellation"];
+export type BulkJob = Schemas["BulkJob"];
 
 export type Weekday = ClassSchedule["weekday"];
 export type ClassSessionState = ClassSession["state"];

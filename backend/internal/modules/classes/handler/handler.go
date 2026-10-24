@@ -28,6 +28,7 @@ type Handler struct {
 	svc      *usecase.Service
 	activity *activity.Recorder
 	events   resourceevents.Publisher
+	bulk     BulkRunner
 }
 
 // New builds the handler. rec may be nil.
@@ -204,12 +205,29 @@ func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := h.svc.SessionDetail(r.Context(), orgctx.Must(r.Context()).ID, id, r.PathValue("date"))
+	out, err := h.sessionDetail(r, id, r.PathValue("date"))
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	response.JSON(w, r, http.StatusOK, out)
+}
+
+// sessionDetail is a session with its bookings and the caller's run that
+// cancelled them, while it can be rolled back.
+func (h *Handler) sessionDetail(r *http.Request, id uuid.UUID, date string) (model.SessionDetail, error) {
+	orgID := orgctx.Must(r.Context()).ID
+	out, err := h.svc.SessionDetail(r.Context(), orgID, id, date)
+	if err != nil {
+		return out, err
+	}
+	if out.Cancelled {
+		pr := authctx.MustPrincipal(r.Context())
+		if out.Cancellation, err = h.svc.CancelJob(r.Context(), orgID, pr.UserInternal, id, date); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
 }
 
 // ChangeSession serves PATCH /v1/tenant/classes/{uuid}/sessions/{date}.
@@ -243,7 +261,7 @@ func (h *Handler) ChangeSession(w http.ResponseWriter, r *http.Request) {
 		"capacity_before": before.Capacity, "capacity": after.Capacity, "booked": after.Booked,
 		"reason": after.Reason,
 	})
-	detail, err := h.svc.SessionDetail(r.Context(), orgctx.Must(r.Context()).ID, id, date)
+	detail, err := h.sessionDetail(r, id, date)
 	if err != nil {
 		writeError(w, r, err)
 		return

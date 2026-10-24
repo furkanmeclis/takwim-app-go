@@ -296,7 +296,7 @@ func (e *Engine) ReservationChanged(ctx context.Context, q *db.Queries, c reserv
 		st.close(model.TaskDropped, now)
 		st.row.LastError = "reservation cancelled"
 		return st.save(ctx, q)
-	case "created", "accepted", "paid", "rescheduled":
+	case "created", "accepted", "paid", "rescheduled", "reinstated":
 		if active {
 			if c.Type != "rescheduled" && isOpen && task.StartsAt.Time.Equal(r.StartsAt.Time) {
 				st.row.ReservationVersion = c.Version

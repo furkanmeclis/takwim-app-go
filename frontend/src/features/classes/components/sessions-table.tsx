@@ -230,9 +230,17 @@ function useSessionColumns({
                   ? [
                       {
                         id: "cancel",
-                        label: t("classes.actions.cancel_session"),
+                        // A booked session is cancelled with its bookings,
+                        // which also needs the reservations permission.
+                        label:
+                          s.booked > 0
+                            ? t("classes.actions.cancel_with_bookings")
+                            : t("classes.actions.cancel_session"),
                         icon: Ban,
-                        permission: permissions.tenant.classes.write,
+                        permission:
+                          s.booked > 0
+                            ? permissions.tenant.reservations.write
+                            : permissions.tenant.classes.write,
                         variant: "destructive" as const,
                         onSelect: () => onCancel(s),
                       },

@@ -181,6 +181,47 @@ type Attendee struct {
 type SessionDetail struct {
 	Session
 	Attendees []Attendee `json:"attendees"`
+	// Cancellation is the caller's run that cancelled the session with its
+	// bookings (TEC-989) while it can still be rolled back; nil otherwise.
+	Cancellation *SessionCancellation `json:"cancellation"`
+}
+
+// SessionsSlug is the bulk engine resource of "cancel a session with its
+// bookings" (TEC-989): its items are the session's reservations.
+const SessionsSlug = "tenant.class_sessions"
+
+// CancelBookingsAction is the bulk action that cancels the bookings of a
+// cancelled session; its rollback opens the session again and takes the
+// bookings back.
+const CancelBookingsAction = "cancel_bookings"
+
+// CancelReason is the cancel reason of a booking whose session was
+// cancelled (shown with the reservation, sent to the customer).
+const CancelReason = "class_cancelled"
+
+// SessionCancelInput is the body of POST …/sessions/{date}/cancel.
+type SessionCancelInput struct {
+	Reason string `json:"reason"`
+}
+
+// SessionCancellation is a run that cancelled a session's bookings.
+type SessionCancellation struct {
+	JobUUID   uuid.UUID `json:"job_uuid"`
+	Total     int       `json:"total"`
+	Succeeded int       `json:"succeeded"`
+	Failed    int       `json:"failed"`
+	Skipped   int       `json:"skipped"`
+	// RollbackUntil ends the undo window (nil: nothing to undo, no booking
+	// was cancelled).
+	RollbackUntil *time.Time `json:"rollback_until"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// SessionCancelResult answers POST …/sessions/{date}/cancel: the session
+// as it is now and the run over its bookings (nil when it had none open).
+type SessionCancelResult struct {
+	Session      SessionDetail        `json:"session"`
+	Cancellation *SessionCancellation `json:"cancellation"`
 }
 
 // SessionChangeInput sets how one session differs from its class:
