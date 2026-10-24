@@ -110,6 +110,9 @@ import (
 	publicbookinghandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/handler"
 	publicbookingusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/publicbooking/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/qrlogin"
+	reportsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reports"
+	reportshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reports/handler"
+	reportsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reports/usecase"
 	reservationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations"
 	reservationsadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/adapters"
 	reservationshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/handler"
@@ -680,6 +683,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Export: exportH.TenantExport(reservationsmodule.Resource, reservationsmodule.ExportQueryKeys...),
 		Bulk:   bulkH.TenantExecute(reservationsmodule.Resource),
 	}, tokens, loader, tenantResolver)
+	// Reports (TEC-925): read-only figures over the records above.
+	reportsmodule.RegisterRoutes(mux, reportshandler.New(reportsusecase.New(deps.Queries), activityRec), tokens, loader, tenantResolver)
 	// Public booking API (TEC-906): business page, widget and mobile app.
 	publicSvc := publicbookingusecase.New(deps.Queries, orgsettingsSvc, availabilitySvc, capacityHolds, reservationsSvc, fieldCipher)
 	publicSvc.SetIndexer(searchIndexer)

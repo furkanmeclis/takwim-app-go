@@ -836,6 +836,16 @@ type Querier interface {
 	// (refund entries not reversed) and what is being refunded (requested
 	// refunds), and the online payment behind a collection.
 	ListRefundableCollections(ctx context.Context, arg ListRefundableCollectionsParams) ([]ListRefundableCollectionsRow, error)
+	// TEC-925: reports. Read-only aggregates over the records of the other
+	// modules, grouped by business day, branch and currency so one query feeds
+	// the daily rows, the branch comparison and the totals. Every query takes
+	// the organization id; branch_ids is the caller's branch scope (NULL =
+	// every branch and the business-wide records), filter_branch_ids the
+	// branches picked in the report (NULL = no filter; head_office adds the
+	// business-wide records to a filter) and staff_ids the staff filter (NULL
+	// = everyone).
+	// The branches of the organization (names for the comparison rows).
+	ListReportBranches(ctx context.Context, organizationID int64) ([]ListReportBranchesRow, error)
 	// Branches with reservations (in the caller's scope) for the list filter.
 	ListReservationBranchFacets(ctx context.Context, arg ListReservationBranchFacetsParams) ([]ListReservationBranchFacetsRow, error)
 	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
@@ -1031,6 +1041,40 @@ type Querier interface {
 	// A change of time / services / staff: the new commitment and times.
 	ReplaceReservationSchedule(ctx context.Context, arg ReplaceReservationScheduleParams) (Reservation, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
+	// Transfers between accounts, other income and expenses per day, branch of
+	// the account (NULL = business-wide) and currency from the cash book;
+	// reversals netted. Staff payouts come from the payouts (staff filter).
+	ReportCashBook(ctx context.Context, arg ReportCashBookParams) ([]ReportCashBookRow, error)
+	// Money taken and paid back per day, branch and currency (ledger);
+	// reversals of either are netted on the day they were posted.
+	ReportCollections(ctx context.Context, arg ReportCollectionsParams) ([]ReportCollectionsRow, error)
+	// Confirmation tasks per local day of the visit they confirm, branch and
+	// state (the state the confirmation list shows: change_requested and the
+	// outcome of an expired task stand apart).
+	ReportConfirmations(ctx context.Context, arg ReportConfirmationsParams) ([]ReportConfirmationsRow, error)
+	// Reservations per local start day (branch time zone, else the
+	// business's), branch, status and channel. With a staff filter: the visits
+	// with a line of one of the staff members.
+	ReportReservations(ctx context.Context, arg ReportReservationsParams) ([]ReportReservationsRow, error)
+	// Revenue per day, branch and currency from the sale lines (reversals
+	// netted on the day they were posted) and the cost of the products sold:
+	// the unit cost of the stock movement (a product handed over with a visit
+	// keeps it), else the current cost of the variant / product.
+	ReportRevenue(ctx context.Context, arg ReportRevenueParams) ([]ReportRevenueRow, error)
+	// Money paid to staff per day, branch of the paying account (NULL =
+	// business-wide) and currency; reversed payouts netted.
+	ReportStaffPayouts(ctx context.Context, arg ReportStaffPayoutsParams) ([]ReportStaffPayoutsRow, error)
+	// Calculated staff shares per day, branch and currency (reversals are
+	// negative rows of the day they were posted).
+	ReportStaffShares(ctx context.Context, arg ReportStaffSharesParams) ([]ReportStaffSharesRow, error)
+	// Stock now per branch (not bound to the period): units on hand and held,
+	// the value at the current unit cost, and the items that are low (at or
+	// below the threshold) or out (nothing free). Removed products are left
+	// out.
+	ReportStockLevels(ctx context.Context, arg ReportStockLevelsParams) ([]ReportStockLevelsRow, error)
+	// Units moved per branch and kind in the period (local day of
+	// occurred_at in the branch time zone). Adjustments are signed.
+	ReportStockMovements(ctx context.Context, arg ReportStockMovementsParams) ([]ReportStockMovementsRow, error)
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
 	// A person settled an unknown result: the provider did not refund.

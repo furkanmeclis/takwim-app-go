@@ -280,6 +280,8 @@
   "actions.staff_share_rules.deleted": "Share rate deleted",
   "actions.staff_share_payouts.created": "Share paid out",
   "actions.staff_share_payouts.reversed": "Share payout reversed",
+  "resources.tenant.reports": "Reports",
+  "actions.reports.exported": "Report downloaded as CSV",
   "fields.tenant.staff_share_rules.staff": "Staff",
   "fields.tenant.staff_share_rules.item_type": "Item type",
   "fields.tenant.staff_share_rules.service": "Service",

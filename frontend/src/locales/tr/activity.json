@@ -280,6 +280,8 @@
   "actions.staff_share_rules.deleted": "Pay oranı silindi",
   "actions.staff_share_payouts.created": "Pay ödemesi yapıldı",
   "actions.staff_share_payouts.reversed": "Pay ödemesi iptal edildi",
+  "resources.tenant.reports": "Raporlar",
+  "actions.reports.exported": "Rapor CSV olarak indirildi",
   "fields.tenant.staff_share_rules.staff": "Personel",
   "fields.tenant.staff_share_rules.item_type": "Kalem türü",
   "fields.tenant.staff_share_rules.service": "Hizmet",

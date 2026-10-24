@@ -6702,6 +6702,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Business report of a period
+         * @description Reservations (by status and channel) and confirmation results of the
+         *     visits that start in the range, revenue (sale lines), collections
+         *     and refunds (ledger), transfers between accounts, other income and
+         *     expenses (cash book), staff share and staff payouts, product cost,
+         *     the business share (revenue - staff share) and the operating result
+         *     (revenue - product cost - staff share - expenses), and the stock.
+         *     Each figure comes from its own record, so revenue, collections,
+         *     transfers and staff payouts never mix (A20). Returned in total, per
+         *     day (business day; visits by the local day in the branch time zone)
+         *     and per branch, plus a head office row for the records of accounts
+         *     without a branch. The range defaults to today and is at most 366
+         *     days. Needs the reports module and tenant.finance.read; the caller's
+         *     branch scope (and X-Branch) limits every figure, and a member
+         *     without every branch never sees head office records.
+         */
+        get: operations["getTenantReportSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reports/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report as CSV
+         * @description The same report as CSV (UTF-8 with BOM, comma separated): one row per
+         *     day and a total row (section=days, default) or one row per branch,
+         *     the head office row and a total row (section=branches). Amounts use
+         *     a dot as the decimal separator; with several currencies there is one
+         *     row per currency and the counts sit on the first one. Column titles
+         *     follow locale (tr default). Needs tenant.report.export as well; the
+         *     export is written to the activity log.
+         */
+        get: operations["exportTenantReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/staff-shares/me": {
         parameters: {
             query?: never;
@@ -11339,6 +11398,171 @@ export interface components {
             data: components["schemas"]["SalesSummary"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @description Visits that start in the range, by status and by channel (total = the sum of the statuses). */
+        ReportReservations: {
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            requested: number;
+            /** Format: int64 */
+            active: number;
+            /** Format: int64 */
+            in_service: number;
+            /** Format: int64 */
+            completed: number;
+            /** Format: int64 */
+            cancelled: number;
+            /** Format: int64 */
+            rejected: number;
+            /** Format: int64 */
+            no_show: number;
+            /** Format: int64 */
+            from_panel: number;
+            /** Format: int64 */
+            from_online: number;
+            /** Format: int64 */
+            from_embed: number;
+        };
+        /**
+         * @description Confirmation tasks of the visits in the range by the state the
+         *     confirmation list shows; cancelled / flagged / unreachable are the
+         *     outcomes of expired tasks, dropped means the visit was cancelled or
+         *     moved first.
+         */
+        ReportConfirmations: {
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            scheduled: number;
+            /** Format: int64 */
+            pending: number;
+            /** Format: int64 */
+            confirmed: number;
+            /** Format: int64 */
+            declined: number;
+            /** Format: int64 */
+            change_requested: number;
+            /** Format: int64 */
+            cancelled: number;
+            /** Format: int64 */
+            flagged: number;
+            /** Format: int64 */
+            unreachable: number;
+            /** Format: int64 */
+            expired: number;
+            /** Format: int64 */
+            dropped: number;
+        };
+        /**
+         * @description The figures of one currency, each from its own record. business_share
+         *     = revenue.net - staff_share; operational_result = revenue.net -
+         *     product_cost - staff_share - expenses (other income, transfers,
+         *     collections and staff payouts are outside it).
+         */
+        ReportMoney: {
+            currency: string;
+            revenue: components["schemas"]["SalesRevenue"];
+            collections: components["schemas"]["SalesCollections"];
+            /** @description Money moved between accounts (not revenue) */
+            transfers: string;
+            /** @description Calculated staff shares of the sale lines */
+            staff_share: string;
+            /** @description Paid to staff (settles shares; not an expense) */
+            staff_payments: string;
+            business_share: string;
+            /** @description Unit cost of the stock movement, else the current product / variant cost */
+            product_cost: string;
+            /** @description Other income from the cash book (not revenue) */
+            income: string;
+            /** @description Expenses from the cash book (staff payouts excluded) */
+            expenses: string;
+            operational_result: string;
+        };
+        /**
+         * @description Units moved in the range (sold and transferred out as positive
+         *     units, adjustments signed) and the stock now (not bound to the
+         *     range); value at the current unit cost in the business currency.
+         */
+        ReportStock: {
+            /** Format: int64 */
+            received: number;
+            /** Format: int64 */
+            sold: number;
+            /** Format: int64 */
+            returned: number;
+            /** Format: int64 */
+            adjusted: number;
+            /** Format: int64 */
+            transferred_in: number;
+            /** Format: int64 */
+            transferred_out: number;
+            /** Format: int64 */
+            movements: number;
+            /** Format: int64 */
+            on_hand: number;
+            /** Format: int64 */
+            reserved: number;
+            /** Format: int64 */
+            items: number;
+            /** Format: int64 */
+            low_items: number;
+            /** Format: int64 */
+            out_items: number;
+            value: string;
+            currency: string;
+        };
+        ReportFigures: {
+            reservations: components["schemas"]["ReportReservations"];
+            confirmations: components["schemas"]["ReportConfirmations"];
+            /** @description One entry per currency; the business currency first and always present. */
+            money: components["schemas"]["ReportMoney"][];
+        };
+        ReportDay: components["schemas"]["ReportFigures"] & {
+            /** Format: date */
+            date: string;
+        };
+        ReportBranch: components["schemas"]["ReportFigures"] & {
+            /** @description The branch; null on the head office row (records of accounts without a branch). */
+            branch: {
+                /** Format: uuid */
+                uuid: string;
+                code: string;
+                name: string;
+                is_active: boolean;
+            } | null;
+            stock: components["schemas"]["ReportStock"];
+        };
+        Report: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            scope: {
+                timezone: string;
+                currency: string;
+                /** @description The branch filter as applied (only branches of this business) */
+                branches: string[];
+                /** @description Head office records are included */
+                head_office: boolean;
+                /** @description The staff filter as applied (only staff of this business) */
+                staff: string[];
+                /** @description Money figures left out (zero) because a staff filter cannot narrow them */
+                omitted_for_staff: ("collections" | "transfers" | "income" | "expenses")[];
+            };
+            totals: components["schemas"]["ReportFigures"] & {
+                stock: components["schemas"]["ReportStock"];
+            };
+            /** @description Days of the range with any record, oldest first */
+            days: components["schemas"]["ReportDay"][];
+            /** @description Branch comparison (every active branch in scope, then the head office row when it has records) */
+            branches: components["schemas"]["ReportBranch"][];
+        };
+        EnvelopeReport: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Report"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeReservationBalance: {
             /** @enum {boolean} */
             success: true;
@@ -15426,6 +15650,14 @@ export interface components {
          *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
          */
         XOrganization: string;
+        /** @description First day (default today in the business time zone) */
+        ReportDateFrom: string;
+        /** @description Last day (default date_from, else today; at most 366 days) */
+        ReportDateTo: string;
+        /** @description Branch uuids and / or head_office; comma-separate or repeat. Absent = every branch in scope and the head office. */
+        ReportBranch: string;
+        /** @description Staff uuids; comma-separate or repeat. Narrows revenue, shares, payouts, visits and confirmations. */
+        ReportStaff: string;
         /**
          * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
          *     lists, counts, facets, search and the overview to that branch; access
@@ -27818,6 +28050,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeFinanceSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantReportSummary: {
+        parameters: {
+            query?: {
+                /** @description First day (default today in the business time zone) */
+                date_from?: components["parameters"]["ReportDateFrom"];
+                /** @description Last day (default date_from, else today; at most 366 days) */
+                date_to?: components["parameters"]["ReportDateTo"];
+                /** @description Branch uuids and / or head_office; comma-separate or repeat. Absent = every branch in scope and the head office. */
+                branch?: components["parameters"]["ReportBranch"];
+                /** @description Staff uuids; comma-separate or repeat. Narrows revenue, shares, payouts, visits and confirmations. */
+                staff?: components["parameters"]["ReportStaff"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    exportTenantReport: {
+        parameters: {
+            query?: {
+                /** @description First day (default today in the business time zone) */
+                date_from?: components["parameters"]["ReportDateFrom"];
+                /** @description Last day (default date_from, else today; at most 366 days) */
+                date_to?: components["parameters"]["ReportDateTo"];
+                /** @description Branch uuids and / or head_office; comma-separate or repeat. Absent = every branch in scope and the head office. */
+                branch?: components["parameters"]["ReportBranch"];
+                /** @description Staff uuids; comma-separate or repeat. Narrows revenue, shares, payouts, visits and confirmations. */
+                staff?: components["parameters"]["ReportStaff"];
+                section?: "days" | "branches";
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file */
+            200: {
+                headers: {
+                    /** @description attachment; filename=rapor_{section}_{from}_{to}.csv */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
             400: components["responses"]["BadRequest"];
