@@ -113,6 +113,13 @@
   "history.sent_at": "Sent",
   "history.finished_at": "Result",
   "history.text": "Text sent",
+  "history.section_title": "Notifications sent",
+  "history.section_empty_description": "Notifications sent for this record are listed here, one row per channel.",
+  "errors.outcome_unknown": "Outcome unknown: the send was interrupted and was not sent again.",
+  "errors.no_delivery_report": "No delivery report came from the provider.",
+  "errors.provider_not_configured": "The provider is not configured.",
+  "errors.no_phone_number": "The customer has no phone number.",
+  "errors.no_email_address": "The customer has no e-mail address.",
   "events.confirmation_request": "Booking confirmation request",
   "channels.voice_call": "Automatic call"
 }

@@ -322,6 +322,9 @@ type Querier interface {
 	ExtendCapacityHold(ctx context.Context, arg ExtendCapacityHoldParams) (CapacityHold, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
 	FailPayment(ctx context.Context, arg FailPaymentParams) (int64, error)
+	// Closes an attempt still waiting for its send result; a result recorded
+	// meanwhile wins (no row).
+	FailStuckCustomerNotificationDelivery(ctx context.Context, arg FailStuckCustomerNotificationDeliveryParams) (int64, error)
 	FinanceEntryReversed(ctx context.Context, arg FinanceEntryReversedParams) (bool, error)
 	// ----------------------------------------------------------------- summary
 	// The records of a period per kind, category and currency (reversals
@@ -1052,6 +1055,9 @@ type Querier interface {
 	ListStorageStarsByKeys(ctx context.Context, arg ListStorageStarsByKeysParams) ([]StorageStar, error)
 	ListStorageStarsByUser(ctx context.Context, userID int64) ([]StorageStar, error)
 	ListStorageTrash(ctx context.Context, arg ListStorageTrashParams) ([]StorageTrash, error)
+	// Attempts claimed but never given a result (the process stopped between
+	// the claim and the record), every business: the stuck sweep closes them.
+	ListStuckCustomerNotificationDeliveries(ctx context.Context, arg ListStuckCustomerNotificationDeliveriesParams) ([]ListStuckCustomerNotificationDeliveriesRow, error)
 	ListStuckProcessingNotificationIDs(ctx context.Context, staleMinutes int32) ([]int64, error)
 	// Activity history of one organization. branch_ids is the caller's branch
 	// scope (narrowed by X-Branch): NULL = every event, otherwise only events of

@@ -113,6 +113,13 @@
   "history.sent_at": "Gönderim",
   "history.finished_at": "Sonuç",
   "history.text": "Gönderilen metin",
+  "history.section_title": "Gönderilen bildirimler",
+  "history.section_empty_description": "Bu kayıt için gönderilen bildirimler burada kanal kanal listelenir.",
+  "errors.outcome_unknown": "Sonuç bilinmiyor: gönderim yarıda kaldı, tekrar gönderilmedi.",
+  "errors.no_delivery_report": "Sağlayıcıdan teslim raporu gelmedi.",
+  "errors.provider_not_configured": "Sağlayıcı ayarlı değil.",
+  "errors.no_phone_number": "Müşterinin telefon numarası yok.",
+  "errors.no_email_address": "Müşterinin e-posta adresi yok.",
   "events.confirmation_request": "Randevu teyit isteği",
   "channels.voice_call": "Otomatik arama"
 }

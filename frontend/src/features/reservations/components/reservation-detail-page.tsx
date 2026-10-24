@@ -27,6 +27,7 @@ import {
   ReservationActionDialog,
   type ActionTarget,
 } from "@/features/reservations/components/reservation-action-dialog";
+import { CustomerNotificationHistoryCard } from "@/features/customer-notifications";
 import { ReservationConfirmationCard } from "@/features/reservations/components/reservation-confirmation-card";
 import { ReservationPaymentsCard } from "@/features/reservations/components/reservation-payments-card";
 import { ReservationProductsCard } from "@/features/reservations/components/reservation-products-card";
@@ -332,6 +333,8 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
           <ReservationBalanceCard uuid={reservation.uuid} />
 
           <ReservationNotesCard reservation={reservation} editable={canWrite} />
+
+          <CustomerNotificationHistoryCard reservationUuid={reservation.uuid} />
 
           <EntitySectionCard
             title={t("reservations.detail.history")}
