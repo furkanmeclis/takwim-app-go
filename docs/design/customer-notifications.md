@@ -52,6 +52,8 @@ The worker runs `Engine.Run`: due dispatches every 5 seconds, reminder planning 
 
 An attempt that stops between claim and record stays `sending` and is not resent: delivery is at most once per channel, never twice.
 
+**Live outcomes** (TEC-981): `Engine.SetResourceEvents(pub, events...)` publishes `tenant.reservations` `updated` for the reservation of a dispatch of one of those events after each processing (claim, send and record; one event however many channels ran) and after each recorded delivery report. Both processes set it for the confirmation request, so the confirmation list sees a failed or skipped request at once. Other notices publish nothing (no list shows them).
+
 **A channel that is not ready is never a success.** `Channel.Ready()` says whether a real provider can deliver. The engine turns any success of a channel that is not ready into `skipped` ("provider not configured"), and only real sends count usage (`entitlements.AddUsage`, metric = channel name).
 
 ## Channels
