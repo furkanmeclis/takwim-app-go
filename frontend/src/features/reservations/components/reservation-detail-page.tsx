@@ -26,6 +26,7 @@ import {
   ReservationActionDialog,
   type ActionTarget,
 } from "@/features/reservations/components/reservation-action-dialog";
+import { ReservationConfirmationCard } from "@/features/reservations/components/reservation-confirmation-card";
 import { ReservationPaymentsCard } from "@/features/reservations/components/reservation-payments-card";
 import { ReservationProductsCard } from "@/features/reservations/components/reservation-products-card";
 import { ACTION_ICONS } from "@/features/reservations/components/reservation-row-actions";
@@ -301,6 +302,8 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
             />
           </EntitySectionCard>
 
+          <ReservationConfirmationCard reservation={reservation} />
+
           <ReservationLinesCard reservation={reservation} />
 
           <ReservationProductsCard
@@ -317,8 +320,10 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
             badge={reservation.events.length}
           >
             <Timeline
-              items={[...reservation.events].reverse().map((event) => ({
-                id: `${event.version}-${event.type}`,
+              items={[...reservation.events].reverse().map((event, i) => ({
+                // Confirmation steps may share a version (they do not
+                // change the booking), so the position keeps ids unique.
+                id: `${event.version}-${event.type}-${i}`,
                 title: t(EVENT_LABEL_KEYS[event.type] ?? event.type),
                 description: [
                   event.to_status && event.from_status !== event.to_status

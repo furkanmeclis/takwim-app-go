@@ -20,7 +20,7 @@ type EngineHandlers struct {
 
 // ExportQueryKeys are the list filters an export honours (q and sort too).
 var ExportQueryKeys = []string{
-	"branch", "staff", "status", "approval_status", "payment_status", "source",
+	"branch", "staff", "status", "approval_status", "confirmation_status", "payment_status", "source",
 	"starts_from", "starts_to", "customer_uuid",
 }
 

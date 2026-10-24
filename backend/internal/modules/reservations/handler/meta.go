@@ -45,6 +45,9 @@ func Meta() resourcemeta.ResourceMeta {
 	status.Sortable = true
 	source := enum("source")
 	source.DefaultVisible = false
+	// Customer confirmation (TEC-921): shown when the add-on is on.
+	confirmation := enum("confirmation_status")
+	confirmation.DefaultVisible = false
 	return resourcemeta.ResourceMeta{
 		Resource:      model.Slug,
 		DefaultSort:   "-starts_at",
@@ -55,7 +58,7 @@ func Meta() resourcemeta.ResourceMeta {
 		},
 		SearchableFields: []string{"number", "customer", "phone"},
 		SortableFields:   []string{"starts_at", "number", "customer", "status", "total_price", "created_at"},
-		FilterableFields: []string{"branch", "staff", "status", "approval_status", "payment_status", "source", "starts_from", "starts_to", "customer_uuid"},
+		FilterableFields: []string{"branch", "staff", "status", "approval_status", "confirmation_status", "payment_status", "source", "starts_from", "starts_to", "customer_uuid"},
 		Columns: []resourcemeta.Column{
 			{Key: "number", LabelKey: "reservations.columns.number", Type: resourcemeta.ColumnTypeString, Sortable: true, DefaultVisible: true},
 			{Key: "starts_at", LabelKey: "reservations.columns.starts_at", Type: resourcemeta.ColumnTypeDatetime, Sortable: true, DefaultVisible: true},
@@ -63,7 +66,7 @@ func Meta() resourcemeta.ResourceMeta {
 			{Key: "services", LabelKey: "reservations.columns.services", Type: resourcemeta.ColumnTypeString, DefaultVisible: true},
 			{Key: "staff", LabelKey: "reservations.columns.staff", Type: resourcemeta.ColumnTypeEnum, Filterable: true, FilterVariant: resourcemeta.FilterVariantFaceted, DefaultVisible: true},
 			{Key: "branch", LabelKey: "reservations.columns.branch", Type: resourcemeta.ColumnTypeEnum, Filterable: true, FilterVariant: resourcemeta.FilterVariantFaceted, DefaultVisible: true},
-			status, enum("approval_status"), enum("payment_status"), source,
+			status, enum("approval_status"), confirmation, enum("payment_status"), source,
 			{Key: "total_price", LabelKey: "reservations.columns.total_price", Type: resourcemeta.ColumnTypeString, Sortable: true, DefaultVisible: true},
 			{Key: "created_at", LabelKey: "reservations.columns.created_at", Type: resourcemeta.ColumnTypeDatetime, Sortable: true, DefaultVisible: false},
 			{Key: "uuid", LabelKey: "reservations.columns.uuid", Type: resourcemeta.ColumnTypeUUID, DefaultVisible: false},
@@ -73,6 +76,7 @@ func Meta() resourcemeta.ResourceMeta {
 			{Key: "staff", LabelKey: "reservations.columns.staff", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.facets.staff"},
 			{Key: "status", LabelKey: "reservations.columns.status", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.status"},
 			{Key: "approval_status", LabelKey: "reservations.columns.approval_status", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.approval_status"},
+			{Key: "confirmation_status", LabelKey: "reservations.columns.confirmation_status", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.confirmation_status"},
 			{Key: "payment_status", LabelKey: "reservations.columns.payment_status", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.payment_status"},
 			{Key: "source", LabelKey: "reservations.columns.source", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "reservations.source"},
 		},

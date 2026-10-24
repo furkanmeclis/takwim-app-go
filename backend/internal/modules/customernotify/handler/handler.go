@@ -102,13 +102,14 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 // DeliveryStatuses are the attempt statuses (filter values).
 var DeliveryStatuses = []string{usecase.DeliverySending, usecase.DeliverySent, usecase.DeliveryDelivered, usecase.DeliveryFailed, usecase.DeliverySkipped}
 
-// EventCodes are the catalog events (filter values).
+// EventCodes are the catalog events (filter values), the confirmation
+// request (TEC-921) included.
 func EventCodes() []string {
 	out := []string{}
 	for _, e := range catalog.All() {
 		out = append(out, e.Code)
 	}
-	return out
+	return append(out, catalog.ConfirmationRequest)
 }
 
 // Deliveries serves GET /v1/tenant/customer-notifications/deliveries.

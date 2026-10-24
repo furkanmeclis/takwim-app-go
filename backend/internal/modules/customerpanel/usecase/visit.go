@@ -47,6 +47,19 @@ func (s *Service) IssueVisitLink(ctx context.Context, orgID int64, reservation u
 	return model.VisitLink{URL: strings.TrimRight(s.cfg.PanelURL, "/") + "/v#" + token, ExpiresAt: expires}, nil
 }
 
+// IssueVisitLinkFor is IssueVisitLink by the reservation's id (the
+// confirmation request puts it in its text at send time).
+func (s *Service) IssueVisitLinkFor(ctx context.Context, orgID, reservationID int64) (model.VisitLink, error) {
+	r, err := s.q.GetReservationForVisitLinkByID(ctx, db.GetReservationForVisitLinkByIDParams{OrganizationID: orgID, ID: reservationID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.VisitLink{}, ErrNotFound
+	}
+	if err != nil {
+		return model.VisitLink{}, err
+	}
+	return s.IssueVisitLink(ctx, orgID, r.Uuid)
+}
+
 // visitRow resolves a visit link to its reservation row; every failure is
 // ErrLinkInvalid (recorded as visit_link_failed).
 func (s *Service) visitRow(ctx context.Context, token string, meta Meta) (db.GetCustomerPanelReservationRow, error) {

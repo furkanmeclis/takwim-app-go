@@ -62,7 +62,7 @@ The `channel.Channel` port (`Name`, `Ready`, `Send`) is the provider layer; adap
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sms`      | `adapters.SMS` over `sms.Sender`. `LogSender` (until the provider is chosen, TEC-884) is not ready: the message is logged in development, the attempt is `skipped`. No phone number: `skipped`. |
 | `email`    | `adapters.Email` over the SMTP mailer; ready when `MAIL_DRIVER=smtp` and `SMTP_HOST` is set (another driver: `skipped`); an SMTP error is `failed`. No address: `skipped`.                      |
-| `whatsapp` | a known channel without an adapter yet: always `skipped`. The confirmation module (TEC-921 / 922 / 923) registers WhatsApp and voice adapters on the same port.                                 |
+| `whatsapp` | a known channel without an adapter yet: always `skipped`. WhatsApp (TEC-922) and voice (TEC-923) adapters register on the same port.                                                            |
 
 The default rule of every event is SMS, then e-mail, with fallback; the reminder defaults to 24 hours before.
 
@@ -89,7 +89,14 @@ Saving validates the event, channels, offsets and texts (`unknown_variable` for 
 
 Settings → Müşteri bildirimleri. "Olaylar ve metinler" lists the events (on / off, channels in order, timing) with a warning for channels that are not ready; a row opens the editor: switch, ordered channels with readiness, fallback, reminder times, one text per channel with variables, preview and "Varsayılan metin". "Gönderim geçmişi" is the read-only history with event, channel and status filters and a drawer with the text and error. Without `tenant.settings.write` the editor is read-only.
 
+## Confirmation requests (TEC-921)
+
+`confirmation.request` is a **managed** event: the confirmation module (confirmations.md) writes it through `Engine.EmitReservation` with its own channels, fallback, key and variables (`deadline`), so it is not listed on the settings page and `PUT` / reset refuse it. Two hooks serve it:
+
+- `SetDispatchGuard`: before a dispatch is claimed, the confirmation engine may cancel it (the task was answered, closed or planned again).
+- `SetLinkIssuerFor(event, issuer)`: confirmation requests carry the single-visit link (`adapters.VisitLinks` over `customerpanel.IssueVisitLinkFor`) on every channel instead of the panel link.
+
 ## Not here yet
 
-- A real SMS provider (TEC-884) and delivery reports; WhatsApp and voice with the confirmation module (TEC-921 / 922 / 923).
+- A real SMS provider (TEC-884) and delivery reports; WhatsApp (TEC-922) and voice (TEC-923).
 - Notices on the reservation and customer detail pages (the history API already filters by `reservation_uuid` / `customer_uuid`).

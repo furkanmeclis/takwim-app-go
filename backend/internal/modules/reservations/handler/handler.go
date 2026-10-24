@@ -127,8 +127,12 @@ func (h *Handler) Facets(w http.ResponseWriter, r *http.Request) {
 var listEnums = map[string][]string{
 	"status":          {model.StatusRequested, model.StatusActive, model.StatusInService, model.StatusCompleted, model.StatusCancelled, model.StatusRejected, model.StatusNoShow},
 	"approval_status": {model.ApprovalPending, model.ApprovalAccepted, model.ApprovalRejected},
-	"payment_status":  {model.PaymentOnSite, model.PaymentOnlinePending, model.PaymentPaid, model.PaymentRefundPending, model.PaymentPartiallyRefunded, model.PaymentRefunded, model.PaymentFailed},
-	"source":          {model.SourcePanel, model.SourceOnline, model.SourceEmbed},
+	"confirmation_status": {
+		model.ConfirmationNotRequired, model.ConfirmationScheduled, model.ConfirmationPending,
+		model.ConfirmationConfirmed, model.ConfirmationDeclined, model.ConfirmationExpired,
+	},
+	"payment_status": {model.PaymentOnSite, model.PaymentOnlinePending, model.PaymentPaid, model.PaymentRefundPending, model.PaymentPartiallyRefunded, model.PaymentRefunded, model.PaymentFailed},
+	"source":         {model.SourcePanel, model.SourceOnline, model.SourceEmbed},
 }
 
 // ParseListFilter reads the list filters.
@@ -185,6 +189,7 @@ func ParseListFilter(values map[string][]string) (model.ListFilter, []response.D
 		f.CustomerUUID = &c[0]
 	}
 	f.Statuses, f.ApprovalStatuses, f.PaymentStatuses, f.Sources = enum("status"), enum("approval_status"), enum("payment_status"), enum("source")
+	f.ConfirmationStatuses = enum("confirmation_status")
 	f.StartsFrom, f.StartsTo = instant("starts_from"), instant("starts_to")
 	return f, details
 }

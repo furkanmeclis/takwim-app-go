@@ -87,7 +87,16 @@ type Engine struct {
 	batch    int32
 	usage    UsageCounter
 	links    LinkIssuer
+	// eventLinks replace links for one event (the confirmation request
+	// carries a visit link, not a panel link).
+	eventLinks map[string]LinkIssuer
+	guard      DispatchGuard
 }
+
+// DispatchGuard tells, inside the claim transaction, why a dispatch must
+// not go out any more ("" = send it); another module owns that decision
+// (a confirmation request whose task was answered or planned again).
+type DispatchGuard func(ctx context.Context, q *db.Queries, d db.CustomerNotificationDispatch) (string, error)
 
 var _ reservationsusecase.Notifier = (*Engine)(nil)
 
@@ -96,7 +105,7 @@ var _ reservationsusecase.Notifier = (*Engine)(nil)
 func New(pool *pgxpool.Pool, q *db.Queries, panelURL string) *Engine {
 	return &Engine{
 		pool: pool, q: q, channels: map[string]channel.Channel{}, log: slog.Default(), now: time.Now,
-		panelURL: strings.TrimSpace(panelURL), batch: 100,
+		panelURL: strings.TrimSpace(panelURL), batch: 100, eventLinks: map[string]LinkIssuer{},
 	}
 }
 
@@ -137,6 +146,60 @@ func (e *Engine) SetUsage(u UsageCounter) { e.usage = u }
 // SetLinkIssuer replaces the public panel address with a personal link at
 // send time.
 func (e *Engine) SetLinkIssuer(fn LinkIssuer) { e.links = fn }
+
+// SetLinkIssuerFor replaces the link of one event at send time (nil
+// removes it).
+func (e *Engine) SetLinkIssuerFor(event string, fn LinkIssuer) {
+	if fn == nil {
+		delete(e.eventLinks, event)
+		return
+	}
+	e.eventLinks[event] = fn
+}
+
+// SetDispatchGuard installs the guard every claim asks before sending.
+func (e *Engine) SetDispatchGuard(fn DispatchGuard) { e.guard = fn }
+
+// linkIssuer is the issuer of an event's personal link.
+func (e *Engine) linkIssuer(event string) LinkIssuer {
+	if fn, ok := e.eventLinks[event]; ok {
+		return fn
+	}
+	return e.links
+}
+
+// ReservationNotice is a notice another module sends for a reservation
+// with its own channels (the confirmation request): written in the
+// caller's transaction like the reservation notices.
+type ReservationNotice struct {
+	Event string
+	// Key makes the notice unique for the reservation (with Event).
+	Key      string
+	Channels []string
+	Fallback bool
+	// DueAt is the visit start the notice is about: a moved, cancelled or
+	// started visit drops it at send time.
+	DueAt *time.Time
+	// Vars are added to the reservation variables.
+	Vars map[string]string
+}
+
+// EmitReservation writes the dispatch of a notice for the customer of a
+// reservation. created is false when the key was already used.
+func (e *Engine) EmitReservation(ctx context.Context, q *db.Queries, orgID, reservationID int64, n ReservationNotice) (bool, error) {
+	if _, ok := catalog.Get(n.Event); !ok {
+		return false, ErrUnknownEvent
+	}
+	r, err := q.GetNotifyReservation(ctx, db.GetNotifyReservationParams{OrganizationID: orgID, ID: reservationID})
+	if err != nil {
+		return false, fmt.Errorf("customer notice: reservation: %w", err)
+	}
+	out, err := e.emit(ctx, q, orgID, emitInput{
+		event: n.Event, key: n.Key, reservation: r, dueAt: n.DueAt,
+		rule: &Rule{Event: n.Event, Enabled: true, Channels: n.Channels, Fallback: n.Fallback}, vars: n.Vars,
+	})
+	return out.created, err
+}
 
 func (e *Engine) clock() time.Time { return e.now().UTC().Truncate(time.Microsecond) }
 
@@ -225,6 +288,9 @@ type emitInput struct {
 	key         string
 	reservation db.GetNotifyReservationRow
 	dueAt       *time.Time
+	// rule, when set, replaces the business's rule of the event.
+	rule *Rule
+	vars map[string]string
 }
 
 // emitted is the result of an emit.
@@ -245,9 +311,14 @@ func idempotencyKey(event string, reservation uuid.UUID, key string) string {
 
 // emit writes the dispatch of one event for the customer of a reservation.
 func (e *Engine) emit(ctx context.Context, q *db.Queries, orgID int64, in emitInput) (emitted, error) {
-	rule, err := e.RuleFor(ctx, q, orgID, in.event)
-	if err != nil {
-		return emitted{}, err
+	var rule Rule
+	if in.rule != nil {
+		rule = *in.rule
+	} else {
+		var err error
+		if rule, err = e.RuleFor(ctx, q, orgID, in.event); err != nil {
+			return emitted{}, err
+		}
 	}
 	if !rule.Enabled {
 		return emitted{}, nil
@@ -262,6 +333,9 @@ func (e *Engine) emit(ctx context.Context, q *db.Queries, orgID int64, in emitIn
 		return emitted{}, fmt.Errorf("customer notice: customer: %w", err)
 	}
 	vars := e.reservationVars(org.Name, customer, r)
+	for k, v := range in.vars {
+		vars[k] = v
+	}
 	p := db.InsertCustomerNotificationDispatchParams{
 		OrganizationID: orgID, EventCode: in.event, CustomerID: r.CustomerID,
 		ReservationID: pgtype.Int8{Int64: r.ID, Valid: true}, ReservationVersion: r.Version,
@@ -372,6 +446,12 @@ func (e *Engine) stale(ctx context.Context, q *db.Queries, orgID int64, d db.Cus
 	}
 	if org.Deleted || org.Status != "active" {
 		return "business not active", org, nil
+	}
+	if e.guard != nil {
+		reason, err := e.guard(ctx, q, d)
+		if err != nil || reason != "" {
+			return reason, org, err
+		}
 	}
 	if d.DueAt.Valid && d.ReservationID.Valid {
 		r, err := q.GetNotifyReservation(ctx, db.GetNotifyReservationParams{OrganizationID: orgID, ID: d.ReservationID.Int64})
@@ -508,8 +588,8 @@ func (e *Engine) send(ctx context.Context, orgID int64, st *step) channel.Result
 	// A personal link is put in at send time only, and only when the channel
 	// really delivers (a log sender never uses up a link); the stored text keeps
 	// the public panel address.
-	if e.links != nil && c.Ready() {
-		link, err := e.links(ctx, st.channel, msg.Recipient, orgID, st.dispatch.ReservationID.Int64)
+	if issue := e.linkIssuer(st.dispatch.EventCode); issue != nil && c.Ready() {
+		link, err := issue(ctx, st.channel, msg.Recipient, orgID, st.dispatch.ReservationID.Int64)
 		if err != nil {
 			e.log.WarnContext(ctx, "customer_notice_link_failed", "dispatch", st.dispatch.Uuid, "error", err)
 		} else if link != "" {

@@ -87,6 +87,14 @@ export const EVENT_LABEL_KEYS: Record<string, string> = {
   product_added: "reservations.events.product_added",
   product_removed: "reservations.events.product_removed",
   refund_recorded: "reservations.events.refund_recorded",
+  confirmation_scheduled: "reservations.events.confirmation_scheduled",
+  confirmation_requested: "reservations.events.confirmation_requested",
+  confirmation_confirmed: "reservations.events.confirmation_confirmed",
+  confirmation_declined: "reservations.events.confirmation_declined",
+  confirmation_change_requested:
+    "reservations.events.confirmation_change_requested",
+  confirmation_expired: "reservations.events.confirmation_expired",
+  confirmation_dropped: "reservations.events.confirmation_dropped",
 };
 
 /** System cancel reasons; people's own reasons are shown as typed. */
@@ -97,6 +105,7 @@ export const CANCEL_REASON_KEYS: Record<string, string> = {
   approval_timeout: "reservations.cancel_reasons.approval_timeout",
   payment_timeout: "reservations.cancel_reasons.payment_timeout",
   customer_cancelled: "reservations.cancel_reasons.customer_cancelled",
+  confirmation_timeout: "reservations.cancel_reasons.confirmation_timeout",
 };
 
 /** Which actions a state allows (mirrors the API's transitions). */

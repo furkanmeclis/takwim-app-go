@@ -463,6 +463,14 @@ export function tenantNav(slug: string): NavCatalog {
             permission: permissions.tenant.settings.read,
           },
           {
+            id: "settings-confirmation",
+            titleKey: "layout.nav_tenant_settings_confirmation",
+            href: routes.tenant.settings.confirmation(slug),
+            icon: CalendarCheck,
+            permission: permissions.tenant.settings.read,
+            module: "confirmation",
+          },
+          {
             id: "settings-plan",
             titleKey: "layout.nav_tenant_settings_plan",
             href: routes.tenant.settings.plan(slug),

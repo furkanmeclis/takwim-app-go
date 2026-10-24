@@ -15,6 +15,7 @@ import { ThemeSwitch } from "@/components/layout/theme-switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { CustomerConfirmationCard } from "@/features/customer-panel/components/customer-confirmation-card";
 import { CustomerReservationBody } from "@/features/customer-panel/components/customer-reservation-detail-page";
 import {
   customerErrorMessage,
@@ -35,9 +36,10 @@ type State =
 
 /**
  * `/panel/v#token`: one visit opened by its visit link (confirmation and
- * cancel messages). It shows that visit only and can cancel it under the
- * business's rules; it opens no panel session. The person's other visits
- * need a sign-in.
+ * cancel messages). It shows that visit only, answers the business's
+ * confirmation request ("Geleceğim", change request) and can cancel it under
+ * the business's rules; it opens no panel session. Opening the page answers
+ * nothing. The person's other visits need a sign-in.
  */
 export function CustomerVisitPage() {
   const { t } = useLocale();
@@ -45,6 +47,7 @@ export function CustomerVisitPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [confirming, setConfirming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [answering, setAnswering] = useState<"confirm" | "change" | null>(null);
 
   const load = (value: string) => {
     customerPanelService
@@ -85,6 +88,33 @@ export function CustomerVisitPage() {
         setCancelling(false);
         setConfirming(false);
       });
+  };
+
+  const answer = (kind: "confirm" | "change", note = "") => {
+    if (!token) return Promise.resolve(false);
+    setAnswering(kind);
+    const call =
+      kind === "confirm"
+        ? customerPanelService.visitConfirm(token)
+        : customerPanelService.visitRequestChange(token, note);
+    return call
+      .then((next) => {
+        setState({ kind: "ready", reservation: next });
+        appToast.success(
+          t(
+            kind === "confirm"
+              ? "customer_panel.confirmation.done"
+              : "customer_panel.confirmation.change_done",
+          ),
+        );
+        return true;
+      })
+      .catch((error: unknown) => {
+        appToast.error(customerErrorMessage(t, error));
+        if (isConflict(error)) load(token);
+        return false;
+      })
+      .finally(() => setAnswering(null));
   };
 
   return (
@@ -159,7 +189,18 @@ export function CustomerVisitPage() {
                   </Button>
                 </AlertDescription>
               </Alert>
-              <CustomerReservationBody reservation={reservation} />
+              <CustomerReservationBody
+                reservation={reservation}
+                confirmation={
+                  <CustomerConfirmationCard
+                    reservation={reservation}
+                    confirming={answering === "confirm"}
+                    requesting={answering === "change"}
+                    onConfirm={() => void answer("confirm")}
+                    onRequestChange={(note) => answer("change", note)}
+                  />
+                }
+              />
             </div>
             <ConfirmDialog
               open={confirming}

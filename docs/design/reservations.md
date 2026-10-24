@@ -4,14 +4,14 @@ A reservation is one visit of a customer: one or more services served back to ba
 
 ## Separate state fields (requirements §8)
 
-| Field                 | Values                                                                                            | Moved by                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `status`              | `requested`, `active`, `in_service`, `completed`, `cancelled`, `rejected`, `no_show`              | the lifecycle below                          |
-| `approval_status`     | `pending`, `accepted`, `rejected` (`approval_mode`: `auto`, `staff`, `panel`)                     | the business                                 |
-| `confirmation_status` | `not_required`, `scheduled`, `pending`, `confirmed`, `declined`, `expired`                        | the confirmation module (`not_required` now) |
-| `payment_status`      | `on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` | payments                                     |
+| Field                 | Values                                                                                            | Moved by                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `status`              | `requested`, `active`, `in_service`, `completed`, `cancelled`, `rejected`, `no_show`              | the lifecycle below                                 |
+| `approval_status`     | `pending`, `accepted`, `rejected` (`approval_mode`: `auto`, `staff`, `panel`)                     | the business                                        |
+| `confirmation_status` | `not_required`, `scheduled`, `pending`, `confirmed`, `declined`, `expired`                        | the confirmation module (TEC-921, confirmations.md) |
+| `payment_status`      | `on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` | payments                                            |
 
-A request the business accepted but the customer has not confirmed shows both values; a payment never confirms on its own.
+A request the business accepted but the customer has not confirmed shows both values; a payment never confirms on its own. With the confirmation add-on the detail carries `confirmation` (the task: attempts, deadline, answer, outcome), the history has `confirmation_*` events, and the list filters by `confirmation_status`. A booking cancelled for no answer has the reason `confirmation_timeout`; one the customer cancelled, `customer_cancelled`.
 
 ## Lines and snapshots
 

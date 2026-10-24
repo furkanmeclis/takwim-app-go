@@ -534,6 +534,9 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 	if out.Products, err = listProducts(ctx, s.q, orgID, row.ID); err != nil {
 		return model.Reservation{}, err
 	}
+	if out.Confirmation, err = s.confirmation(ctx, orgID, row.ID); err != nil {
+		return model.Reservation{}, err
+	}
 	events, err := s.q.ListReservationEvents(ctx, db.ListReservationEventsParams{OrganizationID: orgID, ReservationID: row.ID})
 	if err != nil {
 		return model.Reservation{}, err
@@ -553,6 +556,48 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 		out.Events = append(out.Events, item)
 	}
 	return out, nil
+}
+
+// confirmation reads the customer confirmation task of a booking (nil when
+// none was planned).
+func (s *Service) confirmation(ctx context.Context, orgID, reservationID int64) (*model.Confirmation, error) {
+	c, err := s.q.GetReservationConfirmation(ctx, db.GetReservationConfirmationParams{OrganizationID: orgID, ReservationID: reservationID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := &model.Confirmation{
+		Status: c.Status, Channels: c.Channels, OnNoAnswer: c.OnNoAnswer, AttemptTimes: make([]time.Time, 0, len(c.AttemptTimes)),
+		AttemptsSent: int(c.AttemptsSent), AttemptsPlanned: len(c.AttemptTimes), NextAttemptAt: tsPtr(c.NextAttemptAt),
+		DeadlineAt: c.DeadlineAt.Time.UTC(), Answer: textPtr(c.Answer), AnswerChannel: textPtr(c.AnswerChannel),
+		AnsweredAt: tsPtr(c.AnsweredAt), ChangeRequestedAt: tsPtr(c.ChangeRequestedAt), ChangeNote: c.ChangeNote,
+		Outcome: textPtr(c.Outcome), LastError: c.LastError, PlannedAt: c.PlannedAt.Time.UTC(), ClosedAt: tsPtr(c.ClosedAt),
+	}
+	if out.Channels == nil {
+		out.Channels = []string{}
+	}
+	for _, t := range c.AttemptTimes {
+		out.AttemptTimes = append(out.AttemptTimes, t.Time.UTC())
+	}
+	return out, nil
+}
+
+func tsPtr(v pgtype.Timestamptz) *time.Time {
+	if !v.Valid {
+		return nil
+	}
+	t := v.Time.UTC()
+	return &t
+}
+
+func textPtr(v pgtype.Text) *string {
+	if !v.Valid {
+		return nil
+	}
+	s := v.String
+	return &s
 }
 
 func ts(t time.Time) pgtype.Timestamptz {

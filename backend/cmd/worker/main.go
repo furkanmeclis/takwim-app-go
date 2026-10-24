@@ -21,7 +21,9 @@ import (
 	cashadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/adapters"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	confirmationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/usecase"
 	customernotifyadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/adapters"
+	customernotifycatalog "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/catalog"
 	customernotifyusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/usecase"
 	customerpanelusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/usecase"
 	customersadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/adapters"
@@ -185,9 +187,17 @@ func main() {
 			log.Warn("customer_notice_usage_failed", "organization", orgID, "metric", metric, "error", err)
 		}
 	})
-	reservationHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(notifyEngine))
+	// Customer confirmation (TEC-921): changes made here plan or follow
+	// their tasks like the API's; this process sends the due requests and
+	// applies the deadlines (cancel through the reservation transition).
+	confirmEngine := confirmationsusecase.New(pool, queries, notifyEngine)
+	confirmEngine.SetLogger(log)
+	notifyEngine.SetDispatchGuard(confirmEngine.Guard)
+	reservationNotifier := reservationsusecase.Notifiers(notifyEngine, confirmEngine)
+	reservationHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(reservationNotifier))
 	reservationsSvc := reservationsusecase.New(reservationHolds, queries, orgSettings)
-	reservationsSvc.SetNotifier(notifyEngine)
+	reservationsSvc.SetNotifier(reservationNotifier)
+	confirmEngine.SetReservations(reservationsSvc)
 	cashSvc := cashusecase.New(cashrepository.NewPostgres(pool, queries), nil)
 	// Completed visits and stock sales become sale lines (TEC-916) in the
 	// same transaction, whichever process runs them.
@@ -287,6 +297,9 @@ func main() {
 	panelLinks := customerpanelusecase.New(queries, nil, fieldCipher, nil, nil, customerpanelusecase.PanelDeps{}, log)
 	panelLinks.SetConfig(panelCfg)
 	notifyEngine.SetLinkIssuer(customernotifyadapters.PanelLinks(panelLinks))
+	// Confirmation requests carry a link to the one visit (confirm, cancel,
+	// ask for a change), issued at send time.
+	notifyEngine.SetLinkIssuerFor(customernotifycatalog.ConfirmationRequest, customernotifyadapters.VisitLinks(panelLinks))
 	integrationKit, err := integrationsmodule.New(queries, fieldCipher, cfg.App.Env, log, paymentsmodule.Adapters(cfg)...)
 	if err != nil {
 		log.Error("integrations_failed", "error", err)
@@ -298,7 +311,7 @@ func main() {
 	// The minute sweep of capacity holds also cancels the requests whose
 	// approval or payment hold lapsed (TEC-899).
 	capacityHolds := availabilityusecase.NewHolds(pool, queries, nil)
-	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(notifyEngine))
+	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(reservationNotifier))
 	worker := queue.NewWorker(cfg, log, notifSvc.Deliver).
 		WithExport(exportSvc.ProcessExport).
 		WithImport(importSvc.ProcessImport).
@@ -360,6 +373,7 @@ func main() {
 	}
 
 	go notifyEngine.Run(ctx, customernotifyusecase.DefaultSendInterval, customernotifyusecase.DefaultReminderInterval)
+	go confirmEngine.Run(ctx, confirmationsusecase.DefaultInterval)
 
 	errCh := make(chan error, 1)
 	go func() {

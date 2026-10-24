@@ -43,6 +43,9 @@ import (
 	cashhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/handler"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	confirmationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations"
+	confirmationshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/handler"
+	confirmationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/usecase"
 	customernotifymodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify"
 	customernotifyadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/adapters"
 	customernotifyhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/handler"
@@ -419,11 +422,21 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	smsSender := sms.NewLogSender(log, cfg.App.Env != "production")
 	notifyEngine.Register(customernotifyadapters.SMS{Sender: smsSender},
 		customernotifyadapters.Email{Mail: mail.NewSMTPSender(cfg.SMTP), Configured: cfg.SMTP.Driver == "smtp" && cfg.SMTP.Host != ""})
+	// Customer confirmation (TEC-921, Konfirmasyon add-on): every
+	// reservation change plans or follows its confirmation task in the same
+	// transaction; the requests go out through the notification engine,
+	// which drops a request whose task was answered (dispatch guard).
+	confirmEngine := confirmationsusecase.New(deps.DB, deps.Queries, notifyEngine)
+	confirmEngine.SetLogger(log)
+	notifyEngine.SetDispatchGuard(confirmEngine.Guard)
+	reservationNotifier := reservationsusecase.Notifiers(notifyEngine, confirmEngine)
 	// Lapsed approval / payment holds cancel their requests (TEC-899).
-	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(notifyEngine))
+	capacityHolds.SetExpiryHook(reservationsusecase.ExpireRequestsNotifying(reservationNotifier))
 	reservationsSvc := reservationsusecase.New(capacityHolds, deps.Queries, orgsettingsSvc)
-	reservationsSvc.SetNotifier(notifyEngine)
+	reservationsSvc.SetNotifier(reservationNotifier)
+	confirmEngine.SetReservations(reservationsSvc)
 	customernotifymodule.RegisterRoutes(mux, customernotifyhandler.New(notifyEngine, activityRec), tokens, loader, tenantResolver)
+	confirmationsmodule.RegisterRoutes(mux, confirmationshandler.New(confirmEngine, activityRec), tokens, loader, tenantResolver)
 	reservationsSvc.SetSearchIndexer(searchIndexer)
 	// Sale lines and the customer ledger (TEC-916): a completed visit and a
 	// stock sale write their sale lines in the same transaction.
@@ -658,6 +671,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	panelSender := smsSender
 	panelSvc := customerpanelusecase.New(deps.Queries, tokens, fieldCipher, panelSender, customersSvc, customerpanelusecase.PanelDeps{
 		Reservations: reservationsSvc, Availability: availabilitySvc, Settings: orgsettingsSvc,
+		Confirmations: confirmEngine,
 	}, log)
 	panelSvc.SetTx(customersrepository.NewPostgres(deps.DB, deps.Queries))
 	panelCfg := customerpanelusecase.DefaultConfig

@@ -50,3 +50,5 @@ staff_share_rules
 staff_share_lines
 staff_share_payouts
 refunds
+confirmation_settings
+reservation_confirmations

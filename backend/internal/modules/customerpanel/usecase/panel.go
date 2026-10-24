@@ -25,7 +25,7 @@ import (
 
 // CancelReason is the cancel reason of a visit the customer cancelled in
 // the panel (the business sees it in the reservation history).
-const CancelReason = "customer_cancelled"
+const CancelReason = reservationsmodel.ReasonCustomerCancelled
 
 // SettingsReader returns the current business settings.
 type SettingsReader interface {
@@ -37,6 +37,9 @@ type PanelDeps struct {
 	Reservations *reservationsusecase.Service
 	Availability *availabilityusecase.Service
 	Settings     SettingsReader
+	// Confirmations records confirmation answers (TEC-921); nil offers
+	// none.
+	Confirmations Confirmer
 }
 
 // ActionError: the business rules do not allow the action now (Reason is
@@ -294,6 +297,7 @@ func (o owned) actions(now time.Time) model.Actions {
 		return model.Action{Allowed: true, Until: &until}
 	}
 	out := model.Actions{Cancel: decide(res.CancelCutoffMinutes), Reschedule: decide(res.ChangeCutoffMinutes)}
+	out.Confirm, out.RequestChange = o.confirmActions(now)
 	if out.Reschedule.Allowed {
 		switch {
 		case !o.modules.Allows(sector.ModuleReservations) || !o.modules.Allows(sector.ModuleBookingPage) || !o.settings.ReadyForOnlineSales:
@@ -333,9 +337,10 @@ func (s *Service) view(o owned) model.Reservation {
 			Cancellation: set.Policies.Cancellation, Change: set.Policies.Change, NoShow: set.Policies.NoShow,
 			CancelCutoffMinutes: set.Reservation.CancelCutoffMinutes, ChangeCutoffMinutes: set.Reservation.ChangeCutoffMinutes,
 		},
-		Actions: o.actions(now),
-		History: []model.HistoryEntry{},
-		Refunds: []model.Refund{},
+		Actions:      o.actions(now),
+		Confirmation: confirmationView(r),
+		History:      []model.HistoryEntry{},
+		Refunds:      []model.Refund{},
 	}
 	for _, l := range r.Lines {
 		line := model.Line{
@@ -353,7 +358,8 @@ func (s *Service) view(o owned) model.Reservation {
 		out.Lines = append(out.Lines, line)
 	}
 	for _, e := range r.Events {
-		if e.Type == "notes_updated" {
+		switch e.Type {
+		case "notes_updated", "confirmation_scheduled", "confirmation_dropped":
 			continue
 		}
 		out.History = append(out.History, model.HistoryEntry{Type: e.Type, ToStatus: e.ToStatus, At: e.CreatedAt})

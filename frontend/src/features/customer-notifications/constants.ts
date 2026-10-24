@@ -19,6 +19,20 @@ export const NOTIFICATION_EVENTS: NotificationEventCode[] = [
   "reservation.reminder",
 ];
 
+/**
+ * Events written by other modules with their own settings (not on the
+ * events tab): the confirmation request of the confirmation add-on.
+ */
+export const MANAGED_EVENT_LABEL_KEYS: Record<string, string> = {
+  "confirmation.request": "customer_notifications.events.confirmation_request",
+};
+
+/** Events of the delivery history filter. */
+export const HISTORY_EVENTS: string[] = [
+  ...NOTIFICATION_EVENTS,
+  ...Object.keys(MANAGED_EVENT_LABEL_KEYS),
+];
+
 export const NOTIFICATION_CHANNELS: NotificationChannelName[] = [
   "sms",
   "whatsapp",
@@ -97,7 +111,9 @@ export const MAX_BODY = 1000;
 export const MAX_SUBJECT = 200;
 
 export function eventLabel(t: Translate, code: string) {
-  const key = EVENT_LABEL_KEYS[code as NotificationEventCode];
+  const key =
+    EVENT_LABEL_KEYS[code as NotificationEventCode] ??
+    MANAGED_EVENT_LABEL_KEYS[code];
   return key ? t(key) : code;
 }
 

@@ -48,6 +48,8 @@ export type ReservationLineInput = Schemas["TenantReservationLineInput"];
 export type ReservationStatus = Schemas["TenantReservationStatus"];
 export type ApprovalStatus = Schemas["TenantReservationApprovalStatus"];
 export type ConfirmationStatus = Schemas["TenantReservationConfirmationStatus"];
+/** The confirmation task of a booking (TEC-921). */
+export type ReservationConfirmation = Schemas["TenantReservationConfirmation"];
 export type PaymentStatus = Schemas["TenantReservationPaymentStatus"];
 export type ReservationSource = Schemas["TenantReservationSource"];
 export type ReservationEvent = Reservation["events"][number];
@@ -105,6 +107,7 @@ export type ListReservationsParams = {
   staff?: string;
   status?: string;
   approval_status?: string;
+  confirmation_status?: string;
   payment_status?: string;
   source?: string;
   customer_uuid?: string;

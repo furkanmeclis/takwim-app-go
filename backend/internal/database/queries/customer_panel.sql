@@ -316,6 +316,10 @@ DELETE FROM customer_access_links WHERE expires_at < sqlc.arg(before);
 SELECT r.organization_id, r.id, r.ends_at FROM reservations r
 WHERE r.organization_id = sqlc.arg(organization_id) AND r.uuid = sqlc.arg(uuid);
 
+-- name: GetReservationForVisitLinkByID :one
+SELECT r.organization_id, r.id, r.uuid, r.ends_at FROM reservations r
+WHERE r.organization_id = sqlc.arg(organization_id) AND r.id = sqlc.arg(id);
+
 -- name: CreateCustomerVisitLink :one
 INSERT INTO customer_visit_links (organization_id, reservation_id, token_hash, expires_at, created_at)
 VALUES (sqlc.arg(organization_id), sqlc.arg(reservation_id), sqlc.arg(token_hash), sqlc.arg(expires_at), sqlc.arg(created_at))

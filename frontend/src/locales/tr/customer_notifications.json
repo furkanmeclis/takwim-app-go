@@ -112,5 +112,6 @@
   "history.attempt": "Deneme",
   "history.sent_at": "Gönderim",
   "history.finished_at": "Sonuç",
-  "history.text": "Gönderilen metin"
+  "history.text": "Gönderilen metin",
+  "events.confirmation_request": "Randevu teyit isteği"
 }

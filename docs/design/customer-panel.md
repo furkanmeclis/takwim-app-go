@@ -94,7 +94,8 @@ References: OWASP Authentication and Authorization cheat sheets. Acceptance: A25
 ### Visit links
 
 - `takwim.link/panel/v#<token>` opens **one reservation** (`customer_visit_links`, organization-owned, own hash purpose). `POST visit` answers the panel detail of that visit with `actions.reschedule` refused (`sign_in_required`); `POST visit/cancel` cancels it under the same rules and guard as the panel. It opens no session and no other visit; a visit token is never a panel link or a Bearer token, and the other way round.
-- It works until a day after the visit ends. `IssueVisitLink(org, reservation)` creates one; the confirmation module (TEC-921 / TEC-922) puts it in its messages and adds the confirm action.
+- It works until a day after the visit ends. `IssueVisitLink(org, reservation)` creates one; the confirmation module puts it in its requests (`IssueVisitLinkFor`).
+- `POST visit/confirm` ("Geleceğim") and `POST visit/change-request` answer the business's confirmation request (TEC-921, confirmations.md); the signed-in panel has the same on `reservations/{uuid}/confirm` and `/change-request`. `actions.confirm` / `actions.request_change` say whether they are offered (`not_requested`, `answered`, `status`, `business_unavailable`) and until when; `confirmation` shows the status and deadline.
 
 ### Number change
 
@@ -125,8 +126,6 @@ References: OWASP Authentication and Authorization cheat sheets. Acceptance: A25
 ## Not in this issue
 
 - **TEC-972**: reassignment notices processed from Takwim management, and an extra ownership check for numbers not verified for a long time (a recycled number nobody reported).
-- **Confirm by visit link**: the confirmation module (TEC-921) adds the confirm action on the same visit link.
-
 - **Packages** ("Paketlerim"): there is no packages module yet (TEC-895).
 - **Payment amounts** from a ledger: TEC-912.
-- **Confirmation** (teyit): the confirmation module drives `confirmation_status`; the panel only shows it.
+- **Confirmation** (teyit): the confirmation module drives `confirmation_status` (confirmations.md); the panel shows it and offers the answers.

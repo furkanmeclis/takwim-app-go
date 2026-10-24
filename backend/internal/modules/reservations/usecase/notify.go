@@ -33,6 +33,29 @@ type Notifier interface {
 	ReservationChanged(ctx context.Context, q *db.Queries, c Change) error
 }
 
+// Notifiers runs several notifiers in order (customer notices, the
+// confirmation tasks); the first error stops and rolls the change back.
+func Notifiers(list ...Notifier) Notifier {
+	out := make(multiNotifier, 0, len(list))
+	for _, n := range list {
+		if n != nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+type multiNotifier []Notifier
+
+func (m multiNotifier) ReservationChanged(ctx context.Context, q *db.Queries, c Change) error {
+	for _, n := range m {
+		if err := n.ReservationChanged(ctx, q, c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SetNotifier registers the notifier of reservation changes.
 func (s *Service) SetNotifier(n Notifier) {
 	s.notifier = n

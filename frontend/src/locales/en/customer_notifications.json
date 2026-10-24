@@ -112,5 +112,6 @@
   "history.attempt": "Attempt",
   "history.sent_at": "Sent",
   "history.finished_at": "Result",
-  "history.text": "Text sent"
+  "history.text": "Text sent",
+  "events.confirmation_request": "Booking confirmation request"
 }

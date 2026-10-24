@@ -30,35 +30,37 @@ WHERE r.organization_id = $1
         WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id AND st.uuid = ANY($7::uuid[])))
   AND ($8::text[] IS NULL OR r.status = ANY($8::text[]))
   AND ($9::text[] IS NULL OR r.approval_status = ANY($9::text[]))
-  AND ($10::text[] IS NULL OR r.payment_status = ANY($10::text[]))
-  AND ($11::text[] IS NULL OR r.source = ANY($11::text[]))
-  AND ($12::timestamptz IS NULL OR r.starts_at >= $12)
-  AND ($13::timestamptz IS NULL OR r.starts_at < $13)
+  AND ($10::text[] IS NULL OR r.confirmation_status = ANY($10::text[]))
+  AND ($11::text[] IS NULL OR r.payment_status = ANY($11::text[]))
+  AND ($12::text[] IS NULL OR r.source = ANY($12::text[]))
+  AND ($13::timestamptz IS NULL OR r.starts_at >= $13)
+  AND ($14::timestamptz IS NULL OR r.starts_at < $14)
   AND (
-    $14::text IS NULL
-    OR r.number::text = $14
-    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || $14 || '%'
-    OR ($15::text IS NOT NULL AND c.phone_e164 LIKE '%' || $15 || '%')
-    OR (r.vehicle_plate <> '' AND replace(r.vehicle_plate, ' ', '') ILIKE '%' || replace($14, ' ', '') || '%')
+    $15::text IS NULL
+    OR r.number::text = $15
+    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || $15 || '%'
+    OR ($16::text IS NOT NULL AND c.phone_e164 LIKE '%' || $16 || '%')
+    OR (r.vehicle_plate <> '' AND replace(r.vehicle_plate, ' ', '') ILIKE '%' || replace($15, ' ', '') || '%')
   )
 `
 
 type CountReservationsParams struct {
-	OrganizationID   int64              `json:"organization_id"`
-	BranchIds        []int64            `json:"branch_ids"`
-	OwnUserID        pgtype.Int8        `json:"own_user_id"`
-	OwnStaffID       pgtype.Int8        `json:"own_staff_id"`
-	Branches         []uuid.UUID        `json:"branches"`
-	CustomerUuid     pgtype.UUID        `json:"customer_uuid"`
-	Staff            []uuid.UUID        `json:"staff"`
-	Statuses         []string           `json:"statuses"`
-	ApprovalStatuses []string           `json:"approval_statuses"`
-	PaymentStatuses  []string           `json:"payment_statuses"`
-	Sources          []string           `json:"sources"`
-	StartsFrom       pgtype.Timestamptz `json:"starts_from"`
-	StartsTo         pgtype.Timestamptz `json:"starts_to"`
-	Q                pgtype.Text        `json:"q"`
-	QDigits          pgtype.Text        `json:"q_digits"`
+	OrganizationID       int64              `json:"organization_id"`
+	BranchIds            []int64            `json:"branch_ids"`
+	OwnUserID            pgtype.Int8        `json:"own_user_id"`
+	OwnStaffID           pgtype.Int8        `json:"own_staff_id"`
+	Branches             []uuid.UUID        `json:"branches"`
+	CustomerUuid         pgtype.UUID        `json:"customer_uuid"`
+	Staff                []uuid.UUID        `json:"staff"`
+	Statuses             []string           `json:"statuses"`
+	ApprovalStatuses     []string           `json:"approval_statuses"`
+	ConfirmationStatuses []string           `json:"confirmation_statuses"`
+	PaymentStatuses      []string           `json:"payment_statuses"`
+	Sources              []string           `json:"sources"`
+	StartsFrom           pgtype.Timestamptz `json:"starts_from"`
+	StartsTo             pgtype.Timestamptz `json:"starts_to"`
+	Q                    pgtype.Text        `json:"q"`
+	QDigits              pgtype.Text        `json:"q_digits"`
 }
 
 func (q *Queries) CountReservations(ctx context.Context, arg CountReservationsParams) (int64, error) {
@@ -72,6 +74,7 @@ func (q *Queries) CountReservations(ctx context.Context, arg CountReservationsPa
 		arg.Staff,
 		arg.Statuses,
 		arg.ApprovalStatuses,
+		arg.ConfirmationStatuses,
 		arg.PaymentStatuses,
 		arg.Sources,
 		arg.StartsFrom,
@@ -1333,54 +1336,56 @@ WHERE r.organization_id = $1
         WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id AND st.uuid = ANY($7::uuid[])))
   AND ($8::text[] IS NULL OR r.status = ANY($8::text[]))
   AND ($9::text[] IS NULL OR r.approval_status = ANY($9::text[]))
-  AND ($10::text[] IS NULL OR r.payment_status = ANY($10::text[]))
-  AND ($11::text[] IS NULL OR r.source = ANY($11::text[]))
-  AND ($12::timestamptz IS NULL OR r.starts_at >= $12)
-  AND ($13::timestamptz IS NULL OR r.starts_at < $13)
+  AND ($10::text[] IS NULL OR r.confirmation_status = ANY($10::text[]))
+  AND ($11::text[] IS NULL OR r.payment_status = ANY($11::text[]))
+  AND ($12::text[] IS NULL OR r.source = ANY($12::text[]))
+  AND ($13::timestamptz IS NULL OR r.starts_at >= $13)
+  AND ($14::timestamptz IS NULL OR r.starts_at < $14)
   AND (
-    $14::text IS NULL
-    OR r.number::text = $14
-    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || $14 || '%'
-    OR ($15::text IS NOT NULL AND c.phone_e164 LIKE '%' || $15 || '%')
-    OR (r.vehicle_plate <> '' AND replace(r.vehicle_plate, ' ', '') ILIKE '%' || replace($14, ' ', '') || '%')
+    $15::text IS NULL
+    OR r.number::text = $15
+    OR (c.first_name || ' ' || c.last_name) ILIKE '%' || $15 || '%'
+    OR ($16::text IS NOT NULL AND c.phone_e164 LIKE '%' || $16 || '%')
+    OR (r.vehicle_plate <> '' AND replace(r.vehicle_plate, ' ', '') ILIKE '%' || replace($15, ' ', '') || '%')
   )
 ORDER BY
-  CASE WHEN $16::text = 'starts_at' AND NOT $17::boolean THEN r.starts_at END ASC,
-  CASE WHEN $16::text = 'starts_at' AND $17::boolean THEN r.starts_at END DESC,
-  CASE WHEN $16::text = 'number' AND NOT $17::boolean THEN r.number END ASC,
-  CASE WHEN $16::text = 'number' AND $17::boolean THEN r.number END DESC,
-  CASE WHEN $16::text = 'customer' AND NOT $17::boolean THEN lower(c.first_name || ' ' || c.last_name) END ASC,
-  CASE WHEN $16::text = 'customer' AND $17::boolean THEN lower(c.first_name || ' ' || c.last_name) END DESC,
-  CASE WHEN $16::text = 'status' AND NOT $17::boolean THEN r.status END ASC,
-  CASE WHEN $16::text = 'status' AND $17::boolean THEN r.status END DESC,
-  CASE WHEN $16::text = 'total_price' AND NOT $17::boolean THEN r.total_price END ASC,
-  CASE WHEN $16::text = 'total_price' AND $17::boolean THEN r.total_price END DESC,
-  CASE WHEN $16::text = 'created_at' AND NOT $17::boolean THEN r.created_at END ASC,
-  CASE WHEN $16::text = 'created_at' AND $17::boolean THEN r.created_at END DESC,
+  CASE WHEN $17::text = 'starts_at' AND NOT $18::boolean THEN r.starts_at END ASC,
+  CASE WHEN $17::text = 'starts_at' AND $18::boolean THEN r.starts_at END DESC,
+  CASE WHEN $17::text = 'number' AND NOT $18::boolean THEN r.number END ASC,
+  CASE WHEN $17::text = 'number' AND $18::boolean THEN r.number END DESC,
+  CASE WHEN $17::text = 'customer' AND NOT $18::boolean THEN lower(c.first_name || ' ' || c.last_name) END ASC,
+  CASE WHEN $17::text = 'customer' AND $18::boolean THEN lower(c.first_name || ' ' || c.last_name) END DESC,
+  CASE WHEN $17::text = 'status' AND NOT $18::boolean THEN r.status END ASC,
+  CASE WHEN $17::text = 'status' AND $18::boolean THEN r.status END DESC,
+  CASE WHEN $17::text = 'total_price' AND NOT $18::boolean THEN r.total_price END ASC,
+  CASE WHEN $17::text = 'total_price' AND $18::boolean THEN r.total_price END DESC,
+  CASE WHEN $17::text = 'created_at' AND NOT $18::boolean THEN r.created_at END ASC,
+  CASE WHEN $17::text = 'created_at' AND $18::boolean THEN r.created_at END DESC,
   r.starts_at DESC, r.id DESC
-LIMIT $19 OFFSET $18
+LIMIT $20 OFFSET $19
 `
 
 type ListReservationsParams struct {
-	OrganizationID   int64              `json:"organization_id"`
-	BranchIds        []int64            `json:"branch_ids"`
-	OwnUserID        pgtype.Int8        `json:"own_user_id"`
-	OwnStaffID       pgtype.Int8        `json:"own_staff_id"`
-	Branches         []uuid.UUID        `json:"branches"`
-	CustomerUuid     pgtype.UUID        `json:"customer_uuid"`
-	Staff            []uuid.UUID        `json:"staff"`
-	Statuses         []string           `json:"statuses"`
-	ApprovalStatuses []string           `json:"approval_statuses"`
-	PaymentStatuses  []string           `json:"payment_statuses"`
-	Sources          []string           `json:"sources"`
-	StartsFrom       pgtype.Timestamptz `json:"starts_from"`
-	StartsTo         pgtype.Timestamptz `json:"starts_to"`
-	Q                pgtype.Text        `json:"q"`
-	QDigits          pgtype.Text        `json:"q_digits"`
-	SortField        string             `json:"sort_field"`
-	SortDesc         bool               `json:"sort_desc"`
-	OffsetCount      int32              `json:"offset_count"`
-	LimitCount       int32              `json:"limit_count"`
+	OrganizationID       int64              `json:"organization_id"`
+	BranchIds            []int64            `json:"branch_ids"`
+	OwnUserID            pgtype.Int8        `json:"own_user_id"`
+	OwnStaffID           pgtype.Int8        `json:"own_staff_id"`
+	Branches             []uuid.UUID        `json:"branches"`
+	CustomerUuid         pgtype.UUID        `json:"customer_uuid"`
+	Staff                []uuid.UUID        `json:"staff"`
+	Statuses             []string           `json:"statuses"`
+	ApprovalStatuses     []string           `json:"approval_statuses"`
+	ConfirmationStatuses []string           `json:"confirmation_statuses"`
+	PaymentStatuses      []string           `json:"payment_statuses"`
+	Sources              []string           `json:"sources"`
+	StartsFrom           pgtype.Timestamptz `json:"starts_from"`
+	StartsTo             pgtype.Timestamptz `json:"starts_to"`
+	Q                    pgtype.Text        `json:"q"`
+	QDigits              pgtype.Text        `json:"q_digits"`
+	SortField            string             `json:"sort_field"`
+	SortDesc             bool               `json:"sort_desc"`
+	OffsetCount          int32              `json:"offset_count"`
+	LimitCount           int32              `json:"limit_count"`
 }
 
 type ListReservationsRow struct {
@@ -1437,6 +1442,7 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 		arg.Staff,
 		arg.Statuses,
 		arg.ApprovalStatuses,
+		arg.ConfirmationStatuses,
 		arg.PaymentStatuses,
 		arg.Sources,
 		arg.StartsFrom,

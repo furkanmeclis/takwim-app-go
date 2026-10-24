@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customernotify/channel"
+	customerpanelmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/mail"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sms"
 )
@@ -103,6 +104,29 @@ func PanelLinks(p PanelLinker) func(ctx context.Context, ch string, to channel.R
 			return "", nil
 		}
 		return p.PanelLink(ctx, to.Phone), nil
+	}
+}
+
+// VisitLinker issues a link to one reservation
+// (customerpanel.Service.IssueVisitLinkFor, TEC-910).
+type VisitLinker interface {
+	IssueVisitLinkFor(ctx context.Context, orgID, reservationID int64) (customerpanelmodel.VisitLink, error)
+}
+
+// VisitLinks is the link issuer of the confirmation request (TEC-921): the
+// text carries a link to the one visit (confirm, cancel, ask for a change)
+// on every channel. It opens nothing but that visit, so an e-mail may carry
+// it too.
+func VisitLinks(v VisitLinker) func(ctx context.Context, ch string, to channel.Recipient, orgID, reservationID int64) (string, error) {
+	return func(ctx context.Context, _ string, _ channel.Recipient, orgID, reservationID int64) (string, error) {
+		if v == nil || reservationID == 0 {
+			return "", nil
+		}
+		link, err := v.IssueVisitLinkFor(ctx, orgID, reservationID)
+		if err != nil {
+			return "", err
+		}
+		return link.URL, nil
 	}
 }
 

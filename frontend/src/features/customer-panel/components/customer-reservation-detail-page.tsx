@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarClock, Hourglass, XCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
 import { Loading } from "@/components/common/loading";
@@ -21,12 +21,15 @@ import { createColumn } from "@/components/tables";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { CustomerConfirmationCard } from "@/features/customer-panel/components/customer-confirmation-card";
 import { METHOD_KEYS } from "@/features/customer-panel/components/customer-reservation-columns";
 import { CustomerRescheduleDialog } from "@/features/customer-panel/components/customer-reschedule-dialog";
 import {
   useCancelReservation,
+  useConfirmReservation,
   useCustomerReservation,
   useReloadReservation,
+  useRequestReservationChange,
 } from "@/features/customer-panel/hooks/use-customer-panel";
 import {
   REASON_KEYS,
@@ -38,6 +41,7 @@ import type {
   CustomerReservation,
 } from "@/features/customer-panel/types";
 import {
+  ConfirmationChip,
   PaymentChip,
   ReservationStatusChip,
 } from "@/features/reservations/components/reservation-status-chips";
@@ -63,6 +67,8 @@ export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
   const query = useCustomerReservation(uuid);
   const reservation = query.data;
   const cancel = useCancelReservation(uuid);
+  const confirm = useConfirmReservation(uuid);
+  const change = useRequestReservationChange(uuid);
   const reload = useReloadReservation(uuid);
   const [confirming, setConfirming] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
@@ -87,6 +93,27 @@ export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
         if (isConflict(error)) void reload();
       },
     });
+
+  const onAnswerError = (error: unknown) => {
+    appToast.error(customerErrorMessage(t, error));
+    if (isConflict(error)) void reload();
+  };
+  const runConfirm = () =>
+    confirm.mutate(undefined, {
+      onSuccess: () => appToast.success(t("customer_panel.confirmation.done")),
+      onError: onAnswerError,
+    });
+  const runChange = (note: string) =>
+    change
+      .mutateAsync(note)
+      .then(() => {
+        appToast.success(t("customer_panel.confirmation.change_done"));
+        return true;
+      })
+      .catch((error: unknown) => {
+        onAnswerError(error);
+        return false;
+      });
 
   return (
     <EntityPage
@@ -142,7 +169,18 @@ export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
 
       {reservation ? (
         <div className="space-y-6">
-          <CustomerReservationBody reservation={reservation} />
+          <CustomerReservationBody
+            reservation={reservation}
+            confirmation={
+              <CustomerConfirmationCard
+                reservation={reservation}
+                confirming={confirm.isPending}
+                requesting={change.isPending}
+                onConfirm={runConfirm}
+                onRequestChange={runChange}
+              />
+            }
+          />
 
           <ConfirmDialog
             open={confirming}
@@ -176,8 +214,11 @@ export function CustomerReservationDetailPage({ uuid }: { uuid: string }) {
  */
 export function CustomerReservationBody({
   reservation,
+  confirmation,
 }: {
   reservation: CustomerReservation;
+  /** The confirmation request card, under the header (TEC-921). */
+  confirmation?: ReactNode;
 }) {
   const { t, locale } = useLocale();
   const zone = reservation.timezone;
@@ -200,10 +241,15 @@ export function CustomerReservationBody({
         badges={
           <>
             <ReservationStatusChip status={reservation.status} />
+            {reservation.confirmation ? (
+              <ConfirmationChip status={reservation.confirmation.status} />
+            ) : null}
             <PaymentChip status={reservation.payment_status} />
           </>
         }
       />
+
+      {confirmation}
 
       {reservation.status === "requested" ? (
         <Alert>

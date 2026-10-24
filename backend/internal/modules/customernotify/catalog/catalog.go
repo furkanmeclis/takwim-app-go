@@ -19,6 +19,11 @@ const (
 	ReservationRescheduled = "reservation.rescheduled"
 	ReservationCancelled   = "reservation.cancelled"
 	ReservationReminder    = "reservation.reminder"
+	// ConfirmationRequest asks the customer to confirm a booking (the
+	// Konfirmasyon add-on, TEC-921). Its channels and timing come from the
+	// confirmation settings, not from a notification rule, so it is not in
+	// All() (the notification settings page).
+	ConfirmationRequest = "confirmation.request"
 )
 
 // Limits of a rule.
@@ -119,13 +124,48 @@ var events = []Event{
 	},
 }
 
+// ConfirmationVars are the variables of the confirmation request: the
+// reservation variables, the deadline of the answer and the visit link
+// ({{link}} opens the one visit with "Geleceğim" / cancel / change).
+var ConfirmationVars = append(append([]string(nil), Vars...), "deadline")
+
+// managed are events whose rule lives in another module.
+var managed = []Event{
+	{
+		Code: ConfirmationRequest, Channels: []string{channel.SMS, channel.Email},
+		Text: "{{business_name}}: {{starts_at}} randevunuza geleceğinizi lütfen {{deadline}} saatine kadar teyit edin (no {{reference}}). " +
+			"Teyit, iptal veya değişiklik: {{link}}",
+		Email: Template{
+			Subject: "Randevunuzu teyit edin ({{business_name}})",
+			Body: "Merhaba {{customer_name}},\n\n{{starts_at}} randevunuza geleceğinizi lütfen {{deadline}} saatine kadar teyit edin.\n" +
+				"No: {{reference}}\nHizmet: {{services}}\nŞube: {{branch_name}}\n\n" +
+				"Geleceğim, iptal veya değişiklik isteği için: {{link}}\n\n" +
+				"Bu süreye kadar yanıt gelmezse randevunuz işletmenin kuralına göre iptal edilebilir." + signature,
+		},
+	},
+}
+
 var byCode = func() map[string]Event {
-	m := make(map[string]Event, len(events))
+	m := make(map[string]Event, len(events)+len(managed))
 	for _, e := range events {
+		m[e.Code] = e
+	}
+	for _, e := range managed {
 		m[e.Code] = e
 	}
 	return m
 }()
+
+// Managed reports whether an event's rule lives in another module (it is
+// sent through the engine but not edited on the notification settings).
+func Managed(code string) bool {
+	for _, e := range managed {
+		if e.Code == code {
+			return true
+		}
+	}
+	return false
+}
 
 // All returns the catalog in display order.
 func All() []Event {

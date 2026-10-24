@@ -152,6 +152,8 @@ export const routes = {
         `/t/${encodeURIComponent(slug)}/settings/integrations`,
       notifications: (slug: string) =>
         `/t/${encodeURIComponent(slug)}/settings/notifications`,
+      confirmation: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/settings/confirmation`,
       plan: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/plan`,
       roles: {
         root: (slug: string) => `/t/${encodeURIComponent(slug)}/settings/roles`,
