@@ -23,6 +23,9 @@ const (
 	FieldTransfers   = "transfers"
 	FieldIncome      = "income"
 	FieldExpenses    = "expenses"
+	// FieldPackages: the package sales section (TEC-983). A package is
+	// sold to a customer, not by the staff member who serves its sessions.
+	FieldPackages = "packages"
 )
 
 // Filter is what the report covers. Every part is optional; the dates
@@ -96,6 +99,40 @@ type Collections struct {
 	Count     int64       `json:"count"`
 }
 
+// PackageFigure is one package figure: packages (or sessions for Used),
+// sessions and their value.
+type PackageFigure struct {
+	Count    int64       `json:"count"`
+	Sessions int64       `json:"sessions"`
+	Amount   money.Money `json:"amount"`
+}
+
+// Packages is the package sales section of a period (TEC-983, §13). Sold
+// is the money taken for packages (a collection, never revenue); Used is
+// the value of the sessions consumed, which is already in the service
+// revenue of the visits; Refunded is the money paid back and the sessions
+// the refund closed; Expired is the rights lost on packages whose last
+// valid day is in the period and past. Sales and refunds count on the
+// selling branch, sessions on the branch of the visit.
+type Packages struct {
+	Sold     PackageFigure `json:"sold"`
+	Used     PackageFigure `json:"used"`
+	Refunded PackageFigure `json:"refunded"`
+	Expired  PackageFigure `json:"expired"`
+}
+
+// PackageBalance is the rights open today on valid packages (not bound to
+// the period, like the stock) of one currency: the free sessions and
+// their value, and the sessions held by upcoming visits.
+type PackageBalance struct {
+	Currency     string      `json:"currency"`
+	Packages     int64       `json:"packages"`
+	OpenSessions int64       `json:"open_sessions"`
+	OpenAmount   money.Money `json:"open_amount"`
+	HeldSessions int64       `json:"held_sessions"`
+	HeldAmount   money.Money `json:"held_amount"`
+}
+
 // Money are the figures of one currency. Revenue, collections, transfers
 // and staff payouts are separate records and never derived from one
 // another (A20).
@@ -117,6 +154,9 @@ type Money struct {
 	Income            money.Money `json:"income"`
 	Expenses          money.Money `json:"expenses"`
 	OperationalResult money.Money `json:"operational_result"`
+	// Packages is apart from the figures above: the package price is
+	// never added to revenue (A19, A20).
+	Packages Packages `json:"packages"`
 }
 
 // Stock is the stock of the branches: units moved in the period (by kind;
@@ -167,12 +207,15 @@ type Branch struct {
 	Branch *BranchRef `json:"branch"`
 	Figures
 	Stock Stock `json:"stock"`
+	// One entry per currency; at least the business currency.
+	PackageBalance []PackageBalance `json:"package_balance"`
 }
 
 // Totals are the figures of the whole range.
 type Totals struct {
 	Figures
-	Stock Stock `json:"stock"`
+	Stock          Stock            `json:"stock"`
+	PackageBalance []PackageBalance `json:"package_balance"`
 }
 
 // Scope says what the figures cover, so the screen can state it.

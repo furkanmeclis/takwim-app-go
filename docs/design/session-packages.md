@@ -64,6 +64,18 @@ The state of a sold package is computed: `refunded`, else `used_up` (every sessi
 
 `GET …/customer-packages/summary?date_from&date_to&branch` (default this month): per currency `sold` (packages and money taken), `used` (sessions consumed and their value), `refunded`, and today's `open` (unused rights of valid packages), `held`, `expired` (rights left on expired packages) and `used_up`.
 
+## Reports (TEC-983)
+
+`GET /v1/tenant/reports/summary` carries a package sales section in every money entry (totals, days, branches): `packages.sold` (packages, sessions, price by `sold_on`), `packages.used` (sessions consumed and their value by `consumed_on`), `packages.refunded` (packages, sessions the refund closed and money paid back by `refunded_on`) and `packages.expired` (sessions and value left on packages whose `expires_on` is in the range and already past, by `expires_on`). The totals and branch rows also have `package_balance`: today's valid packages, their free sessions and value, and the sessions held by visits (not bound to the range, like the stock).
+
+- The package price is never added to revenue or the operating result; the value of the sessions used is already service revenue through the sale lines, and the price stays in collections.
+- Sales, refunds and expiries count on the selling branch; a session counts on the visit's branch. There is no head office row for packages.
+- A staff filter leaves the section out (`omitted_for_staff` lists `packages`): a package is sold to a customer, not by the staff member who serves its sessions.
+- The CSV has the `package_*` columns in both sections; the branch section also has today's open rights.
+- The panel's **Raporlar** page shows the package cards and a "Paket satışları" tab (by day and by branch) when the business has the packages module.
+
+Queries: `ReportPackageSales`, `ReportPackageUsage`, `ReportPackageRefunds`, `ReportPackageExpiries`, `ReportPackageBalance` in `queries/reports.sql`; no migration.
+
 ## Permissions (migration 000068)
 
 | Slug                            | Granted to                                    |

@@ -22,10 +22,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { useBusinessToday, useCashAmount } from "@/features/cash/lib/format";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
 import {
   branchId,
   useReportBranchColumns,
   useReportDayColumns,
+  useReportPackageBranchColumns,
+  useReportPackageDayColumns,
   useReportStockColumns,
   useReportVisitColumns,
 } from "@/features/reports/components/report-columns";
@@ -39,6 +42,7 @@ import type {
   Report,
   ReportFilter,
   ReportMoney,
+  ReportPackageBalance,
   ReportSection,
 } from "@/features/reports/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -46,7 +50,7 @@ import { date as formatDate } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
-type Tab = "days" | "branches" | "visits" | "stock";
+type Tab = "days" | "branches" | "visits" | "stock" | "packages";
 
 const EMPTY: string[] = [];
 
@@ -130,6 +134,65 @@ function MoneyCards({
   );
 }
 
+/**
+ * Package sales of the period (TEC-983), apart from revenue: the package
+ * price is a collection, the sessions used are already service revenue.
+ */
+function PackageCards({
+  money: m,
+  balance,
+}: {
+  money: ReportMoney;
+  balance: ReportPackageBalance | undefined;
+}) {
+  const { t } = useLocale();
+  const money = useCashAmount();
+  const fmt = (value: string | undefined) => money(value, m.currency);
+  const p = m.packages;
+  return (
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <StatsCard
+        title={t("reports.packages.sold")}
+        value={fmt(p.sold.amount)}
+        hint={t("reports.packages.sold_hint", {
+          count: p.sold.count,
+          sessions: p.sold.sessions,
+        })}
+      />
+      <StatsCard
+        title={t("reports.packages.used")}
+        value={p.used.sessions}
+        hint={t("reports.packages.used_hint", { amount: fmt(p.used.amount) })}
+      />
+      <StatsCard
+        title={t("reports.packages.open")}
+        value={fmt(balance?.open_amount)}
+        hint={t("reports.packages.open_hint", {
+          sessions: balance?.open_sessions ?? 0,
+          packages: balance?.packages ?? 0,
+          held: balance?.held_sessions ?? 0,
+        })}
+      />
+      <StatsCard
+        title={t("reports.packages.refunded")}
+        value={fmt(p.refunded.amount)}
+        hint={t("reports.packages.refunded_hint", {
+          count: p.refunded.count,
+          sessions: p.refunded.sessions,
+        })}
+      />
+      <StatsCard
+        title={t("reports.packages.expired")}
+        value={fmt(p.expired.amount)}
+        hint={t("reports.packages.expired_hint", {
+          count: p.expired.count,
+          sessions: p.expired.sessions,
+        })}
+      />
+    </div>
+  );
+}
+
 function CountCards({ report }: { report: Report }) {
   const { t } = useLocale();
   const money = useCashAmount();
@@ -178,7 +241,13 @@ function CountCards({ report }: { report: Report }) {
 }
 
 /** What the figures cover, stated on the page (requirements §10). */
-function ScopeNote({ report }: { report: Report }) {
+function ScopeNote({
+  report,
+  packages,
+}: {
+  report: Report;
+  packages: boolean;
+}) {
   const { t, locale } = useLocale();
   const omitted = report.scope.omitted_for_staff;
   const lines = [
@@ -198,7 +267,7 @@ function ScopeNote({ report }: { report: Report }) {
         })
       : null,
     t("reports.scope.stock"),
-    t("reports.scope.packages"),
+    packages ? t("reports.scope.packages") : null,
   ].filter(Boolean);
   return (
     <Alert>
@@ -242,6 +311,14 @@ export function ReportsPage() {
   const visitColumns = useReportVisitColumns();
   const branchColumns = useReportBranchColumns(currency, omitted);
   const stockColumns = useReportStockColumns();
+  const packageDayColumns = useReportPackageDayColumns(currency);
+  const packageBranchColumns = useReportPackageBranchColumns(currency);
+  const hasModule = useNavModules();
+  // A staff filter leaves the package section out (a package is sold to a
+  // customer, not by a staff member); the scope note says so.
+  const packagesOn = hasModule("packages");
+  const showPackages = packagesOn && !omitted.includes("packages");
+  const activeTab: Tab = tab === "packages" && !showPackages ? "days" : tab;
 
   const download = (section: ReportSection) =>
     exportCsv.mutate({ filter, section });
@@ -314,7 +391,7 @@ export function ReportsPage() {
 
         {data ? (
           <>
-            <ScopeNote report={data} />
+            <ScopeNote report={data} packages={packagesOn} />
             {data.totals.money.map((m) => (
               <div key={m.currency} className="space-y-2">
                 {data.totals.money.length > 1 ? (
@@ -326,11 +403,35 @@ export function ReportsPage() {
               </div>
             ))}
             <CountCards report={data} />
+            {showPackages ? (
+              <EntitySectionCard title={t("reports.packages.title")}>
+                <p className="text-muted-foreground mb-4 text-sm">
+                  {t("reports.packages.description")}
+                </p>
+                <div className="space-y-4">
+                  {data.totals.money.map((m) => (
+                    <div key={m.currency} className="space-y-2">
+                      {data.totals.money.length > 1 ? (
+                        <h3 className="text-muted-foreground text-sm font-medium">
+                          {m.currency}
+                        </h3>
+                      ) : null}
+                      <PackageCards
+                        money={m}
+                        balance={data.totals.package_balance.find(
+                          (b) => b.currency === m.currency,
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </EntitySectionCard>
+            ) : null}
           </>
         ) : null}
 
         <Tabs
-          value={tab}
+          value={activeTab}
           onValueChange={(value) => setTab(value as Tab)}
           className="space-y-4"
         >
@@ -341,6 +442,11 @@ export function ReportsPage() {
             </TabsTrigger>
             <TabsTrigger value="visits">{t("reports.tabs.visits")}</TabsTrigger>
             <TabsTrigger value="stock">{t("reports.tabs.stock")}</TabsTrigger>
+            {showPackages ? (
+              <TabsTrigger value="packages">
+                {t("reports.tabs.packages")}
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
           <TabsContent value="days">
@@ -431,6 +537,48 @@ export function ReportsPage() {
               />
             </EntitySectionCard>
           </TabsContent>
+
+          {showPackages ? (
+            <TabsContent value="packages" className="space-y-4">
+              <EntitySectionCard
+                title={t("reports.packages.days_title")}
+                badge={data ? data.days.length : undefined}
+              >
+                <EntityTable
+                  columns={packageDayColumns}
+                  data={data?.days ?? []}
+                  getRowId={(row) => row.date}
+                  isLoading={query.isLoading}
+                  isError={query.isError}
+                  onRetry={() => void query.refetch()}
+                  emptyTitle={t("reports.empty_title")}
+                  emptyDescription={t("reports.empty_description")}
+                  manual={manual}
+                  features={tableFeatures("package-days")}
+                />
+              </EntitySectionCard>
+              <EntitySectionCard
+                title={t("reports.packages.branches_title")}
+                badge={data ? data.branches.length : undefined}
+              >
+                <p className="text-muted-foreground mb-4 text-sm">
+                  {t("reports.packages.branches_description")}
+                </p>
+                <EntityTable
+                  columns={packageBranchColumns}
+                  data={(data?.branches ?? []).filter((b) => b.branch !== null)}
+                  getRowId={branchId}
+                  isLoading={query.isLoading}
+                  isError={query.isError}
+                  onRetry={() => void query.refetch()}
+                  emptyTitle={t("reports.empty_title")}
+                  emptyDescription={t("reports.empty_description")}
+                  manual={manual}
+                  features={tableFeatures("package-branches")}
+                />
+              </EntitySectionCard>
+            </TabsContent>
+          ) : null}
         </Tabs>
       </div>
     </EntityPage>

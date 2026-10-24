@@ -4,6 +4,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reports/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/i18n"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
 // CSV sections of GET /v1/tenant/reports/export.
@@ -30,6 +31,18 @@ var moneyColumns = []string{
 	"revenue_service", "revenue_product", "collections_collected", "collections_refunded",
 	"collections_net", "transfers", "staff_share", "staff_payments", "business_share",
 	"product_cost", "income", "expenses", "operational_result",
+}
+
+// packageColumns are the package sales of the period (TEC-983), per
+// currency like the money; packageBalanceColumns the rights open today
+// (branch comparison only, like the stock).
+var packageColumns = []string{
+	"package_sold_count", "package_sold_sessions", "package_sold_amount", "package_used_sessions", "package_used_amount",
+	"package_refunded_count", "package_refunded_amount", "package_expired_sessions", "package_expired_amount",
+}
+
+var packageBalanceColumns = []string{
+	"package_open_packages", "package_open_sessions", "package_open_amount", "package_held_sessions",
 }
 
 var stockColumns = []string{
@@ -75,6 +88,31 @@ func moneyCells(row map[string]any, m model.Money) {
 	} {
 		row[k] = v
 	}
+	p := m.Packages
+	for k, v := range map[string]any{
+		"package_sold_count": p.Sold.Count, "package_sold_sessions": p.Sold.Sessions, "package_sold_amount": p.Sold.Amount.String(),
+		"package_used_sessions": p.Used.Sessions, "package_used_amount": p.Used.Amount.String(),
+		"package_refunded_count": p.Refunded.Count, "package_refunded_amount": p.Refunded.Amount.String(),
+		"package_expired_sessions": p.Expired.Sessions, "package_expired_amount": p.Expired.Amount.String(),
+	} {
+		row[k] = v
+	}
+}
+
+// balanceCells writes the open package rights of the row's currency.
+func balanceCells(row map[string]any, currency string, list []model.PackageBalance) {
+	pb := model.PackageBalance{OpenAmount: money.Zero()}
+	for _, b := range list {
+		if b.Currency == currency {
+			pb = b
+		}
+	}
+	for k, v := range map[string]any{
+		"package_open_packages": pb.Packages, "package_open_sessions": pb.OpenSessions,
+		"package_open_amount": pb.OpenAmount.String(), "package_held_sessions": pb.HeldSessions,
+	} {
+		row[k] = v
+	}
 }
 
 func stockCells(row map[string]any, s model.Stock) {
@@ -89,7 +127,7 @@ func stockCells(row map[string]any, s model.Stock) {
 
 // figureRows writes one row per currency; the counts (and stock) only on
 // the first one, so a column sum in a spreadsheet stays right.
-func figureRows(lead map[string]any, f model.Figures, stock *model.Stock) []map[string]any {
+func figureRows(lead map[string]any, f model.Figures, stock *model.Stock, balance []model.PackageBalance) []map[string]any {
 	var out []map[string]any
 	for i, m := range f.Money {
 		row := map[string]any{}
@@ -103,6 +141,9 @@ func figureRows(lead map[string]any, f model.Figures, stock *model.Stock) []map[
 			}
 		}
 		moneyCells(row, m)
+		if stock != nil {
+			balanceCells(row, m.Currency, balance)
+		}
 		out = append(out, row)
 	}
 	return out
@@ -113,24 +154,24 @@ func figureRows(lead map[string]any, f model.Figures, stock *model.Stock) []map[
 func Dataset(rep model.Report, section, locale string) ioengine.Dataset {
 	loc := i18n.Normalize(locale)
 	if section == SectionBranches {
-		ds := ioengine.Dataset{Resource: "tenant.reports", Columns: columns([]string{"branch_code", "branch"}, countColumns, stockColumns, moneyColumns)}
+		ds := ioengine.Dataset{Resource: "tenant.reports", Columns: columns([]string{"branch_code", "branch"}, countColumns, stockColumns, moneyColumns, packageColumns, packageBalanceColumns)}
 		for _, b := range rep.Branches {
 			lead := map[string]any{"branch": i18n.Translate(loc, "report.head_office"), "branch_code": ""}
 			if b.Branch != nil {
 				lead = map[string]any{"branch": b.Branch.Name, "branch_code": b.Branch.Code}
 			}
 			stock := b.Stock
-			ds.Rows = append(ds.Rows, figureRows(lead, b.Figures, &stock)...)
+			ds.Rows = append(ds.Rows, figureRows(lead, b.Figures, &stock, b.PackageBalance)...)
 		}
 		stock := rep.Totals.Stock
 		ds.Rows = append(ds.Rows, figureRows(map[string]any{"branch": i18n.Translate(loc, "report.total"), "branch_code": ""},
-			rep.Totals.Figures, &stock)...)
+			rep.Totals.Figures, &stock, rep.Totals.PackageBalance)...)
 		return ds
 	}
-	ds := ioengine.Dataset{Resource: "tenant.reports", Columns: columns([]string{"date"}, countColumns, moneyColumns)}
+	ds := ioengine.Dataset{Resource: "tenant.reports", Columns: columns([]string{"date"}, countColumns, moneyColumns, packageColumns)}
 	for _, d := range rep.Days {
-		ds.Rows = append(ds.Rows, figureRows(map[string]any{"date": d.Date}, d.Figures, nil)...)
+		ds.Rows = append(ds.Rows, figureRows(map[string]any{"date": d.Date}, d.Figures, nil, nil)...)
 	}
-	ds.Rows = append(ds.Rows, figureRows(map[string]any{"date": i18n.Translate(loc, "report.total")}, rep.Totals.Figures, nil)...)
+	ds.Rows = append(ds.Rows, figureRows(map[string]any{"date": i18n.Translate(loc, "report.total")}, rep.Totals.Figures, nil, nil)...)
 	return ds
 }

@@ -221,6 +221,42 @@ func TestReports(t *testing.T) {
 		currency, payout_date) VALUES ($1, $2, NULL, $3, $4, 'payout', 300, 'TRY', '2030-01-15')`, org.ID, ayseID, bankID, paid)
 	exec(`INSERT INTO stock_levels (organization_id, branch_id, product_id, on_hand, reserved) VALUES ($1, $2, $3, 3, 0)`, org.ID, yID, waxID)
 
+	// Packages (TEC-983): P1 sold at X on the 14th (5 x 500, one session
+	// used on the 14th at X, one held at Y); P2 sold at Y before the period,
+	// one session used, last valid day the 14th (2 sessions, 600 lost); P3
+	// sold and refunded at X on the 15th. None of it is revenue.
+	pkg := func(branch int64, sessions int, price, soldOn string, expiresOn any, refunded bool) int64 {
+		var id int64
+		var refundAmount, refundedOn, refundedAt any
+		status := "active"
+		if refunded {
+			status, refundAmount, refundedOn, refundedAt = "refunded", price, soldOn, at(15, 11)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO customer_packages (organization_id, customer_id, branch_id, name, service_name,
+			total_sessions, price, currency, sold_on, expires_on, status, refund_amount, refunded_on, refunded_at)
+			VALUES ($1, $2, $3, 'Paket', 'Kesim', $4, $5::numeric, 'TRY', $6::date, $7::date, $8, $9::numeric, $10::date, $11) RETURNING id`,
+			org.ID, customerID, branch, sessions, price, soldOn, expiresOn, status, refundAmount, refundedOn, refundedAt).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	session := func(packageID, reservationID int64, no int, amount string, consumedOn any) {
+		var id int64
+		if err := pool.QueryRow(ctx, `INSERT INTO package_sessions (organization_id, customer_package_id, reservation_id, line_index,
+			session_no, amount) VALUES ($1, $2, $3, 0, $4, $5::numeric) RETURNING id`, org.ID, packageID, reservationID, no, amount).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if consumedOn != nil {
+			exec(`UPDATE package_sessions SET status = 'consumed', consumed_at = NOW(), consumed_on = $2::date WHERE id = $1`, id, consumedOn)
+		}
+	}
+	p1 := pkg(xID, 5, "2500", "2030-01-14", nil, false)
+	session(p1, r1, 1, "500", "2030-01-14")
+	session(p1, r3, 2, "500", nil)
+	p2 := pkg(yID, 3, "900", "2030-01-10", "2030-01-14", false)
+	session(p2, r2, 1, "300", "2030-01-12")
+	pkg(xID, 2, "400", "2030-01-15", nil, true)
+
 	svc := usecase.New(q)
 	svc.SetClock(func() time.Time { return at(15, 12) })
 	all := orgctx.WithScope(ctx, orgctx.Scope{ID: org.ID, Timezone: "Europe/Istanbul", Currency: "TRY"})
@@ -289,6 +325,28 @@ func TestReports(t *testing.T) {
 		t.Errorf("head office = %+v", ho)
 	}
 
+	// Packages: apart from revenue (still 1400 above).
+	pk := tm.Packages
+	if pk.Sold.Count != 2 || pk.Sold.Sessions != 7 || pk.Sold.Amount.String() != "2900.00" ||
+		pk.Used.Sessions != 1 || pk.Used.Amount.String() != "500.00" ||
+		pk.Refunded.Count != 1 || pk.Refunded.Sessions != 2 || pk.Refunded.Amount.String() != "400.00" ||
+		pk.Expired.Count != 1 || pk.Expired.Sessions != 2 || pk.Expired.Amount.String() != "600.00" {
+		t.Errorf("packages = %+v", pk)
+	}
+	if pb := rep.Totals.PackageBalance; len(pb) != 1 || pb[0].Currency != "TRY" || pb[0].Packages != 1 || pb[0].OpenSessions != 3 ||
+		pb[0].OpenAmount.String() != "1500.00" || pb[0].HeldSessions != 1 || pb[0].HeldAmount.String() != "500.00" {
+		t.Errorf("package balance = %+v", pb)
+	}
+	if d0, d1 := rep.Days[0].Money[0].Packages, rep.Days[1].Money[0].Packages; d0.Sold.Amount.String() != "2500.00" ||
+		d0.Used.Sessions != 1 || d0.Expired.Sessions != 2 || d1.Sold.Amount.String() != "400.00" || d1.Refunded.Count != 1 {
+		t.Errorf("package days = %+v / %+v", d0, d1)
+	}
+	if x, y := byUUID[xUUID], byUUID[yUUID]; x.Money[0].Packages.Sold.Count != 2 || x.Money[0].Packages.Used.Sessions != 1 ||
+		x.PackageBalance[0].OpenSessions != 3 || y.Money[0].Packages.Sold.Count != 0 || y.Money[0].Packages.Expired.Amount.String() != "600.00" ||
+		y.PackageBalance[0].Packages != 0 {
+		t.Errorf("package branches = %+v / %+v", x.Money[0].Packages, y.Money[0].Packages)
+	}
+
 	// Branch filter: Y only (no head office row); head office only.
 	onlyY, err := svc.Summary(all, org.ID, model.Filter{DateFrom: period.DateFrom, DateTo: period.DateTo, Branches: []uuid.UUID{yUUID}})
 	if err != nil || len(onlyY.Branches) != 1 || onlyY.Totals.Money[0].Revenue.Net.String() != "500.00" ||
@@ -306,7 +364,8 @@ func TestReports(t *testing.T) {
 	if err != nil || ayse.Totals.Money[0].Revenue.Net.String() != "900.00" || ayse.Totals.Money[0].StaffShare.String() != "360.00" ||
 		ayse.Totals.Money[0].StaffPayments.String() != "300.00" || !ayse.Totals.Money[0].Collections.Collected.IsZero() ||
 		!ayse.Totals.Money[0].Expenses.IsZero() || ayse.Totals.Money[0].OperationalResult.String() != "540.00" ||
-		ayse.Totals.Reservations.Total != 1 || ayse.Totals.Confirmations.Confirmed != 1 || len(ayse.Scope.OmittedForStaff) != 4 {
+		ayse.Totals.Reservations.Total != 1 || ayse.Totals.Confirmations.Confirmed != 1 || len(ayse.Scope.OmittedForStaff) != 5 ||
+		ayse.Totals.Money[0].Packages.Sold.Count != 0 || ayse.Totals.PackageBalance[0].Packages != 0 {
 		t.Errorf("staff Ayşe = %+v %v", ayse, err)
 	}
 	// Unknown branch or staff: an empty report, nothing echoed.
@@ -318,7 +377,9 @@ func TestReports(t *testing.T) {
 	narrow := orgctx.WithScope(ctx, orgctx.Scope{ID: org.ID, Timezone: "Europe/Istanbul", Currency: "TRY", BranchIDs: []int64{yID}})
 	ny, err := svc.Summary(narrow, org.ID, period)
 	if err != nil || len(ny.Branches) != 1 || ny.Totals.Money[0].Revenue.Net.String() != "500.00" ||
-		!ny.Totals.Money[0].StaffPayments.IsZero() || !ny.Totals.Money[0].Transfers.IsZero() {
+		!ny.Totals.Money[0].StaffPayments.IsZero() || !ny.Totals.Money[0].Transfers.IsZero() ||
+		ny.Totals.Money[0].Packages.Sold.Count != 0 || ny.Totals.Money[0].Packages.Expired.Sessions != 2 ||
+		ny.Totals.PackageBalance[0].Packages != 0 {
 		t.Errorf("narrow = %+v %v", ny, err)
 	}
 	// Another business sees none of it; the range is checked.
@@ -341,10 +402,12 @@ func TestReports(t *testing.T) {
 
 	// CSV: one row per day plus the total, Turkish titles by default.
 	ds := usecase.Dataset(rep, usecase.SectionDays, "")
-	if len(ds.Rows) != 3 || ds.Rows[2]["revenue_net"] != "1400.00" || ds.Rows[0]["reservations_total"] != int64(2) {
+	if len(ds.Rows) != 3 || ds.Rows[2]["revenue_net"] != "1400.00" || ds.Rows[0]["reservations_total"] != int64(2) ||
+		ds.Rows[0]["package_sold_amount"] != "2500.00" || ds.Rows[2]["package_expired_sessions"] != int64(2) {
 		t.Errorf("csv days = %+v", ds.Rows)
 	}
-	if bs := usecase.Dataset(rep, usecase.SectionBranches, "en"); len(bs.Rows) != 4 || bs.Rows[2]["branch"] != "Head office (no branch)" {
+	if bs := usecase.Dataset(rep, usecase.SectionBranches, "en"); len(bs.Rows) != 4 || bs.Rows[2]["branch"] != "Head office (no branch)" ||
+		bs.Rows[3]["package_open_sessions"] != int64(3) || bs.Rows[3]["package_open_amount"] != "1500.00" {
 		t.Errorf("csv branches = %+v", bs.Rows)
 	}
 
@@ -385,7 +448,7 @@ func TestReports(t *testing.T) {
 	code, raw, header := call(owner, "/v1/tenant/reports/export?date_from=2030-01-14&date_to=2030-01-15&section=branches")
 	if code != http.StatusOK || !strings.HasPrefix(header.Get("Content-Type"), "text/csv") ||
 		!strings.Contains(header.Get("Content-Disposition"), "rapor_branches_20300114_20300115.csv") ||
-		!strings.Contains(raw, "Ciro (net)") || !strings.Contains(raw, "Yalı") {
+		!strings.Contains(raw, "Ciro (net)") || !strings.Contains(raw, "Yalı") || !strings.Contains(raw, "Paket satış tutarı") {
 		t.Errorf("owner export = %d %v %s", code, header, raw)
 	}
 	if code, raw, _ := call(owner, "/v1/tenant/reports/export?section=bogus"); code != http.StatusBadRequest {

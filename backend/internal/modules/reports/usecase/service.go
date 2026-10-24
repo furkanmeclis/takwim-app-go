@@ -68,6 +68,12 @@ type Queries interface {
 	ReportConfirmations(ctx context.Context, arg db.ReportConfirmationsParams) ([]db.ReportConfirmationsRow, error)
 	ReportStockMovements(ctx context.Context, arg db.ReportStockMovementsParams) ([]db.ReportStockMovementsRow, error)
 	ReportStockLevels(ctx context.Context, arg db.ReportStockLevelsParams) ([]db.ReportStockLevelsRow, error)
+	// Package sales (TEC-983).
+	ReportPackageSales(ctx context.Context, arg db.ReportPackageSalesParams) ([]db.ReportPackageSalesRow, error)
+	ReportPackageUsage(ctx context.Context, arg db.ReportPackageUsageParams) ([]db.ReportPackageUsageRow, error)
+	ReportPackageRefunds(ctx context.Context, arg db.ReportPackageRefundsParams) ([]db.ReportPackageRefundsRow, error)
+	ReportPackageExpiries(ctx context.Context, arg db.ReportPackageExpiriesParams) ([]db.ReportPackageExpiriesRow, error)
+	ReportPackageBalance(ctx context.Context, arg db.ReportPackageBalanceParams) ([]db.ReportPackageBalanceRow, error)
 	// Daily summary (TEC-926).
 	GetAgendaStaff(ctx context.Context, arg db.GetAgendaStaffParams) (db.GetAgendaStaffRow, error)
 	ListDailyStaffLines(ctx context.Context, arg db.ListDailyStaffLinesParams) ([]db.ListDailyStaffLinesRow, error)
@@ -96,6 +102,7 @@ func (s *Service) SetClock(now func() time.Time) {
 type args struct {
 	orgID      int64
 	from, to   pgtype.Date
+	today      pgtype.Date
 	scope      []int64
 	branches   []int64 // nil = no branch filter
 	headOffice bool    // business-wide records (only without a filter, or when asked)
@@ -146,7 +153,7 @@ func (s *Service) Summary(ctx context.Context, orgID int64, f model.Filter) (mod
 	if err != nil {
 		return model.Report{}, err
 	}
-	a := args{orgID: orgID, from: dateArg(df), to: dateArg(dt), scope: orgctx.BranchScope(ctx)}
+	a := args{orgID: orgID, from: dateArg(df), to: dateArg(dt), today: dateArg(s.today(ctx)), scope: orgctx.BranchScope(ctx)}
 	// Only the filter values of this business are echoed back.
 	pickedBranches, pickedStaff := []uuid.UUID{}, []uuid.UUID{}
 	allBranches := a.scope == nil
@@ -191,7 +198,9 @@ func (s *Service) Summary(ctx context.Context, orgID int64, f model.Filter) (mod
 		Days: []model.Day{}, Branches: []model.Branch{},
 	}
 	if a.staff != nil {
-		out.Scope.OmittedForStaff = []string{model.FieldCollections, model.FieldTransfers, model.FieldIncome, model.FieldExpenses}
+		out.Scope.OmittedForStaff = []string{
+			model.FieldCollections, model.FieldTransfers, model.FieldIncome, model.FieldExpenses, model.FieldPackages,
+		}
 	}
 
 	acc := newAccumulator(currency)
@@ -222,13 +231,16 @@ func (s *Service) Summary(ctx context.Context, orgID int64, f model.Filter) (mod
 			bucket = acc.newBucket()
 		}
 		out.Branches = append(out.Branches, model.Branch{
-			Branch:  &model.BranchRef{UUID: b.Uuid, Code: b.Code, Name: b.Name, IsActive: b.IsActive},
-			Figures: bucket.figures(acc.currency),
-			Stock:   bucket.stock,
+			Branch:         &model.BranchRef{UUID: b.Uuid, Code: b.Code, Name: b.Name, IsActive: b.IsActive},
+			Figures:        bucket.figures(acc.currency),
+			Stock:          bucket.stock,
+			PackageBalance: bucket.balance(acc.currency),
 		})
 	}
 	if bucket, ok := acc.branches[0]; ok {
-		out.Branches = append(out.Branches, model.Branch{Figures: bucket.figures(acc.currency), Stock: bucket.stock})
+		out.Branches = append(out.Branches, model.Branch{
+			Figures: bucket.figures(acc.currency), Stock: bucket.stock, PackageBalance: bucket.balance(acc.currency),
+		})
 	}
 
 	days := make([]string, 0, len(acc.days))
@@ -239,7 +251,9 @@ func (s *Service) Summary(ctx context.Context, orgID int64, f model.Filter) (mod
 	for _, d := range days {
 		out.Days = append(out.Days, model.Day{Date: d, Figures: acc.days[d].figures(acc.currency)})
 	}
-	out.Totals = model.Totals{Figures: acc.total.figures(acc.currency), Stock: acc.total.stock}
+	out.Totals = model.Totals{
+		Figures: acc.total.figures(acc.currency), Stock: acc.total.stock, PackageBalance: acc.total.balance(acc.currency),
+	}
 	return out, nil
 }
 
@@ -328,6 +342,10 @@ func (s *Service) collect(ctx context.Context, a args, acc *accumulator) error {
 				m.Expenses = m.Expenses.Add(amount(r.Expenses))
 			})
 		}
+		// A package is sold to a customer, not by a staff member.
+		if err := s.collectPackages(ctx, a, acc); err != nil {
+			return err
+		}
 	}
 
 	res, err := s.q.ReportReservations(ctx, db.ReportReservationsParams{
@@ -378,6 +396,79 @@ func (s *Service) collect(ctx context.Context, a args, acc *accumulator) error {
 	return nil
 }
 
+// collectPackages adds the package sales section (TEC-983): sales,
+// sessions used, refunds and expired rights per day and branch, and the
+// rights open today per branch.
+func (s *Service) collectPackages(ctx context.Context, a args, acc *accumulator) error {
+	day := func(d pgtype.Date) string { return d.Time.Format(dateLayout) }
+	sold, err := s.q.ReportPackageSales(ctx, db.ReportPackageSalesParams{
+		OrganizationID: a.orgID, DateFrom: a.from, DateTo: a.to, BranchIds: a.scope, FilterBranchIds: a.branches,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range sold {
+		acc.money(day(r.SoldOn), r.BranchID, r.Currency, func(m *model.Money) {
+			addPackageFigure(&m.Packages.Sold, r.SoldCount, r.SoldSessions, amount(r.SoldAmount))
+		})
+	}
+	used, err := s.q.ReportPackageUsage(ctx, db.ReportPackageUsageParams{
+		OrganizationID: a.orgID, DateFrom: a.from, DateTo: a.to, BranchIds: a.scope, FilterBranchIds: a.branches,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range used {
+		acc.money(day(r.ConsumedOn), r.BranchID, r.Currency, func(m *model.Money) {
+			addPackageFigure(&m.Packages.Used, r.UsedSessions, r.UsedSessions, amount(r.UsedAmount))
+		})
+	}
+	refunded, err := s.q.ReportPackageRefunds(ctx, db.ReportPackageRefundsParams{
+		OrganizationID: a.orgID, DateFrom: a.from, DateTo: a.to, BranchIds: a.scope, FilterBranchIds: a.branches,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range refunded {
+		acc.money(day(r.RefundedOn), r.BranchID, r.Currency, func(m *model.Money) {
+			addPackageFigure(&m.Packages.Refunded, r.RefundedCount, r.RefundedSessions, amount(r.RefundedAmount))
+		})
+	}
+	expired, err := s.q.ReportPackageExpiries(ctx, db.ReportPackageExpiriesParams{
+		OrganizationID: a.orgID, DateFrom: a.from, DateTo: a.to, Today: a.today, BranchIds: a.scope, FilterBranchIds: a.branches,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range expired {
+		acc.money(day(r.ExpiresOn), r.BranchID, r.Currency, func(m *model.Money) {
+			addPackageFigure(&m.Packages.Expired, r.ExpiredCount, r.ExpiredSessions, amount(r.ExpiredAmount))
+		})
+	}
+	balance, err := s.q.ReportPackageBalance(ctx, db.ReportPackageBalanceParams{
+		OrganizationID: a.orgID, Today: a.today, BranchIds: a.scope, FilterBranchIds: a.branches,
+	})
+	if err != nil {
+		return err
+	}
+	for _, r := range balance {
+		acc.packageBalance(r.BranchID, r.Currency, func(pb *model.PackageBalance) {
+			pb.Packages += r.PackageCount
+			pb.OpenSessions += r.OpenSessions
+			pb.OpenAmount = pb.OpenAmount.Add(amount(r.OpenAmount))
+			pb.HeldSessions += r.HeldSessions
+			pb.HeldAmount = pb.HeldAmount.Add(amount(r.HeldAmount))
+		})
+	}
+	return nil
+}
+
+func addPackageFigure(f *model.PackageFigure, count, sessions int64, value money.Money) {
+	f.Count += count
+	f.Sessions += sessions
+	f.Amount = f.Amount.Add(value)
+}
+
 // ------------------------------------------------------------ accumulator
 
 type bucket struct {
@@ -385,6 +476,7 @@ type bucket struct {
 	confirmations model.Confirmations
 	money         map[string]*model.Money
 	stock         model.Stock
+	packages      map[string]*model.PackageBalance
 }
 
 type accumulator struct {
@@ -401,7 +493,10 @@ func newAccumulator(currency string) *accumulator {
 }
 
 func (acc *accumulator) newBucket() *bucket {
-	return &bucket{money: map[string]*model.Money{}, stock: model.Stock{Value: money.Zero(), Currency: acc.currency}}
+	return &bucket{
+		money: map[string]*model.Money{}, stock: model.Stock{Value: money.Zero(), Currency: acc.currency},
+		packages: map[string]*model.PackageBalance{},
+	}
 }
 
 func (acc *accumulator) dayBucket(d string) *bucket {
@@ -450,12 +545,37 @@ func (acc *accumulator) stock(branch int64, fn func(*model.Stock)) {
 	fn(&acc.total.stock)
 }
 
-// figures finishes a bucket: the derived amounts and one money entry per
-// currency (the business currency first, always present).
-func (b *bucket) figures(currency string) model.Figures {
-	b.moneyOf(currency)
-	keys := make([]string, 0, len(b.money))
-	for k := range b.money {
+// packageBalance is per branch and total only (not per day).
+func (acc *accumulator) packageBalance(branch int64, currency string, fn func(*model.PackageBalance)) {
+	fn(acc.branchBucket(branch).balanceOf(currency))
+	fn(acc.total.balanceOf(currency))
+}
+
+func (b *bucket) balanceOf(currency string) *model.PackageBalance {
+	pb := b.packages[currency]
+	if pb == nil {
+		pb = &model.PackageBalance{Currency: currency, OpenAmount: money.Zero(), HeldAmount: money.Zero()}
+		b.packages[currency] = pb
+	}
+	return pb
+}
+
+// balance lists the open package rights per currency, the business
+// currency first and always present.
+func (b *bucket) balance(currency string) []model.PackageBalance {
+	b.balanceOf(currency)
+	keys := currencyKeys(b.packages, currency)
+	out := make([]model.PackageBalance, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, *b.packages[k])
+	}
+	return out
+}
+
+// currencyKeys sorts the currencies of a map, the business currency first.
+func currencyKeys[T any](m map[string]T, currency string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool {
@@ -464,6 +584,14 @@ func (b *bucket) figures(currency string) model.Figures {
 		}
 		return keys[i] < keys[j]
 	})
+	return keys
+}
+
+// figures finishes a bucket: the derived amounts and one money entry per
+// currency (the business currency first, always present).
+func (b *bucket) figures(currency string) model.Figures {
+	b.moneyOf(currency)
+	keys := currencyKeys(b.money, currency)
 	out := model.Figures{Reservations: b.reservations, Confirmations: b.confirmations, Money: make([]model.Money, 0, len(keys))}
 	for _, k := range keys {
 		m := *b.money[k]
@@ -477,12 +605,14 @@ func (b *bucket) figures(currency string) model.Figures {
 
 func zeroMoney(currency string) *model.Money {
 	z := money.Zero()
+	pf := model.PackageFigure{Amount: z}
 	return &model.Money{
 		Currency:    currency,
 		Revenue:     model.Revenue{Gross: z, Discount: z, Reversed: z, Net: z, ServiceNet: z, ProductNet: z},
 		Collections: model.Collections{Collected: z, Refunded: z, Reversed: z, Net: z},
 		Transfers:   z, StaffShare: z, StaffPayments: z, BusinessShare: z, ProductCost: z,
 		Income: z, Expenses: z, OperationalResult: z,
+		Packages: model.Packages{Sold: pf, Used: pf, Refunded: pf, Expired: pf},
 	}
 }
 

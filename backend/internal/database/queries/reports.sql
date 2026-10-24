@@ -219,6 +219,112 @@ WHERE st.organization_id = sqlc.arg(organization_id)
 GROUP BY st.branch_id
 ORDER BY st.branch_id;
 
+-- name: ReportPackageSales :many
+-- TEC-983: packages sold per day (sold_on), selling branch and currency.
+-- The price is money taken (a collection), never revenue: the revenue of
+-- a package comes from its sessions on completed visits (sale lines).
+SELECT cp.sold_on, cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS sold_count,
+    COALESCE(SUM(cp.total_sessions), 0)::bigint AS sold_sessions,
+    COALESCE(SUM(cp.price), 0)::numeric(14, 2) AS sold_amount
+FROM customer_packages cp
+WHERE cp.organization_id = sqlc.arg(organization_id)
+  AND cp.sold_on BETWEEN sqlc.arg(date_from)::date AND sqlc.arg(date_to)::date
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
+GROUP BY cp.sold_on, cp.branch_id, cp.currency
+ORDER BY cp.sold_on, cp.branch_id, cp.currency;
+
+-- name: ReportPackageUsage :many
+-- TEC-983: sessions consumed per day (consumed_on), visit branch and
+-- currency; their value is already in the service revenue of the visits.
+SELECT ps.consumed_on::date AS consumed_on, r.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS used_sessions,
+    COALESCE(SUM(ps.amount), 0)::numeric(14, 2) AS used_amount
+FROM package_sessions ps
+JOIN customer_packages cp ON cp.organization_id = ps.organization_id AND cp.id = ps.customer_package_id
+JOIN reservations r ON r.organization_id = ps.organization_id AND r.id = ps.reservation_id
+WHERE ps.organization_id = sqlc.arg(organization_id) AND ps.status = 'consumed'
+  AND ps.consumed_on BETWEEN sqlc.arg(date_from)::date AND sqlc.arg(date_to)::date
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
+GROUP BY ps.consumed_on, r.branch_id, cp.currency
+ORDER BY ps.consumed_on, r.branch_id, cp.currency;
+
+-- name: ReportPackageRefunds :many
+-- TEC-983: packages refunded per day (refunded_on), selling branch and
+-- currency: the money paid back and the sessions the refund closed.
+SELECT cp.refunded_on::date AS refunded_on, cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS refunded_count,
+    COALESCE(SUM(cp.total_sessions - COALESCE(u.consumed, 0)), 0)::bigint AS refunded_sessions,
+    COALESCE(SUM(cp.refund_amount), 0)::numeric(14, 2) AS refunded_amount
+FROM customer_packages cp
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) AS consumed FROM package_sessions ps
+    WHERE ps.organization_id = cp.organization_id AND ps.customer_package_id = cp.id AND ps.status = 'consumed'
+) u ON TRUE
+WHERE cp.organization_id = sqlc.arg(organization_id) AND cp.status = 'refunded'
+  AND cp.refunded_on BETWEEN sqlc.arg(date_from)::date AND sqlc.arg(date_to)::date
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
+GROUP BY cp.refunded_on, cp.branch_id, cp.currency
+ORDER BY cp.refunded_on, cp.branch_id, cp.currency;
+
+-- name: ReportPackageExpiries :many
+-- TEC-983: rights lost per day: packages (not refunded, not used up) whose
+-- last valid day (expires_on) is in the range and already past, with the
+-- sessions and value left on them. Held sessions are left out (their
+-- visit consumes or releases them).
+SELECT cp.expires_on::date AS expires_on, cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS expired_count,
+    COALESCE(SUM(cp.total_sessions - COALESCE(u.consumed, 0) - COALESCE(u.held, 0)), 0)::bigint AS expired_sessions,
+    COALESCE(SUM(cp.price - COALESCE(u.consumed_amount, 0) - COALESCE(u.held_amount, 0)), 0)::numeric(14, 2) AS expired_amount
+FROM customer_packages cp
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) FILTER (WHERE ps.status = 'consumed') AS consumed,
+           COUNT(*) FILTER (WHERE ps.status = 'held') AS held,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'consumed') AS consumed_amount,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'held') AS held_amount
+    FROM package_sessions ps
+    WHERE ps.organization_id = cp.organization_id AND ps.customer_package_id = cp.id
+) u ON TRUE
+WHERE cp.organization_id = sqlc.arg(organization_id) AND cp.status = 'active'
+  AND cp.expires_on IS NOT NULL
+  AND cp.expires_on BETWEEN sqlc.arg(date_from)::date AND sqlc.arg(date_to)::date
+  AND cp.expires_on < sqlc.arg(today)::date
+  AND COALESCE(u.consumed, 0) < cp.total_sessions
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
+GROUP BY cp.expires_on, cp.branch_id, cp.currency
+ORDER BY cp.expires_on, cp.branch_id, cp.currency;
+
+-- name: ReportPackageBalance :many
+-- TEC-983: the rights open today per selling branch and currency: valid
+-- packages (not refunded, not used up, not expired) with the sessions and
+-- value still free and those held by upcoming visits.
+SELECT cp.branch_id, cp.currency::text AS currency,
+    COUNT(*)::bigint AS package_count,
+    COALESCE(SUM(cp.total_sessions - COALESCE(u.consumed, 0) - COALESCE(u.held, 0)), 0)::bigint AS open_sessions,
+    COALESCE(SUM(cp.price - COALESCE(u.consumed_amount, 0) - COALESCE(u.held_amount, 0)), 0)::numeric(14, 2) AS open_amount,
+    COALESCE(SUM(COALESCE(u.held, 0)), 0)::bigint AS held_sessions,
+    COALESCE(SUM(COALESCE(u.held_amount, 0)), 0)::numeric(14, 2) AS held_amount
+FROM customer_packages cp
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) FILTER (WHERE ps.status = 'consumed') AS consumed,
+           COUNT(*) FILTER (WHERE ps.status = 'held') AS held,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'consumed') AS consumed_amount,
+           SUM(ps.amount) FILTER (WHERE ps.status = 'held') AS held_amount
+    FROM package_sessions ps
+    WHERE ps.organization_id = cp.organization_id AND ps.customer_package_id = cp.id
+) u ON TRUE
+WHERE cp.organization_id = sqlc.arg(organization_id) AND cp.status = 'active'
+  AND (cp.expires_on IS NULL OR cp.expires_on >= sqlc.arg(today)::date)
+  AND COALESCE(u.consumed, 0) < cp.total_sessions
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR cp.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
+GROUP BY cp.branch_id, cp.currency
+ORDER BY cp.branch_id, cp.currency;
+
 -- name: ListDailyStaffLines :many
 -- TEC-926 daily summary: the lines a staff member serves on one business
 -- day (branch time zone, else the business's) in the caller's branch

@@ -6879,6 +6879,15 @@ export interface paths {
          *     days. Needs the reports module and tenant.finance.read; the caller's
          *     branch scope (and X-Branch) limits every figure, and a member
          *     without every branch never sees head office records.
+         *
+         *     Package sales (TEC-983) are a separate section of each money entry
+         *     (`packages`): packages sold (the price is a collection, never
+         *     revenue), sessions used (their value is already service revenue of
+         *     the visits), refunds and rights lost on packages whose last valid
+         *     day is in the range and past. Sales, refunds and expiries count on
+         *     the selling branch, sessions on the visit's branch. The rights open
+         *     today (`package_balance`) are on the totals and branch rows, not
+         *     bound to the range. A staff filter leaves the package section out.
          */
         get: operations["getTenantReportSummary"];
         put?: never;
@@ -6902,7 +6911,9 @@ export interface paths {
          *     day and a total row (section=days, default) or one row per branch,
          *     the head office row and a total row (section=branches). Amounts use
          *     a dot as the decimal separator; with several currencies there is one
-         *     row per currency and the counts sit on the first one. Column titles
+         *     row per currency and the counts sit on the first one. Both sections
+         *     carry the package sales columns (package_*); the branch section also
+         *     the rights open today. Column titles
          *     follow locale (tr default). Needs tenant.report.export as well; the
          *     export is written to the activity log.
          */
@@ -12180,6 +12191,47 @@ export interface components {
             /** @description Expenses from the cash book (staff payouts excluded) */
             expenses: string;
             operational_result: string;
+            packages: components["schemas"]["ReportPackages"];
+        };
+        ReportPackageFigure: {
+            /**
+             * Format: int64
+             * @description Packages (sessions for used)
+             */
+            count: number;
+            /** Format: int64 */
+            sessions: number;
+            amount: string;
+        };
+        /**
+         * @description Package sales of the range, apart from revenue (A19, A20). sold: the
+         *     packages sold and the money taken; used: the sessions consumed on
+         *     completed visits and their value (already in revenue.service_net);
+         *     refunded: the money paid back and the sessions the refund closed;
+         *     expired: the sessions and value left on packages whose last valid
+         *     day is in the range and past.
+         */
+        ReportPackages: {
+            sold: components["schemas"]["ReportPackageFigure"];
+            used: components["schemas"]["ReportPackageFigure"];
+            refunded: components["schemas"]["ReportPackageFigure"];
+            expired: components["schemas"]["ReportPackageFigure"];
+        };
+        /**
+         * @description The rights open today on valid packages (not refunded, not used up,
+         *     not expired) of one currency, by selling branch: the free sessions
+         *     and their value, and the sessions held by upcoming visits.
+         */
+        ReportPackageBalance: {
+            currency: string;
+            /** Format: int64 */
+            packages: number;
+            /** Format: int64 */
+            open_sessions: number;
+            open_amount: string;
+            /** Format: int64 */
+            held_sessions: number;
+            held_amount: string;
         };
         /**
          * @description Units moved in the range (sold and transferred out as positive
@@ -12234,6 +12286,8 @@ export interface components {
                 is_active: boolean;
             } | null;
             stock: components["schemas"]["ReportStock"];
+            /** @description One entry per currency; the business currency first and always present. */
+            package_balance: components["schemas"]["ReportPackageBalance"][];
         };
         Report: {
             /** Format: date */
@@ -12250,10 +12304,12 @@ export interface components {
                 /** @description The staff filter as applied (only staff of this business) */
                 staff: string[];
                 /** @description Money figures left out (zero) because a staff filter cannot narrow them */
-                omitted_for_staff: ("collections" | "transfers" | "income" | "expenses")[];
+                omitted_for_staff: ("collections" | "transfers" | "income" | "expenses" | "packages")[];
             };
             totals: components["schemas"]["ReportFigures"] & {
                 stock: components["schemas"]["ReportStock"];
+                /** @description One entry per currency; the business currency first and always present. */
+                package_balance: components["schemas"]["ReportPackageBalance"][];
             };
             /** @description Days of the range with any record, oldest first */
             days: components["schemas"]["ReportDay"][];
