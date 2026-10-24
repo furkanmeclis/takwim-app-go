@@ -661,3 +661,71 @@ func TestGroupSessions(t *testing.T) {
 		t.Fatal("check of the running session failed")
 	}
 }
+
+// TestScheduledGroupSessions (TEC-970): with a class timetable a group
+// line is offered only at its sessions (off the step grid too), with the
+// session's seats, trainer and area; the trainer needs no shift but must
+// be free; a day without a session is no_class.
+func TestScheduledGroupSessions(t *testing.T) {
+	req := func(planned map[int64]Planned, sessions ...Session) Request {
+		r := base()
+		r.Step = time.Hour
+		r.Lines[0] = Line{
+			Key: "pilates", Duration: time.Hour, StaffMode: StaffOptional, Staff: []int64{1, 2},
+			ResourceKinds: []string{"area"}, Seats: 3, Scheduled: true, Planned: planned,
+		}
+		// Trainer 2 has no shift: the timetable is the commitment.
+		r.Staff = append(r.Staff, Staff{ID: 2})
+		r.Resources = []Resource{
+			{ID: 7, Kind: "area", Open: r.Open},
+			{ID: 8, Kind: "area", Open: r.Open},
+		}
+		r.Sessions = sessions
+		return r
+	}
+	planned := map[int64]Planned{
+		clock("10:15").UnixNano(): {Seats: 5, StaffID: 2, ResourceIDs: []int64{8}},
+		clock("17:00").UnixNano(): {Seats: 3},
+	}
+	d := only(t, req(planned))
+	if got := starts(d); got != "10:15 17:00" {
+		t.Fatalf("starts = %q, want the two sessions", got)
+	}
+	fixed := d.Slots[0].Lines[0]
+	if fixed.StaffID != 2 || !reflect.DeepEqual(fixed.ResourceIDs, []int64{8}) || fixed.SeatsLeft != 5 || fixed.SessionSeats != 5 {
+		t.Fatalf("fixed session = %+v", fixed)
+	}
+	if open := d.Slots[1].Lines[0]; open.StaffID != 1 || !reflect.DeepEqual(open.ResourceIDs, []int64{7}) || open.SessionSeats != 3 {
+		t.Fatalf("open session = %+v", open)
+	}
+	// A running session is joined while its own seats last.
+	running := Session{Key: "pilates", Start: clock("10:15"), StaffID: 2, ResourceIDs: []int64{8}, Taken: 4}
+	if left := only(t, req(planned, running)).Slots[0].Lines[0].SeatsLeft; left != 1 {
+		t.Fatalf("seats left = %d, want 1", left)
+	}
+	running.Taken = 5
+	if got := starts(only(t, req(planned, running))); got != "17:00" {
+		t.Fatalf("starts with a full session = %q", got)
+	}
+	// A busy trainer or area keeps an empty session closed.
+	busy := req(planned)
+	busy.Staff[1].Busy = []Interval{iv("10:00", "10:30")}
+	if got := starts(only(t, busy)); got != "17:00" {
+		t.Fatalf("starts with the trainer busy = %q", got)
+	}
+	busy = req(planned)
+	busy.Resources[1].Busy = []Interval{iv("11:00", "12:00")}
+	if got := starts(only(t, busy)); got != "17:00" {
+		t.Fatalf("starts with the area busy = %q", got)
+	}
+	// Check accepts only the sessions; a day without one is no_class.
+	if _, ok := Check(req(planned), clock("11:00")); ok {
+		t.Fatal("check outside the timetable passed")
+	}
+	if _, ok := Check(req(planned), clock("10:15")); !ok {
+		t.Fatal("check of a session failed")
+	}
+	if d := only(t, req(map[int64]Planned{})); d.Status != DayNoClass {
+		t.Fatalf("day without sessions = %s, want no_class", d.Status)
+	}
+}

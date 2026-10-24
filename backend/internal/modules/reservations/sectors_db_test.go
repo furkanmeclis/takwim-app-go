@@ -62,7 +62,7 @@ func (f *fixture) newCustomer(t *testing.T, orgID int64, name string) uuid.UUID 
 	return id
 }
 
-// TestGymTemplate (TEC-904, A02 gym, A03 group seats): a new gym gets a
+// TestGymTemplate (TEC-904, TEC-970, A02 gym, A03 group seats): a new gym gets a
 // group class with a studio. Every booking of one start joins the same
 // session on its trainer and studio until the seats run out; the trainer
 // is busy for individual sessions meanwhile; a cancelled booking frees its
@@ -97,6 +97,13 @@ func TestGymTemplate(t *testing.T) {
 	}
 	f.exec(`INSERT INTO service_branches (organization_id, service_id, branch_id) VALUES ($1, $2, $3)`, g.org.ID, personalID, g.branchID)
 	f.exec(`INSERT INTO service_staff (organization_id, service_id, staff_id) VALUES ($1, $2, $3)`, g.org.ID, personalID, trainerID)
+	// TEC-970: the class runs on Mondays at 10, 14, 16 and 17 with the
+	// trainer in the studio; no other start is offered.
+	for _, start := range []string{"10:00", "14:00", "16:00", "17:00"} {
+		f.exec(`INSERT INTO class_schedules (organization_id, branch_id, service_id, weekday, start_time, staff_id, resource_id, valid_from)
+			SELECT $1, $2, $3, 'mon', $4, $5, r.id, '2029-01-01' FROM resources r WHERE r.organization_id = $1 AND r.name = 'Stüdyo'`,
+			g.org.ID, g.branchID, classID, start, trainerID)
+	}
 
 	book := func(svc *usecase.Service, start int, party int, services ...uuid.UUID) (model.Reservation, error) {
 		s := at(start, 0)
@@ -132,6 +139,17 @@ func TestGymTemplate(t *testing.T) {
 		return 0, false
 	}
 
+	// Outside the timetable a group class cannot be booked.
+	if _, ok := seatsAt(11); ok {
+		t.Fatal("11:00 is offered without a session")
+	}
+	if _, err := book(f.svc, 11, 0, class); !errors.Is(err, availabilityusecase.ErrSlotTaken) {
+		t.Fatalf("booking outside the timetable err = %v", err)
+	}
+	// An empty session already holds its trainer.
+	if _, err := book(f.svc, 16, 0, personal); !errors.Is(err, availabilityusecase.ErrSlotTaken) {
+		t.Fatalf("individual session over an empty class err = %v", err)
+	}
 	first, err := book(f.svc, 10, 0, class)
 	if err != nil {
 		t.Fatal(err)

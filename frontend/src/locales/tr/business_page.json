@@ -174,5 +174,6 @@
   "seats.left_short": "{{count}} yer",
   "service.group": "Grup dersi · {{count}} kişi",
   "service.group_alone": "Grup dersi tek başına rezerve edilir; başka bir hizmet seçerseniz ders seçimden çıkar.",
-  "errors.vehicle": "Araç bilgilerini kontrol edin."
+  "errors.vehicle": "Araç bilgilerini kontrol edin.",
+  "datetime.no_class": "Bu gün ders yok"
 }

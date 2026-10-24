@@ -114,6 +114,10 @@ const (
 	PermTenantSessionPackagesRead  = "tenant.session_packages.read"
 	PermTenantSessionPackagesWrite = "tenant.session_packages.write"
 	PermTenantSessionPackagesSell  = "tenant.session_packages.sell"
+	// Class timetable (TEC-970): read the timetable, the sessions and their
+	// bookings; manage classes and single sessions.
+	PermTenantClassesRead  = "tenant.classes.read"
+	PermTenantClassesWrite = "tenant.classes.write"
 	// Takwim modules (TEC-889). A ".own" slug limits the action to the
 	// member's own records; the full slug covers every record inside the
 	// member's branch scope (orgctx.Scope.Reach).

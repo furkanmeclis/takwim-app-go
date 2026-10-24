@@ -152,7 +152,9 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	orgSvc := orgusecase.New(orgrepository.NewPostgres(pool, q), branchusecase.NewOrganizationHooks(nil))
 	alice, bob := newUser("alice"), newUser("bob")
 	newOrg := func(name string, owner db.User, marker string) *isoOrg {
-		org, err := orgSvc.CreateOrganization(ctx, orgmodel.CreateOrganizationInput{Name: name + " " + suffix, OwnerUserID: owner.ID})
+		// A gym: every module but vehicles, the class timetable included
+		// (TEC-970).
+		org, err := orgSvc.CreateOrganization(ctx, orgmodel.CreateOrganizationInput{Name: name + " " + suffix, OwnerUserID: owner.ID, Sector: "gym"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -419,6 +421,28 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"customer_package_uuid": ids["customerPackage"], "line_index": 0,
 		}), http.StatusOK, "apply package session")
 		ids["packageSession"] = applied.data.(map[string]any)["package_sessions"].([]any)[0].(map[string]any)["uuid"].(string)
+		// Class timetable (TEC-970): a group class taught by the staff member
+		// in the chair, on Tuesdays in A and Wednesdays in B (so A's class
+		// has no session on B's date).
+		ids["classService"] = str(must(call(o, http.MethodPost, "/v1/tenant/services", map[string]any{
+			"name": m + " Ders", "duration_minutes": 60, "price": "100.00", "branch_uuids": []string{ids["branch"]},
+			"group_capacity": 10, "resource_kinds": []string{"chair"},
+		}), http.StatusCreated, "create class service"), "uuid")
+		must(call(o, http.MethodPut, "/v1/tenant/services/"+ids["classService"]+"/staff", map[string]any{
+			"staff": []map[string]any{{"staff_uuid": ids["staff"]}},
+		}), http.StatusOK, "class service staff")
+		weekday, date := "tue", "2030-01-08"
+		if o != orgA {
+			weekday, date = "wed", "2030-01-09"
+		}
+		ids["class"] = str(must(call(o, http.MethodPost, "/v1/tenant/classes", map[string]any{
+			"branch_uuid": ids["branch"], "service_uuid": ids["classService"], "weekday": weekday, "start_time": "10:00",
+			"staff_uuid": ids["staff"], "resource_uuid": ids["resource"], "valid_from": "2030-01-01", "note": m,
+		}), http.StatusCreated, "create class"), "uuid")
+		ids["classDate"] = date
+		must(call(o, http.MethodPatch, "/v1/tenant/classes/"+ids["class"]+"/sessions/"+date, map[string]any{
+			"cancelled": false, "capacity": 8, "reason": m,
+		}), http.StatusOK, "class session seats")
 		// The stock sale above is a product sale line with its ledger debit.
 		saleLines := must(call(o, http.MethodGet, "/v1/tenant/sales/lines", nil), http.StatusOK, "sale lines")
 		ids["saleLine"] = saleLines.data.(map[string]any)["items"].([]any)[0].(map[string]any)["uuid"].(string)
@@ -474,7 +498,7 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	// B's identifiers: none of them may appear in a response to A.
 	leaks := []string{orgB.marker, orgB.org.UUID.String(), orgB.org.Slug, bob.Uuid.String(), carol.Uuid.String()}
 	for k, v := range orgB.ids {
-		if k != "version" {
+		if k != "version" && k != "classDate" {
 			leaks = append(leaks, v)
 		}
 	}
@@ -665,6 +689,11 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"?branch=" + orgB.ids["branch"], "?q=" + orgB.marker, "?q=" + orgB.ids["customerPhone"][3:]},
 		"GET /v1/tenant/customer-packages/facets":  {"?branch=" + orgB.ids["branch"]},
 		"GET /v1/tenant/customer-packages/summary": {"?branch=" + orgB.ids["branch"]},
+		"GET /v1/tenant/classes": {"?branch=" + orgB.ids["branch"], "?service=" + orgB.ids["classService"],
+			"?staff=" + orgB.ids["staff"], "?q=" + orgB.marker},
+		"GET /v1/tenant/class-sessions": {"?from=2030-01-07&to=2030-01-13", "?from=2030-01-07&to=2030-01-13&branch=" + orgB.ids["branch"],
+			"?from=2030-01-07&to=2030-01-13&service=" + orgB.ids["classService"], "?from=2030-01-07&to=2030-01-13&staff=" + orgB.ids["staff"],
+			"?from=2030-01-07&to=2030-01-13&q=" + orgB.marker},
 	}
 	for _, rt := range routes {
 		method, path, _ := strings.Cut(rt, " ")
@@ -787,6 +816,14 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"channels": []string{"sms"}, "fallback": true, "first_request_minutes": 1440, "follow_up_minutes": 0,
 			"max_attempts": 1, "deadline_minutes": 120, "window_start_minute": nil, "window_end_minute": nil, "on_no_answer": "cancel"}, reject},
 		{"POST /v1/tenant/confirmations/settings/reset", map[string]any{"branch_uuid": orgB.ids["branch"]}, reject},
+		{"POST /v1/tenant/classes", map[string]any{"branch_uuid": orgB.ids["branch"], "service_uuid": orgA.ids["classService"],
+			"weekday": "fri", "start_time": "12:00"}, reject},
+		{"POST /v1/tenant/classes", map[string]any{"branch_uuid": orgA.ids["branch"], "service_uuid": orgB.ids["classService"],
+			"weekday": "fri", "start_time": "12:00"}, reject},
+		{"POST /v1/tenant/classes", map[string]any{"branch_uuid": orgA.ids["branch"], "service_uuid": orgA.ids["classService"],
+			"weekday": "fri", "start_time": "12:00", "staff_uuid": orgB.ids["staff"]}, reject},
+		{"POST /v1/tenant/classes", map[string]any{"branch_uuid": orgA.ids["branch"], "service_uuid": orgA.ids["classService"],
+			"weekday": "fri", "start_time": "12:00", "resource_uuid": orgB.ids["resource"]}, reject},
 	}
 	for _, c := range cases {
 		method, path, _ := strings.Cut(c.route, " ")
@@ -806,6 +843,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 	}
 	// Mutations on A's own records whose body names B's records.
 	ownCases := []bodyCase{
+		{"PATCH /v1/tenant/classes/" + orgA.ids["class"], map[string]any{"branch_uuid": orgA.ids["branch"],
+			"service_uuid": orgA.ids["classService"], "weekday": "tue", "start_time": "10:00", "staff_uuid": orgB.ids["staff"]}, reject},
+		{"PATCH /v1/tenant/classes/" + orgA.ids["class"], map[string]any{"branch_uuid": orgA.ids["branch"],
+			"service_uuid": orgB.ids["classService"], "weekday": "tue", "start_time": "10:00"}, reject},
 		{"PATCH /v1/tenant/members/" + alice.Uuid.String(), map[string]any{"role_uuids": []string{orgB.ids["role"]}}, reject},
 		{"PATCH /v1/tenant/members/" + alice.Uuid.String(), map[string]any{"branch_scope": "selected", "branch_uuids": []string{orgB.ids["home"]}}, reject},
 		{"PATCH /v1/tenant/staff/" + orgA.ids["staff"], map[string]any{"branch_uuids": []string{orgB.ids["home"]}}, reject},
@@ -1056,6 +1097,10 @@ func paramKey(prev, name string) string {
 		return "customerPackage"
 	case "package-sessions/sessionUuid":
 		return "packageSession"
+	case "classes/uuid":
+		return "class"
+	case "sessions/date":
+		return "classDate"
 	}
 	return ""
 }

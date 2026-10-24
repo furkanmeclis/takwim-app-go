@@ -95,6 +95,8 @@ export const Permission = {
   TenantSessionPackagesRead: "tenant.session_packages.read",
   TenantSessionPackagesWrite: "tenant.session_packages.write",
   TenantSessionPackagesSell: "tenant.session_packages.sell",
+  TenantClassesRead: "tenant.classes.read",
+  TenantClassesWrite: "tenant.classes.write",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantActivityRead: "tenant.activity.read",
@@ -294,6 +296,11 @@ export const permissions = {
       read: Permission.TenantSessionPackagesRead,
       write: Permission.TenantSessionPackagesWrite,
       sell: Permission.TenantSessionPackagesSell,
+    },
+    /** Group class timetable (TEC-970). */
+    classes: {
+      read: Permission.TenantClassesRead,
+      write: Permission.TenantClassesWrite,
     },
     integrations: {
       read: Permission.TenantIntegrationsRead,

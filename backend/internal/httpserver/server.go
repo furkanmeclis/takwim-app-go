@@ -43,6 +43,9 @@ import (
 	cashhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/handler"
 	cashrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/repository"
 	cashusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/cash/usecase"
+	classesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes"
+	classeshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/handler"
+	classesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/classes/usecase"
 	confirmationsmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations"
 	confirmationshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/handler"
 	confirmationsusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/confirmations/usecase"
@@ -552,6 +555,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffsharesmodule.RegisterLiveResources(tenantLive)
 	financemodule.RegisterLiveResources(tenantLive)
 	sessionpackagesmodule.RegisterLiveResources(tenantLive)
+	classesmodule.RegisterLiveResources(tenantLive)
 	reservationsmodule.RegisterLiveResources(tenantLive)
 	organizationsmodule.RegisterLiveResources(tenantLive)
 	integrationjobsmodule.RegisterLiveResources(tenantLive)
@@ -730,6 +734,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	sessionPackagesH := sessionpackageshandler.New(sessionPackagesSvc, activityRec)
 	sessionPackagesH.SetResourceEvents(resourceEvents)
 	sessionpackagesmodule.RegisterRoutes(mux, sessionPackagesH, tokens, loader, tenantResolver)
+	// Class timetable (TEC-970): changes run under the capacity lock of the
+	// booking writers.
+	classesH := classeshandler.New(classesusecase.New(deps.Queries, capacityHolds), activityRec)
+	classesH.SetResourceEvents(resourceEvents)
+	classesmodule.RegisterRoutes(mux, classesH, tokens, loader, tenantResolver)
 	reservationsH := reservationshandler.New(reservationsSvc, activityRec)
 	reservationsH.SetResourceEvents(resourceEvents)
 	reservationsmodule.RegisterRoutes(mux, reservationsH, tokens, loader, tenantResolver)

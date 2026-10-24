@@ -24,6 +24,7 @@ const DAY_STATUS_KEYS: Record<string, string> = {
   closed: "business_page.datetime.closed",
   too_far: "business_page.datetime.too_far",
   too_soon: "business_page.datetime.too_soon",
+  no_class: "business_page.datetime.no_class",
   no_staff: "business_page.datetime.no_staff",
   full: "business_page.datetime.full",
 };

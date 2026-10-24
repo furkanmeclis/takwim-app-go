@@ -22,6 +22,7 @@ import {
   Contact,
   Cpu,
   Download,
+  Dumbbell,
   HardDrive,
   KeyRound,
   LayoutDashboard,
@@ -435,6 +436,14 @@ export function tenantNav(slug: string): NavCatalog {
             icon: Ticket,
             permission: permissions.tenant.sessionPackages.read,
             module: "packages",
+          },
+          {
+            id: "classes",
+            titleKey: "layout.nav_classes",
+            href: routes.tenant.classes.root(slug),
+            icon: Dumbbell,
+            permission: permissions.tenant.classes.read,
+            module: "classes",
           },
           {
             id: "cash",

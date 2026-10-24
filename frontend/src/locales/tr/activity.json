@@ -359,5 +359,22 @@
   "fields.tenant.customer_packages.method": "Ödeme yöntemi",
   "fields.tenant.customer_packages.amount": "İade tutarı",
   "fields.tenant.customer_packages.reason": "Neden",
-  "fields.tenant.customer_packages.used": "Kullanılan seans"
+  "fields.tenant.customer_packages.used": "Kullanılan seans",
+  "resources.tenant.classes": "Ders programı",
+  "actions.classes.created": "Derse program eklendi",
+  "actions.classes.updated": "Ders programı güncellendi",
+  "actions.classes.deleted": "Ders programdan kaldırıldı",
+  "actions.classes.session_cancelled": "Ders seansı iptal edildi",
+  "actions.classes.session_restored": "Ders seansı geri alındı",
+  "actions.classes.session_changed": "Ders seansının kontenjanı değişti",
+  "fields.tenant.classes.service": "Ders",
+  "fields.tenant.classes.branch": "Şube",
+  "fields.tenant.classes.weekday": "Gün",
+  "fields.tenant.classes.start_time": "Başlangıç",
+  "fields.tenant.classes.staff": "Eğitmen",
+  "fields.tenant.classes.resource": "Alan",
+  "fields.tenant.classes.seats": "Kontenjan",
+  "fields.tenant.classes.valid_from": "Başlangıç tarihi",
+  "fields.tenant.classes.valid_until": "Bitiş tarihi",
+  "fields.tenant.classes.is_active": "Aktif"
 }

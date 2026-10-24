@@ -27,6 +27,7 @@ const DAY_STATUS_KEYS: Record<string, string> = {
   closed: "customer_panel.reschedule.closed",
   too_far: "customer_panel.reschedule.too_far",
   too_soon: "customer_panel.reschedule.too_soon",
+  no_class: "customer_panel.reschedule.no_class",
   no_staff: "customer_panel.reschedule.full",
   full: "customer_panel.reschedule.full",
 };

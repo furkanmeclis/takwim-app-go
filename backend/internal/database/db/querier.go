@@ -71,6 +71,7 @@ type Querier interface {
 	CountCashAccounts(ctx context.Context, arg CountCashAccountsParams) (int64, error)
 	CountCashClosings(ctx context.Context, arg CountCashClosingsParams) (int64, error)
 	CountCashMovements(ctx context.Context, arg CountCashMovementsParams) (int64, error)
+	CountClassSchedules(ctx context.Context, arg CountClassSchedulesParams) (int64, error)
 	// Requests of the current round a channel really sent (accepted by a
 	// provider): an expired task without one is unreachable, never cancelled.
 	CountConfirmationSends(ctx context.Context, arg CountConfirmationSendsParams) (int64, error)
@@ -269,6 +270,7 @@ type Querier interface {
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
 	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
 	DeleteCapacityAllocations(ctx context.Context, arg DeleteCapacityAllocationsParams) error
+	DeleteClassSessionChange(ctx context.Context, arg DeleteClassSessionChangeParams) error
 	DeleteConfirmationSettings(ctx context.Context, arg DeleteConfirmationSettingsParams) (int64, error)
 	DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCustomerIdentityLinkParams) (int64, error)
 	DeleteCustomerNotificationRule(ctx context.Context, arg DeleteCustomerNotificationRuleParams) error
@@ -368,6 +370,14 @@ type Querier interface {
 	GetCashClosing(ctx context.Context, arg GetCashClosingParams) (GetCashClosingRow, error)
 	GetCashMovement(ctx context.Context, arg GetCashMovementParams) (GetCashMovementRow, error)
 	GetCashMovementByIdempotencyKey(ctx context.Context, arg GetCashMovementByIdempotencyKeyParams) (GetCashMovementByIdempotencyKeyRow, error)
+	// ------------------------------------------------------------ form lookups
+	GetClassBranch(ctx context.Context, arg GetClassBranchParams) (GetClassBranchRow, error)
+	GetClassResource(ctx context.Context, arg GetClassResourceParams) (GetClassResourceRow, error)
+	GetClassSchedule(ctx context.Context, arg GetClassScheduleParams) (GetClassScheduleRow, error)
+	// A live service with its offer in the branch (sb.* NULL = not offered).
+	GetClassService(ctx context.Context, arg GetClassServiceParams) (GetClassServiceRow, error)
+	// A live staff member who may perform the service and works in the branch.
+	GetClassTrainer(ctx context.Context, arg GetClassTrainerParams) (GetClassTrainerRow, error)
 	GetCollectAccount(ctx context.Context, arg GetCollectAccountParams) (GetCollectAccountRow, error)
 	GetConfirmationBranch(ctx context.Context, arg GetConfirmationBranchParams) (GetConfirmationBranchRow, error)
 	// Customer confirmation (TEC-921). Every query filters by organization_id;
@@ -611,6 +621,10 @@ type Querier interface {
 	InsertCashClosing(ctx context.Context, arg InsertCashClosingParams) (InsertCashClosingRow, error)
 	// ------------------------------------------------------------ movements
 	InsertCashMovement(ctx context.Context, arg InsertCashMovementParams) (InsertCashMovementRow, error)
+	// TEC-970: the class timetable (class_schedules) and single-session
+	// changes (class_session_changes). Every query takes the organization id;
+	// joined tables are matched by alias.organization_id too.
+	InsertClassSchedule(ctx context.Context, arg InsertClassScheduleParams) (InsertClassScheduleRow, error)
 	// No row when this channel was already tried for the dispatch.
 	InsertCustomerNotificationDelivery(ctx context.Context, arg InsertCustomerNotificationDeliveryParams) (CustomerNotificationDelivery, error)
 	// No row when the idempotency key was already used (the notice exists).
@@ -750,6 +764,37 @@ type Querier interface {
 	ListCashMovementKindFacets(ctx context.Context, arg ListCashMovementKindFacetsParams) ([]ListCashMovementKindFacetsRow, error)
 	ListCashMovements(ctx context.Context, arg ListCashMovementsParams) ([]ListCashMovementsRow, error)
 	ListCashTransferLegs(ctx context.Context, arg ListCashTransferLegsParams) ([]ListCashTransferLegsRow, error)
+	// The branches, classes and trainers that appear in the timetable, for
+	// the list filters (kind = branch | service | staff).
+	ListClassFacets(ctx context.Context, arg ListClassFacetsParams) ([]ListClassFacetsRow, error)
+	ListClassFormResources(ctx context.Context, arg ListClassFormResourcesParams) ([]ListClassFormResourcesRow, error)
+	// Live group services with the branches that offer them.
+	ListClassFormServices(ctx context.Context, organizationID int64) ([]ListClassFormServicesRow, error)
+	// Live staff who may perform a group service, with the branches they work in.
+	ListClassFormTrainers(ctx context.Context, organizationID int64) ([]ListClassFormTrainersRow, error)
+	// Live, active classes on one weekday that share the branch and service,
+	// the trainer or the area of a class being saved (overlap is checked by
+	// the caller). exclude_id leaves the class itself out (0 = none).
+	ListClassScheduleNeighbours(ctx context.Context, arg ListClassScheduleNeighboursParams) ([]ListClassScheduleNeighboursRow, error)
+	// The timetable page: filters, search over the class, trainer, area and
+	// note, weekday-aware ordering. branch_ids is the caller's branch scope
+	// (NULL = every branch).
+	ListClassSchedules(ctx context.Context, arg ListClassSchedulesParams) ([]ListClassSchedulesRow, error)
+	// The bookings of one session: visits in the branch with a line of the
+	// class at the start, except cancelled and rejected ones.
+	ListClassSessionAttendees(ctx context.Context, arg ListClassSessionAttendeesParams) ([]ListClassSessionAttendeesRow, error)
+	ListClassSessionChanges(ctx context.Context, arg ListClassSessionChangesParams) ([]ListClassSessionChangesRow, error)
+	// Seats booked per group session (service, branch, start) in [since,
+	// until): active holds that have not lapsed and confirmed bookings.
+	ListClassSessionSeats(ctx context.Context, arg ListClassSessionSeatsParams) ([]ListClassSessionSeatsRow, error)
+	// Active classes of live, active group services in live, active branches
+	// whose validity touches [from, to]: the sessions of a period. Filters are
+	// optional (NULL = all); branch_ids is the caller's branch scope.
+	ListClassTimetable(ctx context.Context, arg ListClassTimetableParams) ([]ListClassTimetableRow, error)
+	// The classes that commit a trainer or an area (any branch: a person has
+	// one calendar) and whose validity touches [from, to]: their sessions are
+	// busy time for every other booking.
+	ListClassTimetableBusy(ctx context.Context, arg ListClassTimetableBusyParams) ([]ListClassTimetableBusyRow, error)
 	// Tills and bank accounts a collection at the business may go into: the
 	// branch's own and the business-wide ones of the currency.
 	ListCollectAccounts(ctx context.Context, arg ListCollectAccountsParams) ([]ListCollectAccountsRow, error)
@@ -1329,6 +1374,7 @@ type Querier interface {
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	SoftDeleteBranch(ctx context.Context, arg SoftDeleteBranchParams) (int64, error)
+	SoftDeleteClassSchedule(ctx context.Context, arg SoftDeleteClassScheduleParams) (int64, error)
 	SoftDeleteCustomer(ctx context.Context, arg SoftDeleteCustomerParams) (int64, error)
 	SoftDeleteOrganization(ctx context.Context, argUuid uuid.UUID) (Organization, error)
 	SoftDeleteProduct(ctx context.Context, arg SoftDeleteProductParams) (int64, error)
@@ -1377,6 +1423,7 @@ type Querier interface {
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error)
 	UpdateCashAccount(ctx context.Context, arg UpdateCashAccountParams) (int64, error)
+	UpdateClassSchedule(ctx context.Context, arg UpdateClassScheduleParams) (int64, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	// The send result of an attempt still in flight.
 	UpdateCustomerNotificationDelivery(ctx context.Context, arg UpdateCustomerNotificationDeliveryParams) (int64, error)
@@ -1428,6 +1475,7 @@ type Querier interface {
 	UpdateUserTOTPRecoveryHashes(ctx context.Context, arg UpdateUserTOTPRecoveryHashesParams) error
 	UpdateWebAuthnCredentialCounter(ctx context.Context, arg UpdateWebAuthnCredentialCounterParams) error
 	UpdateWebAuthnCredentialName(ctx context.Context, arg UpdateWebAuthnCredentialNameParams) (WebauthnCredential, error)
+	UpsertClassSessionChange(ctx context.Context, arg UpsertClassSessionChangeParams) error
 	UpsertConfirmationSettings(ctx context.Context, arg UpsertConfirmationSettingsParams) (ConfirmationSetting, error)
 	// Platform-level: called only after the phone was proven.
 	UpsertCustomerIdentity(ctx context.Context, arg UpsertCustomerIdentityParams) (CustomerIdentity, error)

@@ -359,5 +359,22 @@
   "fields.tenant.customer_packages.method": "Payment method",
   "fields.tenant.customer_packages.amount": "Refund amount",
   "fields.tenant.customer_packages.reason": "Reason",
-  "fields.tenant.customer_packages.used": "Sessions used"
+  "fields.tenant.customer_packages.used": "Sessions used",
+  "resources.tenant.classes": "Class timetable",
+  "actions.classes.created": "Class added to the timetable",
+  "actions.classes.updated": "Class updated",
+  "actions.classes.deleted": "Class removed from the timetable",
+  "actions.classes.session_cancelled": "Class session cancelled",
+  "actions.classes.session_restored": "Class session restored",
+  "actions.classes.session_changed": "Class session seats changed",
+  "fields.tenant.classes.service": "Class",
+  "fields.tenant.classes.branch": "Branch",
+  "fields.tenant.classes.weekday": "Day",
+  "fields.tenant.classes.start_time": "Start",
+  "fields.tenant.classes.staff": "Trainer",
+  "fields.tenant.classes.resource": "Area",
+  "fields.tenant.classes.seats": "Seats",
+  "fields.tenant.classes.valid_from": "Start date",
+  "fields.tenant.classes.valid_until": "End date",
+  "fields.tenant.classes.is_active": "Active"
 }

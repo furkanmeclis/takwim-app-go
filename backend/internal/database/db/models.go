@@ -236,6 +236,39 @@ type CashMovement struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type ClassSchedule struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	ServiceID      int64              `json:"service_id"`
+	Weekday        string             `json:"weekday"`
+	StartTime      string             `json:"start_time"`
+	StaffID        pgtype.Int8        `json:"staff_id"`
+	ResourceID     pgtype.Int8        `json:"resource_id"`
+	Capacity       pgtype.Int4        `json:"capacity"`
+	ValidFrom      pgtype.Date        `json:"valid_from"`
+	ValidUntil     pgtype.Date        `json:"valid_until"`
+	IsActive       bool               `json:"is_active"`
+	Note           string             `json:"note"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ClassSessionChange struct {
+	OrganizationID int64              `json:"organization_id"`
+	ScheduleID     int64              `json:"schedule_id"`
+	SessionDate    pgtype.Date        `json:"session_date"`
+	Cancelled      bool               `json:"cancelled"`
+	Capacity       pgtype.Int4        `json:"capacity"`
+	Reason         string             `json:"reason"`
+	UpdatedBy      pgtype.Int8        `json:"updated_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ConfirmationSetting struct {
 	ID                    int64              `json:"id"`
 	OrganizationID        int64              `json:"organization_id"`

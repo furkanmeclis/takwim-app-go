@@ -40,6 +40,9 @@ const (
 	DayNoStaff = "no_staff"
 	// DayFull: open and staffed, but every start is taken.
 	DayFull = "full"
+	// DayNoClass: a group class with a timetable (TEC-970) has no session
+	// that day.
+	DayNoClass = "no_class"
 )
 
 // Interval is the half-open range [Start, End).
@@ -109,6 +112,25 @@ type Line struct {
 	// while seats are left. The booking takes Request.PartySize seats (at
 	// least one); resources are not sized to the party.
 	Seats int
+	// Scheduled limits a group line to the sessions of its class timetable
+	// (TEC-970): it is offered only at the starts of Planned, with their
+	// seats, trainer and area.
+	Scheduled bool
+	Planned   map[int64]Planned
+}
+
+// Planned is one session of a class timetable, keyed by its start
+// (UnixNano) in Line.Planned.
+type Planned struct {
+	// Seats of the session (the timetable's, or the single session's).
+	Seats int
+	// StaffID is the trainer of the session (0 = the first booking picks
+	// one by the staff mode). The trainer is committed by the timetable:
+	// it must be free of other commitments, not on shift.
+	StaffID int64
+	// ResourceIDs are the session's own resources (the area); kinds of
+	// the line they do not cover are picked like any line.
+	ResourceIDs []int64
 }
 
 // Session is a running group session of a line: its bookings share the
@@ -174,6 +196,8 @@ type Assignment struct {
 	// SeatsLeft is, for a group line, the free seats of the session before
 	// this booking (0 for other lines).
 	SeatsLeft int
+	// SessionSeats is, for a group line, the seats of the session.
+	SessionSeats int
 }
 
 // Slot is one bookable start with a plan for every line.
@@ -216,7 +240,12 @@ func Check(req Request, start time.Time) (Slot, bool) {
 	if !ok {
 		return Slot{}, false
 	}
-	if req.OnGrid && start.Sub(open.Start)%p.req.Step != 0 {
+	// A timetable fixes the starts; otherwise online starts sit on the grid.
+	if p.starts != nil {
+		if !p.scheduledAt(start) {
+			return Slot{}, false
+		}
+	} else if req.OnGrid && start.Sub(open.Start)%p.req.Step != 0 {
 		return Slot{}, false
 	}
 	day := dayStart(start.In(p.loc), p.loc)
@@ -229,6 +258,10 @@ type planner struct {
 	loc       *time.Location
 	staff     map[int64]*Staff
 	resources map[string][]*Resource
+	byID      map[int64]*Resource
+	// starts are the session starts of a scheduled group line in order
+	// (nil without a timetable: starts follow the step grid).
+	starts []time.Time
 	// load is the booked time of each person on the day being planned.
 	load map[int64]time.Duration
 	// sessions are the running group sessions by line key and start.
@@ -263,6 +296,7 @@ func newPlanner(req Request) *planner {
 		loc:       loc,
 		staff:     make(map[int64]*Staff, len(req.Staff)),
 		resources: map[string][]*Resource{},
+		byID:      map[int64]*Resource{},
 		sessions:  map[sessionKey]*Session{},
 		failed:    map[failKey]bool{},
 	}
@@ -276,8 +310,32 @@ func newPlanner(req Request) *planner {
 	for i := range req.Resources {
 		r := &req.Resources[i]
 		p.resources[r.Kind] = append(p.resources[r.Kind], r)
+		p.byID[r.ID] = r
+	}
+	for _, l := range req.Lines {
+		if !l.Scheduled {
+			continue
+		}
+		p.starts = make([]time.Time, 0, len(l.Planned))
+		for ns := range l.Planned {
+			p.starts = append(p.starts, time.Unix(0, ns).In(loc))
+		}
+		sort.Slice(p.starts, func(a, b int) bool { return p.starts[a].Before(p.starts[b]) })
+		break
 	}
 	return p
+}
+
+// scheduledAt reports whether every scheduled line has a session at t.
+func (p *planner) scheduledAt(t time.Time) bool {
+	for _, l := range p.req.Lines {
+		if l.Scheduled {
+			if _, ok := l.Planned[t.UnixNano()]; !ok {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func dayStart(t time.Time, loc *time.Location) time.Time {
@@ -321,6 +379,9 @@ func (p *planner) day(d time.Time) Day {
 		out.Status = DayTooFar
 		return out
 	}
+	if p.starts != nil {
+		return p.scheduledDay(window, out)
+	}
 	if !p.staffed(window) {
 		out.Status = DayNoStaff
 		return out
@@ -341,6 +402,41 @@ func (p *planner) day(d time.Time) Day {
 	switch {
 	case len(out.Slots) > 0:
 		out.Status = DayAvailable
+	case !tried:
+		out.Status = DayTooSoon
+	default:
+		out.Status = DayFull
+	}
+	return out
+}
+
+// scheduledDay plans the sessions of a timetable that start inside the
+// day and inside an open interval of the branch.
+func (p *planner) scheduledDay(window Interval, out Day) Day {
+	p.load = p.staffLoad(window)
+	sessions, tried := false, false
+	for _, t := range p.starts {
+		if t.Before(window.Start) || !t.Before(window.End) {
+			continue
+		}
+		o, ok := p.openAt(t)
+		if !ok {
+			continue
+		}
+		sessions = true
+		if !p.inWindow(t) {
+			continue
+		}
+		tried = true
+		if slot, ok := p.plan(t, o); ok {
+			out.Slots = append(out.Slots, slot)
+		}
+	}
+	switch {
+	case len(out.Slots) > 0:
+		out.Status = DayAvailable
+	case !sessions:
+		out.Status = DayNoClass
 	case !tried:
 		out.Status = DayTooSoon
 	default:
@@ -483,13 +579,25 @@ func (p *planner) assign(i int, t time.Time, open Interval, out []Assignment) bo
 // assignGroup plans a group line at t: it joins the running session of
 // the start while seats are left, otherwise it opens a session on a free
 // staff member and free resources like any line (one session per start).
+// With a timetable only its sessions are planned, with their seats, and a
+// session opens on its own trainer and area.
 func (p *planner) assignGroup(i int, l Line, t time.Time, open Interval, out []Assignment) bool {
 	need := p.req.PartySize
 	if need < 1 {
 		need = 1
 	}
+	seats := l.Seats
+	var planned *Planned
+	if l.Scheduled {
+		pl, ok := l.Planned[t.UnixNano()]
+		if !ok {
+			return false
+		}
+		planned = &pl
+		seats = pl.Seats
+	}
 	if s, ok := p.sessions[sessionKey{key: l.Key, start: t.UnixNano()}]; ok {
-		if s.Taken+need > l.Seats {
+		if s.Taken+need > seats {
 			return false
 		}
 		d := l.Duration
@@ -503,14 +611,21 @@ func (p *planner) assignGroup(i int, l Line, t time.Time, open Interval, out []A
 		held := Interval{Start: t.Add(-l.BufferBefore), End: customer.End.Add(l.BufferAfter)}
 		out[i] = Assignment{
 			Key: l.Key, Start: customer.Start, End: customer.End, Held: held,
-			StaffID: s.StaffID, ResourceIDs: slices.Clone(s.ResourceIDs), SeatsLeft: l.Seats - s.Taken,
+			StaffID: s.StaffID, ResourceIDs: slices.Clone(s.ResourceIDs), SeatsLeft: seats - s.Taken, SessionSeats: seats,
 		}
 		return p.assign(i+1, customer.End, open, out)
 	}
-	if need > l.Seats {
+	if need > seats {
 		return false
 	}
-	for _, staffID := range p.candidates(l) {
+	candidates := p.candidates(l)
+	if planned != nil && planned.StaffID != 0 {
+		if p.staff[planned.StaffID] == nil {
+			return false
+		}
+		candidates = []int64{planned.StaffID}
+	}
+	for _, staffID := range candidates {
 		d := l.Duration
 		if staffID != 0 {
 			if sd, ok := l.StaffDuration[staffID]; ok && sd > 0 {
@@ -522,19 +637,56 @@ func (p *planner) assignGroup(i int, l Line, t time.Time, open Interval, out []A
 			continue
 		}
 		held := Interval{Start: t.Add(-l.BufferBefore), End: customer.End.Add(l.BufferAfter)}
-		if staffID != 0 && !p.staffFree(staffID, held) {
-			continue
+		if staffID != 0 {
+			if planned != nil && planned.StaffID == staffID {
+				if overlapsAny(held, p.staff[staffID].Busy) {
+					continue
+				}
+			} else if !p.staffFree(staffID, held) {
+				continue
+			}
 		}
-		resources, ok := p.pickResources(l.ResourceKinds, held, out[:i], 0)
+		kinds := l.ResourceKinds
+		var fixed []int64
+		if planned != nil && len(planned.ResourceIDs) > 0 {
+			var ok bool
+			fixed, kinds, ok = p.fixedResources(planned.ResourceIDs, kinds, held)
+			if !ok {
+				return false
+			}
+		}
+		resources, ok := p.pickResources(kinds, held, out[:i], 0)
 		if !ok {
 			continue
 		}
-		out[i] = Assignment{Key: l.Key, Start: customer.Start, End: customer.End, Held: held, StaffID: staffID, ResourceIDs: resources, SeatsLeft: l.Seats}
+		out[i] = Assignment{
+			Key: l.Key, Start: customer.Start, End: customer.End, Held: held, StaffID: staffID,
+			ResourceIDs: append(fixed, resources...), SeatsLeft: seats, SessionSeats: seats,
+		}
 		if p.assign(i+1, customer.End, open, out) {
 			return true
 		}
 	}
 	return false
+}
+
+// fixedResources checks the resources a timetable gives a session: each
+// must be loaded (active, of a kind of the line), open and free for the
+// held time. It returns them and the kinds still to pick.
+func (p *planner) fixedResources(ids []int64, kinds []string, held Interval) ([]int64, []string, bool) {
+	rest := slices.Clone(kinds)
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		r := p.byID[id]
+		if r == nil || !insideAny(held, r.Open) || overlapsAny(held, r.Busy) {
+			return nil, nil, false
+		}
+		if k := slices.Index(rest, r.Kind); k >= 0 {
+			rest = slices.Delete(rest, k, k+1)
+		}
+		out = append(out, id)
+	}
+	return out, rest, true
 }
 
 // candidates lists the staff choices of a line, best first; 0 = no staff.

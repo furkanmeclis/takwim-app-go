@@ -215,5 +215,6 @@
   "confirmation.note_hint": "Optional; for example the days and times that suit you.",
   "confirmation.note_too_long": "The note can be at most 500 characters.",
   "confirmation.done": "Thank you, your booking is confirmed.",
-  "confirmation.change_done": "Your change request was sent."
+  "confirmation.change_done": "Your change request was sent.",
+  "reschedule.no_class": "No class on that day"
 }

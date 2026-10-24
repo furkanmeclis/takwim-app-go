@@ -174,5 +174,6 @@
   "seats.left_short": "{{count}} left",
   "service.group": "Group class · {{count}} places",
   "service.group_alone": "A group class is booked on its own; picking another service removes the class.",
-  "errors.vehicle": "Please check your vehicle details."
+  "errors.vehicle": "Please check your vehicle details.",
+  "datetime.no_class": "No class on this day"
 }

@@ -488,5 +488,6 @@
   "fields.bundle_none": "Paket yok, hizmetleri tek tek seç",
   "fields.bundle_hint": "Paket seçilince içindeki hizmetler sırasıyla eklenir; her hizmetin çalışanını ayrı seçebilirsiniz.",
   "fields.bundle_price": "Paket fiyatı {{price}}; hizmetlere liste fiyatı oranında dağıtılır.",
-  "confirmation_task.sources.voice_call": "Otomatik arama (tuşlama)"
+  "confirmation_task.sources.voice_call": "Otomatik arama (tuşlama)",
+  "slots.no_class": "Bu gün ders programında seans yok"
 }

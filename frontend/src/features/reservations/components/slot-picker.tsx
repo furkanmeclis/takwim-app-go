@@ -18,6 +18,7 @@ const DAY_STATUS_KEYS: Record<string, string> = {
   closed: "reservations.slots.closed",
   too_far: "reservations.slots.too_far",
   too_soon: "reservations.slots.too_soon",
+  no_class: "reservations.slots.no_class",
   no_staff: "reservations.slots.no_staff",
   full: "reservations.slots.full",
 };

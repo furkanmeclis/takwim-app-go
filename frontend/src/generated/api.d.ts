@@ -4751,7 +4751,7 @@ export interface paths {
          *     line that takes a staff member is planned with the caller's staff
          *     record, another `staff_uuid` is `403`). Answers each local date of
          *     the branch from `from` to `to` (default today + 6 days, at most 31)
-         *     with a status (`available`, `closed`, `too_far`, `too_soon`,
+         *     with a status (`available`, `closed`, `too_far`, `too_soon`, `no_class`,
          *     `no_staff`, `full`) and the starts every `step_minutes` (default 15)
          *     counted from the opening. Lines run back to back; each slot names
          *     the staff member and resources of every line. `staff_uuid` null is
@@ -4766,6 +4766,12 @@ export interface paths {
          *     the caller's scope or of another business is `404`; services and
          *     staff are checked per line (`lines.N.service_uuid` `not_found`,
          *     `inactive`, `not_offered`; `lines.N.staff_uuid` `not_found`).
+         *
+         *     A group class (TEC-970) is offered only at the sessions of its
+         *     class timetable (`/v1/tenant/classes`), with the session's seats,
+         *     trainer and area; a day without a session is `no_class`. A
+         *     scheduled session holds its trainer and area for every other
+         *     booking, even before its first booking.
          */
         post: operations["postTenantAvailabilitySearch"];
         delete?: never;
@@ -8834,6 +8840,182 @@ export interface paths {
          *     `invalid_transition`. Optional body `expected_version`.
          */
         delete: operations["deleteTenantReservationPackageSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/classes/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class timetable metadata
+         * @description Table contract of `GET /v1/tenant/classes` (TEC-970).
+         */
+        get: operations["getTenantClassesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/classes/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class timetable filter options
+         * @description The branches, classes and trainers of the timetable with their number of classes (caller's branch scope).
+         */
+        get: operations["getTenantClassesFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/classes/form": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class form choices
+         * @description The group services (services with `group_capacity`) with the branches that offer them and the people who may
+         *     teach them (and the branches they work in), and the resources of the caller's branches. Needs
+         *     `tenant.classes.write`.
+         */
+        get: operations["getTenantClassesForm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class timetable
+         * @description The weekly classes of the business (TEC-970, gym `classes` module): a group service taught on one weekday at
+         *     one wall-clock time in a branch, with its trainer, area and seats, between `valid_from` and `valid_until`.
+         *     Every such weekday is a session (`GET /v1/tenant/class-sessions`). A group class is bookable only at its
+         *     sessions. Needs the classes module and `tenant.classes.read`; the list follows the caller's branch scope.
+         */
+        get: operations["getTenantClasses"];
+        put?: never;
+        /**
+         * Add a class
+         * @description `tenant.classes.write`. `service_uuid` a group service offered in the branch (`not_group`, `not_offered`);
+         *     `staff_uuid` someone who teaches the service and works in the branch (`not_qualified`, `not_in_branch`;
+         *     `not_allowed` for a service without staff), null = the first booking of a session picks a free trainer;
+         *     `resource_uuid` a resource of the branch of one of the service's kinds (`not_in_branch`, `kind_mismatch`),
+         *     null = picked by the first booking; `capacity` 1–1000 (null = the service's group capacity); `valid_from`
+         *     defaults to today. A branch, service, person or resource of another business or outside the caller's branch
+         *     scope is `not_found`. `409` when the trainer (`staff_uuid` / `staff_busy`) or the area (`resource_uuid` /
+         *     `resource_busy`) has an overlapping class that weekday, or the service already runs then in the branch
+         *     (`start_time` / `duplicate`).
+         */
+        post: operations["postTenantClass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/classes/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A class */
+        get: operations["getTenantClass"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a class
+         * @description Soft delete. A class with booked future sessions is `409` `sessions` / `has_bookings`.
+         */
+        delete: operations["deleteTenantClass"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a class
+         * @description The whole class (as on create). A change that would leave a booked future session outside the timetable
+         *     (other weekday, time, branch or service, a shorter validity, inactive) is `409` `sessions` / `has_bookings`:
+         *     cancel or move those bookings first. A new trainer or area applies to sessions without bookings.
+         */
+        patch: operations["patchTenantClass"];
+        trace?: never;
+    };
+    "/v1/tenant/classes/{uuid}/sessions/{date}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A class session with its bookings
+         * @description The session of the class on a local date (branch time zone) with its seats and the bookings in it
+         *     (cancelled and rejected visits left out). Attendance is the visit's own step: `POST
+         *     /v1/tenant/reservations/{uuid}/complete` (attended) and `/no-show`. A date without a session is `404`.
+         */
+        get: operations["getTenantClassSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cancel a session or change its seats
+         * @description `tenant.classes.write`. Sets how the session differs from its class: `cancelled` (not offered, its trainer
+         *     and area are free) and / or `capacity` (null = the class's seats). Both off restores the session. Runs under
+         *     the booking lock. A session with bookings is not cancelled (`409` `sessions` / `has_bookings`), seats below
+         *     the booked seats are `409` `capacity` / `below_booked`, a session that already started is `409` `date` /
+         *     `past`.
+         */
+        patch: operations["patchTenantClassSession"];
+        trace?: never;
+    };
+    "/v1/tenant/class-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Class sessions
+         * @description The sessions of the active classes on the local dates `from` … `to` (default today + 6 days, at most 31),
+         *     with their seats and the seats booked (requests waiting for approval or payment included). State: `open`,
+         *     `full`, `cancelled`, `past`. Needs `tenant.classes.read`; caller's branch scope.
+         */
+        get: operations["getTenantClassSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -14910,7 +15092,7 @@ export interface components {
                 /** Format: date */
                 date: string;
                 /** @enum {string} */
-                status: "available" | "closed" | "too_far" | "too_soon" | "no_staff" | "full";
+                status: "available" | "closed" | "too_far" | "too_soon" | "no_staff" | "full" | "no_class";
                 slots: components["schemas"]["TenantAvailabilitySlot"][];
             }[];
         };
@@ -15809,7 +15991,7 @@ export interface components {
                 /** Format: date */
                 date: string;
                 /** @enum {string} */
-                status: "available" | "closed" | "too_far" | "too_soon" | "no_staff" | "full";
+                status: "available" | "closed" | "too_far" | "too_soon" | "no_staff" | "full" | "no_class";
                 slots: {
                     /** Format: date-time */
                     starts_at: string;
@@ -16621,6 +16803,235 @@ export interface components {
             data: components["schemas"]["CustomerPaymentSummary"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        ClassResourceRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            kind: string;
+        };
+        /** @description A weekly class of the timetable (TEC-970). */
+        ClassSchedule: {
+            /** Format: uuid */
+            uuid: string;
+            branch: components["schemas"]["SalesRef"];
+            service: components["schemas"]["SalesRef"];
+            /** @enum {string} */
+            weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+            /**
+             * @description Branch wall clock
+             * @example 18:00
+             */
+            start_time: string;
+            /** @example 19:00 */
+            end_time: string;
+            duration_minutes: number;
+            /** @description The trainer; null = the first booking of a session picks one */
+            staff: components["schemas"]["SalesRef"] | null;
+            /** @description The area; null = picked by the first booking */
+            resource: components["schemas"]["ClassResourceRef"] | null;
+            /** @description The class's own seats; null = the service's group capacity */
+            capacity: number | null;
+            /** @description Seats of a session */
+            seats: number;
+            /** Format: date */
+            valid_from: string;
+            /**
+             * Format: date
+             * @description Last day; null = no end
+             */
+            valid_until: string | null;
+            is_active: boolean;
+            note: string;
+            timezone: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description The whole class (create and patch). */
+        ClassScheduleInput: {
+            /** Format: uuid */
+            branch_uuid: string;
+            /** Format: uuid */
+            service_uuid: string;
+            /** @enum {string} */
+            weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+            /** @example 18:00 */
+            start_time: string;
+            /** Format: uuid */
+            staff_uuid?: string | null;
+            /** Format: uuid */
+            resource_uuid?: string | null;
+            capacity?: number | null;
+            /**
+             * Format: date
+             * @description Default today
+             */
+            valid_from?: string;
+            /** Format: date */
+            valid_until?: string | null;
+            /** @description Default true */
+            is_active?: boolean | null;
+            note?: string;
+        };
+        ClassSchedulePage: {
+            items: components["schemas"]["ClassSchedule"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        ClassFacet: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            /** Format: int64 */
+            count: number;
+        };
+        ClassFacets: {
+            branches: components["schemas"]["ClassFacet"][];
+            services: components["schemas"]["ClassFacet"][];
+            staff: components["schemas"]["ClassFacet"][];
+        };
+        ClassFormTrainer: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            is_active: boolean;
+            branch_uuids: string[];
+        };
+        ClassFormService: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            group_capacity: number;
+            /** @enum {string} */
+            staff_mode: "required" | "optional" | "none";
+            resource_kinds: string[];
+            duration_minutes: number;
+            is_active: boolean;
+            /** @description Branches that offer the class */
+            branch_uuids: string[];
+            trainers: components["schemas"]["ClassFormTrainer"][];
+        };
+        ClassFormResource: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            kind: string;
+            is_active: boolean;
+            /** Format: uuid */
+            branch_uuid: string;
+        };
+        ClassFormOptions: {
+            services: components["schemas"]["ClassFormService"][];
+            resources: components["schemas"]["ClassFormResource"][];
+        };
+        /** @description One session of a class (TEC-970). */
+        ClassSession: {
+            /** Format: uuid */
+            schedule_uuid: string;
+            /**
+             * Format: date
+             * @description Local date: the session's identity in its class
+             */
+            date: string;
+            /** @enum {string} */
+            weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            branch: components["schemas"]["SalesRef"];
+            service: components["schemas"]["SalesRef"];
+            staff: components["schemas"]["SalesRef"] | null;
+            resource: components["schemas"]["ClassResourceRef"] | null;
+            /** @description Seats of the session */
+            capacity: number;
+            /** @description Seats taken by bookings */
+            booked: number;
+            seats_left: number;
+            /** @enum {string} */
+            state: "open" | "full" | "cancelled" | "past";
+            cancelled: boolean;
+            /** @description The session has its own seats */
+            capacity_changed: boolean;
+            reason: string;
+            timezone: string;
+        };
+        ClassSessionPage: {
+            items: components["schemas"]["ClassSession"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        ClassAttendee: {
+            /** Format: uuid */
+            reservation_uuid: string;
+            /** Format: int64 */
+            number: number;
+            /** @enum {string} */
+            status: "requested" | "active" | "in_service" | "completed" | "no_show";
+            approval_status: string;
+            payment_status: string;
+            confirmation_status: string;
+            source: string;
+            seats: number;
+            customer: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                phone: string | null;
+            };
+            /** Format: date-time */
+            created_at: string;
+        };
+        ClassSessionDetail: components["schemas"]["ClassSession"] & {
+            attendees: components["schemas"]["ClassAttendee"][];
+        };
+        ClassSessionChangeInput: {
+            cancelled: boolean;
+            /** @description null = the class's seats */
+            capacity?: number | null;
+            reason?: string;
+        };
+        EnvelopeClassSchedule: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassSchedule"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClassSchedulePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassSchedulePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClassFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClassFormOptions: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassFormOptions"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClassSessionPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassSessionPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClassSessionDetail: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClassSessionDetail"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         /** @description A multi-session package of the business (TEC-920). */
         SessionPackage: {
             /** Format: uuid */
@@ -17118,6 +17529,8 @@ export interface components {
         ConfirmationStartsFrom: string;
         /** @description Visits starting before this RFC 3339 time */
         ConfirmationStartsTo: string;
+        /** @description Local date of the class session (branch time zone) */
+        ClassSessionDate: string;
         /** @description Resource UUID */
         ResourceUUID: string;
         /** @description Cash account UUID. */
@@ -33010,6 +33423,388 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantClassesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantClassesFacets: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassFacets"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantClassesForm: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Form choices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassFormOptions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantClasses: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `weekday` (weekday then start, default), `service`, `created_at`; prefix `-` for descending. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description Service uuids; comma-separate or repeat */
+                service?: string;
+                /** @description Trainer (staff) uuids; comma-separate or repeat */
+                staff?: string;
+                /** @description `mon` … `sun`; comma-separate or repeat */
+                weekday?: string;
+                is_active?: "true" | "false";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Class page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSchedulePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantClass: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description The class */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSchedule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantClass: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The class */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSchedule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantClass: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    patchTenantClass: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description The class */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSchedule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantClassSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                /** @description Local date of the class session (branch time zone) */
+                date: components["parameters"]["ClassSessionDate"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSessionDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantClassSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                /** @description Local date of the class session (branch time zone) */
+                date: components["parameters"]["ClassSessionDate"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassSessionChangeInput"];
+            };
+        };
+        responses: {
+            /** @description The session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSessionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantClassSessions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                from?: string;
+                to?: string;
+                /** @description One of `starts_at` (default), `service`, `booked`; prefix `-` for descending. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description Service uuids; comma-separate or repeat */
+                service?: string;
+                /** @description Trainer (staff) uuids; comma-separate or repeat */
+                staff?: string;
+                /** @description `open`, `full`, `cancelled`, `past`; comma-separate or repeat */
+                state?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClassSessionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantSessionPackagesMeta: {

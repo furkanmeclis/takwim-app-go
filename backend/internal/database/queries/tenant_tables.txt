@@ -61,3 +61,5 @@ session_packages
 session_package_branches
 customer_packages
 package_sessions
+class_schedules
+class_session_changes
