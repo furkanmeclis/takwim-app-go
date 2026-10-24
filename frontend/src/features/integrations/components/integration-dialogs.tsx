@@ -17,9 +17,11 @@ import {
 import {
   labelOf,
   INTEGRATION_FIELD_LABEL_KEYS,
-  INTEGRATION_PROVIDER_HINT_KEYS,
+  INTEGRATION_KIND_LABEL_KEYS,
   INTEGRATION_PROVIDER_LABEL_KEYS,
   integrationWebhookPath,
+  providerHintKey,
+  providerOptionKey,
 } from "@/features/integrations/constants";
 import {
   useConnectIntegration,
@@ -102,9 +104,21 @@ export function ConnectIntegrationDialog({
   const connect = useConnectIntegration();
   const meta = useIntegrationsMeta();
   const providers = meta.data?.providers ?? [];
-  const [providerCode, setProviderCode] =
-    useState<IntegrationProviderCode>(FALLBACK_PROVIDER);
-  const provider = providers.find((p) => p.provider === providerCode);
+  // A provider may serve several kinds (Netgsm: SMS and voice calls), so
+  // the choice is the kind and the provider together.
+  const [chosenKey, setOptionKey] = useState<string>(FALLBACK_PROVIDER);
+  // Until the meta call answers (or when the choice is not offered) the
+  // first offered provider is selected.
+  const optionKey =
+    providers.length &&
+    !providers.some((p) => providerOptionKey(p.kind, p.provider) === chosenKey)
+      ? providerOptionKey(providers[0].kind, providers[0].provider)
+      : chosenKey;
+  const provider = providers.find(
+    (p) => providerOptionKey(p.kind, p.provider) === optionKey,
+  );
+  const providerCode: IntegrationProviderCode =
+    provider?.provider ?? (optionKey as IntegrationProviderCode);
   const fields = useMemo(
     () =>
       provider?.fields ??
@@ -136,12 +150,26 @@ export function ConnectIntegrationDialog({
       }),
     [fields, t],
   );
-  const providerOptions = (
-    providers.length ? providers.map((p) => p.provider) : [FALLBACK_PROVIDER]
-  ).map((code) => ({
-    value: code,
-    label: labelOf(t, INTEGRATION_PROVIDER_LABEL_KEYS, code),
-  }));
+  const providerOptions = providers.length
+    ? providers.map((p) => {
+        const label = labelOf(t, INTEGRATION_PROVIDER_LABEL_KEYS, p.provider);
+        const shared =
+          providers.filter((o) => o.provider === p.provider).length > 1;
+        return {
+          value: providerOptionKey(p.kind, p.provider),
+          label:
+            shared && p.kind
+              ? `${label} · ${labelOf(t, INTEGRATION_KIND_LABEL_KEYS, p.kind)}`
+              : label,
+        };
+      })
+    : [
+        {
+          value: FALLBACK_PROVIDER,
+          label: labelOf(t, INTEGRATION_PROVIDER_LABEL_KEYS, FALLBACK_PROVIDER),
+        },
+      ];
+  const hintKey = providerHintKey(provider?.kind, providerCode);
   return (
     <AppDialog
       open={open}
@@ -169,12 +197,12 @@ export function ConnectIntegrationDialog({
       {open ? (
         <div className="space-y-4">
           <ProviderPicker
-            value={providerCode}
+            value={optionKey}
             options={providerOptions}
-            onChange={setProviderCode}
+            onChange={setOptionKey}
           />
           <AppForm<ConnectValues>
-            key={providerCode}
+            key={optionKey}
             id={CONNECT_FORM}
             schema={schema}
             defaultValues={{
@@ -204,7 +232,7 @@ export function ConnectIntegrationDialog({
           >
             <div className="space-y-4">
               <p className="text-muted-foreground text-sm">
-                {labelOf(t, INTEGRATION_PROVIDER_HINT_KEYS, providerCode)}
+                {hintKey ? t(hintKey) : providerCode}
               </p>
               <AppInput
                 name="display_name"
@@ -235,9 +263,9 @@ function ProviderPicker({
   options,
   onChange,
 }: {
-  value: IntegrationProviderCode;
+  value: string;
   options: { value: string; label: string }[];
-  onChange: (value: IntegrationProviderCode) => void;
+  onChange: (value: string) => void;
 }) {
   const { t } = useLocale();
   return (
@@ -245,10 +273,7 @@ function ProviderPicker({
       <Label htmlFor="integration-provider">
         {t("integrations.fields.provider")}
       </Label>
-      <Select
-        value={value}
-        onValueChange={(next) => onChange(next as IntegrationProviderCode)}
-      >
+      <Select value={value} onValueChange={onChange}>
         <SelectTrigger id="integration-provider" className="w-full">
           <SelectValue />
         </SelectTrigger>

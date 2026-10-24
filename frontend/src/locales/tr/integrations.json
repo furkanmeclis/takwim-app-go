@@ -251,9 +251,12 @@
   "fields.template_language": "Şablon dili (ör. tr)",
   "webhook.label": "Webhook adresi",
   "webhook.hint": "Meta uygulamanızda WhatsApp > Yapılandırma bölümüne bu adresi ve doğrulama anahtarını girin, \"messages\" alanına abone olun. Teslim bilgileri ve müşterinin düğme yanıtları buraya gelir.",
-  "providers.netgsm": "Netgsm sesli mesaj",
-  "provider_hints.netgsm": "Netgsm hesabınızın kullanıcı kodunu (abone numarası) ve API şifresini girin; hesabınızda sesli mesaj ve tuşlama hizmetinin açık olması gerekir. Takwim teyit aramasını bu hesapla yapar; arama sonucunun döneceği adres her aramada otomatik verilir, Netgsm panelinde ayrıca bir ayar gerekmez.",
+  "providers.netgsm": "Netgsm",
+  "provider_hints.netgsm": "Netgsm hesabınızın kullanıcı kodunu (abone numarası) ve API şifresini girin.",
   "fields.usercode": "Kullanıcı kodu (abone numarası)",
   "kinds.voice_call": "Sesli arama",
-  "jobs.kinds.voice_call_result": "Arama sonucu"
+  "jobs.kinds.voice_call_result": "Arama sonucu",
+  "provider_hints.netgsm_sms": "Netgsm hesabınızın kullanıcı kodunu (abone numarası), API şifresini ve Netgsm’de onaylı mesaj başlığınızı (gönderici adı) girin. Müşteri bildirimleri ve teyit istekleri bu hesapla SMS olarak gönderilir; teslim raporları Netgsm’den otomatik okunur, panelde ayrıca bir ayar gerekmez.",
+  "provider_hints.netgsm_voice_call": "Netgsm hesabınızın kullanıcı kodunu (abone numarası) ve API şifresini girin; hesabınızda sesli mesaj ve tuşlama hizmetinin açık olması gerekir. Takwim teyit aramasını bu hesapla yapar; arama sonucunun döneceği adres her aramada otomatik verilir, Netgsm panelinde ayrıca bir ayar gerekmez.",
+  "fields.msgheader": "Mesaj başlığı (gönderici adı)"
 }

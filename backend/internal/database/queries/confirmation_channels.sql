@@ -59,3 +59,14 @@ WHERE cr.organization_id = sqlc.arg(organization_id) AND d.reservation_id = sqlc
   AND d.event_code = sqlc.arg(event_code)
 ORDER BY cr.responded_at, cr.id
 LIMIT 200;
+
+-- name: ListOpenCustomerNotificationDeliveriesByProvider :many
+-- Accepted attempts of one channel and provider still waiting for their
+-- delivery report (every business), oldest first: a provider without a
+-- webhook (Netgsm SMS, TEC-982) is asked for them.
+SELECT id, organization_id, uuid, provider_ref, sent_at
+FROM customer_notification_deliveries
+WHERE status = 'sent' AND finished_at IS NULL AND channel = sqlc.arg(channel) AND provider = sqlc.arg(provider)
+  AND provider_ref <> ''
+ORDER BY organization_id, sent_at
+LIMIT sqlc.arg(limit_count);

@@ -35,6 +35,19 @@ type Config struct {
 	Payments   PaymentsConfig
 	WhatsApp   WhatsAppConfig
 	Voice      VoiceConfig
+	SMS        SMSConfig
+}
+
+// SMSConfig switches the SMS provider of the customer notices on
+// (TEC-982). Each business connects its own Netgsm account in the panel;
+// nothing here is a credential.
+type SMSConfig struct {
+	// NetgsmEnabled registers the Netgsm SMS adapter and the delivery report
+	// poll (SMS_NETGSM_ENABLED).
+	NetgsmEnabled bool
+	// NetgsmBaseURL is Netgsm's API origin (SMS_NETGSM_BASE_URL; tests
+	// point it at a fake).
+	NetgsmBaseURL string
 }
 
 // VoiceConfig switches the automatic confirmation calls on (TEC-923). Each
@@ -391,6 +404,10 @@ func Load() (Config, error) {
 			NetgsmEnabled:  getBool("VOICE_NETGSM_ENABLED", false),
 			NetgsmBaseURL:  strings.TrimRight(getEnv("VOICE_NETGSM_BASE_URL", "https://api.netgsm.com.tr"), "/"),
 			WebhookBaseURL: strings.TrimRight(getEnv("VOICE_WEBHOOK_BASE_URL", ""), "/"),
+		},
+		SMS: SMSConfig{
+			NetgsmEnabled: getBool("SMS_NETGSM_ENABLED", false),
+			NetgsmBaseURL: strings.TrimRight(getEnv("SMS_NETGSM_BASE_URL", "https://api.netgsm.com.tr"), "/"),
 		},
 	}
 
