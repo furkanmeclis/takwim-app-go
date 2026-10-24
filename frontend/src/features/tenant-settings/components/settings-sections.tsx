@@ -1,5 +1,7 @@
 "use client";
 
+import { Code2 } from "lucide-react";
+import Link from "next/link";
 import { useWatch } from "react-hook-form";
 
 import {
@@ -9,6 +11,8 @@ import {
   AppTextarea,
   FormSection,
 } from "@/components/forms";
+import { Button } from "@/components/ui/button";
+import { routes } from "@/config/routes";
 import {
   INVOICE_ITEM_LABEL_KEYS,
   INVOICE_ITEM_TYPES,
@@ -16,7 +20,11 @@ import {
   SALES_CHANNEL_HINT_KEYS,
   SALES_CHANNEL_LABEL_KEYS,
 } from "@/features/tenant-settings/constants";
-import type { SettingsFormValues } from "@/features/tenant-settings/schemas/settings-form";
+import {
+  MAX_EMBED_ORIGINS,
+  type SettingsFormValues,
+} from "@/features/tenant-settings/schemas/settings-form";
+import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { useLocale } from "@/providers/locale-provider";
 
 type SectionProps = { disabled?: boolean };
@@ -225,25 +233,55 @@ export function PoliciesSection({ disabled }: SectionProps) {
   );
 }
 
-/** Satış kanalları: one switch per channel (form order = API order). */
+/**
+ * Satış kanalları: one switch per channel (form order = API order), and the
+ * sites allowed to embed the booking screen (TEC-908) with the way to the
+ * embed code generator.
+ */
 export function ChannelsSection({ disabled }: SectionProps) {
   const { t } = useLocale();
+  const { slug } = useTenant();
   return (
-    <FormSection
-      title={t("tenant_settings.sections.channels")}
-      description={t("tenant_settings.sections.channels_desc")}
-      columns={2}
-    >
-      {SALES_CHANNELS.map((code, index) => (
-        <AppSwitch
-          key={code}
-          name={`sales_channels.${index}.is_active`}
-          label={t(SALES_CHANNEL_LABEL_KEYS[code])}
-          description={t(SALES_CHANNEL_HINT_KEYS[code])}
+    <div className="space-y-4">
+      <FormSection
+        title={t("tenant_settings.sections.channels")}
+        description={t("tenant_settings.sections.channels_desc")}
+        columns={2}
+      >
+        {SALES_CHANNELS.map((code, index) => (
+          <AppSwitch
+            key={code}
+            name={`sales_channels.${index}.is_active`}
+            label={t(SALES_CHANNEL_LABEL_KEYS[code])}
+            description={t(SALES_CHANNEL_HINT_KEYS[code])}
+            disabled={disabled}
+          />
+        ))}
+      </FormSection>
+      <FormSection
+        title={t("tenant_settings.sections.embed")}
+        description={t("tenant_settings.sections.embed_desc")}
+      >
+        <AppTextarea
+          name="embed.allowed_origins"
+          label={t("tenant_settings.fields.embed_origins")}
+          description={t("tenant_settings.fields.embed_origins_hint", {
+            max: MAX_EMBED_ORIGINS,
+          })}
+          placeholder={"https://www.example.com\nhttps://*.example.com"}
+          rows={4}
           disabled={disabled}
         />
-      ))}
-    </FormSection>
+        <div>
+          <Button asChild variant="outline" size="sm">
+            <Link href={routes.tenant.settings.embed(slug)}>
+              <Code2 className="size-4" />
+              {t("tenant_settings.embed_code_link")}
+            </Link>
+          </Button>
+        </div>
+      </FormSection>
+    </div>
   );
 }
 

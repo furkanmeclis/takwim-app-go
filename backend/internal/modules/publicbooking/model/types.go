@@ -104,6 +104,14 @@ type Business struct {
 	Policies    Policies          `json:"policies"`
 	Booking     Booking           `json:"booking"`
 	BranchCount int               `json:"branch_count"`
+	Embed       Embed             `json:"embed"`
+}
+
+// Embed is what the embedded booking screen (TEC-908) needs: the sites
+// allowed to frame it (its frame-ancestors policy and the only targets of
+// its height messages).
+type Embed struct {
+	AllowedOrigins []string `json:"allowed_origins"`
 }
 
 // Image is an API-owned image URL.

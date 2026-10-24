@@ -220,9 +220,15 @@ export function paymentChoices(
   return allowed.includes("on_site") ? ["on_site"] : allowed;
 }
 
-/** Whether the web page takes bookings (else the reason keys). */
-export function bookingOpen(business: PublicBusiness) {
-  return business.booking.ready && business.booking.channels.web === true;
+/**
+ * Whether the screen takes bookings: the business page on channel `web`,
+ * the embedded screen on `widget` (TEC-908).
+ */
+export function bookingOpen(
+  business: PublicBusiness,
+  channel: "web" | "widget" = "web",
+) {
+  return business.booking.ready && business.booking.channels[channel] === true;
 }
 
 /** Sum of "450.00" amounts as a number. */

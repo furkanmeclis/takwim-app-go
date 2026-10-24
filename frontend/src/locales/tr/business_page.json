@@ -150,5 +150,11 @@
   "products.less": "Bir azalt",
   "products.more": "Bir artır",
   "products.line": "{{quantity}} adet",
-  "errors.out_of_stock": "Seçtiğiniz ürünlerden biri az önce tükendi. Lütfen ürünlerinizi yeniden seçin."
+  "errors.out_of_stock": "Seçtiğiniz ürünlerden biri az önce tükendi. Lütfen ürünlerinizi yeniden seçin.",
+  "status.payment_tab_title": "Ödeme yeni sekmede açıldı",
+  "status.payment_tab": "Ödemeyi açılan sekmede tamamlayın. Sonuç, ödeme sağlayıcısının doğrulamasından sonra burada görünür.",
+  "status.pay_open_tab": "Ödeme sayfasını aç",
+  "status.payment_returned_title": "Ödeme sayfasından döndünüz",
+  "status.payment_returned_description": "Ödemenin sonucu, randevuyu aldığınız pencerede görünür. Bu sekmeyi kapatabilirsiniz.",
+  "status.close_tab": "Sekmeyi kapat"
 }

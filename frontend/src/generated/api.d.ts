@@ -11213,6 +11213,10 @@ export interface components {
             code: "web" | "widget" | "api";
             is_active: boolean;
         };
+        OrganizationEmbedSettings: {
+            /** @description Sites allowed to embed the booking screen (TEC-908). Saved as origins: `example.com` becomes `https://example.com`, `https://*.example.com` allows every subdomain, http only for localhost; duplicates are dropped. An invalid entry answers `embed.allowed_origins.{i}` / `invalid`, more than 20 `too_many`. */
+            allowed_origins: string[];
+        };
         OrganizationInvoiceItemMapping: {
             /** @enum {string} */
             item_type: "service" | "product" | "package";
@@ -11232,6 +11236,7 @@ export interface components {
             payment: components["schemas"]["OrganizationPaymentSettings"];
             policies: components["schemas"]["OrganizationPolicySettings"];
             sales_channels: components["schemas"]["OrganizationSalesChannel"][];
+            embed: components["schemas"]["OrganizationEmbedSettings"];
             tax: components["schemas"]["OrganizationTaxSettings"];
         };
         OrganizationSettingsActor: {
@@ -13355,6 +13360,11 @@ export interface components {
                 checkout_minutes: number;
             };
             branch_count: number;
+            /** @description The embedded booking screen (`/embed/{slug}`, TEC-908). */
+            embed: {
+                /** @description Sites allowed to frame the booking screen (its `frame-ancestors` policy and the only targets of its height messages). Empty = no other site. */
+                allowed_origins: string[];
+            };
         };
         PublicBranch: {
             /** @description Areas a party may ask for (zones of the online tables and areas), for the restaurant flow's area step. */

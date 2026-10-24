@@ -56,6 +56,7 @@ export const FIELD_LABEL_KEYS: Record<string, string> = {
   "policies.no_show": "tenant_settings.fields.no_show",
   "policies.change": "tenant_settings.fields.change",
   "tax.default_vat_rate": "tenant_settings.fields.default_vat_rate",
+  "embed.allowed_origins": "tenant_settings.fields.embed_origins",
 };
 
 /** Which tab holds a settings dot path (error badges, jump to first error). */
@@ -67,6 +68,7 @@ export function tabOfPath(path: string): SettingsTab {
   if (path.startsWith("reservation") || path.startsWith("payment"))
     return "reservation";
   if (path.startsWith("policies")) return "policies";
-  if (path.startsWith("sales_channels")) return "channels";
+  if (path.startsWith("sales_channels") || path.startsWith("embed"))
+    return "channels";
   return "tax";
 }

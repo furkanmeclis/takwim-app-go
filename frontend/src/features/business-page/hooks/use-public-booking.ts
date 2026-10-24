@@ -110,12 +110,15 @@ const PAYMENT_WATCH_POLLS = 40;
  * Status view of a booking behind its access token. `watchPayment` (back
  * from the provider's page) looks every few seconds while the payment is
  * still open: only the provider's server notification records the result.
+ * `watchUntil` (the embedded screen, whose payment runs in another tab)
+ * does the same until that time.
  */
 export function usePublicReservation(
   slug: string,
   uuid: string,
   accessToken: string | null,
   watchPayment = false,
+  watchUntil: number | null = null,
 ) {
   return useQuery({
     queryKey: publicBookingKeys.reservation(slug, uuid),
@@ -129,6 +132,13 @@ export function usePublicReservation(
         watchPayment &&
         data?.payment_status === "online_pending" &&
         query.state.dataUpdateCount < PAYMENT_WATCH_POLLS
+      ) {
+        return 3_000;
+      }
+      if (
+        watchUntil &&
+        data?.payment_status === "online_pending" &&
+        Date.now() < watchUntil
       ) {
         return 3_000;
       }

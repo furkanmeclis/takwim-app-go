@@ -40,7 +40,20 @@ type Settings struct {
 	Payment       Payment        `json:"payment"`
 	Policies      Policies       `json:"policies"`
 	SalesChannels []SalesChannel `json:"sales_channels"`
+	Embed         Embed          `json:"embed"`
 	Tax           Tax            `json:"tax"`
+}
+
+// MaxEmbedOrigins is the most sites one business may embed its booking
+// screen on.
+const MaxEmbedOrigins = 20
+
+// Embed holds the sites allowed to frame the booking screen (TEC-908). Each
+// entry is a normalized origin (`https://example.com`, optionally
+// `https://*.example.com`); the embed page answers them in its
+// `frame-ancestors` policy. An empty list means no other site may embed it.
+type Embed struct {
+	AllowedOrigins []string `json:"allowed_origins"`
 }
 
 // Company is the legal / billing identity and the public contact details.
@@ -164,6 +177,7 @@ func Defaults() Settings {
 	return Settings{
 		Payment:       Payment{PayAtVenue: true},
 		SalesChannels: channels,
+		Embed:         Embed{AllowedOrigins: []string{}},
 		Tax:           Tax{InvoiceItemMappings: mappings},
 	}
 }

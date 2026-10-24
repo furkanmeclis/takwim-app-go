@@ -7,13 +7,32 @@
 const STORAGE_PREFIX = "takwim.booking.";
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 
-export function statusPath(slug: string, uuid: string) {
-  return `/b/${encodeURIComponent(slug)}/reservations/${encodeURIComponent(uuid)}`;
+/**
+ * Status page of a booking: `/b/…` on the business page, `/embed/…` inside
+ * the embedded screen (TEC-908), which keeps its query (frame id, view).
+ */
+export function statusPath(
+  slug: string,
+  uuid: string,
+  base = "/b",
+  query = "",
+) {
+  return `${base}/${encodeURIComponent(slug)}/reservations/${encodeURIComponent(uuid)}${query}`;
 }
 
-/** Status link of a booking with its token in the fragment. */
-export function statusHref(slug: string, uuid: string, token: string) {
-  return `${statusPath(slug, uuid)}#t=${token}`;
+/**
+ * Status link of a booking with its token in the fragment. The token
+ * travels in the link, not in a cookie, so the embedded screen works with
+ * third-party cookies and storage blocked (A21).
+ */
+export function statusHref(
+  slug: string,
+  uuid: string,
+  token: string,
+  base = "/b",
+  query = "",
+) {
+  return `${statusPath(slug, uuid, base, query)}#t=${token}`;
 }
 
 export function rememberAccessToken(uuid: string, token: string) {

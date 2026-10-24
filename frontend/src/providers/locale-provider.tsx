@@ -35,9 +35,15 @@ function resolveDir(locale: AppLocale): "ltr" | "rtl" {
 
 function readStoredLocale(): AppLocale | null {
   if (typeof window === "undefined") return null;
-  const stored = window.localStorage.getItem(
-    i18nConfig.storageKey,
-  ) as AppLocale | null;
+  let stored: AppLocale | null = null;
+  try {
+    stored = window.localStorage.getItem(
+      i18nConfig.storageKey,
+    ) as AppLocale | null;
+  } catch {
+    // Storage blocked (e.g. a framed booking screen with site data off).
+    return null;
+  }
   if (stored && i18nConfig.supportedLocales.includes(stored)) {
     return stored;
   }
@@ -77,7 +83,11 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   );
 
   const setLocale = useCallback((next: AppLocale) => {
-    window.localStorage.setItem(i18nConfig.storageKey, next);
+    try {
+      window.localStorage.setItem(i18nConfig.storageKey, next);
+    } catch {
+      // Storage blocked: the choice lasts for this page only.
+    }
     document.documentElement.lang = next;
     document.documentElement.dir = resolveDir(next);
     window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));

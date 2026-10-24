@@ -173,3 +173,66 @@ func TestReadiness(t *testing.T) {
 		t.Fatalf("auto at venue ready=%v missing=%v", ready, missing)
 	}
 }
+
+func TestNormalizeOrigin(t *testing.T) {
+	t.Parallel()
+	ok := map[string]string{
+		"example.com":                 "https://example.com",
+		" HTTPS://Shop.Example.com/ ": "https://shop.example.com",
+		"https://*.example.com":       "https://*.example.com",
+		"https://example.com:8443":    "https://example.com:8443",
+		"http://localhost:3000":       "http://localhost:3000",
+		"http://127.0.0.1:8080":       "http://127.0.0.1:8080",
+		"xn--kuafr-jua.com.tr":        "https://xn--kuafr-jua.com.tr",
+	}
+	for in, want := range ok {
+		got, valid := NormalizeOrigin(in)
+		if !valid || got != want {
+			t.Errorf("NormalizeOrigin(%q) = %q, %v; want %q", in, got, valid, want)
+		}
+	}
+	for _, in := range []string{
+		"", "http://example.com", "https://example.com/booking", "https://example.com?x=1",
+		"https://user@example.com", "ftp://example.com", "https://com", "https://10.0.0.1",
+		"https://*.localhost", "https://exa mple.com", "https://example.com; script-src *",
+		"https://example.com:99999", "https://-bad.com", "javascript:alert(1)", "*",
+	} {
+		if got, valid := NormalizeOrigin(in); valid {
+			t.Errorf("NormalizeOrigin(%q) = %q, want invalid", in, got)
+		}
+	}
+}
+
+func TestNormalizeEmbedOrigins(t *testing.T) {
+	t.Parallel()
+	in := model.Defaults()
+	in.Embed.AllowedOrigins = []string{"example.com", "https://example.com/", "", "https://*.shop.com"}
+	out, err := Normalize(in)
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if strings.Join(out.Embed.AllowedOrigins, ",") != "https://example.com,https://*.shop.com" {
+		t.Fatalf("origins = %v", out.Embed.AllowedOrigins)
+	}
+
+	in.Embed.AllowedOrigins = []string{"https://ok.com", "http://bad.com"}
+	_, err = Normalize(in)
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Details[0].Field != "embed.allowed_origins.1" {
+		t.Fatalf("want embed.allowed_origins.1 error, got %v", err)
+	}
+
+	in.Embed.AllowedOrigins = nil
+	for i := 0; i <= model.MaxEmbedOrigins; i++ {
+		in.Embed.AllowedOrigins = append(in.Embed.AllowedOrigins, "https://s"+strings.Repeat("a", i+1)+".com")
+	}
+	if _, err := Normalize(in); !errors.As(err, &ve) || ve.Details[0].Code != "too_many" {
+		t.Fatalf("want too_many, got %v", err)
+	}
+
+	in.Embed.AllowedOrigins = nil
+	out, err = Normalize(in)
+	if err != nil || out.Embed.AllowedOrigins == nil || len(out.Embed.AllowedOrigins) != 0 {
+		t.Fatalf("nil origins = %v, %v", out.Embed.AllowedOrigins, err)
+	}
+}

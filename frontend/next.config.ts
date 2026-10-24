@@ -1,17 +1,8 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
-/**
- * Baseline security headers for every route. A full script CSP is not set
- * here (Next inline bootstrap scripts would need nonces); `frame-ancestors`
- * and `base-uri` restrictions are safe to enforce globally.
- */
-const securityHeaders = [
-  {
-    key: "Content-Security-Policy",
-    value: "frame-ancestors 'self'; base-uri 'self'",
-  },
-  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+/** Headers every route gets, framable or not. */
+const commonHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
@@ -27,6 +18,28 @@ const securityHeaders = [
       ]
     : []),
 ];
+
+/**
+ * Baseline security headers for every route. A full script CSP is not set
+ * here (Next inline bootstrap scripts would need nonces); `frame-ancestors`
+ * and `base-uri` restrictions are safe to enforce globally.
+ */
+const securityHeaders = [
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'self'; base-uri 'self'",
+  },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  ...commonHeaders,
+];
+
+/**
+ * The embedded booking screen (`/embed/{slug}/…`, TEC-908) is the one page
+ * other sites may frame. It gets no X-Frame-Options here; its
+ * `frame-ancestors` (the business's allowed sites) is set per request by
+ * `src/proxy.ts`. Every other path, the panel included, stays non-framable.
+ */
+const NOT_EMBED = "/:path((?!embed/|embed$).*)";
 
 /**
  * Platform admin pages moved under the System Settings shell
@@ -70,7 +83,10 @@ const settingsRedirects = [
 const nextConfig: NextConfig = {
   output: "standalone",
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: NOT_EMBED, headers: securityHeaders },
+      { source: "/embed/:path*", headers: commonHeaders },
+    ];
   },
   async redirects() {
     return settingsRedirects;

@@ -19,18 +19,18 @@ The business comes from the slug only, never from a header or the body. An unkno
 
 ## Endpoints
 
-| Route                                         | Notes                                                                                                                                    |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET {slug}`                                  | profile: name, logo URL, sector flow and terms, contact, policies, `booking` (channels, readiness, rules, payment methods), branch count |
-| `GET {slug}/logo`                             | logo stream (versioned URL in the profile)                                                                                               |
-| `GET {slug}/branches`                         | active, `show_online` branches: hours, today's and later special days, photos                                                            |
-| `GET {slug}/services?branch_uuid=`            | active, `show_online` services a public branch offers; branch prices / durations; people shown online with their own price / duration    |
-| `GET {slug}/staff?branch_uuid=&service_uuid=` | active, `show_online` people in public branches; no contact details                                                                      |
-| `POST {slug}/availability`                    | `availability.Search` with channel `online`; the answer drops buffers and resources                                                      |
-| `POST {slug}/checkouts`                       | holds the picked slot (`checkout` hold, 10 minutes); answers the checkout token and the planned lines                                    |
-| `GET`, `DELETE {slug}/checkouts/{token}`      | checkout status (`active`, `expired`, `released`, `booked`); release when the customer goes back                                         |
-| `POST {slug}/reservations`                    | books a checkout for a customer identified by phone; answers the reservation and its `access_token`                                      |
-| `GET {slug}/reservations/{uuid}`              | status view behind `X-Reservation-Token`                                                                                                 |
+| Route                                         | Notes                                                                                                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET {slug}`                                  | profile: name, logo URL, sector flow and terms, contact, policies, `booking` (channels, readiness, rules, payment methods), branch count, `embed.allowed_origins` ([embed.md](./embed.md)) |
+| `GET {slug}/logo`                             | logo stream (versioned URL in the profile)                                                                                                                                                 |
+| `GET {slug}/branches`                         | active, `show_online` branches: hours, today's and later special days, photos                                                                                                              |
+| `GET {slug}/services?branch_uuid=`            | active, `show_online` services a public branch offers; branch prices / durations; people shown online with their own price / duration                                                      |
+| `GET {slug}/staff?branch_uuid=&service_uuid=` | active, `show_online` people in public branches; no contact details                                                                                                                        |
+| `POST {slug}/availability`                    | `availability.Search` with channel `online`; the answer drops buffers and resources                                                                                                        |
+| `POST {slug}/checkouts`                       | holds the picked slot (`checkout` hold, 10 minutes); answers the checkout token and the planned lines                                                                                      |
+| `GET`, `DELETE {slug}/checkouts/{token}`      | checkout status (`active`, `expired`, `released`, `booked`); release when the customer goes back                                                                                           |
+| `POST {slug}/reservations`                    | books a checkout for a customer identified by phone; answers the reservation and its `access_token`                                                                                        |
+| `GET {slug}/reservations/{uuid}`              | status view behind `X-Reservation-Token`                                                                                                                                                   |
 
 Hidden, inactive, deleted and other businesses' branches, services and staff are never listed. When a body or filter names them, the answer is `400` with `not_found` (or the slot engine's `inactive` / `not_offered`).
 
