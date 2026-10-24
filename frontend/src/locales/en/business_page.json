@@ -195,5 +195,14 @@
   "packages.none": "Don't use a package",
   "packages.option": "{{name}} · {{remaining}}/{{total}} left",
   "packages.session": "Package session",
-  "packages.paid_with": "From {{name}}"
+  "packages.paid_with": "From {{name}}",
+  "bundle.title": "Bundles",
+  "bundle.hint": "Several services at one price. Picking a bundle sets the services; picking a single service drops the bundle.",
+  "bundle.items": "{{count}} services",
+  "bundle.save": "Save {{amount}}",
+  "bundle.badge": "Bundle",
+  "bundle.in_bundle": "In the {{name}} bundle",
+  "bundle.list_price": "List total",
+  "bundle.discount": "Bundle discount",
+  "bundle.not_found": "The bundle you picked is no longer bookable online in this branch. Pick the services again."
 }

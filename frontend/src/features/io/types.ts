@@ -107,6 +107,7 @@ export type IoResource =
   | "tenant.staff"
   | "tenant.resources"
   | "tenant.services"
+  | "tenant.service_bundles"
   | "tenant.products"
   | "tenant.customers"
   | "tenant.reservations"
@@ -129,6 +130,7 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.staff": "/v1/tenant/staff/export",
   "tenant.resources": "/v1/tenant/resources/export",
   "tenant.services": "/v1/tenant/services/export",
+  "tenant.service_bundles": "/v1/tenant/service-bundles/export",
   "tenant.products": "/v1/tenant/products/export",
   "tenant.customers": "/v1/tenant/customers/export",
   "tenant.reservations": "/v1/tenant/reservations/export",
@@ -167,6 +169,10 @@ export const IMPORT_PATHS: Partial<
   "tenant.services": {
     upload: "/v1/tenant/services/import",
     sample: "/v1/tenant/services/import/sample",
+  },
+  "tenant.service_bundles": {
+    upload: "/v1/tenant/service-bundles/import",
+    sample: "/v1/tenant/service-bundles/import/sample",
   },
   "tenant.products": {
     upload: "/v1/tenant/products/import",
@@ -310,5 +316,25 @@ export const IMPORT_SCHEMA: Partial<
     { key: "is_active", labelKey: "services.fields.is_active" },
     { key: "sort_order", labelKey: "services.fields.sort_order" },
     { key: "description", labelKey: "services.fields.description" },
+  ],
+  // Combined bundles (TEC-985): services by name in serving order, joined
+  // with " + "; a row with the name of an existing bundle updates it.
+  "tenant.service_bundles": [
+    { key: "name", labelKey: "service_bundles.fields.name", required: true },
+    {
+      key: "services",
+      labelKey: "service_bundles.fields.services",
+      required: true,
+    },
+    {
+      key: "price",
+      labelKey: "service_bundles.fields.price_short",
+      required: true,
+    },
+    { key: "branch_codes", labelKey: "service_bundles.fields.branch_codes" },
+    { key: "show_online", labelKey: "service_bundles.fields.show_online" },
+    { key: "is_active", labelKey: "service_bundles.fields.is_active" },
+    { key: "sort_order", labelKey: "service_bundles.fields.sort_order" },
+    { key: "description", labelKey: "service_bundles.fields.description" },
   ],
 };

@@ -24,6 +24,8 @@
   "specs_resources": "Resources",
   "prefix_services": "service",
   "specs_services": "Services",
+  "prefix_service_bundles": "bundle",
+  "specs_service_bundles": "Bundles",
   "prefix_products": "product",
   "specs_products": "Products",
   "prefix_customers": "customer",

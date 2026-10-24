@@ -76,6 +76,7 @@
   "resources.tenant.staff": "Personel",
   "resources.tenant.resources": "Kaynaklar",
   "resources.tenant.services": "Hizmetler",
+  "resources.tenant.service_bundles": "Birleşik paketler",
   "resources.tenant.customers": "Müşteriler",
   "resources.tenant.reservations": "Rezervasyonlar",
   "resources.tenant.products": "Ürünler",

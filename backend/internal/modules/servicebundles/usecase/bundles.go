@@ -71,7 +71,8 @@ type Store interface {
 
 // Service implements the bundle use cases.
 type Service struct {
-	store Store
+	store   Store
+	indexer SearchIndexer
 }
 
 // New builds the service.
@@ -364,6 +365,7 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.Input) (mode
 	if err != nil {
 		return model.Bundle{}, mapErr(err)
 	}
+	s.index(ctx, orgID, created.Uuid)
 	return s.Get(ctx, orgID, created.Uuid)
 }
 
@@ -470,6 +472,7 @@ func (s *Service) Patch(ctx context.Context, orgID int64, id uuid.UUID, in model
 	if err != nil {
 		return model.Bundle{}, mapErr(err)
 	}
+	s.index(ctx, orgID, id)
 	return s.Get(ctx, orgID, id)
 }
 
@@ -501,6 +504,7 @@ func (s *Service) Delete(ctx context.Context, orgID int64, id uuid.UUID) (model.
 	if n == 0 {
 		return model.Bundle{}, ErrNotFound
 	}
+	s.unindex(ctx, orgID, id)
 	return b, nil
 }
 

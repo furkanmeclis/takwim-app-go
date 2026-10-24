@@ -6229,7 +6229,8 @@ paths:
         `X-Organization` organization (`tenant.services.read`). A bundle sells
         several services as one offer; `duration_minutes`, `list_price`,
         `staff_required` and `resource_kinds` follow from its `items`. `q`
-        searches name and description.
+        searches name and description. Export, import and bulk
+        activate / deactivate (TEC-985) use the catalog's permissions.
       security:
         - bearerAuth: []
       parameters:
@@ -6295,6 +6296,133 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/service-bundles/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantServiceBundlesExport
+      summary: Export service bundles
+      description: |
+        Queues an export of the combined service bundles (TEC-985; the
+        catalog's `tenant.services.export`). `query` honours `q`, `branch`,
+        `is_active` and `show_online`; `services` lists the contents joined
+        with ` + `. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/service-bundles/import:
+    post:
+      tags: [Tenant]
+      operationId: postTenantServiceBundlesImport
+      summary: Upload a service bundle import file
+      description: |
+        Creates an import job (`tenant.services.import`). A row whose `name`
+        matches a bundle (case-insensitive) updates it, any other row creates
+        one. `services` names the contents in serving order, separated by
+        ` + `, `;` or `|` (service names of the catalog); `branch_codes` the
+        branches that offer the bundle. Unknown names and codes are row
+        errors. Continue with `/v1/tenant/imports/{uuid}/mapping`, `/preview`
+        and `/confirm`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportUploadForm"
+      responses:
+        "201":
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeImportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/service-bundles/import/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceBundlesImportSample
+      summary: Download a service bundle import sample
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, xlsx, csv, tsv], default: xlsx }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: Sample file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/service-bundles/bulk:
+    post:
+      tags: [Tenant]
+      operationId: postTenantServiceBundlesBulk
+      summary: Run a bulk action on service bundles
+      description: |
+        Actions `activate` (`tenant.services.bulk.activate`) and `deactivate`
+        (`tenant.services.bulk.deactivate`), both reversible. Targets are
+        resolved inside the organization only; the `query` scope takes the
+        list filters (`q`, `branch`, `is_active`, `show_online`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkExecuteRequest"
+      responses:
+        "200":
+          description: Sync bulk result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkSyncResult"
+        "202":
+          description: Async bulk job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBulkJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
 
   /v1/tenant/service-bundles/{uuid}:
     get:
@@ -13409,6 +13537,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopePublicServiceList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/public/businesses/{slug}/bundles:
+    get:
+      tags: [Public booking]
+      operationId: listPublicBundles
+      summary: Combined service bundles bookable online
+      description: |
+        No authentication (TEC-985). Active bundles with `show_online` that a
+        public branch offers and whose every service is bookable online there
+        (active, shown online, with an active branch offer). With
+        `branch_uuid` only that branch's bundles, with the items priced for
+        it; otherwise the list prices and every public branch that offers the
+        bundle. `allocated_price` is each item's share of the bundle price
+        at the shown prices (the same split as the panel: in proportion to
+        the prices, the remainder on the last item); the booking splits the
+        bundle price again over the final line prices. A hidden branch or
+        another business's is `400` detail `branch_uuid` / `not_found`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+        - name: branch_uuid
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Bundles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePublicBundleList"
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
@@ -24794,9 +24955,16 @@ components:
           maxLength: 64
           description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
+        bundle_uuid:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            A bundle of `GET …/bundles` of the branch (TEC-985). `lines` may then be empty (the bundle's services in
+            order, anyone free) or exactly those services in order, each with the person picked (`lines` /
+            `bundle_mismatch` otherwise). A bundle that is not bookable online in the branch is `400` `bundle_uuid` /
+            `not_found`.
         lines:
           type: array
-          minItems: 1
           maxItems: 10
           items: { $ref: "#/components/schemas/PublicLineInput" }
         from: { type: string, format: date }
@@ -24816,6 +24984,24 @@ components:
             - $ref: "#/components/schemas/PublicRef"
             - type: "null"
         seats_left: { type: [integer, "null"], description: Free seats of a group class session; null for an individual service. }
+
+    PublicCheckoutLine:
+      type: object
+      description: A held line of a checkout.
+      required: [service_uuid, starts_at, ends_at, staff]
+      properties:
+        service_uuid: { type: string, format: uuid }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/PublicRef"
+            - type: "null"
+        bundle:
+          description: The service bundle the line belongs to (TEC-985); absent for a single service.
+          oneOf:
+            - $ref: "#/components/schemas/PublicRef"
+            - type: "null"
 
     PublicAvailability:
       type: object
@@ -24910,9 +25096,14 @@ components:
           maxLength: 64
           description: Area of the branch (resource zone) the resources must be in; empty = any.
         branch_uuid: { type: string, format: uuid }
+        bundle_uuid:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            Books a bundle (TEC-985): the same rules as the availability request. The checkout's lines then carry the
+            bundle and the booking splits the bundle price over them as the panel does.
         lines:
           type: array
-          minItems: 1
           maxItems: 10
           items: { $ref: "#/components/schemas/PublicLineInput" }
         starts_at: { type: string, format: date-time, description: "A slot start from the availability answer." }
@@ -24920,7 +25111,7 @@ components:
 
     PublicCheckout:
       type: object
-      required: [token, status, channel, branch, starts_at, ends_at, expires_at, lines, reservation_uuid, party_size, zone]
+      required: [token, status, channel, branch, bundle, starts_at, ends_at, expires_at, lines, reservation_uuid, party_size, zone]
       properties:
         party_size: { type: [integer, "null"], description: Number of people (restaurant). }
         zone: { type: string, description: Area asked for; empty = any. }
@@ -24928,12 +25119,17 @@ components:
         status: { type: string, enum: [active, expired, released, booked] }
         channel: { $ref: "#/components/schemas/PublicChannel" }
         branch: { $ref: "#/components/schemas/PublicRef" }
+        bundle:
+          description: The service bundle the lines belong to (TEC-985); null for single services.
+          oneOf:
+            - $ref: "#/components/schemas/PublicRef"
+            - type: "null"
         starts_at: { type: string, format: date-time }
         ends_at: { type: string, format: date-time }
         expires_at: { type: [string, "null"], format: date-time }
         lines:
           type: array
-          items: { $ref: "#/components/schemas/PublicSlotLine" }
+          items: { $ref: "#/components/schemas/PublicCheckoutLine" }
         reservation_uuid: { type: [string, "null"], format: uuid }
 
     PublicProduct:
@@ -25046,7 +25242,7 @@ components:
           type: array
           items:
             type: object
-            required: [service_uuid, service_name, staff, starts_at, ends_at, duration_minutes, unit_price, package_name]
+            required: [service_uuid, service_name, staff, starts_at, ends_at, duration_minutes, unit_price, package_name, bundle_name, list_price]
             properties:
               service_uuid: { type: [string, "null"], format: uuid }
               service_name: { type: string }
@@ -25065,6 +25261,14 @@ components:
               package_name:
                 type: [string, "null"]
                 description: The line is paid by a session of this package (TEC-984); it is not part of the total.
+              bundle_name:
+                type: [string, "null"]
+                description: The line was booked as part of this service bundle (TEC-985); `unit_price` is its share of the bundle price.
+              list_price:
+                description: The line's price before the bundle discount (bundle lines only).
+                oneOf:
+                  - $ref: "#/components/schemas/MoneyAmount"
+                  - type: "null"
         products:
           type: array
           items:
@@ -25108,6 +25312,51 @@ components:
         data:
           type: array
           items: { $ref: "#/components/schemas/PublicService" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    PublicBundle:
+      type: object
+      description: A combined service bundle a customer may book online (TEC-985).
+      required: [uuid, name, description, price, list_price, discount, currency, duration_minutes, payment_modes, items, branch_uuids]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        list_price: { $ref: "#/components/schemas/MoneyAmount", description: Sum of the item prices. }
+        discount: { $ref: "#/components/schemas/MoneyAmount", description: What the bundle saves (zero when it costs more). }
+        currency: { type: string }
+        duration_minutes: { type: integer, description: Sum of the item durations (the branch's with a branch filter). }
+        payment_modes:
+          type: array
+          description: Payment methods every service of the bundle takes.
+          items: { type: string, enum: [on_site, online] }
+        items:
+          type: array
+          description: The services in serving order.
+          items:
+            type: object
+            required: [service_uuid, service_name, duration_minutes, price, allocated_price, staff_mode]
+            properties:
+              service_uuid: { type: string, format: uuid }
+              service_name: { type: string }
+              duration_minutes: { type: integer }
+              price: { $ref: "#/components/schemas/MoneyAmount", description: "The branch's with a branch filter, else the list price." }
+              allocated_price: { $ref: "#/components/schemas/MoneyAmount", description: The item's share of the bundle price. }
+              staff_mode: { type: string, enum: [required, optional, none] }
+        branch_uuids:
+          type: array
+          description: Public branches where the bundle is bookable online.
+          items: { type: string, format: uuid }
+
+    EnvelopePublicBundleList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PublicBundle" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopePublicStaffList:
@@ -25872,7 +26121,7 @@ components:
               type: array
               items:
                 type: object
-                required: [service_name, staff_name, starts_at, ends_at, duration_minutes, unit_price]
+                required: [service_name, staff_name, starts_at, ends_at, duration_minutes, unit_price, bundle_name, list_price]
                 properties:
                   service_name: { type: string }
                   staff_name: { type: [string, "null"] }
@@ -25880,6 +26129,14 @@ components:
                   ends_at: { type: string, format: date-time }
                   duration_minutes: { type: integer }
                   unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+                  bundle_name:
+                    type: [string, "null"]
+                    description: The line was booked as part of this service bundle (TEC-985); `unit_price` is its share of the bundle price.
+                  list_price:
+                    description: The line's price before the bundle discount (bundle lines only).
+                    oneOf:
+                      - $ref: "#/components/schemas/MoneyAmount"
+                      - type: "null"
             policies:
               type: object
               required: [cancellation, change, no_show, cancel_cutoff_minutes, change_cutoff_minutes]

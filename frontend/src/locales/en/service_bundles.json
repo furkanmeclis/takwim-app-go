@@ -67,6 +67,8 @@
   "fields.branches_hint": "Branches that sell the bundle.",
   "fields.branches_placeholder": "Pick branches",
   "fields.branches_empty": "No branches found",
+  "fields.services": "Services (in order, separated by +)",
+  "fields.branch_codes": "Branch codes",
   "fields.updated_at": "Last updated",
   "items.position": "{{position}}.",
   "items.move_up": "Move up",

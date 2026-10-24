@@ -28,6 +28,7 @@ import type {
   PaymentMethod,
   PublicBusiness,
   PublicBookingProduct,
+  PublicBundle,
   PublicCheckout,
   PublicProduct,
   PublicService,
@@ -62,6 +63,7 @@ export function SummaryStep({
   packageBy = {},
   covered = new Set<number>(),
   onPackageChange,
+  bundle = null,
 }: {
   business: PublicBusiness;
   checkout: PublicCheckout;
@@ -80,14 +82,17 @@ export function SummaryStep({
   /** Lines a picked package pays. */
   covered?: Set<number>;
   onPackageChange?: (line: number, packageUuid: string | null) => void;
+  /** The combined bundle the lines belong to (TEC-985). */
+  bundle?: PublicBundle | null;
 }) {
   const { t, locale } = useLocale();
   const zone = business.timezone;
   const time = (iso: string) =>
     datetimeInZone(iso, zone, locale, { hour: "2-digit", minute: "2-digit" });
   const byUuid = new Map(services.map((s) => [s.uuid, s]));
-  const prices = checkoutPrices(checkout, services);
+  const prices = checkoutPrices(checkout, services, bundle);
   const itemPrices = productPrices(products, pickedProducts);
+  const bundleSaves = bundle !== null && Number(bundle.discount) > 0;
   const total =
     sumAmounts(prices.filter((_, index) => !covered.has(index))) +
     sumAmounts(itemPrices);
@@ -150,6 +155,13 @@ export function SummaryStep({
                     {time(line.starts_at)}–{time(line.ends_at)}
                     {line.staff ? ` · ${line.staff.name}` : ""}
                   </span>
+                  {line.bundle ? (
+                    <span className="text-muted-foreground block text-xs">
+                      {t("business_page.bundle.in_bundle", {
+                        name: line.bundle.name,
+                      })}
+                    </span>
+                  ) : null}
                   {onPackageChange && offered(index).length > 0 ? (
                     <Select
                       value={
@@ -212,6 +224,22 @@ export function SummaryStep({
             ))}
           </ul>
           <Separator />
+          {bundle && bundleSaves ? (
+            <>
+              <p className="text-muted-foreground flex justify-between text-sm">
+                <span>{t("business_page.bundle.list_price")}</span>
+                <span className="tabular-nums line-through">
+                  {money(bundle.list_price)}
+                </span>
+              </p>
+              <p className="text-muted-foreground flex justify-between text-sm">
+                <span>
+                  {t("business_page.bundle.discount")} · {bundle.name}
+                </span>
+                <span className="tabular-nums">−{money(bundle.discount)}</span>
+              </p>
+            </>
+          ) : null}
           <p className="flex justify-between text-sm font-semibold">
             <span>{t("business_page.summary.total")}</span>
             <span className="tabular-nums">{money(total.toFixed(2))}</span>

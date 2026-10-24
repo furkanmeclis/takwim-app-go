@@ -67,6 +67,8 @@
   "fields.branches_hint": "Paketin satılacağı şubeler.",
   "fields.branches_placeholder": "Şube seçin",
   "fields.branches_empty": "Şube bulunamadı",
+  "fields.services": "Hizmetler (sırayla, + ile ayrılmış)",
+  "fields.branch_codes": "Şube kodları",
   "fields.updated_at": "Son güncelleme",
   "items.position": "{{position}}.",
   "items.move_up": "Yukarı taşı",

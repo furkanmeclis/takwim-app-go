@@ -68,6 +68,7 @@
   "lines.price": "Fiyat",
   "lines.minutes": "{{minutes}} dk",
   "lines.empty": "Hizmet yok",
+  "lines.bundle": "{{name}} paketinde",
   "policies.title": "İşletmenin kuralları",
   "policies.cancellation": "İptal",
   "policies.change": "Değişiklik",

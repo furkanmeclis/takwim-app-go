@@ -230,6 +230,47 @@ func (q *Queries) GetServiceBundleByName(ctx context.Context, arg GetServiceBund
 	return i, err
 }
 
+const getServiceBundleSearchDocument = `-- name: GetServiceBundleSearchDocument :one
+SELECT b.id, b.uuid, b.organization_id, b.name, b.description, o.slug AS organization_slug,
+       COALESCE((SELECT string_agg(s.name, ' + ' ORDER BY i.position)
+                 FROM service_bundle_items i
+                 JOIN services s ON s.organization_id = i.organization_id AND s.id = i.service_id
+                 WHERE i.organization_id = b.organization_id AND i.bundle_id = b.id), '')::text AS items
+FROM service_bundles b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = $1 AND b.uuid = $2 AND b.deleted_at IS NULL
+`
+
+type GetServiceBundleSearchDocumentParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type GetServiceBundleSearchDocumentRow struct {
+	ID               int64     `json:"id"`
+	Uuid             uuid.UUID `json:"uuid"`
+	OrganizationID   int64     `json:"organization_id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	OrganizationSlug string    `json:"organization_slug"`
+	Items            string    `json:"items"`
+}
+
+func (q *Queries) GetServiceBundleSearchDocument(ctx context.Context, arg GetServiceBundleSearchDocumentParams) (GetServiceBundleSearchDocumentRow, error) {
+	row := q.db.QueryRow(ctx, getServiceBundleSearchDocument, arg.OrganizationID, arg.Uuid)
+	var i GetServiceBundleSearchDocumentRow
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Description,
+		&i.OrganizationSlug,
+		&i.Items,
+	)
+	return i, err
+}
+
 const insertServiceBundleBranch = `-- name: InsertServiceBundleBranch :exec
 INSERT INTO service_bundle_branches (organization_id, bundle_id, branch_id)
 VALUES ($1, $2, $3)
@@ -302,6 +343,49 @@ func (q *Queries) ListBundleServicesByUUIDs(ctx context.Context, arg ListBundleS
 			&i.Uuid,
 			&i.Name,
 			&i.GroupCapacity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicServiceBundles = `-- name: ListPublicServiceBundles :many
+SELECT b.id, b.uuid, b.organization_id, b.name, b.description, b.price, b.show_online, b.is_active, b.sort_order, b.created_at, b.updated_at, b.deleted_at
+FROM service_bundles b
+WHERE b.organization_id = $1
+  AND b.deleted_at IS NULL AND b.is_active AND b.show_online
+ORDER BY b.sort_order ASC, lower(b.name) ASC, b.id ASC
+`
+
+// Active bundles shown online (public booking, TEC-985); the contents and
+// the branches come from ListServiceBundleItems / ListServiceBundleBranches.
+func (q *Queries) ListPublicServiceBundles(ctx context.Context, organizationID int64) ([]ServiceBundle, error) {
+	rows, err := q.db.Query(ctx, listPublicServiceBundles, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ServiceBundle{}
+	for rows.Next() {
+		var i ServiceBundle
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.ShowOnline,
+			&i.IsActive,
+			&i.SortOrder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -513,6 +597,110 @@ func (q *Queries) ListServiceBundleItems(ctx context.Context, arg ListServiceBun
 	return items, nil
 }
 
+const listServiceBundleSearchDocuments = `-- name: ListServiceBundleSearchDocuments :many
+SELECT b.id, b.uuid, b.organization_id, b.name, b.description, o.slug AS organization_slug,
+       COALESCE((SELECT string_agg(s.name, ' + ' ORDER BY i.position)
+                 FROM service_bundle_items i
+                 JOIN services s ON s.organization_id = i.organization_id AND s.id = i.service_id
+                 WHERE i.organization_id = b.organization_id AND i.bundle_id = b.id), '')::text AS items
+FROM service_bundles b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = $1
+  AND b.deleted_at IS NULL
+`
+
+type ListServiceBundleSearchDocumentsRow struct {
+	ID               int64     `json:"id"`
+	Uuid             uuid.UUID `json:"uuid"`
+	OrganizationID   int64     `json:"organization_id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	OrganizationSlug string    `json:"organization_slug"`
+	Items            string    `json:"items"`
+}
+
+// Cmd+K documents of the live bundles of one organization.
+func (q *Queries) ListServiceBundleSearchDocuments(ctx context.Context, organizationID int64) ([]ListServiceBundleSearchDocumentsRow, error) {
+	rows, err := q.db.Query(ctx, listServiceBundleSearchDocuments, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListServiceBundleSearchDocumentsRow{}
+	for rows.Next() {
+		var i ListServiceBundleSearchDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.Name,
+			&i.Description,
+			&i.OrganizationSlug,
+			&i.Items,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listServiceBundleUUIDs = `-- name: ListServiceBundleUUIDs :many
+SELECT b.uuid
+FROM service_bundles b
+WHERE b.organization_id = $1
+  AND b.deleted_at IS NULL
+  AND ($2::bigint[] IS NULL OR EXISTS (
+        SELECT 1 FROM service_bundle_branches bb
+        WHERE bb.organization_id = b.organization_id AND bb.bundle_id = b.id
+          AND bb.branch_id = ANY($2::bigint[])))
+  AND ($3::boolean IS NULL OR b.is_active = $3)
+  AND ($4::boolean IS NULL OR b.show_online = $4)
+  AND ($5::text IS NULL OR b.name ILIKE '%' || $5 || '%' OR b.description ILIKE '%' || $5 || '%')
+ORDER BY b.sort_order ASC, lower(b.name) ASC, b.id ASC
+LIMIT $6
+`
+
+type ListServiceBundleUUIDsParams struct {
+	OrganizationID  int64       `json:"organization_id"`
+	FilterBranchIds []int64     `json:"filter_branch_ids"`
+	IsActive        pgtype.Bool `json:"is_active"`
+	ShowOnline      pgtype.Bool `json:"show_online"`
+	Q               pgtype.Text `json:"q"`
+	LimitCount      int32       `json:"limit_count"`
+}
+
+// The bundles matching a list filter (bulk "all matching" scope).
+func (q *Queries) ListServiceBundleUUIDs(ctx context.Context, arg ListServiceBundleUUIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listServiceBundleUUIDs,
+		arg.OrganizationID,
+		arg.FilterBranchIds,
+		arg.IsActive,
+		arg.ShowOnline,
+		arg.Q,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var uuid uuid.UUID
+		if err := rows.Scan(&uuid); err != nil {
+			return nil, err
+		}
+		items = append(items, uuid)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServiceBundles = `-- name: ListServiceBundles :many
 SELECT b.id, b.uuid, b.organization_id, b.name, b.description, b.price, b.show_online, b.is_active, b.sort_order, b.created_at, b.updated_at, b.deleted_at
 FROM service_bundles b
@@ -595,6 +783,22 @@ func (q *Queries) ListServiceBundles(ctx context.Context, arg ListServiceBundles
 		return nil, err
 	}
 	return items, nil
+}
+
+const setServiceBundleActive = `-- name: SetServiceBundleActive :exec
+UPDATE service_bundles SET is_active = $1
+WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
+`
+
+type SetServiceBundleActiveParams struct {
+	IsActive       bool  `json:"is_active"`
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) SetServiceBundleActive(ctx context.Context, arg SetServiceBundleActiveParams) error {
+	_, err := q.db.Exec(ctx, setServiceBundleActive, arg.IsActive, arg.OrganizationID, arg.ID)
+	return err
 }
 
 const softDeleteServiceBundle = `-- name: SoftDeleteServiceBundle :execrows

@@ -25,6 +25,9 @@ export type PublicClassesQuery = {
 };
 export type PublicCheckoutRequest = Schemas["PublicCheckoutRequest"];
 export type PublicCheckout = Schemas["PublicCheckout"];
+export type PublicCheckoutLine = PublicCheckout["lines"][number];
+/** A combined service bundle bookable online in a branch (TEC-985). */
+export type PublicBundle = Schemas["PublicBundle"];
 export type PublicBookingRequest = Schemas["PublicBookingRequest"];
 export type PublicReservation = Schemas["PublicReservation"];
 /** A product sold online in a branch (TEC-919). */

@@ -138,6 +138,7 @@ import (
 	searchhandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/handler"
 	searchusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/search/usecase"
 	servicebundlesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles"
+	servicebundlesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/adapters"
 	servicebundleshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/handler"
 	servicebundlesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/usecase"
 	servicesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services"
@@ -305,6 +306,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewSearch(deps.Queries),
 		resourcesadapters.NewSearch(deps.Queries),
 		servicesadapters.NewSearch(deps.Queries),
+		servicebundlesadapters.NewSearch(deps.Queries),
 		productsadapters.NewSearch(deps.Queries),
 		sessionpackagesadapters.NewSearch(deps.Queries),
 		customersadapters.NewSearch(deps.Queries),
@@ -400,6 +402,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	staffSvc := staffusecase.New(staffrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	resourcesSvc := resourcesusecase.New(resourcesrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	servicesSvc := servicesusecase.New(servicesrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
+	bundlesSvc := servicebundlesusecase.New(servicesrepository.NewPostgres(deps.DB, deps.Queries))
+	bundlesSvc.SetIndexer(searchIndexer)
 	servicesSvc.SetStorage(deps.Storage)
 	productsSvc := productsusecase.New(productsrepository.NewPostgres(deps.DB, deps.Queries), searchIndexer)
 	productsSvc.SetStorage(deps.Storage)
@@ -607,6 +611,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewIO(staffSvc),
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
+		servicebundlesadapters.NewIO(bundlesSvc),
 		productsadapters.NewIO(productsSvc),
 		productsadapters.NewMovementsIO(productsSvc),
 		sessionpackagesadapters.NewIO(sessionPackagesSvc),
@@ -630,6 +635,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		staffadapters.NewBulk(staffSvc),
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
+		servicebundlesadapters.NewBulk(bundlesSvc),
 		productsadapters.NewBulk(productsSvc),
 		sessionpackagesadapters.NewBulk(sessionPackagesSvc),
 		customersadapters.NewBulk(customersSvc),
@@ -709,10 +715,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Sample: importH.TenantSample(servicesmodule.Resource),
 		Bulk:   bulkH.TenantExecute(servicesmodule.Resource),
 	}, tokens, loader, tenantResolver)
-	bundlesH := servicebundleshandler.New(
-		servicebundlesusecase.New(servicesrepository.NewPostgres(deps.DB, deps.Queries)), activityRec)
+	bundlesH := servicebundleshandler.New(bundlesSvc, activityRec)
 	bundlesH.SetResourceEvents(resourceEvents)
-	servicebundlesmodule.RegisterRoutes(mux, bundlesH, tokens, loader, tenantResolver)
+	servicebundlesmodule.RegisterRoutes(mux, bundlesH, servicebundlesmodule.EngineHandlers{
+		Export: exportH.TenantExport(servicebundlesmodule.Resource, servicebundlesmodule.ExportQueryKeys...),
+		Import: importH.TenantUpload(servicebundlesmodule.Resource),
+		Sample: importH.TenantSample(servicebundlesmodule.Resource),
+		Bulk:   bulkH.TenantExecute(servicebundlesmodule.Resource),
+	}, tokens, loader, tenantResolver)
 	productsH := productshandler.New(productsSvc, activityRec)
 	productsH.SetResourceEvents(resourceEvents)
 	productsmodule.RegisterRoutes(mux, productsH, productsmodule.EngineHandlers{

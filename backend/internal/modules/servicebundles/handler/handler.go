@@ -12,11 +12,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
-	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/bulkengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourcemeta"
@@ -42,12 +42,15 @@ func (h *Handler) SetResourceEvents(pub resourceevents.Publisher) {
 }
 
 // Meta is the table contract of GET /v1/tenant/service-bundles.
+// Capabilities match the live routes: export / import / bulk are mounted by
+// routes.go (TEC-985).
 func Meta() resourcemeta.ResourceMeta {
 	return resourcemeta.ResourceMeta{
 		Resource:      model.Slug,
 		DefaultFields: []string{"uuid", "name", "items", "duration_minutes", "price", "list_price", "show_online", "is_active"},
 		Capabilities: resourcemeta.Capabilities{
 			Create: true, Read: true, Update: true, Delete: true, Search: true, Filter: true, Sort: true,
+			Export: true, Import: true, Bulk: true,
 		},
 		SearchableFields: []string{"name", "description"},
 		SortableFields:   []string{"name", "price", "sort_order", "is_active", "created_at", "updated_at"},
@@ -71,7 +74,7 @@ func Meta() resourcemeta.ResourceMeta {
 			{Key: "show_online", LabelKey: "service_bundles.columns.show_online", Variant: resourcemeta.FilterVariantFaceted, EnumLookup: "boolean"},
 		},
 		Includes:    []string{},
-		BulkActions: []bulkengine.BulkActionDef{},
+		BulkActions: adapters.NewBulk(nil).BulkActions(),
 	}
 }
 

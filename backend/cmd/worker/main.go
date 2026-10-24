@@ -61,6 +61,8 @@ import (
 	salesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales"
 	salesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/repository"
 	salesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/usecase"
+	servicebundlesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/adapters"
+	servicebundlesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/usecase"
 	servicesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/adapters"
 	servicesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/repository"
 	servicesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/services/usecase"
@@ -178,6 +180,7 @@ func main() {
 	staffSvc := staffusecase.New(staffrepository.NewPostgres(pool, queries), nil)
 	resourcesSvc := resourcesusecase.New(resourcesrepository.NewPostgres(pool, queries), nil)
 	servicesSvc := servicesusecase.New(servicesrepository.NewPostgres(pool, queries), nil)
+	bundlesSvc := servicebundlesusecase.New(servicesrepository.NewPostgres(pool, queries))
 	productsSvc := productsusecase.New(productsrepository.NewPostgres(pool, queries), nil)
 	customersSvc := customersusecase.New(customersrepository.NewPostgres(pool, queries), nil)
 	// Reservation exports and bulk transitions (TEC-963) run with the
@@ -257,6 +260,7 @@ func main() {
 		staffadapters.NewIO(staffSvc),
 		resourcesadapters.NewIO(resourcesSvc),
 		servicesadapters.NewIO(servicesSvc),
+		servicebundlesadapters.NewIO(bundlesSvc),
 		productsadapters.NewIO(productsSvc),
 		productsadapters.NewMovementsIO(productsSvc),
 		sessionpackagesadapters.NewIO(sessionPackagesSvc),
@@ -278,6 +282,7 @@ func main() {
 		staffadapters.NewBulk(staffSvc),
 		resourcesadapters.NewBulk(resourcesSvc),
 		servicesadapters.NewBulk(servicesSvc),
+		servicebundlesadapters.NewBulk(bundlesSvc),
 		productsadapters.NewBulk(productsSvc),
 		sessionpackagesadapters.NewBulk(sessionPackagesSvc),
 		customersadapters.NewBulk(customersSvc),
@@ -300,6 +305,7 @@ func main() {
 		staffadapters.NewSearch(queries),
 		resourcesadapters.NewSearch(queries),
 		servicesadapters.NewSearch(queries),
+		servicebundlesadapters.NewSearch(queries),
 		productsadapters.NewSearch(queries),
 		sessionpackagesadapters.NewSearch(queries),
 		customersadapters.NewSearch(queries),

@@ -384,6 +384,11 @@ func (s *Service) view(o owned) model.Reservation {
 			ServiceName: l.ServiceName, StartsAt: l.StartsAt, EndsAt: l.EndsAt,
 			DurationMinutes: l.DurationMinutes, UnitPrice: l.UnitPrice,
 		}
+		if l.Bundle != nil {
+			name := l.Bundle.Name
+			line.BundleName = &name
+			line.ListPrice = l.ListPrice
+		}
 		out.Services = append(out.Services, l.ServiceName)
 		if l.Staff != nil {
 			name := l.Staff.Name

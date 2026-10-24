@@ -12,8 +12,16 @@ import {
   EntityToolbar,
   useServerListState,
 } from "@/components/entity";
+import { createSelectColumnDef } from "@/components/tables";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
+import {
+  BulkActionMenu,
+  SelectionBanner,
+  resolveBulkActionsWithIcons,
+  useBulkSelection,
+} from "@/features/bulk-engine";
+import { ResourceIOToolbar } from "@/features/io";
 import { useBundleColumns } from "@/features/service-bundles/components/bundle-columns";
 import type { BundleRowActionHandlers } from "@/features/service-bundles/components/bundle-row-actions";
 import { SERVICE_BUNDLES_RESOURCE } from "@/features/service-bundles/constants";
@@ -21,6 +29,7 @@ import {
   useDeleteServiceBundle,
   useServiceBundlesFacets,
   useServiceBundlesList,
+  useServiceBundlesMeta,
   useUpdateServiceBundle,
 } from "@/features/service-bundles/hooks/use-service-bundles";
 import type {
@@ -44,7 +53,8 @@ function oneBoolean(values: string[]) {
 
 /**
  * Combined service bundles: server-side pagination / sort / search, faceted
- * filters, column visibility, row actions and row click → detail.
+ * filters, column visibility, row actions and row click → detail, export /
+ * import and bulk activate / deactivate with the selection banner (TEC-985).
  */
 export function BundlesPage() {
   const { t } = useLocale();
@@ -73,6 +83,7 @@ export function BundlesPage() {
   }, [listState.columnFilters, listState.params]);
 
   const listQuery = useServiceBundlesList(listParams);
+  const metaQuery = useServiceBundlesMeta();
   const facetsQuery = useServiceBundlesFacets();
   const update = useUpdateServiceBundle();
   const remove = useDeleteServiceBundle();
@@ -98,8 +109,48 @@ export function BundlesPage() {
     [openDetail, router, slug, update],
   );
 
-  const columns = useBundleColumns({ handlers, facets: facetsQuery.data });
+  const baseColumns = useBundleColumns({
+    handlers,
+    facets: facetsQuery.data,
+  });
+  const columns = useMemo(
+    () => [createSelectColumnDef<ServiceBundle>(), ...baseColumns],
+    [baseColumns],
+  );
+
+  // Same filters for export, import refresh and "all matching" bulk scope.
+  const engineQuery = useMemo(
+    () => ({
+      q: listParams.q,
+      branch: listParams.branch,
+      is_active: listParams.is_active,
+      show_online: listParams.show_online,
+      sort: listParams.sort,
+    }),
+    [
+      listParams.branch,
+      listParams.is_active,
+      listParams.q,
+      listParams.show_online,
+      listParams.sort,
+    ],
+  );
+
   const total = listQuery.data?.total ?? 0;
+  const bulkSelection = useBulkSelection({
+    listQueryKey: listParams,
+    bulkQuery: engineQuery,
+    total,
+  });
+  const meta = metaQuery.data;
+  const bulkActions = useMemo(
+    () =>
+      resolveBulkActionsWithIcons(
+        SERVICE_BUNDLES_RESOURCE,
+        meta?.bulk_actions ?? [],
+      ),
+    [meta?.bulk_actions],
+  );
   const pageCount = useMemo(() => {
     const size = listState.pagination.pageSize || 20;
     return Math.max(1, Math.ceil(total / size));
@@ -139,6 +190,14 @@ export function BundlesPage() {
         />
       }
     >
+      <SelectionBanner
+        selectedCount={bulkSelection.selectedCount}
+        total={total}
+        showSelectAll={bulkSelection.showSelectAllBanner}
+        allMatchingSelected={bulkSelection.scope.mode === "all"}
+        onSelectAllMatching={bulkSelection.selectAllMatching}
+        onClearSelection={bulkSelection.clearSelection}
+      />
       <EntityTable
         columns={columns}
         data={listQuery.data?.items ?? []}
@@ -162,17 +221,39 @@ export function BundlesPage() {
             : t("service_bundles.empty_description")
         }
         pageCount={pageCount}
-        state={listState.tableState}
+        state={{
+          ...listState.tableState,
+          rowSelection: bulkSelection.rowSelection,
+          onRowSelectionChange: bulkSelection.onRowSelectionChange,
+        }}
         features={{
           persistKey: "tenant-service-bundles-v1",
-          rowSelection: false,
+          rowSelection: true,
           viewMode: true,
         }}
         toolbarExtra={
-          <EntityToolbar
-            onRefresh={refresh}
-            refreshDisabled={listQuery.isFetching}
-          />
+          <>
+            <BulkActionMenu
+              resource={SERVICE_BUNDLES_RESOURCE}
+              actions={bulkActions}
+              scope={bulkSelection.scope}
+              selectedCount={bulkSelection.selectedCount}
+              onComplete={() => {
+                bulkSelection.clearSelection();
+                refresh();
+              }}
+            />
+            <ResourceIOToolbar
+              resource={SERVICE_BUNDLES_RESOURCE}
+              query={engineQuery}
+              capabilities={meta?.capabilities}
+              onImportComplete={refresh}
+            />
+            <EntityToolbar
+              onRefresh={refresh}
+              refreshDisabled={listQuery.isFetching}
+            />
+          </>
         }
       />
 

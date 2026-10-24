@@ -587,6 +587,7 @@ type Querier interface {
 	GetService(ctx context.Context, arg GetServiceParams) (GetServiceRow, error)
 	GetServiceBundle(ctx context.Context, arg GetServiceBundleParams) (ServiceBundle, error)
 	GetServiceBundleByName(ctx context.Context, arg GetServiceBundleByNameParams) (ServiceBundle, error)
+	GetServiceBundleSearchDocument(ctx context.Context, arg GetServiceBundleSearchDocumentParams) (GetServiceBundleSearchDocumentRow, error)
 	GetServiceByName(ctx context.Context, arg GetServiceByNameParams) (Service, error)
 	GetServiceCategory(ctx context.Context, arg GetServiceCategoryParams) (ServiceCategory, error)
 	GetServiceCategoryByName(ctx context.Context, arg GetServiceCategoryByNameParams) (ServiceCategory, error)
@@ -1040,6 +1041,9 @@ type Querier interface {
 	// that has bookings keeps their trainer when the timetable's trainer
 	// changes (TEC-990).
 	ListPublicClassSessionStaff(ctx context.Context, arg ListPublicClassSessionStaffParams) ([]ListPublicClassSessionStaffRow, error)
+	// Active bundles shown online (public booking, TEC-985); the contents and
+	// the branches come from ListServiceBundleItems / ListServiceBundleBranches.
+	ListPublicServiceBundles(ctx context.Context, organizationID int64) ([]ServiceBundle, error)
 	// Active branch offers of services (branch price / duration overrides).
 	ListPublicServiceOffers(ctx context.Context, organizationID int64) ([]ListPublicServiceOffersRow, error)
 	// Who may perform which service, with personal price / duration.
@@ -1130,6 +1134,10 @@ type Querier interface {
 	ListServiceBundleBranches(ctx context.Context, arg ListServiceBundleBranchesParams) ([]ListServiceBundleBranchesRow, error)
 	// The contents of the bundles with the catalog values of their services.
 	ListServiceBundleItems(ctx context.Context, arg ListServiceBundleItemsParams) ([]ListServiceBundleItemsRow, error)
+	// Cmd+K documents of the live bundles of one organization.
+	ListServiceBundleSearchDocuments(ctx context.Context, organizationID int64) ([]ListServiceBundleSearchDocumentsRow, error)
+	// The bundles matching a list filter (bulk "all matching" scope).
+	ListServiceBundleUUIDs(ctx context.Context, arg ListServiceBundleUUIDsParams) ([]uuid.UUID, error)
 	ListServiceBundles(ctx context.Context, arg ListServiceBundlesParams) ([]ServiceBundle, error)
 	ListServiceCategories(ctx context.Context, organizationID int64) ([]ListServiceCategoriesRow, error)
 	ListServiceCategoryFacets(ctx context.Context, organizationID int64) ([]ListServiceCategoryFacetsRow, error)
@@ -1463,6 +1471,7 @@ type Querier interface {
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
 	SetRolePermissions(ctx context.Context, roleID int64) error
 	SetServiceActive(ctx context.Context, arg SetServiceActiveParams) error
+	SetServiceBundleActive(ctx context.Context, arg SetServiceBundleActiveParams) error
 	// Returns the previous key so the caller can remove the old object.
 	SetServiceImage(ctx context.Context, arg SetServiceImageParams) (pgtype.Text, error)
 	// Bulk activate / deactivate (TEC-984).

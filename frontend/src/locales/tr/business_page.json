@@ -195,5 +195,14 @@
   "packages.none": "Paket kullanma",
   "packages.option": "{{name}} · kalan {{remaining}}/{{total}}",
   "packages.session": "Paket seansı",
-  "packages.paid_with": "{{name}} paketinden"
+  "packages.paid_with": "{{name}} paketinden",
+  "bundle.title": "Birleşik paketler",
+  "bundle.hint": "Birden fazla hizmeti tek fiyatla alın. Paket seçildiğinde hizmetler pakete göre belirlenir; tek hizmet seçmek paketi kaldırır.",
+  "bundle.items": "{{count}} hizmet",
+  "bundle.save": "{{amount}} tasarruf",
+  "bundle.badge": "Paket",
+  "bundle.in_bundle": "{{name}} paketinde",
+  "bundle.list_price": "Liste toplamı",
+  "bundle.discount": "Paket indirimi",
+  "bundle.not_found": "Seçtiğiniz paket bu şubede artık online alınamıyor. Hizmetleri yeniden seçin."
 }

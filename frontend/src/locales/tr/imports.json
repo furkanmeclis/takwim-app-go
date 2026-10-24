@@ -110,6 +110,7 @@
   "resources.tenant.staff": "Personel",
   "resources.tenant.resources": "Kaynaklar",
   "resources.tenant.services": "Hizmetler",
+  "resources.tenant.service_bundles": "Birleşik paketler",
   "resources.tenant.products": "Ürünler",
   "resources.tenant.stock_movements": "Stok hareketleri",
   "resources.tenant.customers": "Müşteriler"

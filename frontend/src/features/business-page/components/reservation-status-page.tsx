@@ -373,11 +373,28 @@ function ReservationView({
                       })}
                     </span>
                   ) : null}
+                  {line.bundle_name ? (
+                    <span className="text-muted-foreground block text-xs">
+                      {t("business_page.bundle.in_bundle", {
+                        name: line.bundle_name,
+                      })}
+                    </span>
+                  ) : null}
                 </span>
-                <span className="shrink-0 tabular-nums">
-                  {line.package_name
-                    ? t("business_page.packages.session")
-                    : money(line.unit_price)}
+                <span className="shrink-0 text-end tabular-nums">
+                  {line.package_name ? (
+                    t("business_page.packages.session")
+                  ) : (
+                    <>
+                      {line.list_price &&
+                      line.list_price !== line.unit_price ? (
+                        <span className="text-muted-foreground me-2 text-xs line-through">
+                          {money(line.list_price)}
+                        </span>
+                      ) : null}
+                      {money(line.unit_price)}
+                    </>
+                  )}
                 </span>
               </li>
             ))}
