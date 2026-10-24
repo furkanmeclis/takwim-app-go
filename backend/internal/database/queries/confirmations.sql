@@ -154,5 +154,5 @@ WHERE dl.organization_id = sqlc.arg(organization_id) AND d.reservation_id = sqlc
 INSERT INTO reservation_events (organization_id, reservation_id, version, type, from_status, to_status, actor_id, note)
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(reservation_id), sqlc.arg(version), sqlc.arg(type), sqlc.narg(from_status),
-    sqlc.narg(to_status), NULL, sqlc.arg(note)
+    sqlc.narg(to_status), sqlc.narg(actor_id), sqlc.arg(note)
 );

@@ -282,6 +282,9 @@ func main() {
 	resourceEvents.AddResolver(tenantmodule.ChannelResolver(tenantmodule.QueriesLookup(queries)))
 	importSvc.SetResourceEvents(resourceEvents)
 	bulkSvc.SetResourceEvents(resourceEvents)
+	// Confirmation requests and deadlines move the confirmation list
+	// (TEC-924).
+	confirmEngine.SetResourceEvents(resourceEvents)
 
 	// Integration jobs (TEC-880): queue steps and the minute sweep of due
 	// steps (lost tasks, delivery reports, backoff retries).

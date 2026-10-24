@@ -5494,6 +5494,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/confirmations/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confirmation list metadata
+         * @description Table contract of `GET /v1/tenant/confirmations` (TEC-924).
+         */
+        get: operations["getTenantConfirmationListMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/confirmations/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confirmation list states
+         * @description Counts per `state` with the `branch`, time and `q` filters, and how
+         *     many of those bookings need a person (`attention`).
+         */
+        get: operations["getTenantConfirmationFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/confirmations/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confirmation follow-up alerts
+         * @description Upcoming visits of the caller's branch scope whose confirmation needs
+         *     a person (the nav badge and the panel alert): a change request, no
+         *     answer (`flagged`), no way to reach the customer (`unreachable`) or
+         *     a request no channel could deliver (`send_failed`); `waiting` counts
+         *     the upcoming visits still waiting for an answer.
+         */
+        get: operations["getTenantConfirmationSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confirmation list
+         * @description Every booking with a confirmation task in the caller's branch scope
+         *     (TEC-924, A08): the visit, the business's approval and the customer's
+         *     confirmation side by side, the requests sent and planned, the latest
+         *     request's result, the answer and its channel, and `attention` (the
+         *     visit is ahead and a person has to act). `state` is the task status
+         *     with `change_requested` (an open task the customer asked to move) and
+         *     an expired task split by its outcome (`cancelled`, `flagged`,
+         *     `unreachable`); without a `state` filter `dropped` tasks are left
+         *     out. `q` searches the customer's name or phone or the reservation
+         *     number. Needs the confirmation add-on (`403 MODULE_NOT_ENABLED`)
+         *     and `tenant.reservations.read`.
+         */
+        get: operations["getTenantConfirmations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/confirmation/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confirmation requests of a booking
+         * @description The confirmation requests of the booking, newest first: one row per
+         *     channel tried, with the provider's result, the masked recipient and
+         *     the times (a request no channel took yet has `channel` null).
+         *     `round` / `request` name the planning and the request ("2nd
+         *     request of the 1st planning"). `tenant.reservations.read`; another
+         *     business's or branch's booking: `404`.
+         */
+        get: operations["getTenantReservationConfirmationAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/reservations/{uuid}/confirmation/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a confirmation given on the phone
+         * @description The customer confirmed on the phone (TEC-924): the same as the
+         *     customer's "Geleceğim" (no more requests, no automatic cancel), with
+         *     the member and the `note` in the history (channel `phone`). Allowed
+         *     while the task is open or expired without a cancel and the visit is
+         *     ahead; otherwise `409 CONFIRMATION_NOT_OPEN`. `expected_version`
+         *     refuses a stale action (`409` `expected_version` / `stale`).
+         *     `tenant.reservations.write`.
+         */
+        post: operations["postTenantReservationConfirmationConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/customer-notifications/settings": {
         parameters: {
             query?: never;
@@ -9823,6 +9969,183 @@ export interface components {
             planned_at: string;
             /** Format: date-time */
             closed_at: string | null;
+        };
+        /**
+         * @description The list state of a confirmation (TEC-924): the task status, with
+         *     `change_requested` and an expired task split by its outcome.
+         * @enum {string}
+         */
+        ConfirmationState: "change_requested" | "unreachable" | "flagged" | "pending" | "scheduled" | "confirmed" | "declined" | "cancelled" | "dropped";
+        /** @description One booking of the confirmation list (TEC-924). */
+        ConfirmationTask: {
+            /**
+             * Format: uuid
+             * @description The reservation.
+             */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+            status: components["schemas"]["TenantReservationStatus"];
+            approval_status: components["schemas"]["TenantReservationApprovalStatus"];
+            confirmation_status: components["schemas"]["TenantReservationConfirmationStatus"];
+            version: number;
+            branch: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+            customer: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                /** @description E.164, for the call link. */
+                phone: string | null;
+            };
+            services: string;
+            staff: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            state: components["schemas"]["ConfirmationState"];
+            /** @enum {string} */
+            task_status: "scheduled" | "pending" | "confirmed" | "declined" | "expired" | "dropped";
+            channels: string[];
+            /** @enum {string} */
+            on_no_answer: "cancel" | "flag";
+            attempts_sent: number;
+            attempts_planned: number;
+            /** Format: date-time */
+            next_attempt_at: string | null;
+            /** Format: date-time */
+            deadline_at: string;
+            /** @enum {string|null} */
+            answer: "confirm" | "cancel" | "change" | null;
+            /** @description panel, visit_link, phone (recorded by a member); whatsapp / voice later */
+            answer_channel: string | null;
+            /** Format: date-time */
+            answered_at: string | null;
+            /** Format: date-time */
+            change_requested_at: string | null;
+            change_note: string;
+            /** @enum {string|null} */
+            outcome: "cancelled" | "flagged" | "unreachable" | null;
+            last_error: string;
+            /** @description Requests of the current planning no channel could deliver. */
+            failed_sends: number;
+            /** @description An open task with a request no channel could deliver. */
+            send_failed: boolean;
+            last_send: {
+                /** @enum {string} */
+                status: "pending" | "sending" | "delivered" | "failed" | "skipped" | "cancelled";
+                error: string;
+                /** Format: date-time */
+                at: string;
+            } | null;
+            /** @description The visit is ahead and a person has to act. */
+            attention: boolean;
+            /** @description The booking takes a confirmation given on the phone now. */
+            can_confirm: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ConfirmationTaskPage: {
+            items: components["schemas"]["ConfirmationTask"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeConfirmationTaskPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConfirmationTaskPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ConfirmationFacets: {
+            state: {
+                value: components["schemas"]["ConfirmationState"];
+                /** Format: int64 */
+                count: number;
+            }[];
+            /** Format: int64 */
+            attention: number;
+        };
+        EnvelopeConfirmationFacets: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConfirmationFacets"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ConfirmationSummary: {
+            /** Format: int64 */
+            attention: number;
+            /** Format: int64 */
+            change_requested: number;
+            /** Format: int64 */
+            unreachable: number;
+            /** Format: int64 */
+            flagged: number;
+            /** Format: int64 */
+            send_failed: number;
+            /** Format: int64 */
+            waiting: number;
+        };
+        EnvelopeConfirmationSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConfirmationSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ConfirmationAttempt: {
+            round: number;
+            request: number;
+            /** @description The channel's result (sending, sent, delivered, failed, skipped) or the request's own status without a channel. */
+            status: string;
+            /** @enum {string} */
+            dispatch_status: "pending" | "sending" | "delivered" | "failed" | "skipped" | "cancelled";
+            channel: string | null;
+            try: number;
+            provider: string;
+            /** @description Masked. */
+            recipient: string;
+            error: string;
+            /** Format: date-time */
+            scheduled_at: string;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            delivery_uuid: string | null;
+            /** Format: uuid */
+            dispatch_uuid: string;
+            dispatch_error: string;
+        };
+        EnvelopeConfirmationAttempts: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["ConfirmationAttempt"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ConfirmationConfirmInput: {
+            note?: string;
+            expected_version?: number | null;
+        };
+        EnvelopeConfirmationConfirmResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                /** Format: uuid */
+                uuid: string;
+                /** @enum {string} */
+                confirmation_status: "confirmed";
+            };
+            meta: components["schemas"]["ResponseMeta"];
         };
         CustomerNotificationSettings: {
             channels: components["schemas"]["CustomerNotificationChannel"][];
@@ -14561,6 +14884,12 @@ export interface components {
         IdempotencyKey: string;
         /** @description QR sign-in session id (from the QR URL) */
         QRSessionID: string;
+        /** @description Branch uuids; comma-separate or repeat */
+        ConfirmationBranchFilter: string;
+        /** @description Visits starting at or after this RFC 3339 time */
+        ConfirmationStartsFrom: string;
+        /** @description Visits starting before this RFC 3339 time */
+        ConfirmationStartsTo: string;
         /** @description Resource UUID */
         ResourceUUID: string;
         /** @description Cash account UUID. */
@@ -24418,6 +24747,257 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConfirmationListMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantConfirmationFacets: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["Q"];
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: components["parameters"]["ConfirmationBranchFilter"];
+                /** @description Visits starting at or after this RFC 3339 time */
+                starts_from?: components["parameters"]["ConfirmationStartsFrom"];
+                /** @description Visits starting before this RFC 3339 time */
+                starts_to?: components["parameters"]["ConfirmationStartsTo"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description State counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationFacets"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConfirmationSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Follow-up counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationSummary"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConfirmations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `starts_at`, `deadline_at`, `number`, `customer`, `updated_at`; prefix `-` for descending. Default: the next visit first. */
+                sort?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: components["parameters"]["ConfirmationBranchFilter"];
+                /** @description List states; comma-separate or repeat */
+                state?: string;
+                /** @description `true`: only the bookings that need a person; `false`: the others */
+                attention?: "true" | "false";
+                /** @description Visits starting at or after this RFC 3339 time */
+                starts_from?: components["parameters"]["ConfirmationStartsFrom"];
+                /** @description Visits starting before this RFC 3339 time */
+                starts_to?: components["parameters"]["ConfirmationStartsTo"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmation page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationTaskPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantReservationConfirmationAttempts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attempts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationAttempts"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantReservationConfirmationConfirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationConfirmInput"];
+            };
+        };
+        responses: {
+            /** @description Confirmed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationConfirmResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

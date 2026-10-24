@@ -134,6 +134,9 @@ export const routes = {
         `/t/${encodeURIComponent(slug)}/reservations/${uuid}`,
       followUps: (slug: string) =>
         `/t/${encodeURIComponent(slug)}/reservations/follow-ups`,
+      /** Customer confirmations and their follow-ups (TEC-924). */
+      confirmations: (slug: string) =>
+        `/t/${encodeURIComponent(slug)}/reservations/confirmations`,
     },
     activity: (slug: string) => `/t/${encodeURIComponent(slug)}/activity`,
     exports: {

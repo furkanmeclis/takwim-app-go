@@ -15,3 +15,29 @@ export type ConfirmationRuleTarget = {
   rule: ConfirmationRule;
   custom: boolean;
 };
+
+/** One booking of the confirmation list (TEC-924). */
+export type ConfirmationTask = Schemas["ConfirmationTask"];
+export type ConfirmationTaskPage = Schemas["ConfirmationTaskPage"];
+export type ConfirmationState = Schemas["ConfirmationState"];
+export type ConfirmationFacets = Schemas["ConfirmationFacets"];
+export type ConfirmationSummary = Schemas["ConfirmationSummary"];
+export type ConfirmationAttempt = Schemas["ConfirmationAttempt"];
+export type ConfirmationConfirmInput = Schemas["ConfirmationConfirmInput"];
+
+export type ListConfirmationsParams = {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  q?: string;
+  branch?: string;
+  state?: string;
+  attention?: "true" | "false";
+  starts_from?: string;
+  starts_to?: string;
+};
+
+export type ConfirmationFacetParams = Pick<
+  ListConfirmationsParams,
+  "q" | "branch" | "starts_from" | "starts_to"
+>;

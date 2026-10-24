@@ -46,7 +46,7 @@ const createConfirmationEvent = `-- name: CreateConfirmationEvent :exec
 INSERT INTO reservation_events (organization_id, reservation_id, version, type, from_status, to_status, actor_id, note)
 VALUES (
     $1, $2, $3, $4, $5,
-    $6, NULL, $7
+    $6, $7, $8
 )
 `
 
@@ -57,6 +57,7 @@ type CreateConfirmationEventParams struct {
 	Type           string      `json:"type"`
 	FromStatus     pgtype.Text `json:"from_status"`
 	ToStatus       pgtype.Text `json:"to_status"`
+	ActorID        pgtype.Int8 `json:"actor_id"`
 	Note           string      `json:"note"`
 }
 
@@ -70,6 +71,7 @@ func (q *Queries) CreateConfirmationEvent(ctx context.Context, arg CreateConfirm
 		arg.Type,
 		arg.FromStatus,
 		arg.ToStatus,
+		arg.ActorID,
 		arg.Note,
 	)
 	return err

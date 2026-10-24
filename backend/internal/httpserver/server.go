@@ -436,7 +436,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	reservationsSvc.SetNotifier(reservationNotifier)
 	confirmEngine.SetReservations(reservationsSvc)
 	customernotifymodule.RegisterRoutes(mux, customernotifyhandler.New(notifyEngine, activityRec), tokens, loader, tenantResolver)
-	confirmationsmodule.RegisterRoutes(mux, confirmationshandler.New(confirmEngine, activityRec), tokens, loader, tenantResolver)
+	confirmationsH := confirmationshandler.New(confirmEngine, activityRec)
+	confirmationsH.SetResourceEvents(resourceEvents)
+	confirmationsmodule.RegisterRoutes(mux, confirmationsH, tokens, loader, tenantResolver)
 	reservationsSvc.SetSearchIndexer(searchIndexer)
 	// Sale lines and the customer ledger (TEC-916): a completed visit and a
 	// stock sale write their sale lines in the same transaction.

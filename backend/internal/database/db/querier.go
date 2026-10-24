@@ -71,6 +71,10 @@ type Querier interface {
 	// Requests of the current round a channel really sent (accepted by a
 	// provider): an expired task without one is unreachable, never cancelled.
 	CountConfirmationSends(ctx context.Context, arg CountConfirmationSendsParams) (int64, error)
+	// Counts per state, attention, failed request and upcoming visit (every
+	// filter but the state and attention ones): the list total, the facets
+	// and the follow-up summary.
+	CountConfirmationTaskStates(ctx context.Context, arg CountConfirmationTaskStatesParams) ([]CountConfirmationTaskStatesRow, error)
 	CountCustomerAccessLinksSince(ctx context.Context, arg CountCustomerAccessLinksSinceParams) (int64, error)
 	CountCustomerAuthEventsFromIPSince(ctx context.Context, arg CountCustomerAuthEventsFromIPSinceParams) (int64, error)
 	CountCustomerNotificationDeliveries(ctx context.Context, arg CountCustomerNotificationDeliveriesParams) (int64, error)
@@ -330,6 +334,9 @@ type Querier interface {
 	// its task), with the time zone of its branch.
 	GetConfirmationReservation(ctx context.Context, arg GetConfirmationReservationParams) (GetConfirmationReservationRow, error)
 	GetConfirmationReservationByUUID(ctx context.Context, arg GetConfirmationReservationByUUIDParams) (GetConfirmationReservationByUUIDRow, error)
+	// A booking of the panel by uuid (not locked): its id, branch and
+	// version.
+	GetConfirmationReservationRef(ctx context.Context, arg GetConfirmationReservationRefParams) (GetConfirmationReservationRefRow, error)
 	GetConfirmationTimezone(ctx context.Context, arg GetConfirmationTimezoneParams) (string, error)
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
@@ -647,9 +654,24 @@ type Querier interface {
 	// Tills and bank accounts a collection at the business may go into: the
 	// branch's own and the business-wide ones of the currency.
 	ListCollectAccounts(ctx context.Context, arg ListCollectAccountsParams) ([]ListCollectAccountsRow, error)
+	// The requests of one booking's confirmation, newest first: one row per
+	// channel tried (a request no channel took yet has no delivery).
+	ListConfirmationAttempts(ctx context.Context, arg ListConfirmationAttemptsParams) ([]ListConfirmationAttemptsRow, error)
 	// The branches the settings page lists (inside the caller's scope).
 	ListConfirmationBranches(ctx context.Context, arg ListConfirmationBranchesParams) ([]ListConfirmationBranchesRow, error)
 	ListConfirmationSettings(ctx context.Context, organizationID int64) ([]ListConfirmationSettingsRow, error)
+	// The confirmation list of the panel and its follow-up alerts (TEC-924).
+	// Every query filters by organization_id; joins by alias.organization_id
+	// too.
+	//
+	// state is what the list shows: the task status, with change_requested (an
+	// open task the customer asked to move) and an expired task split by its
+	// outcome (cancelled, flagged, unreachable). send_failed: a request of the
+	// current round failed on every channel (or no channel could take it).
+	// attention: the visit is still ahead and a person has to act (a change
+	// request, no answer, the customer could not be reached, a failed request).
+	// The list and the counts repeat the same tasks CTE.
+	ListConfirmationTasks(ctx context.Context, arg ListConfirmationTasksParams) ([]ListConfirmationTasksRow, error)
 	// The send history: one row per channel attempt. branch_ids = the caller's
 	// branch scope (NULL = every branch).
 	ListCustomerNotificationDeliveries(ctx context.Context, arg ListCustomerNotificationDeliveriesParams) ([]ListCustomerNotificationDeliveriesRow, error)

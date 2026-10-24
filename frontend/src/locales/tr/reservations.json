@@ -461,5 +461,6 @@
   "custom_fields.no": "Hayır",
   "form.section_questions": "Ek alanlar",
   "form.section_questions_desc": "İşletme ayarlarında tanımlanan sorular; cevaplar rezervasyonda saklanır.",
-  "columns.custom_answers": "Ek alanlar"
+  "columns.custom_answers": "Ek alanlar",
+  "confirmation_task.sources.phone": "Telefonla (personel)"
 }

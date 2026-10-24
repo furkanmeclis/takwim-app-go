@@ -1,4 +1,4 @@
-# Customer confirmations (TEC-921)
+# Customer confirmations (TEC-921, TEC-924)
 
 The Konfirmasyon add-on: before a visit the business asks the customer to confirm it, on its channels in order, a set number of times, and cancels or flags the booking when no answer comes by the deadline. The customer answers in the customer panel or on the single-visit link of the message: "Geleceğim", "Değişiklik iste" or cancel. Everything is gated by the `confirmation` module (`sector.ModuleConfirmation`, an add-on, entitlements.md); without it no task is planned, no request is sent and no answer is offered.
 
@@ -79,9 +79,46 @@ The cancel runs after the task's transaction, guarded on `confirmation_status` s
 
 Activity history: `confirmations.updated` / `.reset`, `reservations.confirmed` / `.change_requested` (source `customer_panel` / `visit_link`).
 
-## For TEC-924 (list and follow-up)
+## Confirmation list and follow-up (TEC-924)
 
-The reservation detail carries `confirmation` (status, channels, planned and sent attempts, next attempt, deadline, answer and channel, change request and note, outcome, last error); the reservations list filters and shows `confirmation_status`; the history has the `confirmation_*` events. The confirmation list screen, staff follow-up alerts and a manual "confirmed by phone" belong to TEC-924.
+The desk's work list: every booking with a confirmation task, the business's approval and the customer's confirmation side by side (A08), the requests on every channel, the answers, and what needs a person before the visit. No new table and no new permission: `tenant.reservations.read` reads, `tenant.reservations.write` acts; members of their own calendar only (`tenant.reservations.own`) do not get the business-wide list. Every route needs the add-on (`403 MODULE_NOT_ENABLED`) and applies the branch scope.
+
+| Area    | Path                                                                                                                                                      |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engine  | `confirmations/usecase/list.go` (list, facets, summary, attempts, phone confirmation)                                                                     |
+| HTTP    | `confirmations/handler/list.go`, `routes.go`                                                                                                              |
+| Queries | `backend/internal/database/queries/confirmation_list.sql`                                                                                                 |
+| Tests   | `confirmations/list_db_test.go`; the routes are in `httpserver/isolation_test.go`                                                                         |
+| Web     | `frontend/src/features/confirmations/*` (list page, drawer, attempts table, phone dialog, alerts, nav badge), page `/t/{slug}/reservations/confirmations` |
+
+### List states
+
+`state` is the task status with two refinements: an open task the customer asked to move is `change_requested`, and an expired task shows its outcome (`cancelled`, `flagged`, `unreachable`). So: `change_requested`, `unreachable`, `flagged`, `pending`, `scheduled`, `confirmed`, `declined`, `cancelled`, `dropped`. Without a `state` filter `dropped` tasks (the visit was cancelled, moved past the deadline, or the add-on was turned off) are left out.
+
+`send_failed`: an open task with a request of the current planning (`scheduled_at >= planned_at`) that ended `failed` or `skipped` on every channel. `attention`: the visit is `active` and still ahead, and the state is `change_requested`, `unreachable` or `flagged`, or `send_failed`. After the start nothing needs a person any more.
+
+### Routes
+
+| Route                                                      | Does                                                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /v1/tenant/confirmations`                             | the list: `q` (name, phone, number), `branch`, `state`, `attention`, `starts_from` / `starts_to`; sort `starts_at` (default) … |
+| `GET /v1/tenant/confirmations/facets`                      | counts per state and `attention` with the other filters                                                                        |
+| `GET /v1/tenant/confirmations/summary`                     | upcoming visits that need a person, by reason (`change_requested`, `unreachable`, `flagged`, `send_failed`) and `waiting`      |
+| `GET /v1/tenant/confirmations/meta`                        | the table contract                                                                                                             |
+| `GET /v1/tenant/reservations/{uuid}/confirmation/attempts` | the requests of a booking: one row per channel tried (provider result, masked recipient, error, times, round / request number) |
+| `POST /v1/tenant/reservations/{uuid}/confirmation/confirm` | "Telefonla teyit edildi": `note`, `expected_version`                                                                           |
+
+A phone confirmation is `Engine.Answer` with source `phone` and the member as the history actor (event `confirmation_confirmed`, note = the member's note): no more requests, no automatic cancel. It takes the same tasks as the customer's answer (open, or expired without a cancel, visit ahead), else `409 CONFIRMATION_NOT_OPEN`; a stale `expected_version` is `409` `expected_version` / `stale`. Activity: `reservations.confirmed` with source `phone`. Moving and cancelling use the reservation transitions (a move plans the task again).
+
+### Live updates and alerts
+
+The list follows the reservations live channel (`tenant.reservations`): reservation handlers publish there, the customer panel publishes the answers, the phone confirmation handler publishes, and the worker's engine publishes each request it sends and each deadline it applies (`Engine.SetResourceEvents`). The summary also refreshes every minute (a failed delivery is recorded by the notification worker without an event).
+
+- Sidebar: "Teyit listesi" under the operations group (`module: confirmation`, `tenant.reservations.read`) with the `attention` count and the reasons in its info popover.
+- Panel alert (`ConfirmationAlerts`) on the organization home and on top of the list: the count by reason and a link to the "Takip gerekenler" view.
+- Reservation detail: the confirmation card offers "Telefonla teyit edildi" and lists the requests.
+
+The list's views are `Takip gerekenler` (`attention=true`, visits from now on), `Bugün` (default), `Yarın`, `Yaklaşan`, `Tümü`; days are counted in the business's time zone. `?view=attention` and `?state=…&branch=…` open the list with them.
 
 ## Not here yet
 

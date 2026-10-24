@@ -35,4 +35,16 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/confirmations/settings", h.GetSettings, read)
 	route("PUT /v1/tenant/confirmations/settings", h.PutSettings, read, write)
 	route("POST /v1/tenant/confirmations/settings/reset", h.Reset, read, write)
+
+	// The confirmation list and its follow-up alerts (TEC-924): the
+	// reservations' own permissions; members who see only their own
+	// calendar do not get the business-wide list.
+	resRead := middleware.RequireTenantPermission(rbac.PermTenantReservationsRead)
+	resWrite := middleware.RequireTenantPermission(rbac.PermTenantReservationsWrite)
+	route("GET /v1/tenant/confirmations/meta", h.Meta, resRead)
+	route("GET /v1/tenant/confirmations/facets", h.Facets, resRead)
+	route("GET /v1/tenant/confirmations/summary", h.Summary, resRead)
+	route("GET /v1/tenant/confirmations", h.List, resRead)
+	route("GET /v1/tenant/reservations/{uuid}/confirmation/attempts", h.Attempts, resRead)
+	route("POST /v1/tenant/reservations/{uuid}/confirmation/confirm", h.Confirm, resRead, resWrite)
 }

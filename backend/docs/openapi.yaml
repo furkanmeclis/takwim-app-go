@@ -8865,6 +8865,204 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/confirmations/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConfirmationListMeta
+      summary: Confirmation list metadata
+      description: Table contract of `GET /v1/tenant/confirmations` (TEC-924).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/confirmations/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConfirmationFacets
+      summary: Confirmation list states
+      description: |
+        Counts per `state` with the `branch`, time and `q` filters, and how
+        many of those bookings need a person (`attention`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/ConfirmationBranchFilter"
+        - $ref: "#/components/parameters/ConfirmationStartsFrom"
+        - $ref: "#/components/parameters/ConfirmationStartsTo"
+      responses:
+        "200":
+          description: State counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationFacets"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/confirmations/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConfirmationSummary
+      summary: Confirmation follow-up alerts
+      description: |
+        Upcoming visits of the caller's branch scope whose confirmation needs
+        a person (the nav badge and the panel alert): a change request, no
+        answer (`flagged`), no way to reach the customer (`unreachable`) or
+        a request no channel could deliver (`send_failed`); `waiting` counts
+        the upcoming visits still waiting for an answer.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Follow-up counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationSummary"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/confirmations:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConfirmations
+      summary: Confirmation list
+      description: |
+        Every booking with a confirmation task in the caller's branch scope
+        (TEC-924, A08): the visit, the business's approval and the customer's
+        confirmation side by side, the requests sent and planned, the latest
+        request's result, the answer and its channel, and `attention` (the
+        visit is ahead and a person has to act). `state` is the task status
+        with `change_requested` (an open task the customer asked to move) and
+        an expired task split by its outcome (`cancelled`, `flagged`,
+        `unreachable`); without a `state` filter `dropped` tasks are left
+        out. `q` searches the customer's name or phone or the reservation
+        number. Needs the confirmation add-on (`403 MODULE_NOT_ENABLED`)
+        and `tenant.reservations.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `starts_at`, `deadline_at`, `number`, `customer`, `updated_at`; prefix `-` for descending. Default: the next visit first."
+          schema: { type: string }
+        - $ref: "#/components/parameters/ConfirmationBranchFilter"
+        - name: state
+          in: query
+          description: "List states; comma-separate or repeat"
+          schema: { type: string }
+        - name: attention
+          in: query
+          description: "`true`: only the bookings that need a person; `false`: the others"
+          schema: { type: string, enum: ["true", "false"] }
+        - $ref: "#/components/parameters/ConfirmationStartsFrom"
+        - $ref: "#/components/parameters/ConfirmationStartsTo"
+      responses:
+        "200":
+          description: Confirmation page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationTaskPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/reservations/{uuid}/confirmation/attempts:
+    get:
+      tags: [Tenant]
+      operationId: getTenantReservationConfirmationAttempts
+      summary: Confirmation requests of a booking
+      description: |
+        The confirmation requests of the booking, newest first: one row per
+        channel tried, with the provider's result, the masked recipient and
+        the times (a request no channel took yet has `channel` null).
+        `round` / `request` name the planning and the request ("2nd
+        request of the 1st planning"). `tenant.reservations.read`; another
+        business's or branch's booking: `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationAttempts"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/reservations/{uuid}/confirmation/confirm:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationConfirmationConfirm
+      summary: Record a confirmation given on the phone
+      description: |
+        The customer confirmed on the phone (TEC-924): the same as the
+        customer's "Geleceğim" (no more requests, no automatic cancel), with
+        the member and the `note` in the history (channel `phone`). Allowed
+        while the task is open or expired without a cancel and the visit is
+        ahead; otherwise `409 CONFIRMATION_NOT_OPEN`. `expected_version`
+        refuses a stale action (`409` `expected_version` / `stale`).
+        `tenant.reservations.write`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmationConfirmInput"
+      responses:
+        "200":
+          description: Confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationConfirmResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/customer-notifications/settings:
     get:
       tags: [Tenant]
@@ -12666,6 +12864,21 @@ components:
       required: true
       description: QR sign-in session id (from the QR URL)
       schema: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+    ConfirmationBranchFilter:
+      name: branch
+      in: query
+      description: "Branch uuids; comma-separate or repeat"
+      schema: { type: string }
+    ConfirmationStartsFrom:
+      name: starts_from
+      in: query
+      description: "Visits starting at or after this RFC 3339 time"
+      schema: { type: string, format: date-time }
+    ConfirmationStartsTo:
+      name: starts_to
+      in: query
+      description: "Visits starting before this RFC 3339 time"
+      schema: { type: string, format: date-time }
     ResourceUUID:
       name: uuid
       in: path
@@ -15045,6 +15258,191 @@ components:
         last_error: { type: string }
         planned_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
+
+    ConfirmationState:
+      type: string
+      description: |
+        The list state of a confirmation (TEC-924): the task status, with
+        `change_requested` and an expired task split by its outcome.
+      enum: [change_requested, unreachable, flagged, pending, scheduled, confirmed, declined, cancelled, dropped]
+
+    ConfirmationTask:
+      type: object
+      description: One booking of the confirmation list (TEC-924).
+      required: [uuid, number, status, approval_status, confirmation_status, version, branch, customer, services, staff,
+        starts_at, ends_at, state, task_status, channels, on_no_answer, attempts_sent, attempts_planned, next_attempt_at,
+        deadline_at, answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error,
+        failed_sends, send_failed, last_send, attention, can_confirm, updated_at]
+      properties:
+        uuid: { type: string, format: uuid, description: The reservation. }
+        number: { type: integer, format: int64 }
+        status: { $ref: "#/components/schemas/TenantReservationStatus" }
+        approval_status: { $ref: "#/components/schemas/TenantReservationApprovalStatus" }
+        confirmation_status: { $ref: "#/components/schemas/TenantReservationConfirmationStatus" }
+        version: { type: integer }
+        branch:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        customer:
+          type: object
+          required: [uuid, name, phone]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+            phone: { type: [string, "null"], description: "E.164, for the call link." }
+        services: { type: string }
+        staff: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        state: { $ref: "#/components/schemas/ConfirmationState" }
+        task_status: { type: string, enum: [scheduled, pending, confirmed, declined, expired, dropped] }
+        channels:
+          type: array
+          items: { type: string }
+        on_no_answer: { type: string, enum: [cancel, flag] }
+        attempts_sent: { type: integer }
+        attempts_planned: { type: integer }
+        next_attempt_at: { type: [string, "null"], format: date-time }
+        deadline_at: { type: string, format: date-time }
+        answer: { type: [string, "null"], enum: [confirm, cancel, change, null] }
+        answer_channel: { type: [string, "null"], description: "panel, visit_link, phone (recorded by a member); whatsapp / voice later" }
+        answered_at: { type: [string, "null"], format: date-time }
+        change_requested_at: { type: [string, "null"], format: date-time }
+        change_note: { type: string }
+        outcome: { type: [string, "null"], enum: [cancelled, flagged, unreachable, null] }
+        last_error: { type: string }
+        failed_sends: { type: integer, description: Requests of the current planning no channel could deliver. }
+        send_failed: { type: boolean, description: An open task with a request no channel could deliver. }
+        last_send:
+          oneOf:
+            - type: object
+              required: [status, error, at]
+              properties:
+                status: { type: string, enum: [pending, sending, delivered, failed, skipped, cancelled] }
+                error: { type: string }
+                at: { type: string, format: date-time }
+            - type: "null"
+        attention: { type: boolean, description: The visit is ahead and a person has to act. }
+        can_confirm: { type: boolean, description: The booking takes a confirmation given on the phone now. }
+        updated_at: { type: string, format: date-time }
+
+    ConfirmationTaskPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ConfirmationTask" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeConfirmationTaskPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConfirmationTaskPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ConfirmationFacets:
+      type: object
+      required: [state, attention]
+      properties:
+        state:
+          type: array
+          items:
+            type: object
+            required: [value, count]
+            properties:
+              value: { $ref: "#/components/schemas/ConfirmationState" }
+              count: { type: integer, format: int64 }
+        attention: { type: integer, format: int64 }
+
+    EnvelopeConfirmationFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConfirmationFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ConfirmationSummary:
+      type: object
+      required: [attention, change_requested, unreachable, flagged, send_failed, waiting]
+      properties:
+        attention: { type: integer, format: int64 }
+        change_requested: { type: integer, format: int64 }
+        unreachable: { type: integer, format: int64 }
+        flagged: { type: integer, format: int64 }
+        send_failed: { type: integer, format: int64 }
+        waiting: { type: integer, format: int64 }
+
+    EnvelopeConfirmationSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConfirmationSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ConfirmationAttempt:
+      type: object
+      required: [round, request, status, dispatch_status, channel, try, provider, recipient, error, scheduled_at, sent_at,
+        finished_at, created_at, delivery_uuid, dispatch_uuid, dispatch_error]
+      properties:
+        round: { type: integer }
+        request: { type: integer }
+        status: { type: string, description: "The channel's result (sending, sent, delivered, failed, skipped) or the request's own status without a channel." }
+        dispatch_status: { type: string, enum: [pending, sending, delivered, failed, skipped, cancelled] }
+        channel: { type: [string, "null"] }
+        try: { type: integer }
+        provider: { type: string }
+        recipient: { type: string, description: Masked. }
+        error: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        sent_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        delivery_uuid: { type: [string, "null"], format: uuid }
+        dispatch_uuid: { type: string, format: uuid }
+        dispatch_error: { type: string }
+
+    EnvelopeConfirmationAttempts:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/ConfirmationAttempt" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ConfirmationConfirmInput:
+      type: object
+      properties:
+        note: { type: string, maxLength: 500 }
+        expected_version: { type: [integer, "null"] }
+
+    EnvelopeConfirmationConfirmResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [uuid, confirmation_status]
+          properties:
+            uuid: { type: string, format: uuid }
+            confirmation_status: { type: string, enum: [confirmed] }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     CustomerNotificationSettings:
       type: object
