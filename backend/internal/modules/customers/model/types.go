@@ -25,6 +25,17 @@ var LinkSources = []string{"otp", "panel_login", "panel_link", "phone_change"}
 type Verification struct {
 	Source     string    `json:"source"`
 	VerifiedAt time.Time `json:"verified_at"`
+	// HistoryHiddenFrom (TEC-972): the person's panel shows only the visits
+	// booked from this moment (the number changed hands, or nobody proved it
+	// for a long time). nil while the whole history is open.
+	HistoryHiddenFrom *time.Time `json:"history_hidden_from"`
+	// HistoryRequestedAt (TEC-991): the person asked this business from the
+	// panel to reopen the hidden history.
+	HistoryRequestedAt *time.Time `json:"history_requested_at"`
+	// HistoryRestoredAt / HistoryRestoredBy: the business reopened the
+	// history after checking who the person is.
+	HistoryRestoredAt *time.Time `json:"history_restored_at"`
+	HistoryRestoredBy string     `json:"history_restored_by"`
 }
 
 // Customer is the business-level customer record.

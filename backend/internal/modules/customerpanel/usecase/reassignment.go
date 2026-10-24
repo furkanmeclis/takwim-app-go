@@ -19,6 +19,7 @@ import (
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/model"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sms"
 )
 
@@ -202,6 +203,46 @@ func (s *Service) closeDormant(ctx context.Context, p string, now time.Time) err
 	s.log.WarnContext(ctx, "customer_dormant_history_closed", "source", logSource, "phone", sms.Mask(p),
 		"last_verified_at", identity.PhoneVerifiedAt.Time, "businesses_hidden", hidden)
 	return nil
+}
+
+// HistoryRequest is a history request the person made to one business:
+// the business (for its activity trail) and the record it concerns.
+type HistoryRequest struct {
+	Scope        orgctx.Scope
+	CustomerUUID uuid.UUID
+	RequestedAt  time.Time
+}
+
+// RequestHistory (TEC-991) records that the signed-in person asks the
+// business named by slug to reopen the history a release closed
+// (visible_from on the link): the receptionist sees the request on the
+// record and reopens it after checking who the person is. The panel never
+// reopens anything itself: the answer to "are these visits yours?" is no
+// proof. A business that does not know the person is ErrNotFound; one whose
+// history is open answers an ActionError (history_open). Asking again keeps
+// the first request's time.
+func (s *Service) RequestHistory(ctx context.Context, p Principal, slug string, meta Meta) (HistoryRequest, model.Profile, error) {
+	row, err := s.q.RequestCustomerHistory(ctx, db.RequestCustomerHistoryParams{Slug: slug, IdentityID: p.IdentityID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return HistoryRequest{}, model.Profile{}, ErrNotFound
+	}
+	if err != nil {
+		return HistoryRequest{}, model.Profile{}, err
+	}
+	if !row.VisibleFrom.Valid {
+		return HistoryRequest{}, model.Profile{}, &ActionError{Action: "history_request", Reason: model.ReasonHistoryOpen}
+	}
+	s.event(ctx, eventHistoryRequested, p.Phone, p.IdentityID, meta.IP)
+	profile, err := s.profile(ctx, p)
+	if err != nil {
+		return HistoryRequest{}, model.Profile{}, err
+	}
+	req := HistoryRequest{
+		Scope:        orgctx.Scope{ID: row.OrganizationID, UUID: row.OrganizationUuid, Slug: row.OrganizationSlug, Name: row.OrganizationName},
+		CustomerUUID: row.CustomerUuid,
+		RequestedAt:  row.HistoryRequestedAt.Time,
+	}
+	return req, profile, nil
 }
 
 // historyNotice is the closing release of the profile's number, if any.

@@ -29,6 +29,7 @@ import { CustomerReassignedDialog } from "@/features/customer-panel/components/c
 import {
   useCustomerLogout,
   useCustomerProfile,
+  useRequestHistory,
 } from "@/features/customer-panel/hooks/use-customer-panel";
 import { customerErrorMessage } from "@/features/customer-panel/lib/errors";
 import type { CustomerBusiness } from "@/features/customer-panel/types";
@@ -43,7 +44,8 @@ import { useLocale } from "@/providers/locale-provider";
  * everywhere ends every panel session of this phone (other phones and
  * browsers too). A notice explains history closed without the person
  * asking (TEC-972: a reassignment processed by Takwim, a long unproven
- * number).
+ * number); for each such business the person can ask it to reopen the
+ * history (TEC-991), which the business does after checking who they are.
  */
 export function CustomerProfilePage() {
   const { t, locale } = useLocale();
@@ -53,6 +55,8 @@ export function CustomerProfilePage() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [changingPhone, setChangingPhone] = useState(false);
   const [reassigned, setReassigned] = useState(false);
+  const requestHistory = useRequestHistory();
+  const [requesting, setRequesting] = useState<CustomerBusiness | null>(null);
 
   const columns = useMemo(
     () =>
@@ -108,9 +112,59 @@ export function CustomerProfilePage() {
           enableSorting: false,
           cell: ({ row }) => date(row.original.linked_at, undefined, locale),
         }),
+        createColumn<CustomerBusiness>({
+          id: "history",
+          labelKey: "customer_panel.profile.history",
+          enableSorting: false,
+          gridSecondary: true,
+          cell: ({ row }) => {
+            const b = row.original;
+            if (!b.history_from) {
+              return b.history_restored_at ? (
+                <Badge variant="secondary">
+                  {t("customer_panel.profile.history_restored", {
+                    at: date(b.history_restored_at, undefined, locale),
+                  })}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              );
+            }
+            if (b.history_requested_at) {
+              return (
+                <Badge variant="outline">
+                  {t("customer_panel.profile.history_requested", {
+                    at: date(b.history_requested_at, undefined, locale),
+                  })}
+                </Badge>
+              );
+            }
+            return (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setRequesting(b)}
+              >
+                <History className="size-4" />
+                {t("customer_panel.profile.request_history")}
+              </Button>
+            );
+          },
+        }),
       ] as ColumnDef<CustomerBusiness, unknown>[],
     [locale, t],
   );
+
+  const sendHistoryRequest = () => {
+    if (!requesting) return;
+    requestHistory.mutate(requesting.slug, {
+      onSuccess: () =>
+        appToast.success(t("customer_panel.profile.request_history_done")),
+      onError: (error) => appToast.error(customerErrorMessage(t, error)),
+      onSettled: () => setRequesting(null),
+    });
+  };
 
   const signOut = (everywhere: boolean) =>
     logout.mutate(everywhere, {
@@ -141,13 +195,18 @@ export function CustomerProfilePage() {
           <AlertTitle>
             {t("customer_panel.profile.history_notice_title")}
           </AlertTitle>
-          <AlertDescription>
-            {t(
-              profile.history_notice.reason === "dormant"
-                ? "customer_panel.profile.history_notice_dormant"
-                : "customer_panel.profile.history_notice_reassigned",
-              { at: date(profile.history_notice.closed_at, undefined, locale) },
-            )}
+          <AlertDescription className="space-y-2">
+            <p>
+              {t(
+                profile.history_notice.reason === "dormant"
+                  ? "customer_panel.profile.history_notice_dormant"
+                  : "customer_panel.profile.history_notice_reassigned",
+                {
+                  at: date(profile.history_notice.closed_at, undefined, locale),
+                },
+              )}
+            </p>
+            <p>{t("customer_panel.profile.history_notice_request")}</p>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -267,6 +326,17 @@ export function CustomerProfilePage() {
         open={reassigned}
         onOpenChange={setReassigned}
         businesses={profile.businesses}
+      />
+      <ConfirmDialog
+        open={requesting !== null}
+        title={t("customer_panel.profile.request_history")}
+        description={t("customer_panel.profile.request_history_description", {
+          business: requesting?.name ?? "",
+        })}
+        confirmLabel={t("customer_panel.profile.request_history_confirm")}
+        isPending={requestHistory.isPending}
+        onConfirm={sendHistoryRequest}
+        onCancel={() => setRequesting(null)}
       />
       <ConfirmDialog
         open={confirmAll}

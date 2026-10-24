@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BadgeCheck, Pencil, Trash2 } from "lucide-react";
+import { BadgeCheck, History, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
@@ -17,6 +17,8 @@ import {
   EntityPage,
   EntitySectionCard,
 } from "@/components/entity";
+import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
@@ -26,6 +28,7 @@ import { CustomerActivityCard } from "@/features/customers/components/customer-a
 import {
   useCustomer,
   useDeleteCustomer,
+  useRestoreCustomerHistory,
 } from "@/features/customers/hooks/use-customers";
 import {
   sourceLabel,
@@ -37,15 +40,23 @@ import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { date, datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
-/** Show page: contact, notes and tags, consent, verification, activity. */
+/**
+ * Show page: contact, notes and tags, consent, verification, activity. The
+ * verification card also carries the person's panel history at this
+ * business (TEC-991): when a number release hid the earlier visits, the
+ * reception reopens them after checking who the person is.
+ */
 export function CustomerDetailPage({ uuid }: { uuid: string }) {
   const { t, locale } = useLocale();
   const { slug } = useTenant();
   const router = useRouter();
   const query = useCustomer(uuid);
   const remove = useDeleteCustomer();
+  const restore = useRestoreCustomerHistory();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
   const customer = query.data;
+  const verification = customer?.verification ?? null;
   const title = customer?.full_name ?? t("customers.detail_title");
   const consent = (value: boolean) =>
     value ? t("customers.consent.given") : t("customers.consent.none");
@@ -182,18 +193,82 @@ export function CustomerDetailPage({ uuid }: { uuid: string }) {
                 : t("customers.verified.no")
             }
           >
-            {customer.verification ? (
-              <p className="flex items-start gap-2 text-sm">
-                <BadgeCheck className="text-primary mt-0.5 size-4 shrink-0" />
-                {t("customers.verification.linked", {
-                  method: verificationLabel(t, customer.verification.source),
-                  at: datetime(
-                    customer.verification.verified_at,
-                    undefined,
-                    locale,
-                  ),
-                })}
-              </p>
+            {verification ? (
+              <div className="space-y-4">
+                <p className="flex items-start gap-2 text-sm">
+                  <BadgeCheck className="text-primary mt-0.5 size-4 shrink-0" />
+                  {t("customers.verification.linked", {
+                    method: verificationLabel(t, verification.source),
+                    at: datetime(verification.verified_at, undefined, locale),
+                  })}
+                </p>
+                {verification.history_hidden_from ? (
+                  <Alert>
+                    <History className="size-4" />
+                    <AlertTitle>
+                      {t("customers.history.hidden_title")}
+                    </AlertTitle>
+                    <AlertDescription className="space-y-3">
+                      <p>
+                        {t("customers.history.hidden", {
+                          at: datetime(
+                            verification.history_hidden_from,
+                            undefined,
+                            locale,
+                          ),
+                        })}
+                      </p>
+                      {verification.history_requested_at ? (
+                        <p className="font-medium">
+                          {t("customers.history.requested", {
+                            at: datetime(
+                              verification.history_requested_at,
+                              undefined,
+                              locale,
+                            ),
+                          })}
+                        </p>
+                      ) : null}
+                      <p>{t("customers.history.check_hint")}</p>
+                      <PermissionGuard
+                        permission={permissions.tenant.customers.write}
+                      >
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmRestore(true)}
+                        >
+                          <History className="size-4" />
+                          {t("customers.history.restore")}
+                        </Button>
+                      </PermissionGuard>
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                {!verification.history_hidden_from &&
+                verification.history_restored_at ? (
+                  <p className="text-muted-foreground flex items-start gap-2 text-sm">
+                    <History className="mt-0.5 size-4 shrink-0" />
+                    {verification.history_restored_by
+                      ? t("customers.history.restored_by", {
+                          by: verification.history_restored_by,
+                          at: datetime(
+                            verification.history_restored_at,
+                            undefined,
+                            locale,
+                          ),
+                        })
+                      : t("customers.history.restored", {
+                          at: datetime(
+                            verification.history_restored_at,
+                            undefined,
+                            locale,
+                          ),
+                        })}
+                  </p>
+                ) : null}
+              </div>
             ) : (
               <p className="text-muted-foreground text-sm">
                 {t("customers.verification.unlinked")}
@@ -251,6 +326,22 @@ export function CustomerDetailPage({ uuid }: { uuid: string }) {
           <CustomerNotificationHistoryCard customerUuid={uuid} />
 
           <CustomerActivityCard customerUuid={uuid} />
+
+          <ConfirmDialog
+            open={confirmRestore}
+            title={t("customers.history.restore")}
+            description={t("customers.history.restore_description", {
+              name: customer.full_name,
+            })}
+            confirmLabel={t("customers.history.restore_confirm")}
+            isPending={restore.isPending}
+            onConfirm={() =>
+              restore.mutate(uuid, {
+                onSettled: () => setConfirmRestore(false),
+              })
+            }
+            onCancel={() => setConfirmRestore(false)}
+          />
 
           <EntityDeleteDialog
             open={confirmDelete}

@@ -101,6 +101,23 @@ export function useUpdateCustomer() {
   });
 }
 
+/**
+ * The business reopens the person's panel history after checking who they
+ * are at the reception (TEC-991). The detail and the activity reload.
+ */
+export function useRestoreCustomerHistory() {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const invalidate = useInvalidateCustomers();
+  return useMutation({
+    mutationFn: (uuid: string) => customersService.restoreHistory(slug, uuid),
+    onSuccess: () => {
+      appToast.success(t("customers.history.restored_toast"));
+      void invalidate();
+    },
+  });
+}
+
 export function useDeleteCustomer() {
   const { slug } = useTenant();
   const { t } = useLocale();

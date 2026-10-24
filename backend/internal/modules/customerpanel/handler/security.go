@@ -12,7 +12,11 @@ import (
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customerpanel/usecase"
+	customersmodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/customers/model"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/httpkit"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 )
 
@@ -124,6 +128,37 @@ func (h *Handler) Reassigned(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, err)
 		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
+// RequestHistory serves POST /v1/customer/businesses/{slug}/history-request
+// (TEC-991): "reopen my history at this business". The business's activity
+// gets the request (no actor: the customer acted) so the reception sees it
+// on the record.
+func (h *Handler) RequestHistory(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.session(w, r, "security", h.limits.Security)
+	if !ok {
+		return
+	}
+	req, out, err := h.svc.RequestHistory(r.Context(), p, r.PathValue("slug"), meta(r))
+	if err != nil {
+		if errors.Is(err, usecase.ErrNotFound) {
+			response.NotFound(w, r, "Business was not found")
+			return
+		}
+		writeError(w, r, err)
+		return
+	}
+	if h.activity != nil {
+		id := req.CustomerUUID
+		h.activity.RecordEntry(orgctx.WithScope(r.Context(), req.Scope), activity.Entry{
+			Action: "customers.history_requested", Resource: customersmodel.Slug, ResourceUUID: &id,
+			Payload: map[string]any{"source": "customer_panel", "requested_at": req.RequestedAt}, Request: r,
+		})
+	}
+	if h.events != nil {
+		h.events.Publish(orgctx.WithScope(r.Context(), req.Scope), customersmodel.Slug, resourceevents.ActionUpdated, req.CustomerUUID.String())
 	}
 	response.JSON(w, r, http.StatusOK, out)
 }

@@ -38,17 +38,25 @@ UPDATE customers SET deleted_at = NULL
 WHERE organization_id = sqlc.arg(organization_id) AND uuid = sqlc.arg(uuid) AND deleted_at IS NOT NULL;
 
 -- name: GetCustomer :one
-SELECT c.*, l.source AS link_source, l.verified_at AS link_verified_at
+SELECT c.*, l.source AS link_source, l.verified_at AS link_verified_at,
+    l.visible_from AS link_visible_from, l.history_requested_at AS link_history_requested_at,
+    l.history_restored_at AS link_history_restored_at,
+    COALESCE(TRIM(ru.name || ' ' || ru.surname), '')::TEXT AS link_history_restored_by
 FROM customers c
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
+LEFT JOIN users ru ON ru.id = l.history_restored_by
 WHERE c.organization_id = sqlc.arg(organization_id)
   AND c.uuid = sqlc.arg(uuid)
   AND c.deleted_at IS NULL;
 
 -- name: ListCustomers :many
-SELECT c.*, l.source AS link_source, l.verified_at AS link_verified_at
+SELECT c.*, l.source AS link_source, l.verified_at AS link_verified_at,
+    l.visible_from AS link_visible_from, l.history_requested_at AS link_history_requested_at,
+    l.history_restored_at AS link_history_restored_at,
+    COALESCE(TRIM(ru.name || ' ' || ru.surname), '')::TEXT AS link_history_restored_by
 FROM customers c
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
+LEFT JOIN users ru ON ru.id = l.history_restored_by
 WHERE c.organization_id = sqlc.arg(organization_id)
   AND c.deleted_at IS NULL
   AND (sqlc.narg(tags)::text[] IS NULL OR c.tags && sqlc.narg(tags)::text[])
@@ -117,9 +125,13 @@ ORDER BY c.id ASC
 LIMIT sqlc.arg(limit_count);
 
 -- name: ListCustomersForExport :many
-SELECT c.*, l.source AS link_source, l.verified_at AS link_verified_at
+SELECT c.*, l.source AS link_source, l.verified_at AS link_verified_at,
+    l.visible_from AS link_visible_from, l.history_requested_at AS link_history_requested_at,
+    l.history_restored_at AS link_history_restored_at,
+    COALESCE(TRIM(ru.name || ' ' || ru.surname), '')::TEXT AS link_history_restored_by
 FROM customers c
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
+LEFT JOIN users ru ON ru.id = l.history_restored_by
 WHERE c.organization_id = sqlc.arg(organization_id)
   AND c.deleted_at IS NULL
   AND (sqlc.narg(tags)::text[] IS NULL OR c.tags && sqlc.narg(tags)::text[])
@@ -193,6 +205,18 @@ WHERE organization_id = sqlc.arg(organization_id) AND customer_id = sqlc.arg(cus
 -- name: DeleteCustomerIdentityLink :execrows
 DELETE FROM customer_identity_links
 WHERE organization_id = sqlc.arg(organization_id) AND customer_id = sqlc.arg(customer_id);
+
+-- name: RestoreCustomerHistory :one
+-- TEC-991: the business reopens the history it closed for the person
+-- (visible_from set by a reassignment or the dormant check) after checking
+-- who they are. Only this business's link changes; the reverted window is
+-- kept as the trail. No row: the record is not linked or nothing is hidden.
+UPDATE customer_identity_links l
+SET visible_from = NULL, history_requested_at = NULL, history_restored_at = NOW(),
+    history_restored_by = sqlc.arg(user_id), history_restored_from = l.visible_from
+WHERE l.organization_id = sqlc.arg(organization_id) AND l.customer_id = sqlc.arg(customer_id)
+  AND l.visible_from IS NOT NULL
+RETURNING l.identity_id, l.verified_phone_e164, l.history_restored_from;
 
 -- name: GetLinkedCustomer :one
 -- The business's own record of an identity (customer panel, online booking).

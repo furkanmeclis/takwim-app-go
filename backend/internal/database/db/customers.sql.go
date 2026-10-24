@@ -135,7 +135,7 @@ VALUES (
     $1, $2, $3, $4,
     $5, $6, $7
 )
-RETURNING id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at, visible_from, visible_until
+RETURNING id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at, visible_from, visible_until, history_requested_at, history_restored_at, history_restored_by, history_restored_from
 `
 
 type CreateCustomerIdentityLinkParams struct {
@@ -172,6 +172,10 @@ func (q *Queries) CreateCustomerIdentityLink(ctx context.Context, arg CreateCust
 		&i.CreatedAt,
 		&i.VisibleFrom,
 		&i.VisibleUntil,
+		&i.HistoryRequestedAt,
+		&i.HistoryRestoredAt,
+		&i.HistoryRestoredBy,
+		&i.HistoryRestoredFrom,
 	)
 	return i, err
 }
@@ -218,9 +222,13 @@ func (q *Queries) DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCust
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT c.id, c.uuid, c.organization_id, c.first_name, c.last_name, c.phone_e164, c.email, c.birth_date, c.notes, c.tags, c.sms_consent, c.email_consent, c.consent_updated_at, c.source, c.created_at, c.updated_at, c.deleted_at, l.source AS link_source, l.verified_at AS link_verified_at
+SELECT c.id, c.uuid, c.organization_id, c.first_name, c.last_name, c.phone_e164, c.email, c.birth_date, c.notes, c.tags, c.sms_consent, c.email_consent, c.consent_updated_at, c.source, c.created_at, c.updated_at, c.deleted_at, l.source AS link_source, l.verified_at AS link_verified_at,
+    l.visible_from AS link_visible_from, l.history_requested_at AS link_history_requested_at,
+    l.history_restored_at AS link_history_restored_at,
+    COALESCE(TRIM(ru.name || ' ' || ru.surname), '')::TEXT AS link_history_restored_by
 FROM customers c
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
+LEFT JOIN users ru ON ru.id = l.history_restored_by
 WHERE c.organization_id = $1
   AND c.uuid = $2
   AND c.deleted_at IS NULL
@@ -232,25 +240,29 @@ type GetCustomerParams struct {
 }
 
 type GetCustomerRow struct {
-	ID               int64              `json:"id"`
-	Uuid             uuid.UUID          `json:"uuid"`
-	OrganizationID   int64              `json:"organization_id"`
-	FirstName        string             `json:"first_name"`
-	LastName         string             `json:"last_name"`
-	PhoneE164        pgtype.Text        `json:"phone_e164"`
-	Email            string             `json:"email"`
-	BirthDate        pgtype.Date        `json:"birth_date"`
-	Notes            string             `json:"notes"`
-	Tags             []string           `json:"tags"`
-	SmsConsent       bool               `json:"sms_consent"`
-	EmailConsent     bool               `json:"email_consent"`
-	ConsentUpdatedAt pgtype.Timestamptz `json:"consent_updated_at"`
-	Source           string             `json:"source"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	LinkSource       pgtype.Text        `json:"link_source"`
-	LinkVerifiedAt   pgtype.Timestamptz `json:"link_verified_at"`
+	ID                     int64              `json:"id"`
+	Uuid                   uuid.UUID          `json:"uuid"`
+	OrganizationID         int64              `json:"organization_id"`
+	FirstName              string             `json:"first_name"`
+	LastName               string             `json:"last_name"`
+	PhoneE164              pgtype.Text        `json:"phone_e164"`
+	Email                  string             `json:"email"`
+	BirthDate              pgtype.Date        `json:"birth_date"`
+	Notes                  string             `json:"notes"`
+	Tags                   []string           `json:"tags"`
+	SmsConsent             bool               `json:"sms_consent"`
+	EmailConsent           bool               `json:"email_consent"`
+	ConsentUpdatedAt       pgtype.Timestamptz `json:"consent_updated_at"`
+	Source                 string             `json:"source"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
+	LinkSource             pgtype.Text        `json:"link_source"`
+	LinkVerifiedAt         pgtype.Timestamptz `json:"link_verified_at"`
+	LinkVisibleFrom        pgtype.Timestamptz `json:"link_visible_from"`
+	LinkHistoryRequestedAt pgtype.Timestamptz `json:"link_history_requested_at"`
+	LinkHistoryRestoredAt  pgtype.Timestamptz `json:"link_history_restored_at"`
+	LinkHistoryRestoredBy  string             `json:"link_history_restored_by"`
 }
 
 func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (GetCustomerRow, error) {
@@ -276,6 +288,10 @@ func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (GetCu
 		&i.DeletedAt,
 		&i.LinkSource,
 		&i.LinkVerifiedAt,
+		&i.LinkVisibleFrom,
+		&i.LinkHistoryRequestedAt,
+		&i.LinkHistoryRestoredAt,
+		&i.LinkHistoryRestoredBy,
 	)
 	return i, err
 }
@@ -324,7 +340,7 @@ func (q *Queries) GetCustomerIdentityByPhone(ctx context.Context, phoneE164 stri
 }
 
 const getCustomerIdentityLink = `-- name: GetCustomerIdentityLink :one
-SELECT id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at, visible_from, visible_until FROM customer_identity_links
+SELECT id, organization_id, customer_id, identity_id, source, verified_phone_e164, verified_at, created_at, visible_from, visible_until, history_requested_at, history_restored_at, history_restored_by, history_restored_from FROM customer_identity_links
 WHERE organization_id = $1 AND customer_id = $2
 `
 
@@ -347,6 +363,10 @@ func (q *Queries) GetCustomerIdentityLink(ctx context.Context, arg GetCustomerId
 		&i.CreatedAt,
 		&i.VisibleFrom,
 		&i.VisibleUntil,
+		&i.HistoryRequestedAt,
+		&i.HistoryRestoredAt,
+		&i.HistoryRestoredBy,
+		&i.HistoryRestoredFrom,
 	)
 	return i, err
 }
@@ -597,9 +617,13 @@ func (q *Queries) ListCustomerUUIDs(ctx context.Context, arg ListCustomerUUIDsPa
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT c.id, c.uuid, c.organization_id, c.first_name, c.last_name, c.phone_e164, c.email, c.birth_date, c.notes, c.tags, c.sms_consent, c.email_consent, c.consent_updated_at, c.source, c.created_at, c.updated_at, c.deleted_at, l.source AS link_source, l.verified_at AS link_verified_at
+SELECT c.id, c.uuid, c.organization_id, c.first_name, c.last_name, c.phone_e164, c.email, c.birth_date, c.notes, c.tags, c.sms_consent, c.email_consent, c.consent_updated_at, c.source, c.created_at, c.updated_at, c.deleted_at, l.source AS link_source, l.verified_at AS link_verified_at,
+    l.visible_from AS link_visible_from, l.history_requested_at AS link_history_requested_at,
+    l.history_restored_at AS link_history_restored_at,
+    COALESCE(TRIM(ru.name || ' ' || ru.surname), '')::TEXT AS link_history_restored_by
 FROM customers c
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
+LEFT JOIN users ru ON ru.id = l.history_restored_by
 WHERE c.organization_id = $1
   AND c.deleted_at IS NULL
   AND ($2::text[] IS NULL OR c.tags && $2::text[])
@@ -646,25 +670,29 @@ type ListCustomersParams struct {
 }
 
 type ListCustomersRow struct {
-	ID               int64              `json:"id"`
-	Uuid             uuid.UUID          `json:"uuid"`
-	OrganizationID   int64              `json:"organization_id"`
-	FirstName        string             `json:"first_name"`
-	LastName         string             `json:"last_name"`
-	PhoneE164        pgtype.Text        `json:"phone_e164"`
-	Email            string             `json:"email"`
-	BirthDate        pgtype.Date        `json:"birth_date"`
-	Notes            string             `json:"notes"`
-	Tags             []string           `json:"tags"`
-	SmsConsent       bool               `json:"sms_consent"`
-	EmailConsent     bool               `json:"email_consent"`
-	ConsentUpdatedAt pgtype.Timestamptz `json:"consent_updated_at"`
-	Source           string             `json:"source"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	LinkSource       pgtype.Text        `json:"link_source"`
-	LinkVerifiedAt   pgtype.Timestamptz `json:"link_verified_at"`
+	ID                     int64              `json:"id"`
+	Uuid                   uuid.UUID          `json:"uuid"`
+	OrganizationID         int64              `json:"organization_id"`
+	FirstName              string             `json:"first_name"`
+	LastName               string             `json:"last_name"`
+	PhoneE164              pgtype.Text        `json:"phone_e164"`
+	Email                  string             `json:"email"`
+	BirthDate              pgtype.Date        `json:"birth_date"`
+	Notes                  string             `json:"notes"`
+	Tags                   []string           `json:"tags"`
+	SmsConsent             bool               `json:"sms_consent"`
+	EmailConsent           bool               `json:"email_consent"`
+	ConsentUpdatedAt       pgtype.Timestamptz `json:"consent_updated_at"`
+	Source                 string             `json:"source"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
+	LinkSource             pgtype.Text        `json:"link_source"`
+	LinkVerifiedAt         pgtype.Timestamptz `json:"link_verified_at"`
+	LinkVisibleFrom        pgtype.Timestamptz `json:"link_visible_from"`
+	LinkHistoryRequestedAt pgtype.Timestamptz `json:"link_history_requested_at"`
+	LinkHistoryRestoredAt  pgtype.Timestamptz `json:"link_history_restored_at"`
+	LinkHistoryRestoredBy  string             `json:"link_history_restored_by"`
 }
 
 func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error) {
@@ -709,6 +737,10 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.DeletedAt,
 			&i.LinkSource,
 			&i.LinkVerifiedAt,
+			&i.LinkVisibleFrom,
+			&i.LinkHistoryRequestedAt,
+			&i.LinkHistoryRestoredAt,
+			&i.LinkHistoryRestoredBy,
 		); err != nil {
 			return nil, err
 		}
@@ -721,9 +753,13 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 }
 
 const listCustomersForExport = `-- name: ListCustomersForExport :many
-SELECT c.id, c.uuid, c.organization_id, c.first_name, c.last_name, c.phone_e164, c.email, c.birth_date, c.notes, c.tags, c.sms_consent, c.email_consent, c.consent_updated_at, c.source, c.created_at, c.updated_at, c.deleted_at, l.source AS link_source, l.verified_at AS link_verified_at
+SELECT c.id, c.uuid, c.organization_id, c.first_name, c.last_name, c.phone_e164, c.email, c.birth_date, c.notes, c.tags, c.sms_consent, c.email_consent, c.consent_updated_at, c.source, c.created_at, c.updated_at, c.deleted_at, l.source AS link_source, l.verified_at AS link_verified_at,
+    l.visible_from AS link_visible_from, l.history_requested_at AS link_history_requested_at,
+    l.history_restored_at AS link_history_restored_at,
+    COALESCE(TRIM(ru.name || ' ' || ru.surname), '')::TEXT AS link_history_restored_by
 FROM customers c
 LEFT JOIN customer_identity_links l ON l.organization_id = c.organization_id AND l.customer_id = c.id
+LEFT JOIN users ru ON ru.id = l.history_restored_by
 WHERE c.organization_id = $1
   AND c.deleted_at IS NULL
   AND ($2::text[] IS NULL OR c.tags && $2::text[])
@@ -754,25 +790,29 @@ type ListCustomersForExportParams struct {
 }
 
 type ListCustomersForExportRow struct {
-	ID               int64              `json:"id"`
-	Uuid             uuid.UUID          `json:"uuid"`
-	OrganizationID   int64              `json:"organization_id"`
-	FirstName        string             `json:"first_name"`
-	LastName         string             `json:"last_name"`
-	PhoneE164        pgtype.Text        `json:"phone_e164"`
-	Email            string             `json:"email"`
-	BirthDate        pgtype.Date        `json:"birth_date"`
-	Notes            string             `json:"notes"`
-	Tags             []string           `json:"tags"`
-	SmsConsent       bool               `json:"sms_consent"`
-	EmailConsent     bool               `json:"email_consent"`
-	ConsentUpdatedAt pgtype.Timestamptz `json:"consent_updated_at"`
-	Source           string             `json:"source"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	LinkSource       pgtype.Text        `json:"link_source"`
-	LinkVerifiedAt   pgtype.Timestamptz `json:"link_verified_at"`
+	ID                     int64              `json:"id"`
+	Uuid                   uuid.UUID          `json:"uuid"`
+	OrganizationID         int64              `json:"organization_id"`
+	FirstName              string             `json:"first_name"`
+	LastName               string             `json:"last_name"`
+	PhoneE164              pgtype.Text        `json:"phone_e164"`
+	Email                  string             `json:"email"`
+	BirthDate              pgtype.Date        `json:"birth_date"`
+	Notes                  string             `json:"notes"`
+	Tags                   []string           `json:"tags"`
+	SmsConsent             bool               `json:"sms_consent"`
+	EmailConsent           bool               `json:"email_consent"`
+	ConsentUpdatedAt       pgtype.Timestamptz `json:"consent_updated_at"`
+	Source                 string             `json:"source"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
+	LinkSource             pgtype.Text        `json:"link_source"`
+	LinkVerifiedAt         pgtype.Timestamptz `json:"link_verified_at"`
+	LinkVisibleFrom        pgtype.Timestamptz `json:"link_visible_from"`
+	LinkHistoryRequestedAt pgtype.Timestamptz `json:"link_history_requested_at"`
+	LinkHistoryRestoredAt  pgtype.Timestamptz `json:"link_history_restored_at"`
+	LinkHistoryRestoredBy  string             `json:"link_history_restored_by"`
 }
 
 func (q *Queries) ListCustomersForExport(ctx context.Context, arg ListCustomersForExportParams) ([]ListCustomersForExportRow, error) {
@@ -814,6 +854,10 @@ func (q *Queries) ListCustomersForExport(ctx context.Context, arg ListCustomersF
 			&i.DeletedAt,
 			&i.LinkSource,
 			&i.LinkVerifiedAt,
+			&i.LinkVisibleFrom,
+			&i.LinkHistoryRequestedAt,
+			&i.LinkHistoryRestoredAt,
+			&i.LinkHistoryRestoredBy,
 		); err != nil {
 			return nil, err
 		}
@@ -842,6 +886,38 @@ func (q *Queries) RestoreCustomer(ctx context.Context, arg RestoreCustomerParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const restoreCustomerHistory = `-- name: RestoreCustomerHistory :one
+UPDATE customer_identity_links l
+SET visible_from = NULL, history_requested_at = NULL, history_restored_at = NOW(),
+    history_restored_by = $1, history_restored_from = l.visible_from
+WHERE l.organization_id = $2 AND l.customer_id = $3
+  AND l.visible_from IS NOT NULL
+RETURNING l.identity_id, l.verified_phone_e164, l.history_restored_from
+`
+
+type RestoreCustomerHistoryParams struct {
+	UserID         pgtype.Int8 `json:"user_id"`
+	OrganizationID int64       `json:"organization_id"`
+	CustomerID     int64       `json:"customer_id"`
+}
+
+type RestoreCustomerHistoryRow struct {
+	IdentityID          int64              `json:"identity_id"`
+	VerifiedPhoneE164   string             `json:"verified_phone_e164"`
+	HistoryRestoredFrom pgtype.Timestamptz `json:"history_restored_from"`
+}
+
+// TEC-991: the business reopens the history it closed for the person
+// (visible_from set by a reassignment or the dormant check) after checking
+// who they are. Only this business's link changes; the reverted window is
+// kept as the trail. No row: the record is not linked or nothing is hidden.
+func (q *Queries) RestoreCustomerHistory(ctx context.Context, arg RestoreCustomerHistoryParams) (RestoreCustomerHistoryRow, error) {
+	row := q.db.QueryRow(ctx, restoreCustomerHistory, arg.UserID, arg.OrganizationID, arg.CustomerID)
+	var i RestoreCustomerHistoryRow
+	err := row.Scan(&i.IdentityID, &i.VerifiedPhoneE164, &i.HistoryRestoredFrom)
+	return i, err
 }
 
 const setCustomerTags = `-- name: SetCustomerTags :exec

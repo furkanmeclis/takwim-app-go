@@ -8040,6 +8040,41 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/customers/{uuid}/history/restore:
+    post:
+      tags: [Tenant]
+      operationId: restoreTenantCustomerHistory
+      summary: Reopen the customer's panel history
+      description: |
+        `tenant.customers.write` (TEC-991). A reassignment notice or the
+        dormant number check hid the person's earlier visits at this
+        business from their panel (`verification.history_hidden_from`).
+        When the reception has checked who the person is, the business
+        reopens its own history: only this business's link changes, the
+        reverted window and the actor stay on it (`history_restored_at`,
+        `history_restored_by`) and the activity gets
+        `customers.history_restored`. A name match is never evidence; the
+        check is the business's. A record that is not linked to a person or
+        whose history is open answers `409` with `history` / `open`. A uuid
+        of another organization answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Customer with the reopened history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantCustomer"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/customers/{uuid}/activity:
     get:
       tags: [Tenant]
@@ -14562,6 +14597,37 @@ paths:
                 $ref: "#/components/schemas/EnvelopeCustomerProfile"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/businesses/{slug}/history-request:
+    post:
+      tags: [Customer panel]
+      operationId: requestCustomerHistory
+      summary: Ask a business to reopen the hidden history
+      description: |
+        TEC-991. After a release closed the earlier history (`history_from`
+        on the business), the person asks that business to reopen it. The
+        request is written on the business's record and its activity
+        (`customers.history_requested`); the reception reopens the history
+        after checking who the person is. The panel never reopens anything
+        itself. A business that does not know the person answers `404`; one
+        whose history is open `409 ACTION_NOT_ALLOWED` with
+        `history_request` / `history_open`. Asking again keeps the first
+        request's time. Limit: 10 per session in 10 minutes.
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PublicBusinessSlug"
+      responses:
+        "200":
+          description: Profile with the request on the business
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerProfile"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/customer/visit:
@@ -23146,10 +23212,25 @@ components:
     TenantCustomerVerification:
       type: object
       description: The record is linked to a person who proved the phone. The shared identity itself is never exposed.
-      required: [source, verified_at]
+      required: [source, verified_at, history_hidden_from, history_requested_at, history_restored_at, history_restored_by]
       properties:
-        source: { type: string, enum: [otp, panel_login] }
+        source: { type: string, enum: [otp, panel_login, panel_link, phone_change] }
         verified_at: { type: string, format: date-time }
+        history_hidden_from:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            The person's panel shows only the visits of this business booked from this moment (the number
+            changed hands or was not proven for a long time, TEC-972). Null while the whole history is open.
+        history_requested_at:
+          type: [string, "null"]
+          format: date-time
+          description: The person asked this business from their panel to reopen the hidden history (TEC-991).
+        history_restored_at:
+          type: [string, "null"]
+          format: date-time
+          description: The business reopened the history after checking who the person is.
+        history_restored_by: { type: string, description: Who reopened it; empty otherwise. }
 
     TenantCustomer:
       type: object
@@ -25163,7 +25244,8 @@ components:
 
     CustomerBusiness:
       type: object
-      required: [uuid, slug, name, first_name, last_name, linked_at, reservation_count, history_from, history_until]
+      required: [uuid, slug, name, first_name, last_name, linked_at, reservation_count, history_from, history_until,
+        history_requested_at, history_restored_at]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -25180,6 +25262,14 @@ components:
           type: [string, "null"]
           format: date-time
           description: Only visits booked before this moment are shown (the person moved to another number).
+        history_requested_at:
+          type: [string, "null"]
+          format: date-time
+          description: The person asked this business to reopen the history behind `history_from` (TEC-991).
+        history_restored_at:
+          type: [string, "null"]
+          format: date-time
+          description: The business reopened its history after checking who the person is.
 
     CustomerDevice:
       type: object

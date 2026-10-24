@@ -52,6 +52,8 @@ func RegisterRoutes(mux *http.ServeMux, h *customerpanelhandler.Handler) {
 	mux.HandleFunc("POST /v1/customer/phone/start", h.Authenticate(h.PhoneStart))
 	mux.HandleFunc("POST /v1/customer/phone/verify", h.Authenticate(h.PhoneVerify))
 	mux.HandleFunc("POST /v1/customer/phone/reassigned", h.Authenticate(h.Reassigned))
+	// TEC-991: ask a business to reopen the history a release closed.
+	mux.HandleFunc("POST /v1/customer/businesses/{slug}/history-request", h.Authenticate(h.RequestHistory))
 	// Visit links: one reservation, no session. The token is the only key.
 	mux.HandleFunc("POST /v1/customer/visit", h.Visit)
 	mux.HandleFunc("POST /v1/customer/visit/cancel", h.VisitCancel)

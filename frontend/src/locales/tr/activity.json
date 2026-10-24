@@ -234,6 +234,8 @@
   "actions.customers.created": "Müşteri eklendi",
   "actions.customers.updated": "Müşteri güncellendi",
   "actions.customers.deleted": "Müşteri silindi",
+  "actions.customers.history_requested": "Müşteri panel geçmişini geri istedi",
+  "actions.customers.history_restored": "Müşterinin panel geçmişi geri açıldı",
   "fields.tenant.customers.first_name": "Ad",
   "fields.tenant.customers.last_name": "Soyad",
   "fields.tenant.customers.phone": "Telefon",

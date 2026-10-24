@@ -341,16 +341,20 @@ type CustomerIdentity struct {
 }
 
 type CustomerIdentityLink struct {
-	ID                int64              `json:"id"`
-	OrganizationID    int64              `json:"organization_id"`
-	CustomerID        int64              `json:"customer_id"`
-	IdentityID        int64              `json:"identity_id"`
-	Source            string             `json:"source"`
-	VerifiedPhoneE164 string             `json:"verified_phone_e164"`
-	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	VisibleFrom       pgtype.Timestamptz `json:"visible_from"`
-	VisibleUntil      pgtype.Timestamptz `json:"visible_until"`
+	ID                  int64              `json:"id"`
+	OrganizationID      int64              `json:"organization_id"`
+	CustomerID          int64              `json:"customer_id"`
+	IdentityID          int64              `json:"identity_id"`
+	Source              string             `json:"source"`
+	VerifiedPhoneE164   string             `json:"verified_phone_e164"`
+	VerifiedAt          pgtype.Timestamptz `json:"verified_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	VisibleFrom         pgtype.Timestamptz `json:"visible_from"`
+	VisibleUntil        pgtype.Timestamptz `json:"visible_until"`
+	HistoryRequestedAt  pgtype.Timestamptz `json:"history_requested_at"`
+	HistoryRestoredAt   pgtype.Timestamptz `json:"history_restored_at"`
+	HistoryRestoredBy   pgtype.Int8        `json:"history_restored_by"`
+	HistoryRestoredFrom pgtype.Timestamptz `json:"history_restored_from"`
 }
 
 type CustomerNotificationDelivery struct {

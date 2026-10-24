@@ -80,7 +80,16 @@ type Business struct {
 	ReservationCount int64      `json:"reservation_count"`
 	HistoryFrom      *time.Time `json:"history_from"`
 	HistoryUntil     *time.Time `json:"history_until"`
+	// HistoryRequestedAt (TEC-991): the person asked this business to reopen
+	// the history behind HistoryFrom; HistoryRestoredAt: the business did,
+	// after checking who the person is.
+	HistoryRequestedAt *time.Time `json:"history_requested_at"`
+	HistoryRestoredAt  *time.Time `json:"history_restored_at"`
 }
+
+// Reasons a history request is refused (ActionError, action
+// "history_request").
+const ReasonHistoryOpen = "history_open"
 
 // LinkInput redeems a panel link (the token after "#" in
 // takwim.link/panel/l#…). The token travels in the body, never in a URL.

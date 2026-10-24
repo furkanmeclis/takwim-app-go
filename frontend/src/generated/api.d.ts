@@ -4968,6 +4968,36 @@ export interface paths {
         patch: operations["patchTenantCustomer"];
         trace?: never;
     };
+    "/v1/tenant/customers/{uuid}/history/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen the customer's panel history
+         * @description `tenant.customers.write` (TEC-991). A reassignment notice or the
+         *     dormant number check hid the person's earlier visits at this
+         *     business from their panel (`verification.history_hidden_from`).
+         *     When the reception has checked who the person is, the business
+         *     reopens its own history: only this business's link changes, the
+         *     reverted window and the actor stay on it (`history_restored_at`,
+         *     `history_restored_by`) and the activity gets
+         *     `customers.history_restored`. A name match is never evidence; the
+         *     check is the business's. A record that is not linked to a person or
+         *     whose history is open answers `409` with `history` / `open`. A uuid
+         *     of another organization answers `404`.
+         */
+        post: operations["restoreTenantCustomerHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/customers/{uuid}/activity": {
         parameters: {
             query?: never;
@@ -9166,6 +9196,34 @@ export interface paths {
          *     `keep_businesses` / `unknown`.
          */
         post: operations["reportCustomerNumberReassigned"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/businesses/{slug}/history-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a business to reopen the hidden history
+         * @description TEC-991. After a release closed the earlier history (`history_from`
+         *     on the business), the person asks that business to reopen it. The
+         *     request is written on the business's record and its activity
+         *     (`customers.history_requested`); the reception reopens the history
+         *     after checking who the person is. The panel never reopens anything
+         *     itself. A business that does not know the person answers `404`; one
+         *     whose history is open `409 ACTION_NOT_ALLOWED` with
+         *     `history_request` / `history_open`. Asking again keeps the first
+         *     request's time. Limit: 10 per session in 10 minutes.
+         */
+        post: operations["requestCustomerHistory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15716,9 +15774,27 @@ export interface components {
         /** @description The record is linked to a person who proved the phone. The shared identity itself is never exposed. */
         TenantCustomerVerification: {
             /** @enum {string} */
-            source: "otp" | "panel_login";
+            source: "otp" | "panel_login" | "panel_link" | "phone_change";
             /** Format: date-time */
             verified_at: string;
+            /**
+             * Format: date-time
+             * @description The person's panel shows only the visits of this business booked from this moment (the number
+             *     changed hands or was not proven for a long time, TEC-972). Null while the whole history is open.
+             */
+            history_hidden_from: string | null;
+            /**
+             * Format: date-time
+             * @description The person asked this business from their panel to reopen the hidden history (TEC-991).
+             */
+            history_requested_at: string | null;
+            /**
+             * Format: date-time
+             * @description The business reopened the history after checking who the person is.
+             */
+            history_restored_at: string | null;
+            /** @description Who reopened it; empty otherwise. */
+            history_restored_by: string;
         };
         TenantCustomer: {
             /** Format: uuid */
@@ -17406,6 +17482,16 @@ export interface components {
              * @description Only visits booked before this moment are shown (the person moved to another number).
              */
             history_until: string | null;
+            /**
+             * Format: date-time
+             * @description The person asked this business to reopen the history behind `history_from` (TEC-991).
+             */
+            history_requested_at: string | null;
+            /**
+             * Format: date-time
+             * @description The business reopened its history after checking who the person is.
+             */
+            history_restored_at: string | null;
         };
         CustomerDevice: {
             /** Format: uuid */
@@ -27620,6 +27706,40 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    restoreTenantCustomerHistory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer with the reopened history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantCustomer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getTenantCustomerActivity: {
         parameters: {
             query?: {
@@ -34967,6 +35087,33 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    requestCustomerHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The business's slug (`takwim.link/{slug}`). */
+                slug: components["parameters"]["PublicBusinessSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile with the request on the business */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerProfile"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
         };
     };

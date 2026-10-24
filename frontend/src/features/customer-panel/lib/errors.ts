@@ -12,6 +12,7 @@ export const REASON_KEYS: Record<string, string> = {
   sign_in_required: "customer_panel.reasons.sign_in_required",
   not_requested: "customer_panel.reasons.not_requested",
   answered: "customer_panel.reasons.answered",
+  history_open: "customer_panel.reasons.history_open",
 };
 
 const CONFLICT_KEYS: Record<string, string> = {
