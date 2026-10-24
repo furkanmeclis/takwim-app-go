@@ -17,8 +17,11 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reports/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 )
@@ -87,6 +90,36 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.svc.Summary(r.Context(), orgctx.Must(r.Context()).ID, f)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
+// Daily serves GET /v1/tenant/daily-summary: the home page summary of
+// one business day (date, default today). Each section follows the
+// caller's permissions and the modules of the business.
+func (h *Handler) Daily(w http.ResponseWriter, r *http.Request) {
+	var day *time.Time
+	if raw := strings.TrimSpace(r.URL.Query().Get("date")); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			response.ValidationError(w, r, []response.Detail{{Field: "date", Message: "date must be YYYY-MM-DD", Code: "invalid"}})
+			return
+		}
+		day = &t
+	}
+	scope := orgctx.Must(r.Context())
+	modules := entitlement.ForScope(scope)
+	access := model.DailyAccess{
+		OwnReservations:      scope.Has(rbac.PermTenantReservationsRead) || scope.Has(rbac.PermTenantReservationsOwn),
+		BusinessReservations: scope.Has(rbac.PermTenantReservationsRead),
+		Money:                scope.Has(rbac.PermTenantFinanceRead) && modules.Allows(sector.ModuleReports),
+		Earnings: (scope.Has(rbac.PermTenantEarningsRead) || scope.Has(rbac.PermTenantEarningsOwn)) &&
+			modules.Allows(sector.ModuleStaffShares),
+	}
+	out, err := h.svc.Daily(r.Context(), scope.ID, authctx.MustPrincipal(r.Context()).UserInternal, day, access)
 	if err != nil {
 		writeError(w, r, err)
 		return

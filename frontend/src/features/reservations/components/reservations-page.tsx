@@ -10,6 +10,7 @@ import {
   EntityTable,
   EntityToolbar,
   useServerListState,
+  useUrlListDefaults,
 } from "@/components/entity";
 import { createSelectColumnDef } from "@/components/tables";
 import {
@@ -70,6 +71,14 @@ function joined(values: string[]) {
 
 type Period = "all" | "upcoming" | "past";
 
+/** Column filters another page may set through the URL. */
+const URL_FILTER_IDS = [
+  "status",
+  "approval_status",
+  "confirmation_status",
+  "payment_status",
+] as const;
+
 type CancelPrompt = {
   resolve: (params: Record<string, string> | null) => void;
 };
@@ -91,8 +100,11 @@ export function ReservationsPage() {
   const router = useRouter();
   const canWrite = useCanWriteReservations();
 
+  // The home page links here with filters (`?approval_status=pending`).
+  const urlDefaults = useUrlListDefaults(URL_FILTER_IDS);
   const listState = useServerListState({
     initialSort: "",
+    initialColumnFilters: urlDefaults.initialColumnFilters,
     initialPageSize: 20,
     realtime: tenantLiveList(organization, RESERVATIONS_RESOURCE),
   });

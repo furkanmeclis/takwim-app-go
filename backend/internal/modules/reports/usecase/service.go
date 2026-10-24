@@ -68,6 +68,10 @@ type Queries interface {
 	ReportConfirmations(ctx context.Context, arg db.ReportConfirmationsParams) ([]db.ReportConfirmationsRow, error)
 	ReportStockMovements(ctx context.Context, arg db.ReportStockMovementsParams) ([]db.ReportStockMovementsRow, error)
 	ReportStockLevels(ctx context.Context, arg db.ReportStockLevelsParams) ([]db.ReportStockLevelsRow, error)
+	// Daily summary (TEC-926).
+	GetAgendaStaff(ctx context.Context, arg db.GetAgendaStaffParams) (db.GetAgendaStaffRow, error)
+	ListDailyStaffLines(ctx context.Context, arg db.ListDailyStaffLinesParams) ([]db.ListDailyStaffLinesRow, error)
+	CountPendingApprovals(ctx context.Context, arg db.CountPendingApprovalsParams) (int64, error)
 }
 
 // Service builds reports.

@@ -218,3 +218,34 @@ WHERE st.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(filter_branch_ids)::bigint[] IS NULL OR st.branch_id = ANY(sqlc.narg(filter_branch_ids)::bigint[]))
 GROUP BY st.branch_id
 ORDER BY st.branch_id;
+
+-- name: ListDailyStaffLines :many
+-- TEC-926 daily summary: the lines a staff member serves on one business
+-- day (branch time zone, else the business's) in the caller's branch
+-- scope, with their visit. Cancelled and rejected visits are left out.
+SELECT l.line_index, l.service_name, l.starts_at, l.ends_at,
+       r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
+       b.uuid AS branch_uuid, b.name AS branch_name,
+       c.first_name AS customer_first_name, c.last_name AS customer_last_name
+FROM reservation_lines l
+JOIN reservations r ON r.organization_id = l.organization_id AND r.id = l.reservation_id
+JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+JOIN organizations org ON org.id = r.organization_id
+JOIN customers c ON c.organization_id = r.organization_id AND c.id = r.customer_id
+WHERE l.organization_id = sqlc.arg(organization_id) AND l.staff_id = sqlc.arg(staff_id)
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]))
+  AND l.starts_at >= sqlc.arg(day)::date - INTERVAL '1 day'
+  AND l.starts_at < sqlc.arg(day)::date + INTERVAL '2 days'
+  AND (l.starts_at AT TIME ZONE COALESCE(NULLIF(b.timezone, ''), org.timezone))::date = sqlc.arg(day)::date
+  AND r.status NOT IN ('cancelled', 'rejected')
+ORDER BY l.starts_at, r.number, l.line_index;
+
+-- name: CountPendingApprovals :one
+-- TEC-926 daily summary: visits still waiting for the business to accept
+-- or reject them, in the caller's branch scope (any date: each one needs
+-- a decision).
+SELECT COUNT(*)::bigint
+FROM reservations r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.status = 'requested' AND r.approval_status = 'pending'
+  AND (sqlc.narg(branch_ids)::bigint[] IS NULL OR r.branch_id = ANY(sqlc.narg(branch_ids)::bigint[]));

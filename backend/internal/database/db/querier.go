@@ -131,6 +131,10 @@ type Querier interface {
 	CountOutboxByStatus(ctx context.Context, status string) (int64, error)
 	// Matching visits per kind (the list total and the kind facet).
 	CountPaymentFollowUps(ctx context.Context, arg CountPaymentFollowUpsParams) ([]CountPaymentFollowUpsRow, error)
+	// TEC-926 daily summary: visits still waiting for the business to accept
+	// or reject them, in the caller's branch scope (any date: each one needs
+	// a decision).
+	CountPendingApprovals(ctx context.Context, arg CountPendingApprovalsParams) (int64, error)
 	CountPermissions(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
@@ -735,6 +739,10 @@ type Querier interface {
 	ListCustomerUUIDs(ctx context.Context, arg ListCustomerUUIDsParams) ([]uuid.UUID, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
 	ListCustomersForExport(ctx context.Context, arg ListCustomersForExportParams) ([]ListCustomersForExportRow, error)
+	// TEC-926 daily summary: the lines a staff member serves on one business
+	// day (branch time zone, else the business's) in the caller's branch
+	// scope, with their visit. Cancelled and rejected visits are left out.
+	ListDailyStaffLines(ctx context.Context, arg ListDailyStaffLinesParams) ([]ListDailyStaffLinesRow, error)
 	// Organizations with holds past their expiry (the minute sweep).
 	ListDueCapacityHoldOrganizations(ctx context.Context, now pgtype.Timestamptz) ([]int64, error)
 	ListDueCustomerNotificationDispatches(ctx context.Context, arg ListDueCustomerNotificationDispatchesParams) ([]int64, error)
