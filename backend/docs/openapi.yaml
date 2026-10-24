@@ -7766,7 +7766,7 @@ paths:
         line that takes a staff member is planned with the caller's staff
         record, another `staff_uuid` is `403`). Answers each local date of
         the branch from `from` to `to` (default today + 6 days, at most 31)
-        with a status (`available`, `closed`, `too_far`, `too_soon`,
+        with a status (`available`, `closed`, `too_far`, `too_soon`, `no_class`,
         `no_staff`, `full`) and the starts every `step_minutes` (default 15)
         counted from the opening. Lines run back to back; each slot names
         the staff member and resources of every line. `staff_uuid` null is
@@ -7781,6 +7781,12 @@ paths:
         the caller's scope or of another business is `404`; services and
         staff are checked per line (`lines.N.service_uuid` `not_found`,
         `inactive`, `not_offered`; `lines.N.staff_uuid` `not_found`).
+
+        A group class (TEC-970) is offered only at the sessions of its
+        class timetable (`/v1/tenant/classes`), with the session's seats,
+        trainer and area; a day without a session is `no_class`. A
+        scheduled session holds its trainer and area for every other
+        booking, even before its first booking.
       security:
         - bearerAuth: []
       parameters:
@@ -14105,6 +14111,336 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /v1/tenant/classes/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClassesMeta
+      summary: Class timetable metadata
+      description: Table contract of `GET /v1/tenant/classes` (TEC-970).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/classes/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClassesFacets
+      summary: Class timetable filter options
+      description: The branches, classes and trainers of the timetable with their number of classes (caller's branch scope).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassFacets"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/classes/form:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClassesForm
+      summary: Class form choices
+      description: |
+        The group services (services with `group_capacity`) with the branches that offer them and the people who may
+        teach them (and the branches they work in), and the resources of the caller's branches. Needs
+        `tenant.classes.write`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Form choices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassFormOptions"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/classes:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClasses
+      summary: Class timetable
+      description: |
+        The weekly classes of the business (TEC-970, gym `classes` module): a group service taught on one weekday at
+        one wall-clock time in a branch, with its trainer, area and seats, between `valid_from` and `valid_until`.
+        Every such weekday is a session (`GET /v1/tenant/class-sessions`). A group class is bookable only at its
+        sessions. Needs the classes module and `tenant.classes.read`; the list follows the caller's branch scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `weekday` (weekday then start, default), `service`, `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: service
+          in: query
+          description: "Service uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: staff
+          in: query
+          description: "Trainer (staff) uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: weekday
+          in: query
+          description: "`mon` … `sun`; comma-separate or repeat"
+          schema: { type: string }
+        - name: is_active
+          in: query
+          schema: { type: string, enum: ["true", "false"] }
+      responses:
+        "200":
+          description: Class page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSchedulePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantClass
+      summary: Add a class
+      description: |
+        `tenant.classes.write`. `service_uuid` a group service offered in the branch (`not_group`, `not_offered`);
+        `staff_uuid` someone who teaches the service and works in the branch (`not_qualified`, `not_in_branch`;
+        `not_allowed` for a service without staff), null = the first booking of a session picks a free trainer;
+        `resource_uuid` a resource of the branch of one of the service's kinds (`not_in_branch`, `kind_mismatch`),
+        null = picked by the first booking; `capacity` 1–1000 (null = the service's group capacity); `valid_from`
+        defaults to today. A branch, service, person or resource of another business or outside the caller's branch
+        scope is `not_found`. `409` when the trainer (`staff_uuid` / `staff_busy`) or the area (`resource_uuid` /
+        `resource_busy`) has an overlapping class that weekday, or the service already runs then in the branch
+        (`start_time` / `duplicate`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassScheduleInput"
+      responses:
+        "201":
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSchedule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/classes/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClass
+      summary: A class
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSchedule"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantClass
+      summary: Change a class
+      description: |
+        The whole class (as on create). A change that would leave a booked future session outside the timetable
+        (other weekday, time, branch or service, a shorter validity, inactive) is `409` `sessions` / `has_bookings`:
+        cancel or move those bookings first. A new trainer or area applies to sessions without bookings.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassScheduleInput"
+      responses:
+        "200":
+          description: The class
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSchedule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantClass
+      summary: Remove a class
+      description: Soft delete. A class with booked future sessions is `409` `sessions` / `has_bookings`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/classes/{uuid}/sessions/{date}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClassSession
+      summary: A class session with its bookings
+      description: |
+        The session of the class on a local date (branch time zone) with its seats and the bookings in it
+        (cancelled and rejected visits left out). Attendance is the visit's own step: `POST
+        /v1/tenant/reservations/{uuid}/complete` (attended) and `/no-show`. A date without a session is `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/ClassSessionDate"
+      responses:
+        "200":
+          description: The session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSessionDetail"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantClassSession
+      summary: Cancel a session or change its seats
+      description: |
+        `tenant.classes.write`. Sets how the session differs from its class: `cancelled` (not offered, its trainer
+        and area are free) and / or `capacity` (null = the class's seats). Both off restores the session. Runs under
+        the booking lock. A session with bookings is not cancelled (`409` `sessions` / `has_bookings`), seats below
+        the booked seats are `409` `capacity` / `below_booked`, a session that already started is `409` `date` /
+        `past`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/ClassSessionDate"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassSessionChangeInput"
+      responses:
+        "200":
+          description: The session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSessionDetail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/class-sessions:
+    get:
+      tags: [Tenant]
+      operationId: getTenantClassSessions
+      summary: Class sessions
+      description: |
+        The sessions of the active classes on the local dates `from` … `to` (default today + 6 days, at most 31),
+        with their seats and the seats booked (requests waiting for approval or payment included). State: `open`,
+        `full`, `cancelled`, `past`. Needs `tenant.classes.read`; caller's branch scope.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: sort
+          in: query
+          description: "One of `starts_at` (default), `service`, `booked`; prefix `-` for descending."
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: service
+          in: query
+          description: "Service uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: staff
+          in: query
+          description: "Trainer (staff) uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: state
+          in: query
+          description: "`open`, `full`, `cancelled`, `past`; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Session page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeClassSessionPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/session-packages/meta:
     get:
       tags: [Tenant]
@@ -14615,6 +14951,14 @@ components:
       in: query
       description: "Visits starting before this RFC 3339 time"
       schema: { type: string, format: date-time }
+    ClassSessionDate:
+      name: date
+      in: path
+      required: true
+      description: Local date of the class session (branch time zone)
+      schema:
+        type: string
+        format: date
     ResourceUUID:
       name: uuid
       in: path
@@ -21915,7 +22259,7 @@ components:
             required: [date, status, slots]
             properties:
               date: { type: string, format: date }
-              status: { type: string, enum: [available, closed, too_far, too_soon, no_staff, full] }
+              status: { type: string, enum: [available, closed, too_far, too_soon, no_staff, full, no_class] }
               slots:
                 type: array
                 items: { $ref: "#/components/schemas/TenantAvailabilitySlot" }
@@ -23059,7 +23403,7 @@ components:
             required: [date, status, slots]
             properties:
               date: { type: string, format: date }
-              status: { type: string, enum: [available, closed, too_far, too_soon, no_staff, full] }
+              status: { type: string, enum: [available, closed, too_far, too_soon, no_staff, full, no_class] }
               slots:
                 type: array
                 items:
@@ -23974,6 +24318,257 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/CustomerPaymentSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ClassResourceRef:
+      type: object
+      required: [uuid, name, kind]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+
+    ClassSchedule:
+      type: object
+      description: A weekly class of the timetable (TEC-970).
+      required: [uuid, branch, service, weekday, start_time, end_time, duration_minutes, staff, resource, capacity, seats, valid_from, valid_until, is_active, note, timezone, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        service: { $ref: "#/components/schemas/SalesRef" }
+        weekday: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        start_time: { type: string, example: "18:00", description: "Branch wall clock" }
+        end_time: { type: string, example: "19:00" }
+        duration_minutes: { type: integer }
+        staff:
+          description: The trainer; null = the first booking of a session picks one
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        resource:
+          description: The area; null = picked by the first booking
+          oneOf:
+            - $ref: "#/components/schemas/ClassResourceRef"
+            - type: "null"
+        capacity: { type: [integer, "null"], description: "The class's own seats; null = the service's group capacity" }
+        seats: { type: integer, description: "Seats of a session" }
+        valid_from: { type: string, format: date }
+        valid_until: { type: [string, "null"], format: date, description: "Last day; null = no end" }
+        is_active: { type: boolean }
+        note: { type: string }
+        timezone: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ClassScheduleInput:
+      type: object
+      description: The whole class (create and patch).
+      required: [branch_uuid, service_uuid, weekday, start_time]
+      properties:
+        branch_uuid: { type: string, format: uuid }
+        service_uuid: { type: string, format: uuid }
+        weekday: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        start_time: { type: string, example: "18:00" }
+        staff_uuid: { type: [string, "null"], format: uuid }
+        resource_uuid: { type: [string, "null"], format: uuid }
+        capacity: { type: [integer, "null"], minimum: 1, maximum: 1000 }
+        valid_from: { type: string, format: date, description: "Default today" }
+        valid_until: { type: [string, "null"], format: date }
+        is_active: { type: [boolean, "null"], description: "Default true" }
+        note: { type: string, maxLength: 500 }
+
+    ClassSchedulePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ClassSchedule" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    ClassFacet:
+      type: object
+      required: [uuid, name, count]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        count: { type: integer, format: int64 }
+
+    ClassFacets:
+      type: object
+      required: [branches, services, staff]
+      properties:
+        branches: { type: array, items: { $ref: "#/components/schemas/ClassFacet" } }
+        services: { type: array, items: { $ref: "#/components/schemas/ClassFacet" } }
+        staff: { type: array, items: { $ref: "#/components/schemas/ClassFacet" } }
+
+    ClassFormTrainer:
+      type: object
+      required: [uuid, name, is_active, branch_uuids]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        is_active: { type: boolean }
+        branch_uuids: { type: array, items: { type: string, format: uuid } }
+
+    ClassFormService:
+      type: object
+      required: [uuid, name, group_capacity, staff_mode, resource_kinds, duration_minutes, is_active, branch_uuids, trainers]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        group_capacity: { type: integer }
+        staff_mode: { type: string, enum: [required, optional, none] }
+        resource_kinds: { type: array, items: { type: string } }
+        duration_minutes: { type: integer }
+        is_active: { type: boolean }
+        branch_uuids: { type: array, items: { type: string, format: uuid }, description: "Branches that offer the class" }
+        trainers: { type: array, items: { $ref: "#/components/schemas/ClassFormTrainer" } }
+
+    ClassFormResource:
+      type: object
+      required: [uuid, name, kind, is_active, branch_uuid]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+        is_active: { type: boolean }
+        branch_uuid: { type: string, format: uuid }
+
+    ClassFormOptions:
+      type: object
+      required: [services, resources]
+      properties:
+        services: { type: array, items: { $ref: "#/components/schemas/ClassFormService" } }
+        resources: { type: array, items: { $ref: "#/components/schemas/ClassFormResource" } }
+
+    ClassSession:
+      type: object
+      description: One session of a class (TEC-970).
+      required: [schedule_uuid, date, weekday, starts_at, ends_at, branch, service, staff, resource, capacity, booked, seats_left, state, cancelled, capacity_changed, reason, timezone]
+      properties:
+        schedule_uuid: { type: string, format: uuid }
+        date: { type: string, format: date, description: "Local date: the session's identity in its class" }
+        weekday: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        service: { $ref: "#/components/schemas/SalesRef" }
+        staff:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        resource:
+          oneOf:
+            - $ref: "#/components/schemas/ClassResourceRef"
+            - type: "null"
+        capacity: { type: integer, description: "Seats of the session" }
+        booked: { type: integer, description: "Seats taken by bookings" }
+        seats_left: { type: integer }
+        state: { type: string, enum: [open, full, cancelled, past] }
+        cancelled: { type: boolean }
+        capacity_changed: { type: boolean, description: "The session has its own seats" }
+        reason: { type: string }
+        timezone: { type: string }
+
+    ClassSessionPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ClassSession" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    ClassAttendee:
+      type: object
+      required: [reservation_uuid, number, status, approval_status, payment_status, confirmation_status, source, seats, customer, created_at]
+      properties:
+        reservation_uuid: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+        status: { type: string, enum: [requested, active, in_service, completed, no_show] }
+        approval_status: { type: string }
+        payment_status: { type: string }
+        confirmation_status: { type: string }
+        source: { type: string }
+        seats: { type: integer }
+        customer:
+          type: object
+          required: [uuid, name, phone]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+            phone: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+
+    ClassSessionDetail:
+      allOf:
+        - $ref: "#/components/schemas/ClassSession"
+        - type: object
+          required: [attendees]
+          properties:
+            attendees:
+              type: array
+              items: { $ref: "#/components/schemas/ClassAttendee" }
+
+    ClassSessionChangeInput:
+      type: object
+      required: [cancelled]
+      properties:
+        cancelled: { type: boolean }
+        capacity: { type: [integer, "null"], minimum: 1, maximum: 1000, description: "null = the class's seats" }
+        reason: { type: string, maxLength: 500 }
+
+    EnvelopeClassSchedule:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassSchedule" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeClassSchedulePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassSchedulePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeClassFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeClassFormOptions:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassFormOptions" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeClassSessionPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassSessionPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeClassSessionDetail:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ClassSessionDetail" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     SessionPackage:

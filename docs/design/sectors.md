@@ -50,4 +50,4 @@ Modules: reservations, calendar, customers, services, packages, products, staff,
 - Module screens arrive with their issues and tag their nav items with `module`.
 - Changing the sector of a business with data (resources, classes) needs a migration plan; for now the platform can change it freely.
 - Package rights (paket hakkı) of the gym, clinic and beauty flows come with multi-session packages (TEC-920).
-- A class timetable (recurring sessions with a fixed trainer and area, the classes module) comes with TEC-970; the booking page steps for the vehicle and group class seats with TEC-971.
+- The class timetable (recurring sessions with a fixed trainer and area, the classes module) is TEC-970 ([classes.md](./classes.md)): a group class is bookable only at its sessions, and the gym template seeds no timetable. The booking page steps for the vehicle and group class seats with TEC-971.

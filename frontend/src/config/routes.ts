@@ -139,6 +139,12 @@ export const routes = {
       detail: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/packages/${uuid}`,
     },
+    /** Group class timetable (TEC-970): weekly classes and their sessions. */
+    classes: {
+      root: (slug: string) => `/t/${encodeURIComponent(slug)}/classes`,
+      session: (slug: string, uuid: string, date: string) =>
+        `/t/${encodeURIComponent(slug)}/classes/${uuid}/sessions/${date}`,
+    },
     cash: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/cash`,
       create: (slug: string) => `/t/${encodeURIComponent(slug)}/cash/create`,

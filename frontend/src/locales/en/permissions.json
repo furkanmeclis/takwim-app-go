@@ -175,5 +175,8 @@
   "labels.tenant.cash.reopen": "Reopen a closed day",
   "labels.tenant.cash.export": "Export cash records",
   "labels.tenant.cash.bulk.archive": "Bulk archive accounts",
-  "labels.tenant.cash.bulk.activate": "Bulk activate accounts"
+  "labels.tenant.cash.bulk.activate": "Bulk activate accounts",
+  "labels.tenant.classes.read": "View the class timetable and sessions",
+  "labels.tenant.classes.write": "Manage the class timetable and sessions",
+  "groups.tenant_classes": "Group classes"
 }

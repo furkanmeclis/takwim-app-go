@@ -90,6 +90,7 @@ type Queries interface {
 	ListAvailabilityResources(ctx context.Context, arg db.ListAvailabilityResourcesParams) ([]db.ListAvailabilityResourcesRow, error)
 	ListAvailabilityResourceClosures(ctx context.Context, arg db.ListAvailabilityResourceClosuresParams) ([]db.ListAvailabilityResourceClosuresRow, error)
 	ListGroupSessionHolds(ctx context.Context, arg db.ListGroupSessionHoldsParams) ([]db.ListGroupSessionHoldsRow, error)
+	ClassQueries
 }
 
 // SettingsReader returns the current business settings (orgsettings).
@@ -206,6 +207,9 @@ func (p *prepared) slot(s engine.Slot) model.Slot {
 			left := a.SeatsLeft
 			line.SeatsLeft = &left
 			line.SessionServiceID, line.SessionSeats = p.serviceIDs[i], seats
+			if a.SessionSeats > 0 {
+				line.SessionSeats = a.SessionSeats
+			}
 			line.Seats = max(p.req.PartySize, 1)
 		}
 		out.Lines = append(out.Lines, line)
@@ -434,6 +438,10 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 	p := &prepared{branchID: branch.ID, staff: map[int64]model.Ref{}, resources: map[int64]model.ResourceRef{}}
 	staffShifts := map[int64]engine.WeeklyShifts{}
 	kinds := map[string]bool{}
+	// The trainers and areas of scheduled sessions, and the sessions being
+	// planned (own sessions do not block their own lines).
+	fixedStaff, fixedResources := map[int64]bool{}, map[int64]bool{}
+	own := map[sessionOf]bool{}
 	online := channel == model.ChannelOnline
 	for i, l := range in.Lines {
 		field := "lines." + strconv.Itoa(i)
@@ -475,6 +483,22 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 				ve.add(field+".service_uuid", "group_alone", "a group class is booked on its own")
 				continue
 			}
+			// TEC-970: only the sessions of the class timetable are offered.
+			plan, err := s.planned(ctx, orgID, branch.ID, svc.ID, seats, loc, first, last)
+			if err != nil {
+				return nil, err
+			}
+			line.Scheduled, line.Planned = true, plan.sessions
+			for id := range plan.staff {
+				fixedStaff[id] = true
+			}
+			for id := range plan.resources {
+				fixedResources[id] = true
+			}
+			for k := range plan.kinds {
+				kinds[k] = true
+			}
+			own[sessionOf{service: svc.ID, branch: branch.ID}] = true
 		}
 		for _, k := range svc.ResourceKinds {
 			kinds[k] = true
@@ -487,7 +511,7 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 			pinned := l.StaffUUID != nil
 			matched := false
 			for _, row := range rows {
-				if online && !row.ShowOnline {
+				if online && !row.ShowOnline && !fixedStaff[row.ID] {
 					continue
 				}
 				if pinned && row.Uuid != *l.StaffUUID {
@@ -569,7 +593,7 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 			return nil, err
 		}
 		for _, row := range rows {
-			if online && !row.ShowOnline {
+			if online && !row.ShowOnline && !fixedResources[row.ID] {
 				continue
 			}
 			open := req.Open
@@ -600,6 +624,21 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		for _, c := range closures {
 			r := &req.Resources[resourceIndex[c.ResourceID]]
 			r.Busy = append(r.Busy, engine.Interval{Start: c.StartsAt.Time, End: c.EndsAt.Time})
+		}
+	}
+
+	classStaff, classResources, err := s.timetableBusy(ctx, orgID, own, staffIDs, resourceIDs, first, last)
+	if err != nil {
+		return nil, err
+	}
+	for id, list := range classStaff {
+		if i, ok := staffIndex[id]; ok {
+			req.Staff[i].Busy = append(req.Staff[i].Busy, list...)
+		}
+	}
+	for id, list := range classResources {
+		if i, ok := resourceIndex[id]; ok {
+			req.Resources[i].Busy = append(req.Resources[i].Busy, list...)
 		}
 	}
 

@@ -215,5 +215,6 @@
   "confirmation.note_hint": "İsteğe bağlı; örneğin size uyan gün ve saatler.",
   "confirmation.note_too_long": "Not en fazla 500 karakter olabilir.",
   "confirmation.done": "Teşekkürler, randevunuz teyit edildi.",
-  "confirmation.change_done": "Değişiklik isteğiniz gönderildi."
+  "confirmation.change_done": "Değişiklik isteğiniz gönderildi.",
+  "reschedule.no_class": "O gün ders yok"
 }

@@ -175,5 +175,8 @@
   "labels.tenant.cash.reopen": "Kapanmış günü yeniden aç",
   "labels.tenant.cash.export": "Kasa kayıtlarını dışa aktar",
   "labels.tenant.cash.bulk.archive": "Hesapları toplu arşivle",
-  "labels.tenant.cash.bulk.activate": "Hesapları toplu aktifleştir"
+  "labels.tenant.cash.bulk.activate": "Hesapları toplu aktifleştir",
+  "labels.tenant.classes.read": "Ders programını ve seansları görüntüle",
+  "labels.tenant.classes.write": "Ders programını ve seansları yönet",
+  "groups.tenant_classes": "Grup dersleri"
 }
