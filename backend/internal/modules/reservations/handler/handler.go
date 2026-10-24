@@ -109,6 +109,17 @@ func (h *Handler) Agenda(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, out)
 }
 
+// Form serves GET /v1/tenant/reservations/form: the booking form
+// questions and hidden flow steps (TEC-905).
+func (h *Handler) Form(w http.ResponseWriter, r *http.Request) {
+	out, err := h.svc.Form(r.Context(), orgctx.Must(r.Context()).ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // Meta serves GET /v1/tenant/reservations/meta.
 func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, Meta())

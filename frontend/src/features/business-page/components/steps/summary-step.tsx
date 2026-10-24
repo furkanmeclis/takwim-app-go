@@ -23,6 +23,7 @@ import type {
   PublicProduct,
   PublicService,
 } from "@/features/business-page/types";
+import { answerText } from "@/features/reservations/lib/custom-fields";
 import { priceLabel } from "@/features/services/lib/format";
 import { datetimeInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
@@ -151,6 +152,19 @@ export function SummaryStep({
               {contact.customer_note}
             </p>
           ) : null}
+          {business.booking.fields.map((field) => {
+            const value = contact.custom_fields?.[field.key];
+            if (value === undefined || value === "") return null;
+            if (field.type === "checkbox" && value !== true) return null;
+            return (
+              <p key={field.key} className="text-muted-foreground">
+                <span className="text-foreground font-medium">
+                  {field.label}:
+                </span>{" "}
+                {answerText({ type: field.type, value }, t)}
+              </p>
+            );
+          })}
         </CardContent>
       </Card>
 

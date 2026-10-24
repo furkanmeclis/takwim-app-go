@@ -12,6 +12,66 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countOnlineBranchReservations = `-- name: CountOnlineBranchReservations :one
+SELECT count(*) FROM reservations
+WHERE organization_id = $1 AND branch_id = $2
+  AND source IN ('online', 'embed') AND status NOT IN ('cancelled', 'rejected')
+  AND starts_at >= $3 AND starts_at < $4
+  AND ($5::bigint IS NULL OR id <> $5)
+`
+
+type CountOnlineBranchReservationsParams struct {
+	OrganizationID int64              `json:"organization_id"`
+	BranchID       int64              `json:"branch_id"`
+	StartsFrom     pgtype.Timestamptz `json:"starts_from"`
+	StartsTo       pgtype.Timestamptz `json:"starts_to"`
+	ExcludeID      pgtype.Int8        `json:"exclude_id"`
+}
+
+// Online booking limit (TEC-905): the branch's online bookings (page,
+// widget, API) starting in [starts_from, starts_to) that still count
+// (not cancelled or rejected).
+func (q *Queries) CountOnlineBranchReservations(ctx context.Context, arg CountOnlineBranchReservationsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countOnlineBranchReservations,
+		arg.OrganizationID,
+		arg.BranchID,
+		arg.StartsFrom,
+		arg.StartsTo,
+		arg.ExcludeID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countOpenCustomerReservations = `-- name: CountOpenCustomerReservations :one
+SELECT count(*) FROM reservations
+WHERE organization_id = $1 AND customer_id = $2
+  AND status IN ('requested', 'active', 'in_service') AND ends_at > $3
+  AND ($4::bigint IS NULL OR id <> $4)
+`
+
+type CountOpenCustomerReservationsParams struct {
+	OrganizationID int64              `json:"organization_id"`
+	CustomerID     int64              `json:"customer_id"`
+	Now            pgtype.Timestamptz `json:"now"`
+	ExcludeID      pgtype.Int8        `json:"exclude_id"`
+}
+
+// Online booking limit (TEC-905): the customer's bookings that are still
+// open (waiting, booked or in service) and not over yet.
+func (q *Queries) CountOpenCustomerReservations(ctx context.Context, arg CountOpenCustomerReservationsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countOpenCustomerReservations,
+		arg.OrganizationID,
+		arg.CustomerID,
+		arg.Now,
+		arg.ExcludeID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countReservations = `-- name: CountReservations :one
 SELECT count(*)
 FROM reservations r
@@ -91,16 +151,18 @@ const createReservation = `-- name: CreateReservation :one
 INSERT INTO reservations (
     organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status,
     confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields,
-    customer_note, internal_note, created_by, party_size, zone, vehicle_type, vehicle_plate
+    customer_note, internal_note, created_by, party_size, zone, vehicle_type, vehicle_plate,
+    settings_version, custom_field_defs
 )
 VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
     $10, $11, $12, $13, $14,
     $15, $16, $17, $18, $19,
-    $20, $21, $22, $23
+    $20, $21, $22, $23,
+    $24, $25
 )
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs
 `
 
 type CreateReservationParams struct {
@@ -127,6 +189,8 @@ type CreateReservationParams struct {
 	Zone               string             `json:"zone"`
 	VehicleType        pgtype.Text        `json:"vehicle_type"`
 	VehiclePlate       string             `json:"vehicle_plate"`
+	SettingsVersion    pgtype.Int4        `json:"settings_version"`
+	CustomFieldDefs    []byte             `json:"custom_field_defs"`
 }
 
 func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error) {
@@ -154,6 +218,8 @@ func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationPa
 		arg.Zone,
 		arg.VehicleType,
 		arg.VehiclePlate,
+		arg.SettingsVersion,
+		arg.CustomFieldDefs,
 	)
 	var i Reservation
 	err := row.Scan(
@@ -186,6 +252,8 @@ func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationPa
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }
@@ -318,7 +386,7 @@ func (q *Queries) GetAgendaStaff(ctx context.Context, arg GetAgendaStaffParams) 
 }
 
 const getReservation = `-- name: GetReservation :one
-SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, r.party_size, r.zone, r.vehicle_type, r.vehicle_plate, b.uuid AS branch_uuid, b.name AS branch_name,
+SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, r.party_size, r.zone, r.vehicle_type, r.vehicle_plate, r.settings_version, r.custom_field_defs, b.uuid AS branch_uuid, b.name AS branch_name,
        c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
        h.expires_at AS hold_expires_at
 FROM reservations r
@@ -363,6 +431,8 @@ type GetReservationRow struct {
 	Zone               string             `json:"zone"`
 	VehicleType        pgtype.Text        `json:"vehicle_type"`
 	VehiclePlate       string             `json:"vehicle_plate"`
+	SettingsVersion    pgtype.Int4        `json:"settings_version"`
+	CustomFieldDefs    []byte             `json:"custom_field_defs"`
 	BranchUuid         uuid.UUID          `json:"branch_uuid"`
 	BranchName         string             `json:"branch_name"`
 	CustomerUuid       uuid.UUID          `json:"customer_uuid"`
@@ -404,6 +474,8 @@ func (q *Queries) GetReservation(ctx context.Context, arg GetReservationParams) 
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 		&i.BranchUuid,
 		&i.BranchName,
 		&i.CustomerUuid,
@@ -412,6 +484,25 @@ func (q *Queries) GetReservation(ctx context.Context, arg GetReservationParams) 
 		&i.HoldExpiresAt,
 	)
 	return i, err
+}
+
+const getReservationBranchTimezone = `-- name: GetReservationBranchTimezone :one
+SELECT COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone
+FROM branches b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = $1 AND b.id = $2
+`
+
+type GetReservationBranchTimezoneParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) GetReservationBranchTimezone(ctx context.Context, arg GetReservationBranchTimezoneParams) (string, error) {
+	row := q.db.QueryRow(ctx, getReservationBranchTimezone, arg.OrganizationID, arg.ID)
+	var timezone string
+	err := row.Scan(&timezone)
+	return timezone, err
 }
 
 const getReservationCurrency = `-- name: GetReservationCurrency :one
@@ -455,7 +546,7 @@ func (q *Queries) GetReservationCustomer(ctx context.Context, arg GetReservation
 }
 
 const getReservationForUpdate = `-- name: GetReservationForUpdate :one
-SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate FROM reservations
+SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs FROM reservations
 WHERE organization_id = $1 AND uuid = $2
 FOR UPDATE
 `
@@ -498,6 +589,8 @@ func (q *Queries) GetReservationForUpdate(ctx context.Context, arg GetReservatio
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }
@@ -550,7 +643,7 @@ func (q *Queries) GetReservationLineService(ctx context.Context, arg GetReservat
 }
 
 const getReservationRecord = `-- name: GetReservationRecord :one
-SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate FROM reservations
+SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs FROM reservations
 WHERE organization_id = $1 AND uuid = $2
 `
 
@@ -592,6 +685,8 @@ func (q *Queries) GetReservationRecord(ctx context.Context, arg GetReservationRe
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }
@@ -1313,7 +1408,7 @@ func (q *Queries) ListReservationStaffIDs(ctx context.Context, arg ListReservati
 }
 
 const listReservations = `-- name: ListReservations :many
-SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, r.party_size, r.zone, r.vehicle_type, r.vehicle_plate, b.uuid AS branch_uuid, b.name AS branch_name,
+SELECT r.id, r.uuid, r.organization_id, r.number, r.branch_id, r.customer_id, r.hold_id, r.status, r.approval_mode, r.approval_status, r.confirmation_status, r.payment_status, r.source, r.starts_at, r.ends_at, r.total_price, r.currency, r.custom_fields, r.customer_note, r.internal_note, r.version, r.cancel_reason, r.created_by, r.created_at, r.updated_at, r.party_size, r.zone, r.vehicle_type, r.vehicle_plate, r.settings_version, r.custom_field_defs, b.uuid AS branch_uuid, b.name AS branch_name,
        c.uuid AS customer_uuid, c.first_name AS customer_first_name, c.last_name AS customer_last_name,
        c.phone_e164 AS customer_phone,
        COALESCE((SELECT string_agg(l.service_name, ', ' ORDER BY l.line_index) FROM reservation_lines l
@@ -1418,6 +1513,8 @@ type ListReservationsRow struct {
 	Zone               string             `json:"zone"`
 	VehicleType        pgtype.Text        `json:"vehicle_type"`
 	VehiclePlate       string             `json:"vehicle_plate"`
+	SettingsVersion    pgtype.Int4        `json:"settings_version"`
+	CustomFieldDefs    []byte             `json:"custom_field_defs"`
 	BranchUuid         uuid.UUID          `json:"branch_uuid"`
 	BranchName         string             `json:"branch_name"`
 	CustomerUuid       uuid.UUID          `json:"customer_uuid"`
@@ -1491,6 +1588,8 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 			&i.Zone,
 			&i.VehicleType,
 			&i.VehiclePlate,
+			&i.SettingsVersion,
+			&i.CustomFieldDefs,
 			&i.BranchUuid,
 			&i.BranchName,
 			&i.CustomerUuid,
@@ -1511,7 +1610,7 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 }
 
 const listReservationsByHolds = `-- name: ListReservationsByHolds :many
-SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate FROM reservations
+SELECT id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs FROM reservations
 WHERE organization_id = $1 AND hold_id = ANY($2::BIGINT[])
 FOR UPDATE
 `
@@ -1561,6 +1660,8 @@ func (q *Queries) ListReservationsByHolds(ctx context.Context, arg ListReservati
 			&i.Zone,
 			&i.VehicleType,
 			&i.VehiclePlate,
+			&i.SettingsVersion,
+			&i.CustomFieldDefs,
 		); err != nil {
 			return nil, err
 		}
@@ -1593,7 +1694,7 @@ SET hold_id = $1, starts_at = $2, ends_at = $3,
     total_price = $4, party_size = $5, zone = $6,
     version = version + 1
 WHERE organization_id = $7 AND id = $8
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs
 `
 
 type ReplaceReservationScheduleParams struct {
@@ -1650,6 +1751,8 @@ func (q *Queries) ReplaceReservationSchedule(ctx context.Context, arg ReplaceRes
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }
@@ -1657,17 +1760,19 @@ func (q *Queries) ReplaceReservationSchedule(ctx context.Context, arg ReplaceRes
 const updateReservationNotes = `-- name: UpdateReservationNotes :one
 UPDATE reservations
 SET customer_note = $1, internal_note = $2,
-    custom_fields = $3, version = version + 1
-WHERE organization_id = $4 AND id = $5
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate
+    custom_fields = $3, custom_field_defs = $4,
+    version = version + 1
+WHERE organization_id = $5 AND id = $6
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs
 `
 
 type UpdateReservationNotesParams struct {
-	CustomerNote   string `json:"customer_note"`
-	InternalNote   string `json:"internal_note"`
-	CustomFields   []byte `json:"custom_fields"`
-	OrganizationID int64  `json:"organization_id"`
-	ID             int64  `json:"id"`
+	CustomerNote    string `json:"customer_note"`
+	InternalNote    string `json:"internal_note"`
+	CustomFields    []byte `json:"custom_fields"`
+	CustomFieldDefs []byte `json:"custom_field_defs"`
+	OrganizationID  int64  `json:"organization_id"`
+	ID              int64  `json:"id"`
 }
 
 func (q *Queries) UpdateReservationNotes(ctx context.Context, arg UpdateReservationNotesParams) (Reservation, error) {
@@ -1675,6 +1780,7 @@ func (q *Queries) UpdateReservationNotes(ctx context.Context, arg UpdateReservat
 		arg.CustomerNote,
 		arg.InternalNote,
 		arg.CustomFields,
+		arg.CustomFieldDefs,
 		arg.OrganizationID,
 		arg.ID,
 	)
@@ -1709,6 +1815,8 @@ func (q *Queries) UpdateReservationNotes(ctx context.Context, arg UpdateReservat
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }
@@ -1719,7 +1827,7 @@ SET status = $1, approval_status = $2,
     payment_status = $3, cancel_reason = $4,
     version = version + 1
 WHERE organization_id = $5 AND id = $6
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs
 `
 
 type UpdateReservationStateParams struct {
@@ -1772,6 +1880,8 @@ func (q *Queries) UpdateReservationState(ctx context.Context, arg UpdateReservat
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }

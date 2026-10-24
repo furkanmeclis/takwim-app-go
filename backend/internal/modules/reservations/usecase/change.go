@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
 	availabilitymodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/model"
 	availabilityusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/availability/usecase"
+	orgsettings "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/orgsettings/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/reservations/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
@@ -40,6 +40,16 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 			return model.Reservation{}, verr
 		}
 		return model.Reservation{}, err
+	}
+	// A move on the online channel (the customer panel) keeps to the
+	// branch's online bookings per day (TEC-905).
+	var set *orgsettings.Version
+	if in.Channel == availabilitymodel.ChannelOnline && s.settings != nil {
+		v, err := s.settings.Current(ctx, orgID)
+		if err != nil {
+			return model.Reservation{}, err
+		}
+		set = &v
 	}
 	err := s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
 		row, err := s.visible(ctx, tx.Q, orgID, id, caller, true)
@@ -136,6 +146,11 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 		if err != nil {
 			return err
 		}
+		if row.Source != model.SourcePanel {
+			if err := checkDailyLimit(ctx, tx.Q, orgID, set, created.Slot.BranchID, created.Slot.StartsAt, row.ID); err != nil {
+				return err
+			}
+		}
 		if booking {
 			if err := s.holds.ConfirmIn(ctx, tx, created.ID, RefType, &row.Uuid); err != nil {
 				return err
@@ -188,6 +203,8 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 }
 
 // UpdateNotes edits the notes and the form answers of any reservation.
+// custom_fields, when given, is the whole answer set (the panel's
+// questions are checked, other keys are kept); omitted, the answers stay.
 func (s *Service) UpdateNotes(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64, in model.NotesInput) (model.Reservation, error) {
 	ve := &ValidationError{}
 	if len(in.CustomerNote) > MaxNoteLength {
@@ -196,17 +213,18 @@ func (s *Service) UpdateNotes(ctx context.Context, orgID int64, id uuid.UUID, ca
 	if len(in.InternalNote) > MaxNoteLength {
 		ve.add("internal_note", "too_long", "note is too long")
 	}
-	if in.CustomFields == nil {
-		in.CustomFields = map[string]any{}
-	}
-	fields, err := json.Marshal(in.CustomFields)
-	if err != nil {
-		ve.add("custom_fields", "invalid", "custom fields must be an object")
-	}
 	if err := ve.orNil(); err != nil {
 		return model.Reservation{}, err
 	}
-	err = s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
+	var set *orgsettings.Version
+	if s.settings != nil {
+		v, err := s.settings.Current(ctx, orgID)
+		if err != nil {
+			return model.Reservation{}, err
+		}
+		set = &v
+	}
+	err := s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
 		row, err := s.visible(ctx, tx.Q, orgID, id, caller, true)
 		if err != nil {
 			return err
@@ -214,8 +232,19 @@ func (s *Service) UpdateNotes(ctx context.Context, orgID int64, id uuid.UUID, ca
 		if in.ExpectedVersion != nil && *in.ExpectedVersion != int(row.Version) {
 			return ErrStaleVersion
 		}
+		// The panel's form: its questions are checked, other answers stay;
+		// a question keeps the definition the record already has.
+		// Without custom_fields the stored answers stay as they are.
+		fields, defs := row.CustomFields, row.CustomFieldDefs
+		if in.CustomFields != nil {
+			fields, defs = checkAnswers(ve, set, model.SourcePanel, in.CustomFields, decodeDefs(row.CustomFieldDefs))
+			if err := ve.orNil(); err != nil {
+				return err
+			}
+		}
 		updated, err := tx.Q.UpdateReservationNotes(ctx, db.UpdateReservationNotesParams{
-			OrganizationID: orgID, ID: row.ID, CustomerNote: in.CustomerNote, InternalNote: in.InternalNote, CustomFields: fields,
+			OrganizationID: orgID, ID: row.ID, CustomerNote: in.CustomerNote, InternalNote: in.InternalNote,
+			CustomFields: fields, CustomFieldDefs: defs,
 		})
 		if err != nil {
 			return err

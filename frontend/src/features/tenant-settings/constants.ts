@@ -1,9 +1,28 @@
 import type {
+  BookingFieldType,
   InvoiceItemType,
   SalesChannelCode,
 } from "@/features/tenant-settings/types";
 
 export const SALES_CHANNELS: SalesChannelCode[] = ["web", "widget", "api"];
+
+/** Booking form question types (TEC-905), in display order. */
+export const BOOKING_FIELD_TYPES = [
+  "text",
+  "number",
+  "select",
+  "checkbox",
+] as const satisfies readonly BookingFieldType[];
+
+/** Most booking form questions (API limit). */
+export const MAX_BOOKING_FIELDS = 20;
+
+export const BOOKING_FIELD_TYPE_KEYS: Record<BookingFieldType, string> = {
+  text: "tenant_settings.booking.types.text",
+  number: "tenant_settings.booking.types.number",
+  select: "tenant_settings.booking.types.select",
+  checkbox: "tenant_settings.booking.types.checkbox",
+};
 
 export const INVOICE_ITEM_TYPES: InvoiceItemType[] = [
   "service",
@@ -50,6 +69,11 @@ export const FIELD_LABEL_KEYS: Record<string, string> = {
     "tenant_settings.fields.cancel_cutoff_minutes",
   "reservation.change_cutoff_minutes":
     "tenant_settings.fields.change_cutoff_minutes",
+  "reservation.slot_step_minutes": "tenant_settings.fields.slot_step_minutes",
+  "reservation.max_open_per_customer":
+    "tenant_settings.fields.max_open_per_customer",
+  "reservation.max_online_per_day": "tenant_settings.fields.max_online_per_day",
+  "booking.hidden_steps": "tenant_settings.booking.hidden_steps",
   "payment.pay_at_venue": "tenant_settings.fields.pay_at_venue",
   "payment.pay_online": "tenant_settings.fields.pay_online",
   "policies.cancellation": "tenant_settings.fields.cancellation",
@@ -61,12 +85,13 @@ export const FIELD_LABEL_KEYS: Record<string, string> = {
 
 /** Which tab holds a settings dot path (error badges, jump to first error). */
 export type SettingsTab =
-  "company" | "reservation" | "policies" | "channels" | "tax";
+  "company" | "reservation" | "booking" | "policies" | "channels" | "tax";
 
 export function tabOfPath(path: string): SettingsTab {
   if (path.startsWith("company")) return "company";
   if (path.startsWith("reservation") || path.startsWith("payment"))
     return "reservation";
+  if (path.startsWith("booking")) return "booking";
   if (path.startsWith("policies")) return "policies";
   if (path.startsWith("sales_channels") || path.startsWith("embed"))
     return "channels";

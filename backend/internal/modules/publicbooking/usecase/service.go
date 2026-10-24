@@ -253,6 +253,15 @@ func (s *Service) booking(ctx context.Context, o Org) (model.Booking, error) {
 		MinLeadMinutes: set.Reservation.MinLeadMinutes, MaxAdvanceDays: set.Reservation.MaxAdvanceDays,
 		CancelCutoffMinutes: set.Reservation.CancelCutoffMinutes, ChangeCutoffMinutes: set.Reservation.ChangeCutoffMinutes,
 		PaymentMethods: []string{}, CheckoutMinutes: availabilityusecase.DefaultCheckoutMinutes,
+		SlotStepMinutes: set.Reservation.SlotStepMinutes, MaxOpenPerCustomer: set.Reservation.MaxOpenPerCustomer,
+		HiddenSteps: append([]string{}, set.Booking.HiddenSteps...), Fields: []model.Field{},
+	}
+	for _, f := range set.Booking.Fields {
+		if f.Online {
+			out.Fields = append(out.Fields, model.Field{
+				Key: f.Key, Label: f.Label, Help: f.Help, Type: f.Type, Options: append([]string{}, f.Options...), Required: f.Required,
+			})
+		}
 	}
 	for _, c := range model.Channels {
 		out.Channels[c] = false
@@ -322,7 +331,9 @@ func (s *Service) Business(ctx context.Context, o Org) (model.Business, error) {
 	def := sector.Of(o.Sector)
 	flow := make([]string, 0, len(def.Flow))
 	for _, st := range def.Flow {
-		flow = append(flow, string(st))
+		if !v.Settings.Booking.Hides(string(st)) {
+			flow = append(flow, string(st))
+		}
 	}
 	c := v.Settings.Company
 	p := v.Settings.Policies
@@ -432,6 +443,9 @@ func (s *Service) Products(ctx context.Context, o Org, branchUUID *uuid.UUID) ([
 	out := []model.Product{}
 	if !o.modules.Allows(sector.ModuleProducts) {
 		return out, nil
+	}
+	if hidden, err := s.productsHidden(ctx, o); err != nil || hidden {
+		return out, err
 	}
 	items, err := reservationsusecase.ListProductOptions(ctx, s.q, o.ID, branchID, "", true, 100)
 	if err != nil {
@@ -672,6 +686,38 @@ func (s *Service) Staff(ctx context.Context, o Org, branchUUID, serviceUUID *uui
 	return out, nil
 }
 
+// checkChoices refuses the choices of the optional steps the business
+// hides (TEC-905): a person when the staff step is hidden (the engine
+// assigns a free one), an area when the area step is hidden.
+func (s *Service) checkChoices(ctx context.Context, o Org, lines []availabilitymodel.LineInput, zone string) error {
+	v, err := s.settings.Current(ctx, o.ID)
+	if err != nil {
+		return err
+	}
+	b := v.Settings.Booking
+	ve := &ValidationError{}
+	if b.Hides(orgsettings.StepStaff) {
+		for i, l := range lines {
+			if l.StaffUUID != nil {
+				ve.add(fmt.Sprintf("lines.%d.staff_uuid", i), "not_offered", "the business assigns the staff member")
+			}
+		}
+	}
+	if b.Hides(orgsettings.StepArea) && strings.TrimSpace(zone) != "" {
+		ve.add("zone", "not_offered", "the business assigns the area")
+	}
+	return ve.orNil()
+}
+
+// productsHidden reports whether the business hides the products step.
+func (s *Service) productsHidden(ctx context.Context, o Org) (bool, error) {
+	v, err := s.settings.Current(ctx, o.ID)
+	if err != nil {
+		return false, err
+	}
+	return v.Settings.Booking.Hides(orgsettings.StepProducts), nil
+}
+
 // Availability searches slots on the online channel.
 func (s *Service) Availability(ctx context.Context, o Org, in model.AvailabilityInput) (model.Availability, error) {
 	channel, err := channelOf(in.Channel)
@@ -682,6 +728,9 @@ func (s *Service) Availability(ctx context.Context, o Org, in model.Availability
 		return model.Availability{}, err
 	}
 	if _, err := s.publicBranchID(ctx, o, in.BranchUUID, "branch_uuid"); err != nil {
+		return model.Availability{}, err
+	}
+	if err := s.checkChoices(ctx, o, in.Lines, in.Zone); err != nil {
 		return model.Availability{}, err
 	}
 	res, err := s.availability.Search(ctx, o.ID, availabilitymodel.SearchInput{
@@ -738,6 +787,13 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 	if _, err := s.publicBranchID(ctx, o, in.BranchUUID, "branch_uuid"); err != nil {
 		return model.Checkout{}, err
 	}
+	if err := s.checkChoices(ctx, o, in.Lines, in.Zone); err != nil {
+		return model.Checkout{}, err
+	}
+	set, err := s.settings.Current(ctx, o.ID)
+	if err != nil {
+		return model.Checkout{}, err
+	}
 	var token uuid.UUID
 	err = s.holds.Run(ctx, o.ID, func(tx *availabilityusecase.Tx) error {
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
@@ -745,6 +801,10 @@ func (s *Service) CreateCheckout(ctx context.Context, o Org, in model.CheckoutIn
 			StartsAt: in.StartsAt, Reason: availabilitymodel.ReasonCheckout, PartySize: in.PartySize, Zone: in.Zone,
 		}, availabilityusecase.Caller{}, 0)
 		if err != nil {
+			return err
+		}
+		// The branch's online bookings of the day (the booking checks again).
+		if err := reservationsusecase.CheckDailyLimit(ctx, tx.Q, o.ID, &set, created.Slot.BranchID, created.Slot.StartsAt); err != nil {
 			return err
 		}
 		raw, err := json.Marshal(slotCheckoutLines(created.Slot.Lines))
@@ -971,6 +1031,15 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 	if len(in.Products) > 0 && !o.modules.Allows(sector.ModuleProducts) {
 		return model.Reservation{}, false, invalid("products", "not_allowed", "the business does not sell products online")
 	}
+	if len(in.Products) > 0 {
+		hidden, err := s.productsHidden(ctx, o)
+		if err != nil {
+			return model.Reservation{}, false, err
+		}
+		if hidden {
+			return model.Reservation{}, false, invalid("products", "not_offered", "the business does not offer products with a booking")
+		}
+	}
 	for i, p := range in.Products {
 		if p.Quantity < 1 || p.Quantity > model.MaxProductQuantity {
 			return model.Reservation{}, false, invalid(fmt.Sprintf("products[%d].quantity", i), "invalid",
@@ -1099,7 +1168,12 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		CustomerNote: r.CustomerNote, ExpiresAt: r.HoldExpiresAt, CancelReason: r.CancelReason,
 		PartySize: r.PartySize, Zone: r.Zone, Vehicle: r.Vehicle,
 		Lines: make([]model.Line, 0, len(r.Lines)), Products: make([]model.BookedProduct, 0, len(r.Products)),
-		CreatedAt: r.CreatedAt, AccessToken: s.AccessToken(o, r.UUID),
+		CreatedAt: r.CreatedAt, AccessToken: s.AccessToken(o, r.UUID), Answers: []model.Answer{},
+	}
+	for _, a := range r.CustomAnswers {
+		if a.Online {
+			out.Answers = append(out.Answers, model.Answer{Key: a.Key, Label: a.Label, Type: a.Type, Value: a.Value})
+		}
 	}
 	for _, p := range r.Products {
 		item := model.BookedProduct{Name: p.Product.Name, Quantity: p.Quantity, UnitPrice: p.UnitPrice, Status: p.Status}

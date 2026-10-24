@@ -133,6 +133,9 @@ type Request struct {
 	// Step is the distance between candidate starts, counted from the
 	// opening of each open interval.
 	Step time.Duration
+	// OnGrid makes Check refuse a start off the Step grid of its open
+	// interval (the business's online slot step, TEC-905).
+	OnGrid bool
 	// Open are the branch's open intervals: the customer's whole time must
 	// sit inside one of them.
 	Open      []Interval
@@ -211,6 +214,9 @@ func Check(req Request, start time.Time) (Slot, bool) {
 	}
 	open, ok := p.openAt(start)
 	if !ok {
+		return Slot{}, false
+	}
+	if req.OnGrid && start.Sub(open.Start)%p.req.Step != 0 {
 		return Slot{}, false
 	}
 	day := dayStart(start.In(p.loc), p.loc)

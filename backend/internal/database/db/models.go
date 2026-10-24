@@ -1039,6 +1039,8 @@ type Reservation struct {
 	Zone               string             `json:"zone"`
 	VehicleType        pgtype.Text        `json:"vehicle_type"`
 	VehiclePlate       string             `json:"vehicle_plate"`
+	SettingsVersion    pgtype.Int4        `json:"settings_version"`
+	CustomFieldDefs    []byte             `json:"custom_field_defs"`
 }
 
 type ReservationConfirmation struct {

@@ -21,6 +21,7 @@ import {
   ReservationRowActions,
   type ReservationRowActionHandlers,
 } from "@/features/reservations/components/reservation-row-actions";
+import { answersSummary } from "@/features/reservations/lib/custom-fields";
 import {
   partyLabel,
   sourceLabel,
@@ -211,6 +212,22 @@ export function useReservationColumns({ handlers, facets }: Options) {
             {amount(row.original.total_price, row.original.currency, locale)}
           </span>
         ),
+      }),
+      createColumn<ReservationListItem>({
+        id: "custom_answers",
+        labelKey: "reservations.columns.custom_answers",
+        enableSorting: false,
+        defaultHidden: true,
+        cell: ({ row }) => {
+          const text = answersSummary(row.original.custom_answers, t);
+          return text ? (
+            <span className="line-clamp-2 max-w-xs text-sm" title={text}>
+              {text}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
       }),
       createColumn<ReservationListItem>({
         accessorKey: "created_at",

@@ -27,14 +27,16 @@ SELECT currency::TEXT FROM organizations WHERE id = sqlc.arg(organization_id);
 INSERT INTO reservations (
     organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status,
     confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields,
-    customer_note, internal_note, created_by, party_size, zone, vehicle_type, vehicle_plate
+    customer_note, internal_note, created_by, party_size, zone, vehicle_type, vehicle_plate,
+    settings_version, custom_field_defs
 )
 VALUES (
     sqlc.arg(organization_id), sqlc.arg(number), sqlc.arg(branch_id), sqlc.arg(customer_id), sqlc.narg(hold_id),
     sqlc.arg(status), sqlc.arg(approval_mode), sqlc.arg(approval_status), sqlc.arg(confirmation_status),
     sqlc.arg(payment_status), sqlc.arg(source), sqlc.arg(starts_at), sqlc.arg(ends_at), sqlc.arg(total_price),
     sqlc.arg(currency), sqlc.arg(custom_fields), sqlc.arg(customer_note), sqlc.arg(internal_note), sqlc.narg(created_by),
-    sqlc.narg(party_size), sqlc.arg(zone), sqlc.narg(vehicle_type), sqlc.arg(vehicle_plate)
+    sqlc.narg(party_size), sqlc.arg(zone), sqlc.narg(vehicle_type), sqlc.arg(vehicle_plate),
+    sqlc.narg(settings_version), sqlc.arg(custom_field_defs)
 )
 RETURNING *;
 
@@ -236,9 +238,34 @@ ORDER BY line_index;
 -- name: UpdateReservationNotes :one
 UPDATE reservations
 SET customer_note = sqlc.arg(customer_note), internal_note = sqlc.arg(internal_note),
-    custom_fields = sqlc.arg(custom_fields), version = version + 1
+    custom_fields = sqlc.arg(custom_fields), custom_field_defs = sqlc.arg(custom_field_defs),
+    version = version + 1
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
 RETURNING *;
+
+-- name: CountOpenCustomerReservations :one
+-- Online booking limit (TEC-905): the customer's bookings that are still
+-- open (waiting, booked or in service) and not over yet.
+SELECT count(*) FROM reservations
+WHERE organization_id = sqlc.arg(organization_id) AND customer_id = sqlc.arg(customer_id)
+  AND status IN ('requested', 'active', 'in_service') AND ends_at > sqlc.arg(now)
+  AND (sqlc.narg(exclude_id)::bigint IS NULL OR id <> sqlc.narg(exclude_id));
+
+-- name: CountOnlineBranchReservations :one
+-- Online booking limit (TEC-905): the branch's online bookings (page,
+-- widget, API) starting in [starts_from, starts_to) that still count
+-- (not cancelled or rejected).
+SELECT count(*) FROM reservations
+WHERE organization_id = sqlc.arg(organization_id) AND branch_id = sqlc.arg(branch_id)
+  AND source IN ('online', 'embed') AND status NOT IN ('cancelled', 'rejected')
+  AND starts_at >= sqlc.arg(starts_from) AND starts_at < sqlc.arg(starts_to)
+  AND (sqlc.narg(exclude_id)::bigint IS NULL OR id <> sqlc.narg(exclude_id));
+
+-- name: GetReservationBranchTimezone :one
+SELECT COALESCE(NULLIF(b.timezone, ''), o.timezone)::TEXT AS timezone
+FROM branches b
+JOIN organizations o ON o.id = b.organization_id
+WHERE b.organization_id = sqlc.arg(organization_id) AND b.id = sqlc.arg(id);
 
 -- name: ListCalendarBranches :many
 -- Branches of the calendar (TEC-901): one branch, or every branch of the

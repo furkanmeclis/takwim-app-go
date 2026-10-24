@@ -156,5 +156,8 @@
   "status.pay_open_tab": "Ödeme sayfasını aç",
   "status.payment_returned_title": "Ödeme sayfasından döndünüz",
   "status.payment_returned_description": "Ödemenin sonucu, randevuyu aldığınız pencerede görünür. Bu sekmeyi kapatabilirsiniz.",
-  "status.close_tab": "Sekmeyi kapat"
+  "status.close_tab": "Sekmeyi kapat",
+  "errors.day_full": "Bu gün için online rezervasyon kalmadı. Lütfen başka bir gün seçin.",
+  "errors.open_limit": "Bu işletmede açık rezervasyon sınırına ulaştınız. Yeni rezervasyon için mevcut randevunuzun tamamlanmasını bekleyin veya işletmeyle iletişime geçin.",
+  "errors.answers": "Lütfen iletişim adımındaki soruları kontrol edin."
 }

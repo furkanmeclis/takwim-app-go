@@ -48,6 +48,11 @@ export type ContactValues = {
   customer_note: string;
   sms_consent: boolean;
   email_consent: boolean;
+  /** Answers of the business's online questions (TEC-905). */
+  custom_fields: Record<string, string | boolean>;
   /** Honeypot: hidden from people, must stay empty. */
   website: string;
 };
+
+/** A booking question asked online (`booking.fields`). */
+export type PublicBookingField = PublicBusiness["booking"]["fields"][number];

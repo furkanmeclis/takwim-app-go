@@ -266,13 +266,19 @@ type Reservation struct {
 	TotalPrice         money.Money    `json:"total_price"`
 	Currency           string         `json:"currency"`
 	CustomFields       map[string]any `json:"custom_fields"`
-	CustomerNote       string         `json:"customer_note"`
-	InternalNote       string         `json:"internal_note"`
-	PartySize          *int           `json:"party_size"`
-	Zone               string         `json:"zone"`
-	Vehicle            *Vehicle       `json:"vehicle"`
-	Version            int            `json:"version"`
-	CancelReason       *string        `json:"cancel_reason"`
+	// CustomAnswers are the booking form answers with the question each
+	// was answered under (TEC-905), in the form's order.
+	CustomAnswers []CustomAnswer `json:"custom_answers"`
+	// SettingsVersion is the business settings version the booking was
+	// made under (null for bookings made before TEC-905).
+	SettingsVersion *int     `json:"settings_version"`
+	CustomerNote    string   `json:"customer_note"`
+	InternalNote    string   `json:"internal_note"`
+	PartySize       *int     `json:"party_size"`
+	Zone            string   `json:"zone"`
+	Vehicle         *Vehicle `json:"vehicle"`
+	Version         int      `json:"version"`
+	CancelReason    *string  `json:"cancel_reason"`
 	// HoldExpiresAt is when a waiting request lets its capacity go.
 	HoldExpiresAt *time.Time `json:"hold_expires_at"`
 	Lines         []Line     `json:"lines"`
@@ -282,6 +288,40 @@ type Reservation struct {
 	Confirmation *Confirmation `json:"confirmation"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
+// CustomAnswer is one booking form answer with its question as it was
+// when answered. A key without a stored question (an older free-form
+// answer) has its key as label.
+type CustomAnswer struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	// Type: text, number, select or checkbox.
+	Type  string `json:"type"`
+	Value any    `json:"value"`
+	// Online: the question is asked on the customer screens.
+	Online bool `json:"online"`
+}
+
+// FormField is a booking form question of the business (TEC-905).
+type FormField struct {
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	Help     string   `json:"help"`
+	Type     string   `json:"type"`
+	Options  []string `json:"options"`
+	Required bool     `json:"required"`
+	// Online / Panel: asked on the customer screens / in the panel.
+	Online bool `json:"online"`
+	Panel  bool `json:"panel"`
+}
+
+// Form is GET /v1/tenant/reservations/form: the booking form questions
+// and the optional flow steps the business hides, for the panel's booking
+// form and detail.
+type Form struct {
+	Fields      []FormField `json:"fields"`
+	HiddenSteps []string    `json:"hidden_steps"`
 }
 
 // Slug is the resource slug (activity, live lists).
@@ -316,7 +356,8 @@ type Locked struct {
 	Version            int
 }
 
-// NotesInput edits the notes and form answers.
+// NotesInput edits the notes and form answers; a nil CustomFields keeps
+// the stored answers.
 type NotesInput struct {
 	CustomerNote    string         `json:"customer_note"`
 	InternalNote    string         `json:"internal_note"`
@@ -370,8 +411,10 @@ type ListItem struct {
 	PartySize          *int        `json:"party_size"`
 	Zone               string      `json:"zone"`
 	Vehicle            *Vehicle    `json:"vehicle"`
-	Version            int         `json:"version"`
-	CreatedAt          time.Time   `json:"created_at"`
+	// CustomAnswers are the booking form answers (TEC-905).
+	CustomAnswers []CustomAnswer `json:"custom_answers"`
+	Version       int            `json:"version"`
+	CreatedAt     time.Time      `json:"created_at"`
 }
 
 // Facet is one filter option with its count.

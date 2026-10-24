@@ -7724,6 +7724,34 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/reservations/form:
+    get:
+      tags: [Tenant]
+      operationId: getTenantReservationsForm
+      summary: Booking form questions
+      description: |
+        The business's booking form questions and the optional flow steps it
+        hides (business settings `booking`, TEC-905), for the panel booking
+        form and the reservation detail. Readable with the reservations
+        permission (no settings permission needed). The panel form asks the
+        questions with `panel: true`; required ones must be answered
+        (`custom_fields.<key>` / `required`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantReservationForm"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/reservations/calendar:
     get:
       tags: [Tenant]
@@ -16681,6 +16709,9 @@ components:
         - max_advance_days
         - cancel_cutoff_minutes
         - change_cutoff_minutes
+        - slot_step_minutes
+        - max_open_per_customer
+        - max_online_per_day
       properties:
         approval_mode:
           type: string
@@ -16712,6 +16743,81 @@ components:
           minimum: 0
           maximum: 43200
           description: Customer change requests allowed until this many minutes before the start; null = no limit
+        slot_step_minutes:
+          type: [integer, "null"]
+          minimum: 5
+          maximum: 240
+          multipleOf: 5
+          description: >-
+            Distance between the starts offered online (TEC-905). Online
+            availability uses it whatever the request asks and online starts
+            off the grid are refused; null = the client's step.
+        max_open_per_customer:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 100
+          description: >-
+            Most open bookings (waiting, booked or in service, not over) a
+            customer may hold when booking online (`customer` / `open_limit`);
+            panel bookings are not limited. null = no limit.
+        max_online_per_day:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 10000
+          description: >-
+            Most online bookings (page, widget, API) a branch takes per local
+            day; cancelled and rejected ones do not count (`starts_at` /
+            `daily_limit`). null = no limit.
+
+    OrganizationBookingField:
+      type: object
+      description: >-
+        A booking form question (TEC-905). The answer is stored in the
+        reservation's `custom_fields` under `key`; the reservation keeps the
+        question as answered.
+      required: [key, label, type, options, required, online, panel, help]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9_]{0,39}$"
+          description: Stable answer key; empty on save = derived from the label
+        label: { type: string, minLength: 1, maxLength: 80 }
+        type:
+          type: string
+          enum: [text, number, select, checkbox]
+        options:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 80 }
+          description: The choices of a select (2 or more, unique); empty otherwise
+        required:
+          type: boolean
+          description: Must be answered where asked; a required checkbox must be ticked
+        online: { type: boolean, description: "Asked on the booking page, the widget and the public API" }
+        panel: { type: boolean, description: "Asked in the panel booking form" }
+        help: { type: string, maxLength: 200 }
+
+    OrganizationBookingSettings:
+      type: object
+      description: >-
+        Fine-tuning of the sector's booking flow (TEC-905): optional steps the
+        customer screens skip and the business's own questions. Capacity and
+        availability checks always stay.
+      required: [hidden_steps, fields]
+      properties:
+        hidden_steps:
+          type: array
+          items:
+            type: string
+            enum: [staff, products, area]
+          description: >-
+            `staff`: the engine assigns a free person (a picked one is
+            refused); `products`: no products with a booking; `area`: the
+            engine picks any table (a zone is refused).
+        fields:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/OrganizationBookingField" }
 
     OrganizationPaymentSettings:
       type: object
@@ -16773,7 +16879,7 @@ components:
 
     OrganizationSettings:
       type: object
-      required: [company, reservation, payment, policies, sales_channels, embed, tax]
+      required: [company, reservation, payment, policies, sales_channels, embed, tax, booking]
       properties:
         company: { $ref: "#/components/schemas/OrganizationCompanySettings" }
         reservation: { $ref: "#/components/schemas/OrganizationReservationSettings" }
@@ -16784,6 +16890,7 @@ components:
           items: { $ref: "#/components/schemas/OrganizationSalesChannel" }
         embed: { $ref: "#/components/schemas/OrganizationEmbedSettings" }
         tax: { $ref: "#/components/schemas/OrganizationTaxSettings" }
+        booking: { $ref: "#/components/schemas/OrganizationBookingSettings" }
 
     OrganizationSettingsActor:
       type: object
@@ -18826,7 +18933,13 @@ components:
         starts_at: { type: string, format: date-time }
         source: { type: string, enum: [panel], description: Always panel on this route. }
         payment: { type: string, enum: [on_site], description: The panel collects at the business. }
-        custom_fields: { type: object, additionalProperties: true }
+        custom_fields:
+          type: object
+          additionalProperties: true
+          description: >-
+            Booking form answers by question key (`GET …/reservations/form`).
+            Questions asked in the panel are checked (required, type, select
+            option: 400 `custom_fields.<key>`); other keys are kept.
         customer_note: { type: string, maxLength: 2000 }
         internal_note: { type: string, maxLength: 2000 }
         vehicle:
@@ -18878,7 +18991,10 @@ components:
       properties:
         customer_note: { type: string, maxLength: 2000 }
         internal_note: { type: string, maxLength: 2000 }
-        custom_fields: { type: object, additionalProperties: true }
+        custom_fields:
+          type: object
+          additionalProperties: true
+          description: The whole answer set (omit to keep the stored answers); the panel questions are checked as on create and other keys are kept.
         expected_version: { type: integer }
 
     TenantReservationActionRequest:
@@ -18911,8 +19027,11 @@ components:
 
     TenantReservationListItem:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, source, branch, customer, services, staff, starts_at, ends_at, total_price, currency, version, created_at, party_size, zone, vehicle]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, source, branch, customer, services, staff, starts_at, ends_at, total_price, currency, version, created_at, party_size, zone, vehicle, custom_answers]
       properties:
+        custom_answers:
+          type: array
+          items: { $ref: "#/components/schemas/TenantReservationAnswer" }
         party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
         vehicle:
@@ -19167,7 +19286,7 @@ components:
 
     TenantReservation:
       type: object
-      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, products, events, created_at, updated_at, party_size, zone, vehicle]
+      required: [uuid, number, status, approval_mode, approval_status, confirmation_status, payment_status, source, branch, customer, starts_at, ends_at, total_price, currency, custom_fields, custom_answers, settings_version, customer_note, internal_note, version, cancel_reason, hold_expires_at, lines, products, events, created_at, updated_at, party_size, zone, vehicle]
       properties:
         party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
@@ -19190,6 +19309,13 @@ components:
         total_price: { $ref: "#/components/schemas/MoneyAmount" }
         currency: { type: string }
         custom_fields: { type: object, additionalProperties: true }
+        custom_answers:
+          type: array
+          description: The answers with the question each was answered under, in the form's order.
+          items: { $ref: "#/components/schemas/TenantReservationAnswer" }
+        settings_version:
+          type: [integer, "null"]
+          description: The business settings version the booking was made under (null before TEC-905).
         customer_note: { type: string }
         internal_note: { type: string }
         version: { type: integer }
@@ -19280,6 +19406,40 @@ components:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/TenantReservationAgenda" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantReservationForm:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [fields, hidden_steps]
+          properties:
+            fields:
+              type: array
+              items: { $ref: "#/components/schemas/OrganizationBookingField" }
+            hidden_steps:
+              type: array
+              items: { type: string, enum: [staff, products, area] }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantReservationAnswer:
+      type: object
+      description: >-
+        A booking form answer with its question as it was answered (TEC-905).
+        An older answer without a stored question has its key as label.
+      required: [key, label, type, value, online]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        type: { type: string, enum: [text, number, select, checkbox] }
+        value:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+        online: { type: boolean, description: The question is asked on the customer screens. }
 
     EnvelopeTenantReservationFacets:
       type: object
@@ -19484,7 +19644,7 @@ components:
         currency: { type: string, example: TRY }
         flow:
           type: array
-          description: The sector's default customer booking steps.
+          description: The customer booking steps, the sector's flow without the optional steps the business hides (TEC-905).
           items: { type: string }
         terms:
           type: object
@@ -19507,7 +19667,7 @@ components:
             no_show: { type: string }
         booking:
           type: object
-          required: [channels, ready, unavailable, approval_mode, min_lead_minutes, max_advance_days, cancel_cutoff_minutes, change_cutoff_minutes, payment_methods, online_payment_ready, checkout_minutes]
+          required: [channels, ready, unavailable, approval_mode, min_lead_minutes, max_advance_days, cancel_cutoff_minutes, change_cutoff_minutes, payment_methods, online_payment_ready, checkout_minutes, slot_step_minutes, max_open_per_customer, hidden_steps, fields]
           properties:
             channels:
               type: object
@@ -19529,6 +19689,23 @@ components:
               type: boolean
               description: Online payment is offered and the business has a working payment provider and an online cash account; the customer pays on the provider's page after booking.
             checkout_minutes: { type: integer }
+            slot_step_minutes:
+              type: [integer, "null"]
+              description: Distance between the starts offered online; availability uses it whatever the request asks (null = the client's step).
+            max_open_per_customer:
+              type: [integer, "null"]
+              description: Most open bookings a customer may hold; a booking over it is 400 `customer` / `open_limit` (null = no limit).
+            hidden_steps:
+              type: array
+              items: { type: string, enum: [staff, products, area] }
+              description: >-
+                Optional steps the business hides (already left out of `flow`).
+                A person on a line is then 400 `lines.N.staff_uuid` / `not_offered`,
+                products `products` / `not_offered`, a zone `zone` / `not_offered`.
+            fields:
+              type: array
+              description: The booking form questions asked online, in order; answers go in the booking's `custom_fields` by key.
+              items: { $ref: "#/components/schemas/PublicBookingField" }
         branch_count: { type: integer }
         embed:
           type: object
@@ -19539,6 +19716,31 @@ components:
               type: array
               description: Sites allowed to frame the booking screen (its `frame-ancestors` policy and the only targets of its height messages). Empty = no other site.
               items: { type: string, example: "https://www.example.com" }
+
+    PublicBookingField:
+      type: object
+      required: [key, label, help, type, options, required]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        help: { type: string }
+        type: { type: string, enum: [text, number, select, checkbox] }
+        options: { type: array, items: { type: string } }
+        required: { type: boolean, description: A required checkbox must be true. }
+
+    PublicBookingAnswer:
+      type: object
+      required: [key, label, type, value]
+      properties:
+        key: { type: string }
+        label: { type: string, description: The question as it was when answered. }
+        type: { type: string, enum: [text, number, select, checkbox] }
+        value:
+          description: Text, number or boolean answer.
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
 
     PublicBranch:
       type: object
@@ -19818,7 +20020,14 @@ components:
             email_consent: { type: boolean, default: false }
         payment: { type: string, enum: [on_site, online], description: "Default: on site when the business and every service allow it." }
         customer_note: { type: string, maxLength: 2000 }
-        custom_fields: { type: object, additionalProperties: true }
+        custom_fields:
+          type: object
+          additionalProperties: true
+          description: >-
+            Answers to the online questions (`booking.fields`) by key: text,
+            number, one of a select's options, or a boolean for a checkbox.
+            Missing required answers and bad values are 400
+            `custom_fields.<key>`; keys of other questions are dropped.
         website: { type: string, description: "Honeypot: hidden from people, must stay empty." }
         vehicle:
           description: The vehicle of a car wash booking (optional).
@@ -19840,8 +20049,12 @@ components:
 
     PublicReservation:
       type: object
-      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, expires_at, cancel_reason, can_pay_online, lines, products, created_at, party_size, zone, vehicle]
+      required: [uuid, number, status, approval_status, confirmation_status, payment_status, branch, timezone, starts_at, ends_at, total_price, currency, customer_note, answers, expires_at, cancel_reason, can_pay_online, lines, products, created_at, party_size, zone, vehicle]
       properties:
+        answers:
+          type: array
+          description: Answers to the booking form questions asked online (TEC-905).
+          items: { $ref: "#/components/schemas/PublicBookingAnswer" }
         party_size: { type: [integer, "null"], description: Number of people (restaurant) or seats of a group class. }
         zone: { type: string, description: Area asked for; empty = any. }
         vehicle:

@@ -13,7 +13,11 @@ import {
   contactDefaults,
   createContactSchema,
 } from "@/features/business-page/schemas/contact-form";
-import type { ContactValues } from "@/features/business-page/types";
+import type {
+  ContactValues,
+  PublicBookingField,
+} from "@/features/business-page/types";
+import { CustomFieldInputs } from "@/features/reservations/components/custom-field-inputs";
 import { useLocale } from "@/providers/locale-provider";
 
 export const CONTACT_FORM_ID = "business-page-contact";
@@ -25,19 +29,22 @@ export const CONTACT_FORM_ID = "business-page-contact";
  */
 export function ContactStep({
   value,
+  fields,
   onSubmit,
 }: {
   value: ContactValues | null;
+  /** The business's online questions (TEC-905). */
+  fields: PublicBookingField[];
   onSubmit: (values: ContactValues) => void;
 }) {
   const { t } = useLocale();
-  const schema = useMemo(() => createContactSchema(t), [t]);
+  const schema = useMemo(() => createContactSchema(t, fields), [t, fields]);
 
   return (
     <AppForm<ContactValues>
       id={CONTACT_FORM_ID}
       schema={schema}
-      defaultValues={value ?? contactDefaults()}
+      defaultValues={value ?? contactDefaults(fields)}
       onSubmit={onSubmit}
       className="grid gap-4 sm:grid-cols-2"
     >
@@ -68,6 +75,11 @@ export function ContactStep({
             autoComplete="email"
             label={t("business_page.contact.email")}
           />
+          {fields.length > 0 ? (
+            <div className="grid gap-4 sm:col-span-2">
+              <CustomFieldInputs fields={fields} />
+            </div>
+          ) : null}
           <AppTextarea
             name="customer_note"
             className="sm:col-span-2"

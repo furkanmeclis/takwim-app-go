@@ -33,6 +33,23 @@ export function flattenSettings(s: OrganizationSettings): Map<string, string> {
   }
   // Versions saved before TEC-908 decode with an empty list.
   put("embed.allowed_origins", (s.embed?.allowed_origins ?? []).join(", "));
+  put("booking.hidden_steps", s.booking.hidden_steps.join(", "));
+  for (const field of s.booking.fields) {
+    put(
+      `booking.fields.${field.key}`,
+      [
+        field.label,
+        field.type,
+        field.options.join(" / "),
+        field.required ? "*" : "",
+        [field.online ? "online" : "", field.panel ? "panel" : ""]
+          .filter(Boolean)
+          .join("+"),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    );
+  }
   put("tax.default_vat_rate", s.tax.default_vat_rate);
   for (const mapping of s.tax.invoice_item_mappings) {
     put(

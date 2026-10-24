@@ -395,6 +395,13 @@ func (s *Service) prepare(ctx context.Context, orgID int64, in model.SearchInput
 		latest := lastDay.Format(dateLayout)
 		result.EarliestStart = req.NotBefore.UTC()
 		result.LatestDate = &latest
+		// The business's online slot step (TEC-905) replaces the client's
+		// and online starts must sit on it.
+		if r.SlotStepMinutes != nil && *r.SlotStepMinutes > 0 {
+			step = *r.SlotStepMinutes
+			req.Step, req.OnGrid = time.Duration(step)*time.Minute, true
+			result.StepMinutes = step
+		}
 	}
 
 	hours, err := weekly(branch.WorkingHours)

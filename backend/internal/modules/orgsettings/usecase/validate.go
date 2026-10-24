@@ -51,7 +51,16 @@ const (
 	maxAdvanceDays         = 730
 	maxCutoffMinutes       = 30 * 24 * 60
 	maxPolicyText          = 5000
+	// The online slot grid: a multiple of 5 minutes up to 4 hours (the
+	// availability engine's step limits).
+	minSlotStep = 5
+	maxSlotStep = 240
+	// The online booking limits.
+	maxOpenPerCustomer = 100
+	maxOnlinePerDay    = 10000
 )
+
+var fieldKeyRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
 // ValidVKN reports whether v is a valid Turkish tax identification number
 // (Vergi Kimlik Numarası, 10 digits, GİB checksum).
@@ -158,6 +167,15 @@ func Normalize(in model.Settings) (model.Settings, error) {
 	}
 	minutes(ve, "reservation.cancel_cutoff_minutes", r.CancelCutoffMinutes, 0, maxCutoffMinutes)
 	minutes(ve, "reservation.change_cutoff_minutes", r.ChangeCutoffMinutes, 0, maxCutoffMinutes)
+	if v := r.SlotStepMinutes; v != nil && (*v < minSlotStep || *v > maxSlotStep || *v%minSlotStep != 0) {
+		ve.add("reservation.slot_step_minutes", "out_of_range", fmt.Sprintf("must be a multiple of %d between %d and %d minutes", minSlotStep, minSlotStep, maxSlotStep))
+	}
+	if v := r.MaxOpenPerCustomer; v != nil && (*v < 1 || *v > maxOpenPerCustomer) {
+		ve.add("reservation.max_open_per_customer", "out_of_range", fmt.Sprintf("must be between 1 and %d", maxOpenPerCustomer))
+	}
+	if v := r.MaxOnlinePerDay; v != nil && (*v < 1 || *v > maxOnlinePerDay) {
+		ve.add("reservation.max_online_per_day", "out_of_range", fmt.Sprintf("must be between 1 and %d", maxOnlinePerDay))
+	}
 	// The earliest bookable start must lie inside the booking window.
 	if r.MinLeadMinutes != nil && r.MaxAdvanceDays != nil && *r.MinLeadMinutes > *r.MaxAdvanceDays*24*60 {
 		ve.add("reservation.min_lead_minutes", "after_max_advance", "earliest booking must be within the booking window")
@@ -254,6 +272,8 @@ func Normalize(in model.Settings) (model.Settings, error) {
 		t.InvoiceItemMappings = append(t.InvoiceItemMappings, m)
 	}
 
+	s.Booking = normalizeBooking(ve, s.Booking)
+
 	if len(ve.Details) > 0 {
 		return s, ve
 	}
@@ -325,6 +345,134 @@ func NormalizeOrigin(raw string) (string, bool) {
 		out += ":" + port
 	}
 	return out, true
+}
+
+// normalizeBooking validates the flow options and the booking form: known
+// optional steps once each (in display order), at most MaxFields questions
+// with unique keys (derived from the label when empty), a known type,
+// options only for a select (2 or more, unique) and at least one place to
+// ask them.
+func normalizeBooking(ve *ValidationError, b model.Booking) model.Booking {
+	hidden := map[string]bool{}
+	for i, step := range b.HiddenSteps {
+		step = strings.TrimSpace(step)
+		if !slices.Contains(model.HideableSteps, step) {
+			ve.add(fmt.Sprintf("booking.hidden_steps.%d", i), "invalid", "this step cannot be hidden: "+step)
+			continue
+		}
+		hidden[step] = true
+	}
+	out := model.Booking{HiddenSteps: []string{}, Fields: []model.CustomField{}}
+	for _, step := range model.HideableSteps {
+		if hidden[step] {
+			out.HiddenSteps = append(out.HiddenSteps, step)
+		}
+	}
+	if len(b.Fields) > model.MaxFields {
+		ve.add("booking.fields", "too_many", fmt.Sprintf("at most %d questions", model.MaxFields))
+		return out
+	}
+	keys := map[string]bool{}
+	// Keys given by the client first, so a derived key never takes one.
+	for _, f := range b.Fields {
+		if k := strings.TrimSpace(f.Key); k != "" {
+			keys[k] = true
+		}
+	}
+	seen := map[string]bool{}
+	for i, f := range b.Fields {
+		prefix := fmt.Sprintf("booking.fields.%d", i)
+		f.Key = strings.TrimSpace(f.Key)
+		f.Label = strings.TrimSpace(f.Label)
+		f.Type = strings.TrimSpace(f.Type)
+		f.Help = strings.TrimSpace(f.Help)
+		if f.Label == "" {
+			ve.add(prefix+".label", "required", "label is required")
+		}
+		maxLen(ve, prefix+".label", f.Label, model.MaxFieldLabel)
+		maxLen(ve, prefix+".help", f.Help, model.MaxFieldHelp)
+		if f.Key == "" {
+			f.Key = uniqueKey(fieldKey(f.Label), keys)
+			keys[f.Key] = true
+		}
+		switch {
+		case !fieldKeyRE.MatchString(f.Key):
+			ve.add(prefix+".key", "invalid", "key must be lower case letters, digits and _ (starting with a letter)")
+		case seen[f.Key]:
+			ve.add(prefix+".key", "duplicate", "key is used twice")
+		}
+		seen[f.Key] = true
+		if !slices.Contains(model.FieldTypes, f.Type) {
+			ve.add(prefix+".type", "invalid", "type must be text, number, select or checkbox")
+		}
+		options := []string{}
+		if f.Type == model.FieldSelect {
+			uniq := map[string]bool{}
+			for j, o := range f.Options {
+				o = strings.TrimSpace(o)
+				switch {
+				case o == "":
+					ve.add(fmt.Sprintf("%s.options.%d", prefix, j), "required", "option is empty")
+				case uniq[o]:
+					ve.add(fmt.Sprintf("%s.options.%d", prefix, j), "duplicate", "option is listed twice")
+				}
+				maxLen(ve, fmt.Sprintf("%s.options.%d", prefix, j), o, model.MaxOptionLength)
+				uniq[o] = true
+				options = append(options, o)
+			}
+			switch {
+			case len(options) < 2:
+				ve.add(prefix+".options", "too_few", "a select needs at least 2 options")
+			case len(options) > model.MaxFieldOptions:
+				ve.add(prefix+".options", "too_many", fmt.Sprintf("at most %d options", model.MaxFieldOptions))
+			}
+		}
+		f.Options = options
+		if !f.Online && !f.Panel {
+			ve.add(prefix+".online", "required", "ask the question online, in the panel or both")
+		}
+		out.Fields = append(out.Fields, f)
+	}
+	return out
+}
+
+// fieldKey derives an answer key from a label ("Alerji var mı?" →
+// "alerji_var_mi").
+func fieldKey(label string) string {
+	repl := strings.NewReplacer("ç", "c", "ğ", "g", "ı", "i", "İ", "i", "ö", "o", "ş", "s", "ü", "u",
+		"Ç", "c", "Ğ", "g", "Ö", "o", "Ş", "s", "Ü", "u")
+	var b strings.Builder
+	under := false
+	for _, r := range strings.ToLower(repl.Replace(label)) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			under = false
+		case !under && b.Len() > 0:
+			b.WriteByte('_')
+			under = true
+		}
+	}
+	key := strings.Trim(b.String(), "_")
+	if len(key) > 32 {
+		key = strings.Trim(key[:32], "_")
+	}
+	if key == "" || key[0] < 'a' || key[0] > 'z' {
+		key = "field_" + key
+	}
+	return strings.Trim(key, "_")
+}
+
+func uniqueKey(base string, taken map[string]bool) string {
+	if !taken[base] {
+		return base
+	}
+	for i := 2; ; i++ {
+		k := fmt.Sprintf("%s_%d", base, i)
+		if !taken[k] {
+			return k
+		}
+	}
 }
 
 func maxLen(ve *ValidationError, field, v string, n int) {

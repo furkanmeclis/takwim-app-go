@@ -156,5 +156,8 @@
   "status.pay_open_tab": "Open the payment page",
   "status.payment_returned_title": "You are back from the payment page",
   "status.payment_returned_description": "The result shows in the window where you booked. You can close this tab.",
-  "status.close_tab": "Close this tab"
+  "status.close_tab": "Close this tab",
+  "errors.day_full": "No online bookings are left for this day. Please pick another day.",
+  "errors.open_limit": "You reached this business's limit of open bookings. Wait for your current booking to be completed or contact the business.",
+  "errors.answers": "Please check the questions on the contact step."
 }

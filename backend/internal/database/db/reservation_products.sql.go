@@ -614,7 +614,7 @@ const updateReservationProductsTotal = `-- name: UpdateReservationProductsTotal 
 UPDATE reservations
 SET total_price = $1, payment_status = $2, version = version + 1
 WHERE organization_id = $3 AND id = $4
-RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate
+RETURNING id, uuid, organization_id, number, branch_id, customer_id, hold_id, status, approval_mode, approval_status, confirmation_status, payment_status, source, starts_at, ends_at, total_price, currency, custom_fields, customer_note, internal_note, version, cancel_reason, created_by, created_at, updated_at, party_size, zone, vehicle_type, vehicle_plate, settings_version, custom_field_defs
 `
 
 type UpdateReservationProductsTotalParams struct {
@@ -663,6 +663,8 @@ func (q *Queries) UpdateReservationProductsTotal(ctx context.Context, arg Update
 		&i.Zone,
 		&i.VehicleType,
 		&i.VehiclePlate,
+		&i.SettingsVersion,
+		&i.CustomFieldDefs,
 	)
 	return i, err
 }

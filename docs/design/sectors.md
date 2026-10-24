@@ -13,7 +13,7 @@ Status: **implemented** (TEC-882). Every business belongs to one of six sectors:
 | Assignment                                           | Platform: create / `PATCH /v1/platform/organizations/{uuid}` take `sector`. The tenant API does not change it (Takwim yönetimi assigns the sector). |
 | Panel                                                | `frontend/src/features/sectors` (`useSector()`: definition, `hasModule`, `term`), `NavModulesProvider` in the tenant shell                          |
 
-The catalog is code, not data: a sector is a product decision and every client (panel, booking page, the future mobile app) reads the same definition from the API. A business's own settings fine-tune the flow later (requirements §6); they never change the sector's module set.
+The catalog is code, not data: a sector is a product decision and every client (panel, booking page, the future mobile app) reads the same definition from the API. A business's own settings fine-tune the flow (requirements §6, [booking-rules.md](./booking-rules.md)): they hide optional steps (staff, products, area) and add questions; they never change the sector's module set, the step order or the capacity checks.
 
 ## Catalog
 

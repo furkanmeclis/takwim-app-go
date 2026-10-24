@@ -4745,6 +4745,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/reservations/form": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Booking form questions
+         * @description The business's booking form questions and the optional flow steps it
+         *     hides (business settings `booking`, TEC-905), for the panel booking
+         *     form and the reservation detail. Readable with the reservations
+         *     permission (no settings permission needed). The panel form asks the
+         *     questions with `panel: true`; required ones must be answered
+         *     (`custom_fields.<key>` / `required`).
+         */
+        get: operations["getTenantReservationsForm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/reservations/calendar": {
         parameters: {
             query?: never;
@@ -11194,6 +11219,35 @@ export interface components {
             cancel_cutoff_minutes: number | null;
             /** @description Customer change requests allowed until this many minutes before the start; null = no limit */
             change_cutoff_minutes: number | null;
+            /** @description Distance between the starts offered online (TEC-905). Online availability uses it whatever the request asks and online starts off the grid are refused; null = the client's step. */
+            slot_step_minutes: number | null;
+            /** @description Most open bookings (waiting, booked or in service, not over) a customer may hold when booking online (`customer` / `open_limit`); panel bookings are not limited. null = no limit. */
+            max_open_per_customer: number | null;
+            /** @description Most online bookings (page, widget, API) a branch takes per local day; cancelled and rejected ones do not count (`starts_at` / `daily_limit`). null = no limit. */
+            max_online_per_day: number | null;
+        };
+        /** @description A booking form question (TEC-905). The answer is stored in the reservation's `custom_fields` under `key`; the reservation keeps the question as answered. */
+        OrganizationBookingField: {
+            /** @description Stable answer key; empty on save = derived from the label */
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "text" | "number" | "select" | "checkbox";
+            /** @description The choices of a select (2 or more, unique); empty otherwise */
+            options: string[];
+            /** @description Must be answered where asked; a required checkbox must be ticked */
+            required: boolean;
+            /** @description Asked on the booking page, the widget and the public API */
+            online: boolean;
+            /** @description Asked in the panel booking form */
+            panel: boolean;
+            help: string;
+        };
+        /** @description Fine-tuning of the sector's booking flow (TEC-905): optional steps the customer screens skip and the business's own questions. Capacity and availability checks always stay. */
+        OrganizationBookingSettings: {
+            /** @description `staff`: the engine assigns a free person (a picked one is refused); `products`: no products with a booking; `area`: the engine picks any table (a zone is refused). */
+            hidden_steps: ("staff" | "products" | "area")[];
+            fields: components["schemas"]["OrganizationBookingField"][];
         };
         /** @description At least one option is on. Online payment is the full amount. */
         OrganizationPaymentSettings: {
@@ -11238,6 +11292,7 @@ export interface components {
             sales_channels: components["schemas"]["OrganizationSalesChannel"][];
             embed: components["schemas"]["OrganizationEmbedSettings"];
             tax: components["schemas"]["OrganizationTaxSettings"];
+            booking: components["schemas"]["OrganizationBookingSettings"];
         };
         OrganizationSettingsActor: {
             /** Format: uuid */
@@ -12793,6 +12848,7 @@ export interface components {
              * @enum {string}
              */
             payment?: "on_site";
+            /** @description Booking form answers by question key (`GET …/reservations/form`). Questions asked in the panel are checked (required, type, select option: 400 `custom_fields.<key>`); other keys are kept. */
             custom_fields?: {
                 [key: string]: unknown;
             };
@@ -12825,6 +12881,7 @@ export interface components {
         TenantReservationNotesRequest: {
             customer_note?: string;
             internal_note?: string;
+            /** @description The whole answer set (omit to keep the stored answers); the panel questions are checked as on create and other keys are kept. */
             custom_fields?: {
                 [key: string]: unknown;
             };
@@ -12847,6 +12904,7 @@ export interface components {
         /** @enum {string} */
         TenantReservationSource: "panel" | "online" | "embed";
         TenantReservationListItem: {
+            custom_answers: components["schemas"]["TenantReservationAnswer"][];
             /** @description Number of people (restaurant) or seats of a group class. */
             party_size: number | null;
             /** @description Area asked for; empty = any. */
@@ -13086,6 +13144,10 @@ export interface components {
             custom_fields: {
                 [key: string]: unknown;
             };
+            /** @description The answers with the question each was answered under, in the form's order. */
+            custom_answers: components["schemas"]["TenantReservationAnswer"][];
+            /** @description The business settings version the booking was made under (null before TEC-905). */
+            settings_version: number | null;
             customer_note: string;
             internal_note: string;
             version: number;
@@ -13159,6 +13221,25 @@ export interface components {
             success: true;
             data: components["schemas"]["TenantReservationAgenda"];
             meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeTenantReservationForm: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                fields: components["schemas"]["OrganizationBookingField"][];
+                hidden_steps: ("staff" | "products" | "area")[];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description A booking form answer with its question as it was answered (TEC-905). An older answer without a stored question has its key as label. */
+        TenantReservationAnswer: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "text" | "number" | "select" | "checkbox";
+            value: string | number | boolean;
+            /** @description The question is asked on the customer screens. */
+            online: boolean;
         };
         EnvelopeTenantReservationFacets: {
             /** @enum {boolean} */
@@ -13323,7 +13404,7 @@ export interface components {
             timezone: string;
             /** @example TRY */
             currency: string;
-            /** @description The sector's default customer booking steps. */
+            /** @description The customer booking steps, the sector's flow without the optional steps the business hides (TEC-905). */
             flow: string[];
             /** @description Sector term codes (`staff`, `resource`, `booking`). */
             terms: {
@@ -13358,6 +13439,14 @@ export interface components {
                 /** @description Online payment is offered and the business has a working payment provider and an online cash account; the customer pays on the provider's page after booking. */
                 online_payment_ready: boolean;
                 checkout_minutes: number;
+                /** @description Distance between the starts offered online; availability uses it whatever the request asks (null = the client's step). */
+                slot_step_minutes: number | null;
+                /** @description Most open bookings a customer may hold; a booking over it is 400 `customer` / `open_limit` (null = no limit). */
+                max_open_per_customer: number | null;
+                /** @description Optional steps the business hides (already left out of `flow`). A person on a line is then 400 `lines.N.staff_uuid` / `not_offered`, products `products` / `not_offered`, a zone `zone` / `not_offered`. */
+                hidden_steps: ("staff" | "products" | "area")[];
+                /** @description The booking form questions asked online, in order; answers go in the booking's `custom_fields` by key. */
+                fields: components["schemas"]["PublicBookingField"][];
             };
             branch_count: number;
             /** @description The embedded booking screen (`/embed/{slug}`, TEC-908). */
@@ -13365,6 +13454,25 @@ export interface components {
                 /** @description Sites allowed to frame the booking screen (its `frame-ancestors` policy and the only targets of its height messages). Empty = no other site. */
                 allowed_origins: string[];
             };
+        };
+        PublicBookingField: {
+            key: string;
+            label: string;
+            help: string;
+            /** @enum {string} */
+            type: "text" | "number" | "select" | "checkbox";
+            options: string[];
+            /** @description A required checkbox must be true. */
+            required: boolean;
+        };
+        PublicBookingAnswer: {
+            key: string;
+            /** @description The question as it was when answered. */
+            label: string;
+            /** @enum {string} */
+            type: "text" | "number" | "select" | "checkbox";
+            /** @description Text, number or boolean answer. */
+            value: string | number | boolean;
         };
         PublicBranch: {
             /** @description Areas a party may ask for (zones of the online tables and areas), for the restaurant flow's area step. */
@@ -13588,6 +13696,7 @@ export interface components {
              */
             payment?: "on_site" | "online";
             customer_note?: string;
+            /** @description Answers to the online questions (`booking.fields`) by key: text, number, one of a select's options, or a boolean for a checkbox. Missing required answers and bad values are 400 `custom_fields.<key>`; keys of other questions are dropped. */
             custom_fields?: {
                 [key: string]: unknown;
             };
@@ -13605,6 +13714,8 @@ export interface components {
             }[];
         };
         PublicReservation: {
+            /** @description Answers to the booking form questions asked online (TEC-905). */
+            answers: components["schemas"]["PublicBookingAnswer"][];
             /** @description Number of people (restaurant) or seats of a group class. */
             party_size: number | null;
             /** @description Area asked for; empty = any. */
@@ -23062,6 +23173,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeTenantReservationFacets"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantReservationsForm: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Form */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantReservationForm"];
                 };
             };
             400: components["responses"]["OrganizationRequired"];

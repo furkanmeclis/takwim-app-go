@@ -451,5 +451,15 @@
   "confirmation_task.change_requested_empty": "Müşteri not bırakmadı. Randevuyu taşıyabilir veya müşteriyi arayabilirsiniz.",
   "confirmation_task.outcome_alert.flagged": "Müşteri teyit etmedi",
   "confirmation_task.outcome_alert.unreachable": "Teyit isteği müşteriye ulaştırılamadı",
-  "confirmation_task.outcome_alert.description": "Randevu iptal edilmedi. Müşteriyi arayarak durumu netleştirin."
+  "confirmation_task.outcome_alert.description": "Randevu iptal edilmedi. Müşteriyi arayarak durumu netleştirin.",
+  "custom_fields.choose": "Seçin…",
+  "custom_fields.required": "Bu alan zorunlu.",
+  "custom_fields.must_accept": "Devam etmek için işaretleyin.",
+  "custom_fields.number": "Bir sayı girin.",
+  "custom_fields.too_long": "En fazla 500 karakter.",
+  "custom_fields.yes": "Evet",
+  "custom_fields.no": "Hayır",
+  "form.section_questions": "Ek alanlar",
+  "form.section_questions_desc": "İşletme ayarlarında tanımlanan sorular; cevaplar rezervasyonda saklanır.",
+  "columns.custom_answers": "Ek alanlar"
 }

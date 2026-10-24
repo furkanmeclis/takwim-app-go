@@ -81,7 +81,7 @@ func (s *Service) List(ctx context.Context, orgID int64, f model.ListFilter, cal
 			Services: r.Services, Staff: r.StaffNames, StartsAt: r.StartsAt.Time.UTC(), EndsAt: r.EndsAt.Time.UTC(),
 			TotalPrice: money.FromNumericOrZero(r.TotalPrice), Currency: r.Currency, Version: int(r.Version),
 			CreatedAt: r.CreatedAt.Time.UTC(), PartySize: partyOf(r.PartySize), Zone: r.Zone,
-			Vehicle: vehicleOf(r.VehicleType, r.VehiclePlate),
+			Vehicle: vehicleOf(r.VehicleType, r.VehiclePlate), CustomAnswers: answersOf(r.CustomFields, r.CustomFieldDefs),
 		}
 		if r.CustomerPhone.Valid {
 			item.Customer.Phone = &r.CustomerPhone.String

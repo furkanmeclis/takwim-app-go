@@ -36,6 +36,7 @@ import {
   PaymentChip,
   ReservationStatusChip,
 } from "@/features/reservations/components/reservation-status-chips";
+import { CustomFieldInputs } from "@/features/reservations/components/custom-field-inputs";
 import { RescheduleDialog } from "@/features/reservations/components/reschedule-dialog";
 import {
   ACTION_LABEL_KEYS,
@@ -45,6 +46,7 @@ import {
 } from "@/features/reservations/constants";
 import {
   useReservation,
+  useReservationForm,
   useUpdateReservationNotes,
 } from "@/features/reservations/hooks/use-reservations";
 import {
@@ -54,6 +56,12 @@ import {
   sourceLabel,
   statusLabel,
 } from "@/features/reservations/lib/labels";
+import {
+  answerText,
+  customDefaults,
+  panelFields,
+  toCustomFields,
+} from "@/features/reservations/lib/custom-fields";
 import {
   READ_ANY,
   useCanWriteReservations,
@@ -461,7 +469,23 @@ function ReservationNotesCard({
 }) {
   const { t } = useLocale();
   const save = useUpdateReservationNotes();
-  const schema = useMemo(() => createNotesSchema(t), [t]);
+  const bookingForm = useReservationForm();
+  // Questions asked in the panel can be answered or corrected here; the
+  // other answers (online-only, older questions) are shown and kept.
+  const fields = useMemo(
+    () => panelFields(bookingForm.data?.fields),
+    [bookingForm.data],
+  );
+  const asked = new Set(fields.map((f) => f.key));
+  const schema = useMemo(() => createNotesSchema(t, fields), [t, fields]);
+  const stored = reservation.custom_fields as Record<string, unknown>;
+  const answers = reservation.custom_answers;
+
+  const answerFields = answers.map((answer) => ({
+    key: `answer-${answer.key}`,
+    label: answer.label,
+    value: answerText(answer, t) || "—",
+  }));
 
   if (!editable) {
     return (
@@ -471,6 +495,7 @@ function ReservationNotesCard({
             {
               id: "notes",
               fields: [
+                ...answerFields,
                 {
                   key: "customer_note",
                   label: t("reservations.fields.customer_note"),
@@ -489,47 +514,78 @@ function ReservationNotesCard({
     );
   }
 
+  const others = answers.filter((answer) => !asked.has(answer.key));
+
   return (
     <EntitySectionCard title={t("reservations.detail.notes")}>
-      <AppForm<NotesFormValues>
-        key={reservation.version}
-        className="grid gap-4"
-        schema={schema}
-        defaultValues={{
-          customer_note: reservation.customer_note,
-          internal_note: reservation.internal_note,
-        }}
-        onSubmit={async (values) => {
-          await save.mutateAsync({
-            uuid: reservation.uuid,
-            body: { ...values, expected_version: reservation.version },
-          });
-        }}
-      >
-        {(form) => (
-          <>
-            <AppTextarea
-              name="customer_note"
-              label={t("reservations.fields.customer_note")}
-              description={t("reservations.fields.customer_note_hint")}
-            />
-            <AppTextarea
-              name="internal_note"
-              label={t("reservations.fields.internal_note")}
-              description={t("reservations.fields.internal_note_hint")}
-            />
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!form.formState.isDirty || save.isPending}
-              >
-                {t("reservations.actions.save_notes")}
-              </Button>
-            </div>
-          </>
-        )}
-      </AppForm>
+      {bookingForm.isLoading ? (
+        <Loading label={t("common.loading")} />
+      ) : (
+        <AppForm<NotesFormValues>
+          key={reservation.version}
+          className="grid gap-4"
+          schema={schema}
+          defaultValues={{
+            customer_note: reservation.customer_note,
+            internal_note: reservation.internal_note,
+            custom_fields: customDefaults(fields, stored),
+          }}
+          onSubmit={async (values) => {
+            await save.mutateAsync({
+              uuid: reservation.uuid,
+              body: {
+                customer_note: values.customer_note,
+                internal_note: values.internal_note,
+                custom_fields: toCustomFields(
+                  fields,
+                  values.custom_fields,
+                  stored,
+                ),
+                expected_version: reservation.version,
+              },
+            });
+          }}
+        >
+          {(form) => (
+            <>
+              {others.length > 0 ? (
+                <EntityDetail
+                  sections={[
+                    {
+                      id: "answers",
+                      fields: others.map((answer) => ({
+                        key: `answer-${answer.key}`,
+                        label: answer.label,
+                        value: answerText(answer, t) || "—",
+                      })),
+                    },
+                  ]}
+                />
+              ) : null}
+              <CustomFieldInputs fields={fields} />
+              <AppTextarea
+                name="customer_note"
+                label={t("reservations.fields.customer_note")}
+                description={t("reservations.fields.customer_note_hint")}
+              />
+              <AppTextarea
+                name="internal_note"
+                label={t("reservations.fields.internal_note")}
+                description={t("reservations.fields.internal_note_hint")}
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!form.formState.isDirty || save.isPending}
+                >
+                  {t("reservations.actions.save_notes")}
+                </Button>
+              </div>
+            </>
+          )}
+        </AppForm>
+      )}
     </EntitySectionCard>
   );
 }

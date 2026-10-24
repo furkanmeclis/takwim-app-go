@@ -24,6 +24,21 @@ export function isOutOfStock(error: unknown) {
   );
 }
 
+/** True when the branch took its online bookings of that day (TEC-905). */
+export function isDayFull(error: unknown) {
+  return (
+    isApiError(error) && error.details.some((d) => d.code === "daily_limit")
+  );
+}
+
+/** True when an answer to the business's questions was refused. */
+export function isAnswerError(error: unknown) {
+  return (
+    isApiError(error) &&
+    error.details.some((d) => d.field?.startsWith("custom_fields."))
+  );
+}
+
 /**
  * Toasts a booking error in the customer's words: a taken time, closed
  * bookings and rate limits (with the wait of `Retry-After`); anything else
@@ -40,6 +55,18 @@ export function reportBookingError(error: unknown, t: Translate) {
   }
   if (isOutOfStock(error)) {
     appToast.error(t("business_page.errors.out_of_stock"));
+    return;
+  }
+  if (isDayFull(error)) {
+    appToast.error(t("business_page.errors.day_full"));
+    return;
+  }
+  if (error.details.some((d) => d.code === "open_limit")) {
+    appToast.error(t("business_page.errors.open_limit"));
+    return;
+  }
+  if (isAnswerError(error)) {
+    appToast.error(t("business_page.errors.answers"));
     return;
   }
   if (error.code === "BOOKING_UNAVAILABLE") {

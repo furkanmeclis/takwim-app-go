@@ -6,6 +6,10 @@ export type Reservation = Schemas["TenantReservation"];
 export type ReservationListItem = Schemas["TenantReservationListItem"];
 export type ReservationPage = Schemas["TenantReservationPage"];
 export type ReservationFacets = Schemas["TenantReservationFacets"];
+/** Booking form questions of the business (TEC-905). */
+export type ReservationForm = Schemas["EnvelopeTenantReservationForm"]["data"];
+export type ReservationFormField = ReservationForm["fields"][number];
+export type ReservationAnswer = Schemas["TenantReservationAnswer"];
 /** Money of one visit (`GET /v1/tenant/reservations/{uuid}/payments`). */
 export type ReservationPayments = Schemas["ReservationPayments"];
 export type ReservationLedgerEntry = Schemas["LedgerEntry"];
