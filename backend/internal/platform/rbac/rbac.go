@@ -171,6 +171,13 @@ const (
 	PermTenantReportExport     = "tenant.report.export"
 )
 
+// Customer phones (TEC-972, migration 000075): customer panel numbers that
+// changed hands, and reassignment notices processed from Takwim management.
+const (
+	PermPlatformCustomerPhonesRead  = "platform.customer_phones.read"
+	PermPlatformCustomerPhonesWrite = "platform.customer_phones.write"
+)
+
 // Tenant template role keys (migration 000042): İşletme sahibi, Yönetici,
 // Şube yöneticisi, Resepsiyon and Çalışan.
 const (

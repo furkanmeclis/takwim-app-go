@@ -129,10 +129,26 @@ References: OWASP Authentication and Authorization cheat sheets. Acceptance: A25
 ### Abuse limits and monitoring
 
 - Database limits (hold without Redis): codes of a phone 60 s apart, 5 an hour, **10 a day**; an address that asked codes for **20 different phones** in an hour gets no more codes for that hour (same answer). Redis windows per IP: `auth/link` 10, `visit` 30 per 10 minutes; number change, reassignment and device sign-out 10 per session per 10 minutes.
-- `customer_auth_events` records sign-ins, failed codes, failed panel and visit links, throttled addresses, number changes (and refusals), reassignments and device sign-outs (90 days). 20 failures of a kind from one address in an hour, a throttled address and a reassignment write a warning with `source=customer_auth`, which the platform logs page lists (`/platform/logs`).
+- `customer_auth_events` records sign-ins, failed codes, failed panel and visit links, throttled addresses, number changes (and refusals), reassignments and device sign-outs (90 days). 20 failures of a kind from one address in an hour, a throttled address and a reassignment write a warning with `source=customer_auth`, which the platform logs page lists (`/platform/settings/logs`). The logs page has a ready filter for them ("Müşteri erişim uyarıları": `source=customer_auth`, level `warn`) and takes `?source=…&level=…` in its URL.
+
+## Reassignments from Takwim management (TEC-972)
+
+Acceptance: A29, A30. A number can change hands without anybody telling the panel: the operator recycles it, and the next holder signs in with a code.
+
+### Notices processed by an operator
+
+- `/platform/settings/customer-phones` (permission `platform.customer_phones.read`) lists every release: number changes and reports made by the person (`source=customer`), notices processed here (`platform`, with the operator and their note) and dormant numbers (`system`). Numbers are masked; `q` finds a number in any spelling (exact match) or a part of the note.
+- `POST /v1/platform/customer-phone-releases` (`platform.customer_phones.write`, after a confirmation in the page) processes a notice at once, in one transaction: every business link of the number's profile gets `visible_from = now` (nothing is kept: the operator does not know which visits are whose), **every** session of the profile ends, and the number gets a `reassigned` release, so records of the number found later open only what is booked from now on. A number without a profile gets the release too. Nothing is deleted at the businesses.
+- When nobody proved the number since its last release (a number change, a report or an earlier notice already closed it) the notice answers `409 PHONE_ALREADY_RELEASED`: it would close nothing, and a second notice after the next holder signed in would hide the next holder's own visits.
+- A `platform_reassigned` auth event, a `source=customer_auth` warning and an activity entry (`customer_phones.reassigned`) record it.
+
+### Numbers not proven for a long time
+
+- A number whose profile has not proven it for **180 days** (`DormantAfter`, `customer_identities.phone_verified_at`) may have been recycled unreported. At its next sign-in (code or panel link), before the session opens, the profile's earlier history is closed the same way: `visible_from = now` on every link, a `dormant` release (`source=system`), every older session ends. A `dormant_closed` event and a warning record it. A number released after its last proof is left alone; a failure fails the sign-in, so history never opens unchecked.
+- We close the history instead of asking "are these visits yours?": the answer to such a question is no proof (anybody holding the number can say yes), and the question itself would show the businesses the previous holder visited. The person sees everything booked from now on; the businesses keep every record.
+- The profile (`GET me`) carries `history_notice` (`reassigned` or `dormant`, with the time) after either closing, and the panel's profile page explains why earlier visits are not shown.
 
 ## Not in this issue
 
-- **TEC-972**: reassignment notices processed from Takwim management, and an extra ownership check for numbers not verified for a long time (a recycled number nobody reported).
 - **Payment amounts** from a ledger: TEC-912.
 - **Confirmation** (teyit): the confirmation module drives `confirmation_status` (confirmations.md); the panel shows it and offers the answers.

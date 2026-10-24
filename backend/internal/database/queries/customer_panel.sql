@@ -263,11 +263,54 @@ WHERE id = sqlc.arg(id);
 UPDATE customer_identities SET phone_e164 = sqlc.arg(phone_e164), phone_verified_at = sqlc.arg(verified_at)
 WHERE id = sqlc.arg(id) AND phone_e164 = sqlc.arg(old_phone_e164);
 
--- name: CreateCustomerPhoneRelease :exec
+-- name: CreateCustomerPhoneRelease :one
 -- Release times and history windows use the database clock, like the
--- created_at of the records they are compared with.
-INSERT INTO customer_phone_releases (phone_e164, identity_id, reason, released_at)
-VALUES (sqlc.arg(phone_e164), sqlc.arg(identity_id), sqlc.arg(reason), NOW());
+-- created_at of the records they are compared with. source: the person in
+-- the panel (customer), a platform operator (platform, TEC-972) or the
+-- dormant number check (system).
+INSERT INTO customer_phone_releases (
+    phone_e164, identity_id, reason, released_at, source, note, created_by, businesses_hidden, sessions_revoked
+)
+VALUES (
+    sqlc.arg(phone_e164), sqlc.arg(identity_id), sqlc.arg(reason), NOW(), sqlc.arg(source), sqlc.arg(note),
+    sqlc.narg(created_by), sqlc.arg(businesses_hidden), sqlc.arg(sessions_revoked)
+)
+RETURNING *;
+
+-- name: ListCustomerPhoneReleases :many
+-- Platform list of releases (TEC-972), newest first unless asked otherwise.
+-- phone is an exact E.164 match; note a case-insensitive part of the note.
+SELECT r.uuid, r.phone_e164, r.reason, r.source, r.note, r.released_at,
+       r.businesses_hidden, r.sessions_revoked, (r.identity_id IS NOT NULL)::BOOLEAN AS has_profile,
+       COALESCE(TRIM(u.name || ' ' || u.surname), '')::TEXT AS created_by_name
+FROM customer_phone_releases r
+LEFT JOIN users u ON u.id = r.created_by
+WHERE (sqlc.narg(phone)::TEXT IS NULL OR r.phone_e164 = sqlc.narg(phone))
+  AND (sqlc.narg(note)::TEXT IS NULL OR r.note ILIKE '%' || sqlc.narg(note) || '%')
+  AND (sqlc.narg(reasons)::TEXT[] IS NULL OR r.reason = ANY(sqlc.narg(reasons)::TEXT[]))
+  AND (sqlc.narg(sources)::TEXT[] IS NULL OR r.source = ANY(sqlc.narg(sources)::TEXT[]))
+ORDER BY
+    CASE WHEN sqlc.arg(oldest_first)::BOOLEAN THEN r.released_at END ASC,
+    CASE WHEN NOT sqlc.arg(oldest_first)::BOOLEAN THEN r.released_at END DESC,
+    r.id DESC
+LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
+
+-- name: CountCustomerPhoneReleases :one
+SELECT COUNT(*)::BIGINT FROM customer_phone_releases r
+WHERE (sqlc.narg(phone)::TEXT IS NULL OR r.phone_e164 = sqlc.narg(phone))
+  AND (sqlc.narg(note)::TEXT IS NULL OR r.note ILIKE '%' || sqlc.narg(note) || '%')
+  AND (sqlc.narg(reasons)::TEXT[] IS NULL OR r.reason = ANY(sqlc.narg(reasons)::TEXT[]))
+  AND (sqlc.narg(sources)::TEXT[] IS NULL OR r.source = ANY(sqlc.narg(sources)::TEXT[]));
+
+-- name: LatestClosingCustomerPhoneRelease :one
+-- The last release of the phone that closed the profile's earlier history
+-- without the person asking (a platform reassignment or the dormant check):
+-- the panel explains the hidden history with it.
+SELECT reason, source, released_at FROM customer_phone_releases
+WHERE identity_id = sqlc.arg(identity_id) AND phone_e164 = sqlc.arg(phone_e164)
+  AND source IN ('platform', 'system')
+ORDER BY released_at DESC, id DESC
+LIMIT 1;
 
 -- name: LatestCustomerPhoneRelease :one
 -- The last time the phone changed hands (no row: never).

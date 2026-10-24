@@ -43,6 +43,7 @@
   "subnav.group_security": "Security & Access",
   "subnav.auth_methods": "Authentication Methods",
   "subnav.access_policy": "Access Policy",
+  "subnav.customer_phones": "Customer Numbers",
   "subnav.group_integrations": "Integrations",
   "subnav.oauth_providers": "OAuth Providers",
   "subnav.storage": "Object Storage",

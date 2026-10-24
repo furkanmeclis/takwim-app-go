@@ -43,6 +43,7 @@
   "subnav.group_security": "Güvenlik & Erişim",
   "subnav.auth_methods": "Giriş & Kayıt Ayarları",
   "subnav.access_policy": "Erişim Politikası",
+  "subnav.customer_phones": "Müşteri Numaraları",
   "subnav.group_integrations": "Entegrasyonlar",
   "subnav.oauth_providers": "OAuth Sağlayıcıları",
   "subnav.storage": "Nesne Depolama",

@@ -56,6 +56,8 @@
   "actions.branches.service_point_updated": "Hizmet noktası güncellendi",
   "actions.branches.service_point_deleted": "Hizmet noktası silindi",
   "resources.platform.catalog": "Araç kataloğu",
+  "resources.platform.customer_phones": "Müşteri numaraları",
+  "actions.customer_phones.reassigned": "Numara yeniden tahsis bildirimi işlendi",
   "actions.catalog.import_uploaded": "Kasko listesi yüklendi",
   "actions.catalog.import_apply_requested": "Kasko listesinin uygulanması istendi",
   "actions.catalog.import_applied": "Kasko listesi uygulandı",

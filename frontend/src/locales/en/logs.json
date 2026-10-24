@@ -12,6 +12,8 @@
   "delete_title": "Delete log",
   "delete_description": "This log entry will be permanently removed.",
   "filters_title": "Log filters",
+  "presets.title": "Ready filters:",
+  "presets.customer_auth": "Customer access warnings",
   "filters_description": "Narrow the list by level, source, or date.",
   "filters.created_from": "From date",
   "filters.created_to": "To date",

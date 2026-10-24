@@ -120,6 +120,10 @@ type Config struct {
 	FailureAlert int
 	// PanelURL is the panel address sent after an online booking.
 	PanelURL string
+	// DormantAfter: a number nobody proved for this long may have changed
+	// hands unreported; its next sign-in closes the profile's earlier
+	// history (TEC-972, closeDormant). 0 turns the check off.
+	DormantAfter time.Duration
 }
 
 // DefaultConfig are the production rules.
@@ -138,6 +142,7 @@ var DefaultConfig = Config{
 	VisitLinkGrace:     24 * time.Hour,
 	FailureAlert:       20,
 	PanelURL:           "https://takwim.link/panel",
+	DormantAfter:       180 * 24 * time.Hour,
 }
 
 // TokenSigner computes keyed hashes (crypto.FieldCipher.BlindIndex).
@@ -442,9 +447,13 @@ func (s *Service) Verify(ctx context.Context, in model.VerifyInput, meta Meta) (
 
 // openSession signs the holder of the proven phone in: the identity of the
 // phone (created on first use), its records linked, a new session row and
-// its token.
+// its token. A number nobody proved for a long time has its earlier
+// history closed first (closeDormant).
 func (s *Service) openSession(ctx context.Context, p, method string, meta Meta) (model.Session, error) {
 	now := s.now()
+	if err := s.closeDormant(ctx, p, now); err != nil {
+		return model.Session{}, err
+	}
 	identity, err := s.q.UpsertCustomerIdentity(ctx, db.UpsertCustomerIdentityParams{PhoneE164: p, VerifiedAt: ts(now)})
 	if err != nil {
 		return model.Session{}, err
@@ -578,6 +587,7 @@ func (s *Service) profile(ctx context.Context, p Principal) (model.Profile, erro
 	out := model.Profile{
 		Phone: p.Phone, PhoneDisplay: phone.Display(p.Phone, ""), VerifiedAt: p.VerifiedAt,
 		SessionExpiresAt: p.ExpiresAt, ActiveSessions: active, Businesses: make([]model.Business, 0, len(rows)),
+		HistoryNotice: s.historyNotice(ctx, p),
 	}
 	for _, r := range rows {
 		out.Businesses = append(out.Businesses, model.Business{

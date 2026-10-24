@@ -1,7 +1,13 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { LogOut, PhoneForwarded, ShieldOff, UserX } from "lucide-react";
+import {
+  History,
+  LogOut,
+  PhoneForwarded,
+  ShieldOff,
+  UserX,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -13,6 +19,7 @@ import {
   EntityTable,
 } from "@/components/entity";
 import { createColumn } from "@/components/tables";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
@@ -34,7 +41,9 @@ import { useLocale } from "@/providers/locale-provider";
  * signed-in devices and access security (TEC-910): a safe number change,
  * the report of a recently reassigned number, and signing out. Signing out
  * everywhere ends every panel session of this phone (other phones and
- * browsers too).
+ * browsers too). A notice explains history closed without the person
+ * asking (TEC-972: a reassignment processed by Takwim, a long unproven
+ * number).
  */
 export function CustomerProfilePage() {
   const { t, locale } = useLocale();
@@ -126,6 +135,23 @@ export function CustomerProfilePage() {
       title={t("customer_panel.profile.title")}
       description={t("customer_panel.profile.description")}
     >
+      {profile.history_notice ? (
+        <Alert>
+          <History className="size-4" />
+          <AlertTitle>
+            {t("customer_panel.profile.history_notice_title")}
+          </AlertTitle>
+          <AlertDescription>
+            {t(
+              profile.history_notice.reason === "dormant"
+                ? "customer_panel.profile.history_notice_dormant"
+                : "customer_panel.profile.history_notice_reassigned",
+              { at: date(profile.history_notice.closed_at, undefined, locale) },
+            )}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <EntitySectionCard title={t("customer_panel.profile.account")}>
         <EntityDetail
           sections={[

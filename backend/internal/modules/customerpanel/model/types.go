@@ -53,6 +53,17 @@ type Profile struct {
 	SessionExpiresAt time.Time  `json:"session_expires_at"`
 	ActiveSessions   int64      `json:"active_sessions"`
 	Businesses       []Business `json:"businesses"`
+	// HistoryNotice explains history closed without the person asking
+	// (TEC-972): Takwim processed a reassignment notice of the number, or
+	// the number had not been proven for a long time. nil otherwise.
+	HistoryNotice *HistoryNotice `json:"history_notice"`
+}
+
+// HistoryNotice is why and when the profile's earlier history was closed.
+type HistoryNotice struct {
+	// Reason is ReleaseReassigned (platform notice) or ReleaseDormant.
+	Reason   string    `json:"reason"`
+	ClosedAt time.Time `json:"closed_at"`
 }
 
 // Business is one business that linked the person, with the name it keeps.
@@ -390,4 +401,57 @@ type PaymentTotal struct {
 // PaymentSummary is the per-currency summary of "Ödemelerim".
 type PaymentSummary struct {
 	Totals []PaymentTotal `json:"totals"`
+}
+
+// Release reasons and sources (customer_phone_releases, TEC-910 / TEC-972).
+const (
+	ReleaseNumberChanged = "number_changed"
+	ReleaseReassigned    = "reassigned"
+	ReleaseDormant       = "dormant"
+
+	ReleaseSourceCustomer = "customer"
+	ReleaseSourcePlatform = "platform"
+	ReleaseSourceSystem   = "system"
+)
+
+// ReleaseReasons and ReleaseSources are the filter values of the platform
+// list.
+var (
+	ReleaseReasons = []string{ReleaseNumberChanged, ReleaseReassigned, ReleaseDormant}
+	ReleaseSources = []string{ReleaseSourceCustomer, ReleaseSourcePlatform, ReleaseSourceSystem}
+)
+
+// ReassignmentInput is a reassignment notice processed from Takwim
+// management (TEC-972): the number was given to somebody else (operator
+// notice, support request). Note says where the notice came from.
+type ReassignmentInput struct {
+	Phone string `json:"phone"`
+	Note  string `json:"note"`
+}
+
+// PhoneRelease is one row of the platform list: a number that changed
+// hands. The number is masked; HasProfile says whether a Takwim profile
+// used it; BusinessesHidden and SessionsRevoked what the release closed.
+type PhoneRelease struct {
+	UUID             uuid.UUID `json:"uuid"`
+	PhoneMasked      string    `json:"phone_masked"`
+	Reason           string    `json:"reason"`
+	Source           string    `json:"source"`
+	Note             string    `json:"note"`
+	CreatedByName    string    `json:"created_by_name"`
+	HasProfile       bool      `json:"has_profile"`
+	BusinessesHidden int       `json:"businesses_hidden"`
+	SessionsRevoked  int       `json:"sessions_revoked"`
+	ReleasedAt       time.Time `json:"released_at"`
+}
+
+// ReleaseFilter narrows the platform list. Q is a phone (exact match once
+// normalized) or a part of the note; Reasons and Sources match any.
+type ReleaseFilter struct {
+	Q           string
+	Reasons     []string
+	Sources     []string
+	OldestFirst bool
+	Limit       int32
+	Offset      int32
 }

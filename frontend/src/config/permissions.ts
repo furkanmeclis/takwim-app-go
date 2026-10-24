@@ -46,6 +46,8 @@ export const Permission = {
   PlatformIntegrationsAppleWrite: "platform.integrations.apple.write",
   PlatformAuthSettingsRead: "platform.auth.settings.read",
   PlatformAuthSettingsWrite: "platform.auth.settings.write",
+  PlatformCustomerPhonesRead: "platform.customer_phones.read",
+  PlatformCustomerPhonesWrite: "platform.customer_phones.write",
 
   AuthSession: "auth.session",
 
@@ -205,6 +207,11 @@ export const permissions = {
   logs: {
     read: Permission.PlatformLogsRead,
     write: Permission.PlatformLogsWrite,
+  },
+  /** Customer numbers that changed hands (TEC-972). */
+  customerPhones: {
+    read: Permission.PlatformCustomerPhonesRead,
+    write: Permission.PlatformCustomerPhonesWrite,
   },
   bulk: {
     read: Permission.PlatformBulkRead,
