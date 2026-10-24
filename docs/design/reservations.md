@@ -17,7 +17,7 @@ A request the business accepted but the customer has not confirmed shows both va
 
 `reservation_lines` keeps each service as it was booked: service name, staff member (name kept when the record is deleted), resources (`[{uuid, name, kind}]`), times, duration, buffers and the unit price. Price order: the person's price (`service_staff.price`) › the branch offer (`service_branches.price`) › the list price. `total_price` is the sum, in the business currency. Renaming a service or changing a price later never rewrites a booking. `vat_rate` / `staff_share_rate` stay empty until the finance modules fill them.
 
-Also stored: `custom_fields` (answers to booking form questions, a JSON object), `customer_note`, `internal_note`, `source` (`panel`, `online`, `embed`), a per-business `number` and `version`.
+Also stored: `custom_fields` (answers to booking form questions, a JSON object) with `custom_field_defs` (the questions as answered) and `settings_version` (TEC-905, [booking-rules.md](./booking-rules.md)), `customer_note`, `internal_note`, `source` (`panel`, `online`, `embed`), a per-business `number` and `version`.
 
 ## Creating
 

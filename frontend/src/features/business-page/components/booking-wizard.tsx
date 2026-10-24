@@ -35,6 +35,8 @@ import {
   statusHref,
 } from "@/features/business-page/lib/access";
 import {
+  isAnswerError,
+  isDayFull,
   isOutOfStock,
   isSlotTaken,
   reportBookingError,
@@ -183,7 +185,8 @@ export function BookingWizard({
   }
   const byParty = flowHasParty(business.flow);
   const branch = branches.find((b) => b.uuid === branchUuid);
-  const areaChoice = hasAreaChoice(branch);
+  // The area step of the flow (hidden by the business: any area).
+  const areaChoice = business.flow.includes("area") && hasAreaChoice(branch);
   const partySize = byParty ? validParty(Number(partyText)) : null;
   // An area that is no longer offered (other branch) means any area.
   const activeZone =
@@ -232,7 +235,8 @@ export function BookingWizard({
           lines,
           from: windowStart,
           to: windowEnd,
-          step_minutes: 15,
+          // The business's online interval wins on the API anyway.
+          step_minutes: business.booking.slot_step_minutes ?? 15,
           channel: surface.channel,
           ...seating,
         }
@@ -332,6 +336,7 @@ export function BookingWizard({
           contact,
           activePayment,
           pickedProducts,
+          business.booking.fields,
         ),
         bookingKey.current,
       );
@@ -342,10 +347,12 @@ export function BookingWizard({
       );
     } catch (error) {
       reportBookingError(error, t);
-      if (isSlotTaken(error)) {
+      if (isSlotTaken(error) || isDayFull(error)) {
         setCheckout(null);
         resetTime();
         goTo("datetime");
+      } else if (isAnswerError(error)) {
+        goTo("contact");
       } else if (isOutOfStock(error)) {
         // Someone took the last units; pick again from what is left.
         void productsQuery.refetch();
@@ -511,6 +518,7 @@ export function BookingWizard({
     body = (
       <ContactStep
         value={contact}
+        fields={business.booking.fields}
         onSubmit={(values) => {
           setContact(values);
           goTo("summary");

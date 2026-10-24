@@ -16,6 +16,7 @@ import {
   tabOfPath,
   type SettingsTab,
 } from "@/features/tenant-settings/constants";
+import { BookingSection } from "@/features/tenant-settings/components/booking-section";
 import { OrganizationProfileCard } from "@/features/tenant-settings/components/organization-profile-card";
 import { SettingsReadiness } from "@/features/tenant-settings/components/settings-readiness";
 import {
@@ -48,6 +49,7 @@ type Tab = SettingsTab | "history";
 const FORM_TABS: { id: SettingsTab; labelKey: string }[] = [
   { id: "company", labelKey: "tenant_settings.tabs.company" },
   { id: "reservation", labelKey: "tenant_settings.tabs.reservation" },
+  { id: "booking", labelKey: "tenant_settings.tabs.booking" },
   { id: "policies", labelKey: "tenant_settings.tabs.policies" },
   { id: "channels", labelKey: "tenant_settings.tabs.channels" },
   { id: "tax", labelKey: "tenant_settings.tabs.tax" },
@@ -159,6 +161,13 @@ function SettingsTabs({
         <ReservationSection disabled={disabled} />
       </TabsContent>
       <TabsContent
+        value="booking"
+        forceMount
+        className="data-[state=inactive]:hidden"
+      >
+        <BookingSection disabled={disabled} />
+      </TabsContent>
+      <TabsContent
         value="policies"
         forceMount
         className="data-[state=inactive]:hidden"
@@ -213,7 +222,8 @@ function SettingsTabs({
 
 /**
  * Organization settings (TEC-690): one versioned document edited in tabs
- * (company, reservation & payment, policies, sales channels, tax) with a
+ * (company, reservation & payment, booking flow & form, policies, sales
+ * channels, tax) with a
  * sticky save bar; every save stores a new immutable version, browsable and
  * comparable in the history tab.
  */

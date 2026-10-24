@@ -85,6 +85,39 @@ type Booking struct {
 	OnlinePaymentReady bool `json:"online_payment_ready"`
 	// CheckoutMinutes is how long a checkout keeps its time.
 	CheckoutMinutes int `json:"checkout_minutes"`
+	// SlotStepMinutes: the distance between the starts the business offers
+	// online (null = the client's choice); availability uses it whatever
+	// the request asks.
+	SlotStepMinutes *int `json:"slot_step_minutes"`
+	// MaxOpenPerCustomer: the most open bookings a customer may hold
+	// (null = no limit).
+	MaxOpenPerCustomer *int `json:"max_open_per_customer"`
+	// HiddenSteps are the optional sector steps the business hides (they
+	// are already left out of Flow); the API refuses their choices.
+	HiddenSteps []string `json:"hidden_steps"`
+	// Fields are the booking form questions asked online, in order; the
+	// answers go in the booking's custom_fields by key.
+	Fields []Field `json:"fields"`
+}
+
+// Field is a booking form question asked on the customer screens.
+type Field struct {
+	Key string `json:"key"`
+	// Label and Help are the business's own text.
+	Label string `json:"label"`
+	Help  string `json:"help"`
+	// Type: text, number, select or checkbox.
+	Type     string   `json:"type"`
+	Options  []string `json:"options"`
+	Required bool     `json:"required"`
+}
+
+// Answer is a booking form answer with its question as answered.
+type Answer struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Type  string `json:"type"`
+	Value any    `json:"value"`
 }
 
 // Business is the profile and page context of GET /v1/public/businesses/{slug}.
@@ -96,7 +129,8 @@ type Business struct {
 	Sector   string    `json:"sector"`
 	Timezone string    `json:"timezone"`
 	Currency string    `json:"currency"`
-	// Flow is the sector's default customer booking flow (step codes).
+	// Flow is the customer booking flow (step codes): the sector's flow
+	// without the optional steps the business hides (TEC-905).
 	Flow []string `json:"flow"`
 	// Terms are the sector's term codes (staff, resource, booking).
 	Terms       map[string]string `json:"terms"`
@@ -373,22 +407,24 @@ type StaffName struct {
 // Reservation is the customer's view of a booking. AccessToken is only in
 // the answer of the booking itself; the status route needs it.
 type Reservation struct {
-	UUID               uuid.UUID             `json:"uuid"`
-	Number             int64                 `json:"number"`
-	Status             string                `json:"status"`
-	ApprovalStatus     string                `json:"approval_status"`
-	ConfirmationStatus string                `json:"confirmation_status"`
-	PaymentStatus      string                `json:"payment_status"`
-	Branch             Ref                   `json:"branch"`
-	Timezone           string                `json:"timezone"`
-	StartsAt           time.Time             `json:"starts_at"`
-	EndsAt             time.Time             `json:"ends_at"`
-	TotalPrice         money.Money           `json:"total_price"`
-	Currency           string                `json:"currency"`
-	CustomerNote       string                `json:"customer_note"`
-	PartySize          *int                  `json:"party_size"`
-	Zone               string                `json:"zone"`
-	Vehicle            *reservations.Vehicle `json:"vehicle"`
+	UUID               uuid.UUID   `json:"uuid"`
+	Number             int64       `json:"number"`
+	Status             string      `json:"status"`
+	ApprovalStatus     string      `json:"approval_status"`
+	ConfirmationStatus string      `json:"confirmation_status"`
+	PaymentStatus      string      `json:"payment_status"`
+	Branch             Ref         `json:"branch"`
+	Timezone           string      `json:"timezone"`
+	StartsAt           time.Time   `json:"starts_at"`
+	EndsAt             time.Time   `json:"ends_at"`
+	TotalPrice         money.Money `json:"total_price"`
+	Currency           string      `json:"currency"`
+	CustomerNote       string      `json:"customer_note"`
+	// Answers are the booking form answers of the questions asked online.
+	Answers   []Answer              `json:"answers"`
+	PartySize *int                  `json:"party_size"`
+	Zone      string                `json:"zone"`
+	Vehicle   *reservations.Vehicle `json:"vehicle"`
 	// ExpiresAt: a request waiting for the business or for online payment
 	// lets its time go at this instant.
 	ExpiresAt    *time.Time `json:"expires_at"`

@@ -95,8 +95,15 @@ type Querier interface {
 	CountMembersByBranch(ctx context.Context, arg CountMembersByBranchParams) ([]CountMembersByBranchRow, error)
 	CountMembersInBranches(ctx context.Context, arg CountMembersInBranchesParams) (int64, error)
 	CountNotificationsForUser(ctx context.Context, arg CountNotificationsForUserParams) (int64, error)
+	// Online booking limit (TEC-905): the branch's online bookings (page,
+	// widget, API) starting in [starts_from, starts_to) that still count
+	// (not cancelled or rejected).
+	CountOnlineBranchReservations(ctx context.Context, arg CountOnlineBranchReservationsParams) (int64, error)
 	// Online (provider receivable) accounts that can take the provider's money.
 	CountOnlineCashAccounts(ctx context.Context, arg CountOnlineCashAccountsParams) (int64, error)
+	// Online booking limit (TEC-905): the customer's bookings that are still
+	// open (waiting, booked or in service) and not over yet.
+	CountOpenCustomerReservations(ctx context.Context, arg CountOpenCustomerReservationsParams) (int64, error)
 	CountOrganizationMembersByOrg(ctx context.Context, arg CountOrganizationMembersByOrgParams) (int64, error)
 	// Members holding the template owner role (any of their roles).
 	CountOrganizationOwners(ctx context.Context, organizationID int64) (int64, error)
@@ -417,6 +424,7 @@ type Querier interface {
 	GetRefundByIdempotencyKey(ctx context.Context, arg GetRefundByIdempotencyKeyParams) (GetRefundByIdempotencyKeyRow, error)
 	GetRefundByUUID(ctx context.Context, arg GetRefundByUUIDParams) (GetRefundByUUIDRow, error)
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
+	GetReservationBranchTimezone(ctx context.Context, arg GetReservationBranchTimezoneParams) (string, error)
 	GetReservationConfirmation(ctx context.Context, arg GetReservationConfirmationParams) (ReservationConfirmation, error)
 	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
 	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)

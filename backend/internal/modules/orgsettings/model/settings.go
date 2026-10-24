@@ -4,8 +4,9 @@
 // and tax mapping. The document is stored as JSONB in
 // organization_settings_versions; every save is a new immutable version.
 //
-// These are the business-wide defaults. Branch, service and booking-flow
-// overrides (TEC-905) read them as their fallback.
+// These are the business-wide defaults. The booking section (TEC-905)
+// fine-tunes the sector's booking flow: optional steps the business hides
+// and its own booking form questions.
 package model
 
 import (
@@ -42,6 +43,7 @@ type Settings struct {
 	SalesChannels []SalesChannel `json:"sales_channels"`
 	Embed         Embed          `json:"embed"`
 	Tax           Tax            `json:"tax"`
+	Booking       Booking        `json:"booking"`
 }
 
 // MaxEmbedOrigins is the most sites one business may embed its booking
@@ -91,6 +93,18 @@ type Reservation struct {
 	// limit.
 	CancelCutoffMinutes *int `json:"cancel_cutoff_minutes"`
 	ChangeCutoffMinutes *int `json:"change_cutoff_minutes"`
+	// SlotStepMinutes is the distance between the starts offered online
+	// (randevu aralığı); nil = the client's choice (15 minutes on the
+	// business page). Online starts off the grid are refused.
+	SlotStepMinutes *int `json:"slot_step_minutes"`
+	// MaxOpenPerCustomer limits the open bookings (waiting, booked, in
+	// service and not over) a customer may hold when booking online; nil
+	// = no limit. Bookings entered in the panel are not limited.
+	MaxOpenPerCustomer *int `json:"max_open_per_customer"`
+	// MaxOnlinePerDay limits the online bookings a branch takes per local
+	// day (page, widget and API; cancelled and rejected ones do not count);
+	// nil = no limit.
+	MaxOnlinePerDay *int `json:"max_online_per_day"`
 }
 
 // Payment says how customers may pay. Online payment is always the full
@@ -127,6 +141,76 @@ type InvoiceItemMapping struct {
 	AccountCode string `json:"account_code"`
 	VATRate     string `json:"vat_rate"`
 	Description string `json:"description"`
+}
+
+// Optional steps of a sector flow a business may hide (requirements §6).
+// Every other step (branch, service, date and time, party size, contact,
+// summary) and every capacity and availability check stays: hiding the
+// staff step lets the engine assign a free person, hiding the area step
+// lets it pick any table, hiding products drops the optional products.
+const (
+	StepStaff    = "staff"
+	StepProducts = "products"
+	StepArea     = "area"
+)
+
+// HideableSteps lists the optional steps in display order.
+var HideableSteps = []string{StepStaff, StepProducts, StepArea}
+
+// Types of a booking form question.
+const (
+	FieldText     = "text"
+	FieldNumber   = "number"
+	FieldSelect   = "select"
+	FieldCheckbox = "checkbox"
+)
+
+// FieldTypes lists the question types.
+var FieldTypes = []string{FieldText, FieldNumber, FieldSelect, FieldCheckbox}
+
+// Limits of the booking form.
+const (
+	MaxFields       = 20
+	MaxFieldLabel   = 80
+	MaxFieldHelp    = 200
+	MaxFieldOptions = 20
+	MaxOptionLength = 80
+	// MaxTextAnswer limits a text answer.
+	MaxTextAnswer = 500
+)
+
+// Booking fine-tunes the customer booking flow of the sector.
+type Booking struct {
+	// HiddenSteps are optional steps (HideableSteps) the customer screens
+	// skip; the API refuses the choice they would make.
+	HiddenSteps []string `json:"hidden_steps"`
+	// Fields are the business's own booking form questions, in order.
+	Fields []CustomField `json:"fields"`
+}
+
+// Hides reports whether the business hides an optional step.
+func (b Booking) Hides(step string) bool {
+	for _, s := range b.HiddenSteps {
+		if s == step {
+			return true
+		}
+	}
+	return false
+}
+
+// CustomField is one booking form question. Key names the answer in a
+// reservation's custom_fields and never changes once saved; Online /
+// Panel say where it is asked (the booking page, widget and API / the
+// panel booking form). A required checkbox must be ticked (consent).
+type CustomField struct {
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Options  []string `json:"options"`
+	Required bool     `json:"required"`
+	Online   bool     `json:"online"`
+	Panel    bool     `json:"panel"`
+	Help     string   `json:"help"`
 }
 
 // Actor is the user who saved a version.
@@ -179,6 +263,7 @@ func Defaults() Settings {
 		SalesChannels: channels,
 		Embed:         Embed{AllowedOrigins: []string{}},
 		Tax:           Tax{InvoiceItemMappings: mappings},
+		Booking:       Booking{HiddenSteps: []string{}, Fields: []CustomField{}},
 	}
 }
 

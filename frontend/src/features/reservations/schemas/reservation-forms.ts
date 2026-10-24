@@ -9,8 +9,38 @@ import {
   VEHICLE_TYPES,
   type VehicleType,
 } from "@/features/reservations/constants";
+import {
+  customFieldIssues,
+  type CustomFieldValues,
+  type FormQuestion,
+} from "@/features/reservations/lib/custom-fields";
+import type { ReservationFormField } from "@/features/reservations/types";
 
-type Translate = (key: string) => string;
+type Translate = (
+  key: string,
+  params?: Record<string, string | number>,
+) => string;
+
+/** Answers of the booking questions asked in the panel (TEC-905). */
+const customFieldsShape = z.record(
+  z.string(),
+  z.union([z.string(), z.boolean()]),
+);
+
+function refineCustomFields(
+  t: Translate,
+  fields: FormQuestion[],
+  values: CustomFieldValues,
+  ctx: z.RefinementCtx,
+) {
+  for (const issue of customFieldIssues(fields, values, t)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["custom_fields", issue.key],
+      message: issue.message,
+    });
+  }
+}
 
 /** Cancel reasons offered in the panel (the API takes any short code). */
 export const CANCEL_REASONS = ["customer_request", "business"] as const;
@@ -44,60 +74,76 @@ function partySizeField(t: Translate, required: boolean) {
 
 export function createBookingSchema(
   t: Translate,
-  { party = false }: { party?: boolean } = {},
+  {
+    party = false,
+    fields = [],
+  }: { party?: boolean; fields?: ReservationFormField[] } = {},
 ) {
-  return z.object({
-    branch_uuid: z
-      .string()
-      .min(1, t("reservations.validation.branch_required")),
-    customer_uuid: z
-      .string()
-      .min(1, t("reservations.validation.customer_required")),
-    lines: z
-      .array(
-        z.object({
-          service_uuid: z
-            .string()
-            .min(1, t("reservations.validation.service_required")),
-          /** ANY_STAFF = anyone free. */
-          staff_uuid: z.string(),
-        }),
-      )
-      .min(1, t("reservations.validation.service_required"))
-      .max(MAX_LINES),
-    party_size: partySizeField(t, party),
-    /** ANY_ZONE = any area of the branch. */
-    zone: z.string(),
-    /** Car wash: NO_VEHICLE or a vehicle type, and the plate. */
-    vehicle_type: z.string(),
-    vehicle_plate: z
-      .string()
-      .trim()
-      .max(MAX_PLATE, t("reservations.validation.plate"))
-      .regex(/^[\p{L}\p{N} ]*$/u, t("reservations.validation.plate")),
-    date: z.string().min(1, t("reservations.validation.date_required")),
-    /** ISO instant of the picked slot. */
-    starts_at: z.string().min(1, t("reservations.validation.slot_required")),
-    customer_note: z
-      .string()
-      .max(MAX_NOTE, t("reservations.validation.note_max")),
-    internal_note: z
-      .string()
-      .max(MAX_NOTE, t("reservations.validation.note_max")),
-  });
+  return z
+    .object({
+      branch_uuid: z
+        .string()
+        .min(1, t("reservations.validation.branch_required")),
+      customer_uuid: z
+        .string()
+        .min(1, t("reservations.validation.customer_required")),
+      lines: z
+        .array(
+          z.object({
+            service_uuid: z
+              .string()
+              .min(1, t("reservations.validation.service_required")),
+            /** ANY_STAFF = anyone free. */
+            staff_uuid: z.string(),
+          }),
+        )
+        .min(1, t("reservations.validation.service_required"))
+        .max(MAX_LINES),
+      party_size: partySizeField(t, party),
+      /** ANY_ZONE = any area of the branch. */
+      zone: z.string(),
+      /** Car wash: NO_VEHICLE or a vehicle type, and the plate. */
+      vehicle_type: z.string(),
+      vehicle_plate: z
+        .string()
+        .trim()
+        .max(MAX_PLATE, t("reservations.validation.plate"))
+        .regex(/^[\p{L}\p{N} ]*$/u, t("reservations.validation.plate")),
+      date: z.string().min(1, t("reservations.validation.date_required")),
+      /** ISO instant of the picked slot. */
+      starts_at: z.string().min(1, t("reservations.validation.slot_required")),
+      customer_note: z
+        .string()
+        .max(MAX_NOTE, t("reservations.validation.note_max")),
+      internal_note: z
+        .string()
+        .max(MAX_NOTE, t("reservations.validation.note_max")),
+      custom_fields: customFieldsShape,
+    })
+    .superRefine((values, ctx) =>
+      refineCustomFields(t, fields, values.custom_fields, ctx),
+    );
 }
 
 export type BookingFormValues = z.infer<ReturnType<typeof createBookingSchema>>;
 
-export function createNotesSchema(t: Translate) {
-  return z.object({
-    customer_note: z
-      .string()
-      .max(MAX_NOTE, t("reservations.validation.note_max")),
-    internal_note: z
-      .string()
-      .max(MAX_NOTE, t("reservations.validation.note_max")),
-  });
+export function createNotesSchema(
+  t: Translate,
+  fields: ReservationFormField[] = [],
+) {
+  return z
+    .object({
+      customer_note: z
+        .string()
+        .max(MAX_NOTE, t("reservations.validation.note_max")),
+      internal_note: z
+        .string()
+        .max(MAX_NOTE, t("reservations.validation.note_max")),
+      custom_fields: customFieldsShape,
+    })
+    .superRefine((values, ctx) =>
+      refineCustomFields(t, fields, values.custom_fields, ctx),
+    );
 }
 
 export type NotesFormValues = z.infer<ReturnType<typeof createNotesSchema>>;

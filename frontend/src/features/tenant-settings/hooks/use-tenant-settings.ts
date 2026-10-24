@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { reservationsKeys } from "@/features/reservations/hooks/query-keys";
 import { tenantSettingsService } from "@/features/tenant-settings/services/tenant-settings.service";
 import type {
   ListSettingsVersionsParams,
@@ -46,6 +47,10 @@ export function useSaveTenantSettings() {
       queryClient.setQueryData(tenantSettingsKeys.current(slug), saved);
       void queryClient.invalidateQueries({
         queryKey: tenantSettingsKeys.all(slug),
+      });
+      // The booking form questions of the panel (TEC-905).
+      void queryClient.invalidateQueries({
+        queryKey: reservationsKeys.form(slug),
       });
       appToast.success(
         t("tenant_settings.toast.saved", { version: saved.version }),

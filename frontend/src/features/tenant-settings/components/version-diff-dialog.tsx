@@ -78,6 +78,9 @@ export function VersionDiffDialog({
         MAPPING_FIELD_KEYS[c] ?? c,
       )}`;
     }
+    if (section === "booking" && a === "fields") {
+      return `${t("tenant_settings.booking.fields_title")} · ${b}`;
+    }
     return path;
   };
 

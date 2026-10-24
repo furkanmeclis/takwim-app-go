@@ -51,6 +51,7 @@ import {
 import { priceLabel } from "@/features/services/lib/format";
 import { isApiError } from "@/lib/api";
 import { datetimeInZone } from "@/lib/utils/format";
+import { answerText } from "@/features/reservations/lib/custom-fields";
 import { useLocale } from "@/providers/locale-provider";
 
 const noop = () => () => {};
@@ -396,6 +397,14 @@ function ReservationView({
               {r.customer_note}
             </p>
           ) : null}
+          {r.answers.map((answer) => (
+            <p key={answer.key} className="text-muted-foreground text-sm">
+              <span className="text-foreground font-medium">
+                {answer.label}:
+              </span>{" "}
+              {answerText(answer, t)}
+            </p>
+          ))}
         </CardContent>
       </Card>
 

@@ -18,6 +18,7 @@ import type {
   ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationFacets,
+  ReservationForm,
   ReservationNotesRequest,
   ReservationPage,
   ReservationPayments,
@@ -46,6 +47,11 @@ export const reservationsService = {
 
   facets(slug: string) {
     return tenantRequest<ReservationFacets>(slug, "GET", `${BASE}/facets`);
+  },
+
+  /** Booking form questions and the hidden flow steps (TEC-905). */
+  form(slug: string) {
+    return tenantRequest<ReservationForm>(slug, "GET", `${BASE}/form`);
   },
 
   /** Columns, working hours and visits of a day or a week. */

@@ -3,6 +3,7 @@
 import {
   CalendarClock,
   Car,
+  ClipboardList,
   ListChecks,
   MapPin,
   MessageSquareText,
@@ -36,6 +37,7 @@ import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { customersService } from "@/features/customers/services/customers.service";
 import type { Customer } from "@/features/customers/types";
+import { CustomFieldInputs } from "@/features/reservations/components/custom-field-inputs";
 import { CustomerQuickCreateDialog } from "@/features/reservations/components/customer-quick-create-dialog";
 import { SlotPicker } from "@/features/reservations/components/slot-picker";
 import {
@@ -43,10 +45,18 @@ import {
   VEHICLE_TYPE_KEYS,
   VEHICLE_TYPES,
 } from "@/features/reservations/constants";
-import { useCreateReservation } from "@/features/reservations/hooks/use-reservations";
+import {
+  useCreateReservation,
+  useReservationForm,
+} from "@/features/reservations/hooks/use-reservations";
 import { useSlotSearch } from "@/features/reservations/hooks/use-slot-search";
 import { useZoneOptions } from "@/features/reservations/hooks/use-zone-options";
 import { clock, zoned } from "@/features/reservations/lib/calendar-time";
+import {
+  customDefaults,
+  panelFields,
+  toCustomFields,
+} from "@/features/reservations/lib/custom-fields";
 import { WRITE_ANY } from "@/features/reservations/lib/permissions";
 import { staffOptions } from "@/features/reservations/lib/staff-options";
 import {
@@ -60,6 +70,7 @@ import {
   toZone,
   type BookingFormValues,
 } from "@/features/reservations/schemas/reservation-forms";
+import type { ReservationFormField } from "@/features/reservations/types";
 import { useSector } from "@/features/sectors/hooks/use-sector";
 import { useServicesList } from "@/features/services/hooks/use-services";
 import { useAccessibleBranches } from "@/features/staff/hooks/use-staff";
@@ -95,7 +106,16 @@ export function ReservationCreatePage() {
   const party = Boolean(sector?.capacity.party_size);
   // Car washes ask for the vehicle (type and plate).
   const vehicle = Boolean(sector?.flow.includes("vehicle"));
-  const schema = useMemo(() => createBookingSchema(t, { party }), [t, party]);
+  // The business's booking questions asked in the panel (TEC-905).
+  const bookingForm = useReservationForm();
+  const fields = useMemo(
+    () => panelFields(bookingForm.data?.fields),
+    [bookingForm.data],
+  );
+  const schema = useMemo(
+    () => createBookingSchema(t, { party, fields }),
+    [t, party, fields],
+  );
   const zone = organization?.timezone ?? undefined;
 
   // From the calendar: ?branch=&date=&at=HH:MM&staff= (free space clicked).
@@ -113,7 +133,7 @@ export function ReservationCreatePage() {
   );
 
   const defaultValues = useMemo<BookingFormValues | null>(() => {
-    if (!branches.data) return null;
+    if (!branches.data || bookingForm.isLoading) return null;
     const items = branches.data.items;
     const branch =
       items.find((item) => item.uuid === preset.branch)?.uuid ??
@@ -131,8 +151,16 @@ export function ReservationCreatePage() {
       starts_at: "",
       customer_note: "",
       internal_note: "",
+      custom_fields: customDefaults(fields),
     };
-  }, [branches.data, preset, selectedBranch, zone]);
+  }, [
+    branches.data,
+    bookingForm.isLoading,
+    fields,
+    preset,
+    selectedBranch,
+    zone,
+  ]);
 
   return (
     <EntityPage
@@ -155,7 +183,9 @@ export function ReservationCreatePage() {
         { label: t("reservations.create_title") },
       ]}
     >
-      {branches.isLoading ? <Loading label={t("common.loading")} /> : null}
+      {branches.isLoading || bookingForm.isLoading ? (
+        <Loading label={t("common.loading")} />
+      ) : null}
       {branches.isError ? (
         <ErrorState
           title={t("common.error_generic")}
@@ -179,6 +209,7 @@ export function ReservationCreatePage() {
                 starts_at: values.starts_at,
                 customer_note: values.customer_note || undefined,
                 internal_note: values.internal_note || undefined,
+                custom_fields: toCustomFields(fields, values.custom_fields),
               });
               router.push(
                 routes.tenant.reservations.detail(slug, created.uuid),
@@ -187,6 +218,7 @@ export function ReservationCreatePage() {
           >
             {(form) => (
               <BookingFields
+                fields={fields}
                 party={party}
                 vehicle={vehicle}
                 preferredTime={preset.at}
@@ -208,6 +240,7 @@ export function ReservationCreatePage() {
 }
 
 function BookingFields({
+  fields,
   party,
   vehicle,
   preferredTime,
@@ -215,6 +248,8 @@ function BookingFields({
   isSubmitting,
   onCancel,
 }: {
+  /** Booking questions asked in the panel (TEC-905). */
+  fields: ReservationFormField[];
   /** The sector books by party size (restaurant flow). */
   party: boolean;
   /** The sector asks for the vehicle (car wash flow). */
@@ -356,13 +391,22 @@ function BookingFields({
           label: t("reservations.form.section_time"),
           icon: CalendarClock,
         },
+        ...(fields.length > 0
+          ? [
+              {
+                key: "questions",
+                label: t("reservations.form.section_questions"),
+                icon: ClipboardList,
+              },
+            ]
+          : []),
         {
           key: "notes",
           label: t("reservations.form.section_notes"),
           icon: MessageSquareText,
         },
       ]),
-    [t, vehicle],
+    [t, vehicle, fields.length],
   );
 
   return (
@@ -540,6 +584,16 @@ function BookingFields({
           }
         />
       </FormSection>
+
+      {fields.length > 0 ? (
+        <FormSection
+          id={sections.id("questions")}
+          title={t("reservations.form.section_questions")}
+          description={t("reservations.form.section_questions_desc")}
+        >
+          <CustomFieldInputs fields={fields} />
+        </FormSection>
+      ) : null}
 
       <FormSection
         id={sections.id("notes")}

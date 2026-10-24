@@ -109,7 +109,9 @@ type plan struct {
 	confirm        bool
 }
 
-func (s *Service) planFor(ctx context.Context, orgID int64, in model.CreateInput, ve *ValidationError) (plan, error) {
+// planFor decides the plan; set is the current settings (nil without a
+// settings reader).
+func (s *Service) planFor(set *orgsettings.Version, in model.CreateInput, ve *ValidationError) (plan, error) {
 	if in.Source == model.SourcePanel {
 		if in.Payment != "" && in.Payment != model.MethodOnSite {
 			ve.add("payment", "invalid", "panel bookings are paid at the business")
@@ -123,14 +125,10 @@ func (s *Service) planFor(ctx context.Context, orgID int64, in model.CreateInput
 			holdReason: availabilitymodel.ReasonCheckout, confirm: true,
 		}, nil
 	}
-	if s.settings == nil {
+	if set == nil {
 		return plan{}, ErrOnlineNotReady
 	}
-	v, err := s.settings.Current(ctx, orgID)
-	if err != nil {
-		return plan{}, err
-	}
-	r, pay := v.Settings.Reservation, v.Settings.Payment
+	r, pay := set.Settings.Reservation, set.Settings.Payment
 	if r.ApprovalMode == "" || (!pay.PayAtVenue && !pay.PayOnline) {
 		return plan{}, ErrOnlineNotReady
 	}
@@ -211,19 +209,23 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 	if len(in.InternalNote) > MaxNoteLength {
 		ve.add("internal_note", "too_long", "note is too long")
 	}
-	if in.CustomFields == nil {
-		in.CustomFields = map[string]any{}
-	}
 	in.Zone = strings.TrimSpace(in.Zone)
 	vehicleType, plate := checkVehicle(ve, in.Vehicle)
-	customFields, err := json.Marshal(in.CustomFields)
-	if err != nil {
-		ve.add("custom_fields", "invalid", "custom fields must be an object")
+	var set *orgsettings.Version
+	if s.settings != nil {
+		v, err := s.settings.Current(ctx, orgID)
+		if err != nil {
+			return model.Reservation{}, err
+		}
+		set = &v
 	}
-	p, err := s.planFor(ctx, orgID, in, ve)
+	// The booking form answers (TEC-905) and the questions they answer.
+	customFields, fieldDefs := checkAnswers(ve, set, in.Source, in.CustomFields, nil)
+	p, err := s.planFor(set, in, ve)
 	if err != nil {
 		return model.Reservation{}, err
 	}
+	online := in.Source != model.SourcePanel
 	if err := ve.orNil(); err != nil {
 		return model.Reservation{}, err
 	}
@@ -248,12 +250,24 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 		if err != nil {
 			return err
 		}
+		// Online booking limits (panel bookings are the business's own
+		// decision); counted under the business's lock.
+		if online {
+			if err := checkOpenLimit(ctx, tx.Q, orgID, set, customer.ID, tx.Now, 0); err != nil {
+				return err
+			}
+		}
 		created, err := s.holds.CreateIn(ctx, tx, availabilitymodel.HoldInput{
 			BranchUUID: in.BranchUUID, Lines: in.Lines, Channel: channel, StartsAt: in.StartsAt, Reason: p.holdReason,
 			PartySize: in.PartySize, Zone: in.Zone,
 		}, caller, actorID)
 		if err != nil {
 			return err
+		}
+		if online {
+			if err := checkDailyLimit(ctx, tx.Q, orgID, set, created.Slot.BranchID, created.Slot.StartsAt, 0); err != nil {
+				return err
+			}
 		}
 		lines, total, err := s.priceLines(ctx, tx, created.Slot, p.method)
 		if err != nil {
@@ -276,6 +290,7 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 			Currency: currency, CustomFields: customFields, CustomerNote: in.CustomerNote, InternalNote: in.InternalNote,
 			CreatedBy: pgtype.Int8{Int64: actorID, Valid: actorID > 0},
 			PartySize: pgParty(in.PartySize), Zone: in.Zone, VehicleType: vehicleType, VehiclePlate: plate,
+			SettingsVersion: settingsVersion(set), CustomFieldDefs: fieldDefs,
 		})
 		if err != nil {
 			return err
@@ -496,6 +511,11 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 		if err := json.Unmarshal(row.CustomFields, &out.CustomFields); err != nil {
 			return model.Reservation{}, err
 		}
+	}
+	out.CustomAnswers = answersOf(row.CustomFields, row.CustomFieldDefs)
+	if row.SettingsVersion.Valid {
+		v := int(row.SettingsVersion.Int32)
+		out.SettingsVersion = &v
 	}
 	if row.CancelReason.Valid {
 		out.CancelReason = &row.CancelReason.String

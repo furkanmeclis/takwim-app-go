@@ -12,6 +12,9 @@ export type OrganizationSettingsVersionPage =
 export type OrganizationSettingsSaveRequest =
   Schemas["OrganizationSettingsSaveRequest"];
 export type SalesChannelCode = Schemas["OrganizationSalesChannel"]["code"];
+export type BookingFieldType = Schemas["OrganizationBookingField"]["type"];
+export type BookingStep =
+  Schemas["OrganizationBookingSettings"]["hidden_steps"][number];
 export type InvoiceItemType =
   Schemas["OrganizationInvoiceItemMapping"]["item_type"];
 

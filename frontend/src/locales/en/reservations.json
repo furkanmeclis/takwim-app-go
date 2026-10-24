@@ -451,5 +451,15 @@
   "confirmation_task.change_requested_empty": "The customer left no note. Move the booking or call the customer.",
   "confirmation_task.outcome_alert.flagged": "The customer did not confirm",
   "confirmation_task.outcome_alert.unreachable": "The confirmation request could not reach the customer",
-  "confirmation_task.outcome_alert.description": "The booking was not cancelled. Call the customer to settle it."
+  "confirmation_task.outcome_alert.description": "The booking was not cancelled. Call the customer to settle it.",
+  "custom_fields.choose": "Choose…",
+  "custom_fields.required": "This field is required.",
+  "custom_fields.must_accept": "Tick to continue.",
+  "custom_fields.number": "Enter a number.",
+  "custom_fields.too_long": "At most 500 characters.",
+  "custom_fields.yes": "Yes",
+  "custom_fields.no": "No",
+  "form.section_questions": "Extra fields",
+  "form.section_questions_desc": "Questions set in the business settings; the answers are stored on the booking.",
+  "columns.custom_answers": "Extra fields"
 }

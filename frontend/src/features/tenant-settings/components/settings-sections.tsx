@@ -170,6 +170,38 @@ export function ReservationSection({ disabled }: SectionProps) {
         />
       </FormSection>
       <FormSection
+        title={t("tenant_settings.sections.limits")}
+        description={t("tenant_settings.sections.limits_desc")}
+        columns={2}
+      >
+        <AppInput
+          name="reservation.slot_step_minutes"
+          type="number"
+          min={5}
+          step={5}
+          label={t("tenant_settings.fields.slot_step_minutes")}
+          description={t("tenant_settings.fields.slot_step_hint")}
+          disabled={disabled}
+        />
+        <div className="hidden sm:block" />
+        <AppInput
+          name="reservation.max_open_per_customer"
+          type="number"
+          min={1}
+          label={t("tenant_settings.fields.max_open_per_customer")}
+          description={t("tenant_settings.fields.max_open_per_customer_hint")}
+          disabled={disabled}
+        />
+        <AppInput
+          name="reservation.max_online_per_day"
+          type="number"
+          min={1}
+          label={t("tenant_settings.fields.max_online_per_day")}
+          description={t("tenant_settings.fields.max_online_per_day_hint")}
+          disabled={disabled}
+        />
+      </FormSection>
+      <FormSection
         title={t("tenant_settings.sections.payment")}
         description={t("tenant_settings.sections.payment_desc")}
         columns={2}

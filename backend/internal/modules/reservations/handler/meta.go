@@ -68,6 +68,7 @@ func Meta() resourcemeta.ResourceMeta {
 			{Key: "branch", LabelKey: "reservations.columns.branch", Type: resourcemeta.ColumnTypeEnum, Filterable: true, FilterVariant: resourcemeta.FilterVariantFaceted, DefaultVisible: true},
 			status, enum("approval_status"), confirmation, enum("payment_status"), source,
 			{Key: "total_price", LabelKey: "reservations.columns.total_price", Type: resourcemeta.ColumnTypeString, Sortable: true, DefaultVisible: true},
+			{Key: "custom_answers", LabelKey: "reservations.columns.custom_answers", Type: resourcemeta.ColumnTypeString, DefaultVisible: false},
 			{Key: "created_at", LabelKey: "reservations.columns.created_at", Type: resourcemeta.ColumnTypeDatetime, Sortable: true, DefaultVisible: false},
 			{Key: "uuid", LabelKey: "reservations.columns.uuid", Type: resourcemeta.ColumnTypeUUID, DefaultVisible: false},
 		},

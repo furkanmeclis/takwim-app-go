@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 import {
+  BOOKING_FIELD_TYPES,
   INVOICE_ITEM_TYPES,
+  MAX_BOOKING_FIELDS,
   SALES_CHANNELS,
 } from "@/features/tenant-settings/constants";
 import {
@@ -62,6 +64,40 @@ function daysField(t: Translate, min: number, max: number) {
     );
 }
 
+function countField(t: Translate, min: number, max: number) {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (v) =>
+        v === "" || (MINUTES.test(v) && Number(v) >= min && Number(v) <= max),
+      t("tenant_settings.validation.count_range", { min, max }),
+    );
+}
+
+function stepField(t: Translate) {
+  return z
+    .string()
+    .trim()
+    .refine(
+      (v) =>
+        v === "" ||
+        (MINUTES.test(v) &&
+          Number(v) >= 5 &&
+          Number(v) <= 240 &&
+          Number(v) % 5 === 0),
+      t("tenant_settings.validation.slot_step"),
+    );
+}
+
+/** Choices of a select question: one per line, trimmed, empty lines out. */
+export function optionLines(raw: string) {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function percentField(t: Translate) {
   return z
     .string()
@@ -120,6 +156,32 @@ export function createSettingsSchema(t: Translate) {
         max_advance_days: daysField(t, 1, 730),
         cancel_cutoff_minutes: minutesField(t, 0, 43200),
         change_cutoff_minutes: minutesField(t, 0, 43200),
+        slot_step_minutes: stepField(t),
+        max_open_per_customer: countField(t, 1, 100),
+        max_online_per_day: countField(t, 1, 10000),
+      }),
+      booking: z.object({
+        show_staff: z.boolean(),
+        show_products: z.boolean(),
+        show_area: z.boolean(),
+        fields: z
+          .array(
+            z.object({
+              key: z.string(),
+              label: z
+                .string()
+                .trim()
+                .min(1, t("tenant_settings.validation.field_label"))
+                .max(80),
+              type: z.enum(BOOKING_FIELD_TYPES),
+              options: z.string(),
+              required: z.boolean(),
+              online: z.boolean(),
+              panel: z.boolean(),
+              help: z.string().trim().max(200),
+            }),
+          )
+          .max(MAX_BOOKING_FIELDS),
       }),
       payment: z.object({
         pay_at_venue: z.boolean(),
@@ -167,6 +229,25 @@ export function createSettingsSchema(t: Translate) {
       }),
     })
     .superRefine((values, ctx) => {
+      values.booking.fields.forEach((field, index) => {
+        if (!field.online && !field.panel) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["booking", "fields", index, "online"],
+            message: t("tenant_settings.validation.field_where"),
+          });
+        }
+        if (field.type === "select") {
+          const options = optionLines(field.options);
+          if (options.length < 2 || new Set(options).size !== options.length) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["booking", "fields", index, "options"],
+              message: t("tenant_settings.validation.field_options"),
+            });
+          }
+        }
+      });
       if (!values.payment.pay_at_venue && !values.payment.pay_online) {
         ctx.addIssue({
           code: "custom",
@@ -216,6 +297,26 @@ export function settingsToForm(s: OrganizationSettings): SettingsFormValues {
       change_cutoff_minutes: minutesToField(
         s.reservation.change_cutoff_minutes,
       ),
+      slot_step_minutes: minutesToField(s.reservation.slot_step_minutes),
+      max_open_per_customer: minutesToField(
+        s.reservation.max_open_per_customer,
+      ),
+      max_online_per_day: minutesToField(s.reservation.max_online_per_day),
+    },
+    booking: {
+      show_staff: !s.booking.hidden_steps.includes("staff"),
+      show_products: !s.booking.hidden_steps.includes("products"),
+      show_area: !s.booking.hidden_steps.includes("area"),
+      fields: s.booking.fields.map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type,
+        options: f.options.join("\n"),
+        required: f.required,
+        online: f.online,
+        panel: f.panel,
+        help: f.help,
+      })),
     },
     payment: { ...s.payment },
     policies: { ...s.policies },
@@ -267,6 +368,30 @@ export function formToSaveRequest(
         change_cutoff_minutes: fieldToMinutes(
           values.reservation.change_cutoff_minutes,
         ),
+        slot_step_minutes: fieldToMinutes(values.reservation.slot_step_minutes),
+        max_open_per_customer: fieldToMinutes(
+          values.reservation.max_open_per_customer,
+        ),
+        max_online_per_day: fieldToMinutes(
+          values.reservation.max_online_per_day,
+        ),
+      },
+      booking: {
+        hidden_steps: [
+          ...(values.booking.show_staff ? [] : (["staff"] as const)),
+          ...(values.booking.show_products ? [] : (["products"] as const)),
+          ...(values.booking.show_area ? [] : (["area"] as const)),
+        ],
+        fields: values.booking.fields.map((f) => ({
+          key: f.key,
+          label: f.label.trim(),
+          type: f.type,
+          options: f.type === "select" ? optionLines(f.options) : [],
+          required: f.required,
+          online: f.online,
+          panel: f.panel,
+          help: f.help.trim(),
+        })),
       },
       payment: { ...values.payment },
       policies: { ...values.policies },

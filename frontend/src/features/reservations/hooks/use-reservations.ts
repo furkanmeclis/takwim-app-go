@@ -59,6 +59,16 @@ export function useReservationsFacets() {
   });
 }
 
+/** Booking form questions and hidden flow steps of the business (TEC-905). */
+export function useReservationForm() {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: reservationsKeys.form(slug),
+    queryFn: () => reservationsService.form(slug),
+    staleTime: 60_000,
+  });
+}
+
 export function useReservationCalendar(params: CalendarParams | null) {
   const { slug } = useTenant();
   return useQuery({
