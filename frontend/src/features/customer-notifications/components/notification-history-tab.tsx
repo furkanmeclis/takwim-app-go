@@ -17,6 +17,7 @@ import {
   NOTIFICATION_STATUSES,
   STATUS_TONES,
   channelLabel,
+  errorLabel,
   eventLabel,
   statusLabel,
 } from "@/features/customer-notifications/constants";
@@ -37,16 +38,30 @@ function filterValues(value: unknown): string[] {
 /**
  * Sent notifications, one row per channel attempt, newest first. A channel
  * without a ready provider shows as "Atlandı", never as sent. Read-only.
+ * With `reservationUuid` / `customerUuid` it lists one booking's or one
+ * customer's notices (the detail pages, TEC-974) and leaves out the
+ * columns that would repeat the page.
  */
-export function NotificationHistoryTab() {
+export function NotificationHistoryTab({
+  reservationUuid,
+  customerUuid,
+}: {
+  reservationUuid?: string;
+  customerUuid?: string;
+} = {}) {
   const { t, locale } = useLocale();
+  const scope = reservationUuid
+    ? "reservation"
+    : customerUuid
+      ? "customer"
+      : undefined;
   const [selected, setSelected] = useState<CustomerNotificationDelivery | null>(
     null,
   );
 
   const listState = useServerListState({
     initialSort: "-created_at",
-    initialPageSize: 20,
+    initialPageSize: scope ? 10 : 20,
   });
 
   const listParams = useMemo<ListCustomerNotificationDeliveriesParams>(() => {
@@ -61,133 +76,147 @@ export function NotificationHistoryTab() {
       event: join(column("event")),
       channel: join(column("channel")),
       status: join(column("status")),
+      reservation_uuid: reservationUuid,
+      customer_uuid: customerUuid,
     };
-  }, [listState.columnFilters, listState.params]);
+  }, [
+    customerUuid,
+    listState.columnFilters,
+    listState.params,
+    reservationUuid,
+  ]);
 
   const listQuery = useCustomerNotificationDeliveries(listParams);
 
   const columns = useMemo(
     () =>
-      [
-        createColumn<CustomerNotificationDelivery>({
-          accessorKey: "created_at",
-          labelKey: "customer_notifications.columns.created_at",
-          enableSorting: true,
-          gridSecondary: true,
-          cell: ({ row }) => (
-            <time
-              dateTime={row.original.created_at}
-              title={relativeDatetime(row.original.created_at, locale)}
-              className="text-sm whitespace-nowrap tabular-nums"
-            >
-              {datetime(row.original.created_at, undefined, locale)}
-            </time>
-          ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          accessorKey: "event",
-          labelKey: "customer_notifications.columns.event",
-          enableSorting: true,
-          gridPrimary: true,
-          filterVariant: "faceted",
-          filterOptions: HISTORY_EVENTS.map((code) => ({
-            value: code,
-            label: eventLabel(t, code),
-          })),
-          cell: ({ row }) => (
-            <span className="font-medium">
-              {eventLabel(t, row.original.event)}
-            </span>
-          ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          id: "customer",
-          accessorFn: (row) => row.customer_name,
-          labelKey: "customer_notifications.columns.customer",
-          enableSorting: false,
-          cell: ({ row }) => (
-            <span className="truncate">{row.original.customer_name}</span>
-          ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          id: "reservation",
-          accessorFn: (row) => row.reservation_number ?? 0,
-          labelKey: "customer_notifications.columns.reservation",
-          enableSorting: false,
-          cell: ({ row }) =>
-            row.original.reservation_number ? (
-              <span className="tabular-nums">
-                #{row.original.reservation_number}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">—</span>
+      (
+        [
+          createColumn<CustomerNotificationDelivery>({
+            accessorKey: "created_at",
+            labelKey: "customer_notifications.columns.created_at",
+            enableSorting: true,
+            gridSecondary: true,
+            cell: ({ row }) => (
+              <time
+                dateTime={row.original.created_at}
+                title={relativeDatetime(row.original.created_at, locale)}
+                className="text-sm whitespace-nowrap tabular-nums"
+              >
+                {datetime(row.original.created_at, undefined, locale)}
+              </time>
             ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          accessorKey: "channel",
-          labelKey: "customer_notifications.columns.channel",
-          enableSorting: true,
-          filterVariant: "faceted",
-          // Confirmation calls are in the history too (TEC-923).
-          filterOptions: [...NOTIFICATION_CHANNELS, "voice_call"].map(
-            (name) => ({
-              value: name,
-              label: channelLabel(t, name),
-            }),
-          ),
-          cell: ({ row }) => channelLabel(t, row.original.channel),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          id: "recipient",
-          accessorFn: (row) => row.recipient_masked,
-          labelKey: "customer_notifications.columns.recipient",
-          enableSorting: false,
-          cell: ({ row }) =>
-            row.original.recipient_masked ? (
-              <span className="font-mono text-xs">
-                {row.original.recipient_masked}
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            accessorKey: "event",
+            labelKey: "customer_notifications.columns.event",
+            enableSorting: true,
+            gridPrimary: true,
+            filterVariant: "faceted",
+            filterOptions: HISTORY_EVENTS.map((code) => ({
+              value: code,
+              label: eventLabel(t, code),
+            })),
+            cell: ({ row }) => (
+              <span className="font-medium">
+                {eventLabel(t, row.original.event)}
               </span>
-            ) : (
-              <span className="text-muted-foreground">—</span>
             ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          accessorKey: "status",
-          labelKey: "customer_notifications.columns.status",
-          enableSorting: true,
-          gridSecondary: true,
-          filterVariant: "faceted",
-          filterOptions: NOTIFICATION_STATUSES.map((status) => ({
-            value: status,
-            label: statusLabel(t, status),
-          })),
-          cell: ({ row }) => (
-            <StatusChip
-              label={statusLabel(t, row.original.status)}
-              tone={STATUS_TONES[row.original.status]}
-            />
-          ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          accessorKey: "error",
-          labelKey: "customer_notifications.columns.error",
-          enableSorting: false,
-          defaultHidden: true,
-          cell: ({ row }) => (
-            <span className="text-muted-foreground line-clamp-2 text-xs">
-              {row.original.error || "—"}
-            </span>
-          ),
-        }),
-        createColumn<CustomerNotificationDelivery>({
-          accessorKey: "provider",
-          labelKey: "customer_notifications.columns.provider",
-          enableSorting: false,
-          defaultHidden: true,
-          cell: ({ row }) => row.original.provider || "—",
-        }),
-      ] as ColumnDef<CustomerNotificationDelivery, unknown>[],
-    [locale, t],
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            id: "customer",
+            accessorFn: (row) => row.customer_name,
+            labelKey: "customer_notifications.columns.customer",
+            enableSorting: false,
+            cell: ({ row }) => (
+              <span className="truncate">{row.original.customer_name}</span>
+            ),
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            id: "reservation",
+            accessorFn: (row) => row.reservation_number ?? 0,
+            labelKey: "customer_notifications.columns.reservation",
+            enableSorting: false,
+            cell: ({ row }) =>
+              row.original.reservation_number ? (
+                <span className="tabular-nums">
+                  #{row.original.reservation_number}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              ),
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            accessorKey: "channel",
+            labelKey: "customer_notifications.columns.channel",
+            enableSorting: true,
+            filterVariant: "faceted",
+            // Confirmation calls are in the history too (TEC-923).
+            filterOptions: [...NOTIFICATION_CHANNELS, "voice_call"].map(
+              (name) => ({
+                value: name,
+                label: channelLabel(t, name),
+              }),
+            ),
+            cell: ({ row }) => channelLabel(t, row.original.channel),
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            id: "recipient",
+            accessorFn: (row) => row.recipient_masked,
+            labelKey: "customer_notifications.columns.recipient",
+            enableSorting: false,
+            cell: ({ row }) =>
+              row.original.recipient_masked ? (
+                <span className="font-mono text-xs">
+                  {row.original.recipient_masked}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              ),
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            accessorKey: "status",
+            labelKey: "customer_notifications.columns.status",
+            enableSorting: true,
+            gridSecondary: true,
+            filterVariant: "faceted",
+            filterOptions: NOTIFICATION_STATUSES.map((status) => ({
+              value: status,
+              label: statusLabel(t, status),
+            })),
+            cell: ({ row }) => (
+              <StatusChip
+                label={statusLabel(t, row.original.status)}
+                tone={STATUS_TONES[row.original.status]}
+              />
+            ),
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            accessorKey: "error",
+            labelKey: "customer_notifications.columns.error",
+            enableSorting: false,
+            defaultHidden: true,
+            cell: ({ row }) => (
+              <span className="text-muted-foreground line-clamp-2 text-xs">
+                {row.original.error ? errorLabel(t, row.original.error) : "—"}
+              </span>
+            ),
+          }),
+          createColumn<CustomerNotificationDelivery>({
+            accessorKey: "provider",
+            labelKey: "customer_notifications.columns.provider",
+            enableSorting: false,
+            defaultHidden: true,
+            cell: ({ row }) => row.original.provider || "—",
+          }),
+        ] as ColumnDef<CustomerNotificationDelivery, unknown>[]
+      ).filter((column) => {
+        // A detail page already names the booking / the customer.
+        if (column.id === "customer") return !scope;
+        if (column.id === "reservation") return scope !== "reservation";
+        return true;
+      }),
+    [locale, scope, t],
   );
 
   const total = listQuery.data?.total ?? 0;
@@ -221,12 +250,16 @@ export function NotificationHistoryTab() {
         emptyDescription={
           hasFilters
             ? t("customer_notifications.history.empty_filtered_description")
-            : t("customer_notifications.history.empty_description")
+            : scope
+              ? t("customer_notifications.history.section_empty_description")
+              : t("customer_notifications.history.empty_description")
         }
         pageCount={pageCount}
         state={listState.tableState}
         features={{
-          persistKey: "tenant-customer-notification-history-v1",
+          persistKey: scope
+            ? `tenant-customer-notification-history-${scope}-v1`
+            : "tenant-customer-notification-history-v1",
           rowSelection: false,
           viewMode: true,
         }}
@@ -239,6 +272,7 @@ export function NotificationHistoryTab() {
       />
       <DeliveryDrawer
         delivery={selected}
+        scope={scope}
         onOpenChange={(open) => {
           if (!open) setSelected(null);
         }}

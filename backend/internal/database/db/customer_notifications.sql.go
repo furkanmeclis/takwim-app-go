@@ -111,6 +111,35 @@ func (q *Queries) DeleteCustomerNotificationTemplates(ctx context.Context, arg D
 	return err
 }
 
+const failStuckCustomerNotificationDelivery = `-- name: FailStuckCustomerNotificationDelivery :execrows
+UPDATE customer_notification_deliveries
+SET status = 'failed', error = $1, finished_at = $2
+WHERE organization_id = $3 AND id = $4
+  AND status = 'sending' AND finished_at IS NULL
+`
+
+type FailStuckCustomerNotificationDeliveryParams struct {
+	Error          string             `json:"error"`
+	FinishedAt     pgtype.Timestamptz `json:"finished_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// Closes an attempt still waiting for its send result; a result recorded
+// meanwhile wins (no row).
+func (q *Queries) FailStuckCustomerNotificationDelivery(ctx context.Context, arg FailStuckCustomerNotificationDeliveryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, failStuckCustomerNotificationDelivery,
+		arg.Error,
+		arg.FinishedAt,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const finishCustomerNotificationDelivery = `-- name: FinishCustomerNotificationDelivery :execrows
 UPDATE customer_notification_deliveries
 SET status = $1, error = $2,
@@ -998,6 +1027,53 @@ func (q *Queries) ListNotifyReminderOrganizations(ctx context.Context, arg ListN
 			return nil, err
 		}
 		items = append(items, organization_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStuckCustomerNotificationDeliveries = `-- name: ListStuckCustomerNotificationDeliveries :many
+SELECT organization_id, id, dispatch_id, channel
+FROM customer_notification_deliveries
+WHERE status = 'sending' AND finished_at IS NULL AND created_at < $1
+ORDER BY created_at
+LIMIT $2
+`
+
+type ListStuckCustomerNotificationDeliveriesParams struct {
+	Before     pgtype.Timestamptz `json:"before"`
+	LimitCount int32              `json:"limit_count"`
+}
+
+type ListStuckCustomerNotificationDeliveriesRow struct {
+	OrganizationID int64  `json:"organization_id"`
+	ID             int64  `json:"id"`
+	DispatchID     int64  `json:"dispatch_id"`
+	Channel        string `json:"channel"`
+}
+
+// Attempts claimed but never given a result (the process stopped between
+// the claim and the record), every business: the stuck sweep closes them.
+func (q *Queries) ListStuckCustomerNotificationDeliveries(ctx context.Context, arg ListStuckCustomerNotificationDeliveriesParams) ([]ListStuckCustomerNotificationDeliveriesRow, error) {
+	rows, err := q.db.Query(ctx, listStuckCustomerNotificationDeliveries, arg.Before, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStuckCustomerNotificationDeliveriesRow{}
+	for rows.Next() {
+		var i ListStuckCustomerNotificationDeliveriesRow
+		if err := rows.Scan(
+			&i.OrganizationID,
+			&i.ID,
+			&i.DispatchID,
+			&i.Channel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

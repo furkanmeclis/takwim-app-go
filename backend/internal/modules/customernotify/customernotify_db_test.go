@@ -646,3 +646,96 @@ func TestPersonalPanelLink(t *testing.T) {
 		t.Fatalf("links issued for a channel that is not ready: %v", linker.phones)
 	}
 }
+
+// fakePublisher records the live events the engine publishes.
+type fakePublisher struct {
+	mu    sync.Mutex
+	uuids []string
+}
+
+func (p *fakePublisher) Publish(_ context.Context, _, _ string, uuids ...string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.uuids = append(p.uuids, uuids...)
+}
+
+// TestStuckAttemptsClosed (TEC-974): an attempt left "sending" by a process
+// that stopped between the claim and the record is closed after the stuck
+// timeout as failed with an unknown outcome; it is never sent again, no next
+// channel runs, and the live lists hear of it. A fresh attempt is left alone.
+func TestStuckAttemptsClosed(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	pub := &fakePublisher{}
+	f.engine.SetResourceEvents(pub, catalog.ReservationAccepted)
+
+	// What a stopped process leaves behind: the claim committed (dispatch
+	// "sending", attempt "sending"), the send result never recorded.
+	stall := func(r resmodel.Reservation, age time.Duration) {
+		t.Helper()
+		var dispatchID int64
+		if err := f.pool.QueryRow(ctx, `UPDATE customer_notification_dispatches d SET status = 'sending'
+			FROM reservations r WHERE r.organization_id = d.organization_id AND r.id = d.reservation_id
+			  AND d.organization_id = $1 AND r.uuid = $2 RETURNING d.id`, f.org.ID, r.UUID).Scan(&dispatchID); err != nil {
+			t.Fatal(err)
+		}
+		f.exec(`INSERT INTO customer_notification_deliveries (organization_id, dispatch_id, channel, attempt_no, status, body, created_at)
+			VALUES ($1, $2, 'sms', 1, 'sending', 'text', $3)`, f.org.ID, dispatchID, f.now.Add(-age))
+	}
+	stuck, err := f.svc.Create(ctx, f.org.ID, f.input(at(9, 0), resmodel.SourcePanel, ""), none, f.owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := f.svc.Create(ctx, f.org.ID, f.input(at(10, 0), resmodel.SourcePanel, ""), none, f.owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stall(stuck, usecase.DefaultStuckTimeout+time.Minute)
+	stall(fresh, time.Minute)
+
+	if n, err := f.engine.CloseStuck(ctx); err != nil || n < 1 {
+		t.Fatalf("close stuck = %d %v", n, err)
+	}
+	ds := f.dispatches(t, stuck)
+	if events(ds) != "reservation.accepted=failed" || ds[0].lastError != "sms: "+usecase.ErrorOutcomeUnknown {
+		t.Fatalf("stuck dispatch = %+v", ds)
+	}
+	if n := f.count(`SELECT count(*) FROM customer_notification_deliveries dl
+		JOIN customer_notification_dispatches d ON d.organization_id = dl.organization_id AND d.id = dl.dispatch_id
+		JOIN reservations r ON r.organization_id = d.organization_id AND r.id = d.reservation_id
+		WHERE dl.organization_id = $1 AND r.uuid = $2 AND dl.status = 'failed' AND dl.error = $3 AND dl.finished_at IS NOT NULL`,
+		f.org.ID, stuck.UUID, usecase.ErrorOutcomeUnknown); n != 1 {
+		t.Fatalf("closed attempts = %d", n)
+	}
+	if got := events(f.dispatches(t, fresh)); got != "reservation.accepted=sending" {
+		t.Fatalf("fresh dispatch = %s", got)
+	}
+	pub.mu.Lock()
+	published := strings.Join(pub.uuids, ",")
+	pub.mu.Unlock()
+	if published != stuck.UUID.String() {
+		t.Fatalf("live events = %q", published)
+	}
+
+	// Nothing is sent again, on that channel or the next one, and a second
+	// sweep leaves the fresh attempt alone.
+	f.process(t)
+	if f.sms.count() != 0 || f.mail.count() != 0 {
+		t.Fatalf("resent: sms %d mail %d", f.sms.count(), f.mail.count())
+	}
+	if _, err := f.engine.CloseStuck(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := events(f.dispatches(t, fresh)); got != "reservation.accepted=sending" {
+		t.Fatalf("fresh dispatch after a second sweep = %s", got)
+	}
+
+	// Once the fresh one is old too, it is closed the same way.
+	f.now = f.now.Add(usecase.DefaultStuckTimeout)
+	if _, err := f.engine.CloseStuck(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := events(f.dispatches(t, fresh)); got != "reservation.accepted=failed" {
+		t.Fatalf("fresh dispatch later = %s", got)
+	}
+}

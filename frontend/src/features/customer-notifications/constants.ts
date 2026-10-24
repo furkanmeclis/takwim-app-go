@@ -95,6 +95,22 @@ export const STATUS_TONES: Record<
   skipped: "warning",
 };
 
+/**
+ * Errors the engine writes itself (provider errors are shown as they come).
+ * "outcome unknown": the send never got its result (TEC-974), it is not
+ * sent again.
+ */
+export const ERROR_LABEL_KEYS: Record<string, string> = {
+  "outcome unknown": "customer_notifications.errors.outcome_unknown",
+  "no delivery report": "customer_notifications.errors.no_delivery_report",
+  "provider not configured":
+    "customer_notifications.errors.provider_not_configured",
+  "provider not configured (logged only)":
+    "customer_notifications.errors.provider_not_configured",
+  "no phone number": "customer_notifications.errors.no_phone_number",
+  "no e-mail address": "customer_notifications.errors.no_email_address",
+};
+
 export const VARIABLE_LABEL_KEYS: Record<string, string> = {
   customer_name: "customer_notifications.variables.customer_name",
   business_name: "customer_notifications.variables.business_name",
@@ -130,6 +146,11 @@ export function channelLabel(t: Translate, name: string) {
 export function statusLabel(t: Translate, status: string) {
   const key = STATUS_LABEL_KEYS[status as NotificationDeliveryStatus];
   return key ? t(key) : status;
+}
+
+export function errorLabel(t: Translate, error: string) {
+  const key = ERROR_LABEL_KEYS[error];
+  return key ? t(key) : error;
 }
 
 /** "1 gün önce", "2 saat önce", "30 dakika önce". */

@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
+import { CustomerNotificationHistoryCard } from "@/features/customer-notifications";
 import { CustomerActivityCard } from "@/features/customers/components/customer-activity-card";
 import {
   useCustomer,
@@ -246,6 +247,8 @@ export function CustomerDetailPage({ uuid }: { uuid: string }) {
           <CustomerBalanceCard customerUuid={uuid} />
 
           <CustomerPackagesCard customer={{ uuid, name: customer.full_name }} />
+
+          <CustomerNotificationHistoryCard customerUuid={uuid} />
 
           <CustomerActivityCard customerUuid={uuid} />
 

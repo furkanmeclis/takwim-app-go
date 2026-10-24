@@ -10,6 +10,7 @@ import { routes } from "@/config/routes";
 import {
   STATUS_TONES,
   channelLabel,
+  errorLabel,
   eventLabel,
   statusLabel,
 } from "@/features/customer-notifications/constants";
@@ -29,13 +30,18 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** One channel attempt: where it went, how it ended and the text sent. */
+/**
+ * One channel attempt: where it went, how it ended and the text sent.
+ * `scope` hides the link to the page the drawer is opened on.
+ */
 export function DeliveryDrawer({
   delivery,
   onOpenChange,
+  scope,
 }: {
   delivery: CustomerNotificationDelivery | null;
   onOpenChange: (open: boolean) => void;
+  scope?: "reservation" | "customer";
 }) {
   const { t, locale } = useLocale();
   const { slug } = useTenant();
@@ -52,7 +58,7 @@ export function DeliveryDrawer({
       footer={
         delivery ? (
           <div className="flex flex-wrap gap-2">
-            {delivery.reservation_uuid ? (
+            {delivery.reservation_uuid && scope !== "reservation" ? (
               <Button asChild variant="outline" size="sm">
                 <Link
                   href={routes.tenant.reservations.detail(
@@ -64,16 +70,18 @@ export function DeliveryDrawer({
                 </Link>
               </Button>
             ) : null}
-            <Button asChild variant="outline" size="sm">
-              <Link
-                href={routes.tenant.customers.detail(
-                  slug,
-                  delivery.customer_uuid,
-                )}
-              >
-                {t("customer_notifications.history.open_customer")}
-              </Link>
-            </Button>
+            {scope !== "customer" ? (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={routes.tenant.customers.detail(
+                    slug,
+                    delivery.customer_uuid,
+                  )}
+                >
+                  {t("customer_notifications.history.open_customer")}
+                </Link>
+              </Button>
+            ) : null}
           </div>
         ) : undefined
       }
@@ -136,7 +144,7 @@ export function DeliveryDrawer({
               title={t("customer_notifications.columns.error")}
             >
               <p className="text-sm break-words whitespace-pre-wrap">
-                {delivery.error}
+                {errorLabel(t, delivery.error)}
               </p>
             </EntitySectionCard>
           ) : null}

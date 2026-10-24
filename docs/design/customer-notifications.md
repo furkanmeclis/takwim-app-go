@@ -1,4 +1,4 @@
-# Customer notifications (TEC-911)
+# Customer notifications (TEC-911, TEC-974)
 
 The messages a business's customers get about their bookings: request received, accepted, rejected, changed, cancelled, and a reminder before the visit. They work in every business, without the confirmation add-on (A28), and every text carries the business's name and the customer panel link. Each business chooses which events notify, on which channels in which order, and with which text.
 
@@ -10,7 +10,7 @@ The messages a business's customers get about their bookings: request received, 
 | HTTP, routes | `backend/internal/modules/customernotify/handler`, `routes.go`                                                                  |
 | Port         | `backend/internal/modules/reservations/usecase/notify.go` (`Notifier`, `Change`)                                                |
 | Queries      | `backend/internal/database/queries/customer_notifications.sql`                                                                  |
-| Migration    | `000059_customer_notifications`                                                                                                 |
+| Migration    | `000059_customer_notifications`, `000071_customer_notification_stuck_attempts`                                                  |
 | Tests        | `backend/internal/modules/customernotify/customernotify_db_test.go`                                                             |
 | Web          | `frontend/src/features/customer-notifications/*`, page `/t/{slug}/settings/notifications`, locale `customer_notifications.json` |
 
@@ -50,7 +50,9 @@ The worker runs `Engine.Run`: due dispatches every 5 seconds, reminder planning 
 2. **Send** through the channel adapter. On a ready SMS channel the `LinkIssuer` (`adapters.PanelLinks` over `customerpanel.PanelLink`, TEC-910) puts the phone's single-use panel link into the text at send time only; the stored text keeps the public address. Other channels, a channel that is not ready, and a phone past its daily link cap send the public address, which asks for a code.
 3. **Record**: `sent` / `delivered` ends the dispatch (`delivered`); `failed` or `skipped` moves on to the next channel when `fallback` is on, else ends it (`skipped` when every attempt was skipped, otherwise `failed`). An `accepted` result (provider queued it) keeps the dispatch `sending` until the provider's report (`ReportDelivery`), which runs the next channel on failure.
 
-An attempt that stops between claim and record stays `sending` and is not resent: delivery is at most once per channel, never twice.
+The record step writes the attempt and its dispatch in one transaction, locking the dispatch first (as the delivery reports do).
+
+**Stuck attempts** (TEC-974). An attempt whose process stopped between claim and record stays `sending` and is not resent: delivery is at most once per channel, never twice. The worker's minute sweep (`Engine.CloseStuck`) closes an attempt still `sending` after 15 minutes (`DefaultStuckTimeout`; a send takes seconds): the attempt is `failed` with `outcome unknown` ("Sonuç bilinmiyor" on the page) and its dispatch `failed` (`<channel>: outcome unknown`). No next channel runs either, since the customer may have got the message; a confirmation request closed so counts as a request that did not go out (`send_failed` on the confirmation list) and is published like any other outcome. A send result that arrives after the sweep changes nothing. Partial index `idx_customer_notification_deliveries_in_flight` (migration `000071`) keeps the scan small.
 
 **Live outcomes** (TEC-981): `Engine.SetResourceEvents(pub, events...)` publishes `tenant.reservations` `updated` for the reservation of a dispatch of one of those events after each processing (claim, send and record; one event however many channels ran) and after each recorded delivery report. Both processes set it for the confirmation request, so the confirmation list sees a failed or skipped request at once. Other notices publish nothing (no list shows them).
 
@@ -90,7 +92,9 @@ Saving validates the event, channels, offsets and texts (`unknown_variable` for 
 
 ## Web
 
-Settings → Müşteri bildirimleri. "Olaylar ve metinler" lists the events (on / off, channels in order, timing) with a warning for channels that are not ready; a row opens the editor: switch, ordered channels with readiness, fallback, reminder times, one text per channel with variables, preview and "Varsayılan metin". "Gönderim geçmişi" is the read-only history with event, channel and status filters and a drawer with the text and error. Without `tenant.settings.write` the editor is read-only.
+Settings → Müşteri bildirimleri. "Olaylar ve metinler" lists the events (on / off, channels in order, timing) with a warning for channels that are not ready; a row opens the editor: switch, ordered channels with readiness, fallback, reminder times, one text per channel with variables, preview and "Varsayılan metin". "Gönderim geçmişi" is the read-only history with event, channel and status filters and a drawer with the text and error (the engine's own errors in Turkish, provider errors as they come). Without `tenant.settings.write` the editor is read-only.
+
+The reservation and customer detail pages have a "Gönderilen bildirimler" card (TEC-974, `CustomerNotificationHistoryCard`): the same history filtered by `reservation_uuid` / `customer_uuid`, without the columns the page already names, and the drawer without the link back to the same page. The history is a business setting, so the card needs `tenant.settings.read` like the API and is left out without it.
 
 ## Confirmation requests (TEC-921)
 
@@ -102,4 +106,4 @@ Settings → Müşteri bildirimleri. "Olaylar ve metinler" lists the events (on 
 ## Not here yet
 
 - A real SMS provider (TEC-884) and its delivery reports. WhatsApp arrived with TEC-922 and the automatic voice call (`voice_call`, the business's Netgsm account) with TEC-923, both for confirmation requests only ([confirmations.md](./confirmations.md#voice-call-tec-923)); the voice call is not on the notification settings page.
-- Notices on the reservation and customer detail pages (the history API already filters by `reservation_uuid` / `customer_uuid`).
+- SMS delivery reports: once the provider is chosen (TEC-884), its adapter becomes a `ReportingChannel` (answers `accepted`, reports through `ReportDelivery`; the receipt timeout already covers a missing report) with its own webhook route and signature check, like WhatsApp and the voice call. Followed in TEC-987.

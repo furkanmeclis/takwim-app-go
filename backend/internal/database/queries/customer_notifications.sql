@@ -229,3 +229,20 @@ WHERE dl.organization_id = sqlc.arg(organization_id)
     OR r.number::text = sqlc.narg(q)
     OR (c.first_name || ' ' || c.last_name) ILIKE '%' || sqlc.narg(q) || '%'
   );
+
+-- name: ListStuckCustomerNotificationDeliveries :many
+-- Attempts claimed but never given a result (the process stopped between
+-- the claim and the record), every business: the stuck sweep closes them.
+SELECT organization_id, id, dispatch_id, channel
+FROM customer_notification_deliveries
+WHERE status = 'sending' AND finished_at IS NULL AND created_at < sqlc.arg(before)
+ORDER BY created_at
+LIMIT sqlc.arg(limit_count);
+
+-- name: FailStuckCustomerNotificationDelivery :execrows
+-- Closes an attempt still waiting for its send result; a result recorded
+-- meanwhile wins (no row).
+UPDATE customer_notification_deliveries
+SET status = 'failed', error = sqlc.arg(error), finished_at = sqlc.arg(finished_at)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
+  AND status = 'sending' AND finished_at IS NULL;

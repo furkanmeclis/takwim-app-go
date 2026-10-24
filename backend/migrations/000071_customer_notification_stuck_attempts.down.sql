@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_customer_notification_deliveries_in_flight;

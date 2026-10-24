@@ -21,6 +21,10 @@
 //     comes fails the attempt after the receipt timeout so the next channel
 //     runs. A call picked up without a valid key is delivered, yet the next
 //     channel runs too (it is no answer).
+//   - An attempt left "sending" by a process that stopped between the
+//     claim and the record is closed by the stuck sweep (CloseStuck) after
+//     the stuck timeout: failed with an unknown outcome, never sent again
+//     and no next channel (the customer may have got it).
 //   - Events set with SetResourceEvents (the confirmation request, TEC-981)
 //     tell the panel's live reservation lists about every send result and
 //     delivery report of their dispatches, so the confirmation list, its
@@ -107,6 +111,8 @@ type Engine struct {
 	// receiptTimeout fails an accepted attempt whose delivery report never
 	// came.
 	receiptTimeout time.Duration
+	// stuckTimeout closes an attempt that never got its send result.
+	stuckTimeout time.Duration
 	// events publishes the outcomes of the dispatches of liveEvents on the
 	// reservations live channel.
 	events     resourceevents.Publisher
@@ -116,6 +122,16 @@ type Engine struct {
 // DefaultReceiptTimeout is how long an accepted message may wait for its
 // delivery report before the attempt counts as failed.
 const DefaultReceiptTimeout = 30 * time.Minute
+
+// DefaultStuckTimeout is how long a claimed attempt may wait for its send
+// result before the stuck sweep closes it. A send takes seconds (provider
+// calls have their own timeouts), so an attempt this old belongs to a
+// process that stopped.
+const DefaultStuckTimeout = 15 * time.Minute
+
+// ErrorOutcomeUnknown is the error of an attempt the stuck sweep closed:
+// the provider may or may not have delivered it.
+const ErrorOutcomeUnknown = "outcome unknown"
 
 // DispatchGuard tells, inside the claim transaction, why a dispatch must
 // not go out any more ("" = send it); another module owns that decision
@@ -130,7 +146,7 @@ func New(pool *pgxpool.Pool, q *db.Queries, panelURL string) *Engine {
 	return &Engine{
 		pool: pool, q: q, channels: map[string]channel.Channel{}, log: slog.Default(), now: time.Now,
 		panelURL: strings.TrimSpace(panelURL), batch: 100, eventLinks: map[string]LinkIssuer{},
-		receiptTimeout: DefaultReceiptTimeout,
+		receiptTimeout: DefaultReceiptTimeout, stuckTimeout: DefaultStuckTimeout,
 	}
 }
 
@@ -173,6 +189,13 @@ func (e *Engine) ReadyFor(ctx context.Context, orgID int64, name string) bool {
 func (e *Engine) SetReceiptTimeout(d time.Duration) {
 	if d > 0 {
 		e.receiptTimeout = d
+	}
+}
+
+// SetStuckTimeout replaces the stuck timeout (0 keeps the default).
+func (e *Engine) SetStuckTimeout(d time.Duration) {
+	if d > 0 {
+		e.stuckTimeout = d
 	}
 }
 
@@ -719,8 +742,29 @@ func (e *Engine) send(ctx context.Context, orgID int64, st *step) channel.Result
 }
 
 // record writes the attempt's result and reports whether the next channel
-// should run now.
+// should run now. The attempt and its dispatch change in one transaction
+// (a process that stops in between leaves neither half written), locking
+// the dispatch first like the delivery reports and the stuck sweep.
 func (e *Engine) record(ctx context.Context, orgID int64, st *step, res channel.Result) (bool, error) {
+	next := false
+	err := e.tx(ctx, func(q *db.Queries) error {
+		_, err := q.LockCustomerNotificationDispatchWait(ctx, db.LockCustomerNotificationDispatchWaitParams{OrganizationID: orgID, ID: st.dispatch.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // the booking or the customer is gone
+		}
+		if err != nil {
+			return err
+		}
+		next, err = e.recordIn(ctx, q, orgID, st, res)
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+	return next, nil
+}
+
+func (e *Engine) recordIn(ctx context.Context, q *db.Queries, orgID int64, st *step, res channel.Result) (bool, error) {
 	now := e.clock()
 	p := db.UpdateCustomerNotificationDeliveryParams{
 		OrganizationID: orgID, ID: st.delivery.ID, Provider: truncate(res.Provider, 32),
@@ -733,24 +777,24 @@ func (e *Engine) record(ctx context.Context, orgID int64, st *step, res channel.
 	case channel.OutcomeAccepted:
 		p.Status, p.SentAt = DeliverySent, ts(now)
 		// The dispatch stays "sending" until the report.
-		_, err := e.q.UpdateCustomerNotificationDelivery(ctx, p)
+		_, err := q.UpdateCustomerNotificationDelivery(ctx, p)
 		return false, err
 	case channel.OutcomeDelivered, channel.OutcomeSent:
 		p.Status, p.SentAt, p.FinishedAt = DeliverySent, ts(now), ts(now)
 		if res.Outcome == channel.OutcomeDelivered {
 			p.Status = DeliveryDelivered
 		}
-		if n, err := e.q.UpdateCustomerNotificationDelivery(ctx, p); err != nil || n == 0 {
+		if n, err := q.UpdateCustomerNotificationDelivery(ctx, p); err != nil || n == 0 {
 			return false, err
 		}
 		if res.Outcome == channel.OutcomeDelivered {
-			if err := e.q.MarkCustomerNotificationDeliveryReceipt(ctx, db.MarkCustomerNotificationDeliveryReceiptParams{
+			if err := q.MarkCustomerNotificationDeliveryReceipt(ctx, db.MarkCustomerNotificationDeliveryReceiptParams{
 				OrganizationID: orgID, ID: st.delivery.ID, At: ts(now),
 			}); err != nil {
 				return false, err
 			}
 		}
-		return false, e.q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
+		return false, q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
 			OrganizationID: orgID, ID: st.dispatch.ID, Status: DispatchDelivered, NextChannelIndex: st.dispatch.NextChannelIndex,
 			CompletedAt: ts(now),
 		})
@@ -759,10 +803,10 @@ func (e *Engine) record(ctx context.Context, orgID int64, st *step, res channel.
 		if res.Outcome == channel.OutcomeSkipped {
 			p.Status = DeliverySkipped
 		}
-		if n, err := e.q.UpdateCustomerNotificationDelivery(ctx, p); err != nil || n == 0 {
+		if n, err := q.UpdateCustomerNotificationDelivery(ctx, p); err != nil || n == 0 {
 			return false, err
 		}
-		return e.advance(ctx, e.q, orgID, st.dispatch, st.channel, res.Error)
+		return e.advance(ctx, q, orgID, st.dispatch, st.channel, res.Error)
 	}
 }
 
@@ -945,6 +989,74 @@ func (e *Engine) ExpireReceipts(ctx context.Context) (int, error) {
 	return len(rows), nil
 }
 
+// CloseStuck closes the attempts that never got their send result within
+// the stuck timeout (the process stopped between the claim and the
+// record) and returns how many it closed. Such an attempt may have reached
+// the customer, so it is never sent again and no next channel runs: the
+// attempt is failed with ErrorOutcomeUnknown and its dispatch failed. A
+// confirmation request closed so shows on the confirmation list as a
+// request that did not go out (a person follows it up).
+func (e *Engine) CloseStuck(ctx context.Context) (int, error) {
+	rows, err := e.q.ListStuckCustomerNotificationDeliveries(ctx, db.ListStuckCustomerNotificationDeliveriesParams{
+		Before: ts(e.clock().Add(-e.stuckTimeout)), LimitCount: e.batch,
+	})
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range rows {
+		d, closed, err := e.closeStuck(ctx, r)
+		if err != nil {
+			e.log.WarnContext(ctx, "customer_notice_stuck_failed", "organization", r.OrganizationID, "delivery", r.ID, "error", err)
+			continue
+		}
+		if closed {
+			n++
+			e.log.WarnContext(ctx, "customer_notice_stuck_closed", "organization", r.OrganizationID, "dispatch", d.Uuid, "channel", r.Channel)
+			e.changed(ctx, r.OrganizationID, d)
+		}
+	}
+	return n, nil
+}
+
+func (e *Engine) closeStuck(ctx context.Context, r db.ListStuckCustomerNotificationDeliveriesRow) (db.CustomerNotificationDispatch, bool, error) {
+	var (
+		disp   db.CustomerNotificationDispatch
+		closed bool
+	)
+	err := e.tx(ctx, func(q *db.Queries) error {
+		d, err := q.LockCustomerNotificationDispatchWait(ctx, db.LockCustomerNotificationDispatchWaitParams{OrganizationID: r.OrganizationID, ID: r.DispatchID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		disp = d
+		now := e.clock()
+		n, err := q.FailStuckCustomerNotificationDelivery(ctx, db.FailStuckCustomerNotificationDeliveryParams{
+			OrganizationID: r.OrganizationID, ID: r.ID, Error: ErrorOutcomeUnknown, FinishedAt: ts(now),
+		})
+		if err != nil || n == 0 {
+			return err // the send result came meanwhile
+		}
+		closed = true
+		// Only the attempt the dispatch waits for ends it.
+		if d.Status != DispatchSending || int(d.NextChannelIndex) >= len(d.Channels) || d.Channels[d.NextChannelIndex] != r.Channel {
+			return nil
+		}
+		disp.Status = DispatchFailed
+		return q.UpdateCustomerNotificationDispatchState(ctx, db.UpdateCustomerNotificationDispatchStateParams{
+			OrganizationID: r.OrganizationID, ID: d.ID, Status: DispatchFailed, NextChannelIndex: d.NextChannelIndex,
+			LastError: r.Channel + ": " + ErrorOutcomeUnknown, CompletedAt: ts(now),
+		})
+	})
+	if err != nil {
+		return disp, false, err
+	}
+	return disp, closed, nil
+}
+
 // ProcessDue sends every due dispatch and returns how many were processed.
 func (e *Engine) ProcessDue(ctx context.Context) (int, error) {
 	orgs, err := e.q.ListDueCustomerNotificationOrganizations(ctx, ts(e.clock()))
@@ -1116,6 +1228,9 @@ func (e *Engine) sweep(ctx context.Context, reminders bool) {
 			e.log.WarnContext(ctx, "customer_notice_receipts_failed", "error", err)
 		} else if n > 0 {
 			e.log.InfoContext(ctx, "customer_notice_receipts_expired", "count", n)
+		}
+		if _, err := e.CloseStuck(ctx); err != nil && ctx.Err() == nil {
+			e.log.WarnContext(ctx, "customer_notice_stuck_sweep_failed", "error", err)
 		}
 	}
 	if _, err := e.ProcessDue(ctx); err != nil && ctx.Err() == nil {
