@@ -9655,6 +9655,438 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/staff-shares/me:
+    get:
+      tags: [Tenant]
+      operationId: getTenantMyStaffShares
+      summary: My shares
+      description: |
+        The signed-in member's own shares (`tenant.earnings.read` or
+        `tenant.earnings.own`, `staff_shares` module): today and the period
+        (default this month), with the balance (earned, payable, paid,
+        remaining) over every branch. `404` when the member has no staff
+        record.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Own shares
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeMyStaffShares"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff-shares/summary:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffSharesSummary
+      summary: Staff shares per staff member and branch
+      description: |
+        Per staff member and currency for `date_from`–`date_to` (default
+        this month, at most 366 days) inside the caller's branch scope:
+        sales (net, after discounts), share, pending (waiting for the
+        visit's collection), payable, business share (sales - share, before
+        costs and expenses), paid in the period; and each person's balance
+        over every branch and day. Per branch: revenue, shares and business
+        share, with totals. A member with `tenant.earnings.own` only gets
+        its own row and no branch figures.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: staff
+          in: query
+          description: "Staff uuids; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffSharesSummary"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff-shares/rules:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffShareRules
+      summary: Staff share rules
+      description: The agreed rates (`tenant.earnings.read`; with `tenant.earnings.own` only the caller's own).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: staff
+          in: query
+          description: "Staff uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: item_type
+          in: query
+          description: "`service` and / or `product`"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rule page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffShareRulePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffShareRule
+      summary: Add a staff share rule
+      description: |
+        `tenant.earnings.manage`, every branch. The default rate of an item
+        type (`service`, `product`: the product commission is kept apart)
+        or, with `service_uuid`, the rate of one service. A percentage of the
+        line's net amount or a fixed amount per unit, from `valid_from`
+        (default today). A new rate is a new rule with a later
+        `valid_from`; shares calculated before keep their values. `409
+        rule_taken` for the same staff member, item and day.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffShareRuleInput"
+      responses:
+        "201":
+          description: The rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffShareRule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/staff-shares/rules/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffShareRule
+      summary: A staff share rule
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/StaffShareRuleUUID"
+      responses:
+        "200":
+          description: The rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffShareRule"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantStaffShareRule
+      summary: Change a staff share rule
+      description: |
+        `tenant.earnings.manage`: basis, rate, fixed amount, start day or
+        note (the staff member, item type and service stay). Shares
+        calculated before keep their values.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/StaffShareRuleUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffShareRuleInput"
+      responses:
+        "200":
+          description: The rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffShareRule"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantStaffShareRule
+      summary: Remove a staff share rule
+      description: "`tenant.earnings.manage`. Shares calculated with the rule keep their values."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/StaffShareRuleUUID"
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff-shares/lines/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffShareLinesMeta
+      summary: Staff share list metadata
+      description: Table contract of `GET /v1/tenant/staff-shares/lines`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff-shares/lines:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffShareLines
+      summary: Staff shares
+      description: |
+        The share of every sale line with a staff member (and the reversal
+        of the share of a reversed line), with the rule, rate and base of
+        the moment, inside the caller's branch scope; with
+        `tenant.earnings.own` only the caller's own. `status`: `pending`
+        (the visit is not paid in full yet) or `payable`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `share_date`, `share_amount`, `base_amount`, `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - name: branch
+          in: query
+          schema: { type: string }
+        - name: staff
+          in: query
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "`share` and / or `reversal`"
+          schema: { type: string }
+        - name: item_type
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, payable] }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Share page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffShareLinePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff-shares/payouts/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffSharePayoutsMeta
+      summary: Share payout list metadata
+      description: Table contract of `GET /v1/tenant/staff-shares/payouts`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/staff-shares/payouts:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffSharePayouts
+      summary: Share payouts
+      description: Payouts and their reversals from the accounts inside the caller's branch scope; with `tenant.earnings.own` the caller's own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `payout_date`, `amount`, `created_at`; prefix `-` for descending."
+          schema: { type: string }
+        - name: branch
+          in: query
+          schema: { type: string }
+        - name: staff
+          in: query
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "`payout` and / or `reversal`"
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Payout page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffSharePayoutPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffSharePayout
+      summary: Pay a staff member's share
+      description: |
+        `tenant.earnings.pay`. A `staff_payment` movement out of the cash or
+        bank account and the payout, in one transaction; not an expense.
+        The amount may not exceed what is payable now (`409
+        payout_too_large`). A request with an `idempotency_key` used before
+        returns the first payout (`409 reused` with another amount or staff
+        member). The cash book rules apply (closed day, till floor).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffSharePayoutInput"
+      responses:
+        "201":
+          description: The payout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffSharePayout"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/staff-shares/payouts/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStaffSharePayout
+      summary: A share payout
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/StaffSharePayoutUUID"
+      responses:
+        "200":
+          description: The payout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffSharePayout"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/staff-shares/payouts/{uuid}/reverse:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffSharePayoutReverse
+      summary: Reverse a share payout
+      description: "`tenant.earnings.pay` and a reason. Reverses the cash movement (dated today) and writes a reversal payout; the share is payable again."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/StaffSharePayoutUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesReasonRequest"
+      responses:
+        "201":
+          description: The reversal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStaffSharePayout"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/resources/meta:
     get:
       tags: [Tenant]
@@ -11620,6 +12052,22 @@ components:
       in: path
       required: true
       description: Sale line UUID.
+      schema:
+        type: string
+        format: uuid
+    StaffShareRuleUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Staff share rule UUID.
+      schema:
+        type: string
+        format: uuid
+    StaffSharePayoutUUID:
+      name: uuid
+      in: path
+      required: true
+      description: Staff share payout UUID.
       schema:
         type: string
         format: uuid
@@ -14257,6 +14705,279 @@ components:
         totals:
           type: array
           items: { $ref: "#/components/schemas/LedgerTotals" }
+
+    StaffShareRule:
+      type: object
+      description: An agreed rate of a staff member (the default of an item type, or the rate of one service) from `valid_from` on.
+      required: [uuid, staff, item_type, service, basis, rate, fixed_amount, valid_from, note, share_count, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        staff: { $ref: "#/components/schemas/SalesRef" }
+        item_type: { type: string, enum: [service, product] }
+        service:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        basis: { type: string, enum: [percent, fixed] }
+        rate: { type: [string, "null"], example: "40.00", description: "Percentage (basis percent)" }
+        fixed_amount: { type: [string, "null"], example: "50.00", description: "Amount per unit (basis fixed)" }
+        valid_from: { type: string, format: date }
+        note: { type: string }
+        share_count: { type: integer, format: int64, description: "Shares calculated with the rule" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    StaffShareRuleInput:
+      type: object
+      description: Create (staff_uuid, item_type, basis and its value required) or patch (basis, rate, fixed_amount, valid_from, note).
+      properties:
+        staff_uuid: { type: string, format: uuid }
+        item_type: { type: string, enum: [service, product] }
+        service_uuid: { type: string, format: uuid }
+        basis: { type: string, enum: [percent, fixed] }
+        rate: { type: string, example: "40" }
+        fixed_amount: { type: string, example: "50.00" }
+        valid_from: { type: string, format: date }
+        note: { type: string, maxLength: 500 }
+
+    StaffShareRulePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareRule" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    StaffShareLine:
+      type: object
+      description: The share of one sale line (`share`) or the exact negative of one (`reversal`), with the values applied at the time. Append-only.
+      required: [uuid, kind, item_type, status, rule_scope, rule_uuid, basis, rate, fixed_amount, base_amount, share_amount, currency, share_date, branch, staff, sale_line_uuid, description, quantity, reservation, customer, reverses_uuid, reversed_by_uuid, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [share, reversal] }
+        item_type: { type: string, enum: [service, product] }
+        status: { type: string, enum: [pending, payable] }
+        rule_scope: { type: string, enum: [default, service] }
+        rule_uuid: { type: [string, "null"], format: uuid }
+        basis: { type: string, enum: [percent, fixed] }
+        rate: { type: [string, "null"] }
+        fixed_amount: { type: [string, "null"] }
+        base_amount: { type: string, example: "1000.00", description: "The line's net amount" }
+        share_amount: { type: string, example: "400.00" }
+        currency: { type: string }
+        share_date: { type: string, format: date }
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        staff: { $ref: "#/components/schemas/SalesRef" }
+        sale_line_uuid: { type: string, format: uuid }
+        description: { type: string }
+        quantity: { type: integer }
+        reservation:
+          oneOf:
+            - $ref: "#/components/schemas/SalesReservationRef"
+            - type: "null"
+        customer:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        reverses_uuid: { type: [string, "null"], format: uuid }
+        reversed_by_uuid: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+
+    StaffShareLinePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareLine" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    StaffShareBalance:
+      type: object
+      description: "Over every branch and day: earned, payable (shares of collected sales), paid, remaining = earned - paid, payable_now = payable - paid."
+      required: [earned, payable, paid, remaining, payable_now]
+      properties:
+        earned: { type: string }
+        payable: { type: string }
+        paid: { type: string }
+        remaining: { type: string }
+        payable_now: { type: string }
+
+    StaffShareSummaryRow:
+      type: object
+      required: [staff, currency, sales, share, pending, payable, business_share, sale_count, period_paid, balance]
+      properties:
+        staff: { $ref: "#/components/schemas/SalesRef" }
+        currency: { type: string }
+        sales: { type: string, example: "1400.00" }
+        share: { type: string, example: "440.00" }
+        pending: { type: string }
+        payable: { type: string }
+        business_share: { type: string, example: "960.00" }
+        sale_count: { type: integer, format: int64 }
+        period_paid: { type: string }
+        balance: { $ref: "#/components/schemas/StaffShareBalance" }
+
+    StaffShareBranchRow:
+      type: object
+      required: [branch, currency, revenue, share, business_share]
+      properties:
+        branch: { $ref: "#/components/schemas/SalesRef" }
+        currency: { type: string }
+        revenue: { type: string }
+        share: { type: string }
+        business_share: { type: string }
+
+    StaffShareTotals:
+      type: object
+      required: [currency, revenue, share, business_share, pending, period_paid]
+      properties:
+        currency: { type: string }
+        revenue: { type: string }
+        share: { type: string }
+        business_share: { type: string }
+        pending: { type: string }
+        period_paid: { type: string }
+
+    StaffSharesSummary:
+      type: object
+      required: [date_from, date_to, staff, branches, totals]
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        staff:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareSummaryRow" }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareBranchRow" }
+        totals:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareTotals" }
+
+    MyStaffShares:
+      type: object
+      required: [staff, today, date_from, date_to, daily, period]
+      properties:
+        staff: { $ref: "#/components/schemas/SalesRef" }
+        today: { type: string, format: date }
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        daily:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareSummaryRow" }
+        period:
+          type: array
+          items: { $ref: "#/components/schemas/StaffShareSummaryRow" }
+
+    StaffSharePayout:
+      type: object
+      description: Money paid to a staff member (`payout`) or the reversal of one (`reversal`), with its cash movement.
+      required: [uuid, kind, staff, amount, currency, payout_date, note, cash_account, cash_movement_uuid, branch, reverses_uuid, reversed_by_uuid, created_by, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [payout, reversal] }
+        staff: { $ref: "#/components/schemas/SalesRef" }
+        amount: { type: string, example: "300.00" }
+        currency: { type: string }
+        payout_date: { type: string, format: date }
+        note: { type: string }
+        cash_account: { $ref: "#/components/schemas/SalesRef" }
+        cash_movement_uuid: { type: string, format: uuid }
+        branch:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        reverses_uuid: { type: [string, "null"], format: uuid }
+        reversed_by_uuid: { type: [string, "null"], format: uuid }
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/CashUserRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    StaffSharePayoutInput:
+      type: object
+      required: [staff_uuid, cash_account_uuid, amount]
+      properties:
+        staff_uuid: { type: string, format: uuid }
+        cash_account_uuid: { type: string, format: uuid }
+        amount: { type: string, example: "300.00" }
+        date: { type: string, format: date, description: "Default today; not in the future" }
+        note: { type: string, maxLength: 500 }
+        idempotency_key: { type: string, maxLength: 100 }
+
+    StaffSharePayoutPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffSharePayout" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopeStaffShareRule:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffShareRule" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffShareRulePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffShareRulePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffShareLinePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffShareLinePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffSharesSummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffSharesSummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeMyStaffShares:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/MyStaffShares" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffSharePayout:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffSharePayout" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeStaffSharePayoutPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/StaffSharePayoutPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeSaleLine:
       type: object

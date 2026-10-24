@@ -32,14 +32,14 @@ Both hooks run inside the transaction of the event, so a completed visit without
 
 All `…Tx` calls take the caller's `*db.Queries`, so they commit with the caller's own record.
 
-| Call                                               | For                                                                                                    |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `RecordCollectionTx(ctx, q, org, CollectionInput)` | payments (TEC-912): a collection credit + a cash movement into the account; idempotency key replays    |
-| `RecordRefundTx(ctx, q, org, RefundInput)`         | refunds (TEC-913): a refund debit against a collection + a cash movement out of the account            |
-| `ReverseEntryTx(ctx, q, org, uuid, reason, user)`  | undo a collection or refund (and its cash movement); refused for sale entries and refunded collections |
-| `ReverseLineTx(ctx, q, org, uuid, reason, user)`   | undo a sale line and its ledger debit (returns, TEC-913)                                               |
-| `LiveLineOfStockSale(ctx, q, org, movement)`       | the live line of a stock sale                                                                          |
-| `ListLines` with a staff filter                    | staff shares (TEC-917) read net amounts per staff member and day                                       |
+| Call                                               | For                                                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `RecordCollectionTx(ctx, q, org, CollectionInput)` | payments (TEC-912): a collection credit + a cash movement into the account; idempotency key replays                          |
+| `RecordRefundTx(ctx, q, org, RefundInput)`         | refunds (TEC-913): a refund debit against a collection + a cash movement out of the account                                  |
+| `ReverseEntryTx(ctx, q, org, uuid, reason, user)`  | undo a collection or refund (and its cash movement); refused for sale entries and refunded collections                       |
+| `ReverseLineTx(ctx, q, org, uuid, reason, user)`   | undo a sale line and its ledger debit (returns, TEC-913)                                                                     |
+| `LiveLineOfStockSale(ctx, q, org, movement)`       | the live line of a stock sale                                                                                                |
+| `SetLineHook(hook)`                                | staff shares (TEC-917): called in the transaction of every new sale line and reversal ([staff-shares.md](./staff-shares.md)) |
 
 Errors are sentinel values in `usecase` (`ErrAlreadyReversed`, `ErrHasRefunds`, `ErrRefundTooLarge`, `ErrCurrencyMismatch`, `ErrIdempotencyReused`, …) and `ValidationError`.
 

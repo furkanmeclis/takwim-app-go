@@ -5929,6 +5929,244 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/staff-shares/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My shares
+         * @description The signed-in member's own shares (`tenant.earnings.read` or
+         *     `tenant.earnings.own`, `staff_shares` module): today and the period
+         *     (default this month), with the balance (earned, payable, paid,
+         *     remaining) over every branch. `404` when the member has no staff
+         *     record.
+         */
+        get: operations["getTenantMyStaffShares"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff shares per staff member and branch
+         * @description Per staff member and currency for `date_from`–`date_to` (default
+         *     this month, at most 366 days) inside the caller's branch scope:
+         *     sales (net, after discounts), share, pending (waiting for the
+         *     visit's collection), payable, business share (sales - share, before
+         *     costs and expenses), paid in the period; and each person's balance
+         *     over every branch and day. Per branch: revenue, shares and business
+         *     share, with totals. A member with `tenant.earnings.own` only gets
+         *     its own row and no branch figures.
+         */
+        get: operations["getTenantStaffSharesSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff share rules
+         * @description The agreed rates (`tenant.earnings.read`; with `tenant.earnings.own` only the caller's own).
+         */
+        get: operations["getTenantStaffShareRules"];
+        put?: never;
+        /**
+         * Add a staff share rule
+         * @description `tenant.earnings.manage`, every branch. The default rate of an item
+         *     type (`service`, `product`: the product commission is kept apart)
+         *     or, with `service_uuid`, the rate of one service. A percentage of the
+         *     line's net amount or a fixed amount per unit, from `valid_from`
+         *     (default today). A new rate is a new rule with a later
+         *     `valid_from`; shares calculated before keep their values. `409
+         *     rule_taken` for the same staff member, item and day.
+         */
+        post: operations["postTenantStaffShareRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/rules/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A staff share rule */
+        get: operations["getTenantStaffShareRule"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a staff share rule
+         * @description `tenant.earnings.manage`. Shares calculated with the rule keep their values.
+         */
+        delete: operations["deleteTenantStaffShareRule"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a staff share rule
+         * @description `tenant.earnings.manage`: basis, rate, fixed amount, start day or
+         *     note (the staff member, item type and service stay). Shares
+         *     calculated before keep their values.
+         */
+        patch: operations["patchTenantStaffShareRule"];
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/lines/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff share list metadata
+         * @description Table contract of `GET /v1/tenant/staff-shares/lines`.
+         */
+        get: operations["getTenantStaffShareLinesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff shares
+         * @description The share of every sale line with a staff member (and the reversal
+         *     of the share of a reversed line), with the rule, rate and base of
+         *     the moment, inside the caller's branch scope; with
+         *     `tenant.earnings.own` only the caller's own. `status`: `pending`
+         *     (the visit is not paid in full yet) or `payable`.
+         */
+        get: operations["getTenantStaffShareLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/payouts/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Share payout list metadata
+         * @description Table contract of `GET /v1/tenant/staff-shares/payouts`.
+         */
+        get: operations["getTenantStaffSharePayoutsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/payouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Share payouts
+         * @description Payouts and their reversals from the accounts inside the caller's branch scope; with `tenant.earnings.own` the caller's own.
+         */
+        get: operations["getTenantStaffSharePayouts"];
+        put?: never;
+        /**
+         * Pay a staff member's share
+         * @description `tenant.earnings.pay`. A `staff_payment` movement out of the cash or
+         *     bank account and the payout, in one transaction; not an expense.
+         *     The amount may not exceed what is payable now (`409
+         *     payout_too_large`). A request with an `idempotency_key` used before
+         *     returns the first payout (`409 reused` with another amount or staff
+         *     member). The cash book rules apply (closed day, till floor).
+         */
+        post: operations["postTenantStaffSharePayout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/payouts/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A share payout */
+        get: operations["getTenantStaffSharePayout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/payouts/{uuid}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a share payout
+         * @description `tenant.earnings.pay` and a reason. Reverses the cash movement (dated today) and writes a reversal payout; the share is payable again.
+         */
+        post: operations["postTenantStaffSharePayoutReverse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/resources/meta": {
         parameters: {
             query?: never;
@@ -9392,6 +9630,262 @@ export interface components {
             /** Format: uuid */
             customer_uuid: string;
             totals: components["schemas"]["LedgerTotals"][];
+        };
+        /** @description An agreed rate of a staff member (the default of an item type, or the rate of one service) from `valid_from` on. */
+        StaffShareRule: {
+            /** Format: uuid */
+            uuid: string;
+            staff: components["schemas"]["SalesRef"];
+            /** @enum {string} */
+            item_type: "service" | "product";
+            service: components["schemas"]["SalesRef"] | null;
+            /** @enum {string} */
+            basis: "percent" | "fixed";
+            /**
+             * @description Percentage (basis percent)
+             * @example 40.00
+             */
+            rate: string | null;
+            /**
+             * @description Amount per unit (basis fixed)
+             * @example 50.00
+             */
+            fixed_amount: string | null;
+            /** Format: date */
+            valid_from: string;
+            note: string;
+            /**
+             * Format: int64
+             * @description Shares calculated with the rule
+             */
+            share_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Create (staff_uuid, item_type, basis and its value required) or patch (basis, rate, fixed_amount, valid_from, note). */
+        StaffShareRuleInput: {
+            /** Format: uuid */
+            staff_uuid?: string;
+            /** @enum {string} */
+            item_type?: "service" | "product";
+            /** Format: uuid */
+            service_uuid?: string;
+            /** @enum {string} */
+            basis?: "percent" | "fixed";
+            /** @example 40 */
+            rate?: string;
+            /** @example 50.00 */
+            fixed_amount?: string;
+            /** Format: date */
+            valid_from?: string;
+            note?: string;
+        };
+        StaffShareRulePage: {
+            items: components["schemas"]["StaffShareRule"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        /** @description The share of one sale line (`share`) or the exact negative of one (`reversal`), with the values applied at the time. Append-only. */
+        StaffShareLine: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "share" | "reversal";
+            /** @enum {string} */
+            item_type: "service" | "product";
+            /** @enum {string} */
+            status: "pending" | "payable";
+            /** @enum {string} */
+            rule_scope: "default" | "service";
+            /** Format: uuid */
+            rule_uuid: string | null;
+            /** @enum {string} */
+            basis: "percent" | "fixed";
+            rate: string | null;
+            fixed_amount: string | null;
+            /**
+             * @description The line's net amount
+             * @example 1000.00
+             */
+            base_amount: string;
+            /** @example 400.00 */
+            share_amount: string;
+            currency: string;
+            /** Format: date */
+            share_date: string;
+            branch: components["schemas"]["SalesRef"];
+            staff: components["schemas"]["SalesRef"];
+            /** Format: uuid */
+            sale_line_uuid: string;
+            description: string;
+            quantity: number;
+            reservation: components["schemas"]["SalesReservationRef"] | null;
+            customer: components["schemas"]["SalesRef"] | null;
+            /** Format: uuid */
+            reverses_uuid: string | null;
+            /** Format: uuid */
+            reversed_by_uuid: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        StaffShareLinePage: {
+            items: components["schemas"]["StaffShareLine"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        /** @description Over every branch and day: earned, payable (shares of collected sales), paid, remaining = earned - paid, payable_now = payable - paid. */
+        StaffShareBalance: {
+            earned: string;
+            payable: string;
+            paid: string;
+            remaining: string;
+            payable_now: string;
+        };
+        StaffShareSummaryRow: {
+            staff: components["schemas"]["SalesRef"];
+            currency: string;
+            /** @example 1400.00 */
+            sales: string;
+            /** @example 440.00 */
+            share: string;
+            pending: string;
+            payable: string;
+            /** @example 960.00 */
+            business_share: string;
+            /** Format: int64 */
+            sale_count: number;
+            period_paid: string;
+            balance: components["schemas"]["StaffShareBalance"];
+        };
+        StaffShareBranchRow: {
+            branch: components["schemas"]["SalesRef"];
+            currency: string;
+            revenue: string;
+            share: string;
+            business_share: string;
+        };
+        StaffShareTotals: {
+            currency: string;
+            revenue: string;
+            share: string;
+            business_share: string;
+            pending: string;
+            period_paid: string;
+        };
+        StaffSharesSummary: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            staff: components["schemas"]["StaffShareSummaryRow"][];
+            branches: components["schemas"]["StaffShareBranchRow"][];
+            totals: components["schemas"]["StaffShareTotals"][];
+        };
+        MyStaffShares: {
+            staff: components["schemas"]["SalesRef"];
+            /** Format: date */
+            today: string;
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            daily: components["schemas"]["StaffShareSummaryRow"][];
+            period: components["schemas"]["StaffShareSummaryRow"][];
+        };
+        /** @description Money paid to a staff member (`payout`) or the reversal of one (`reversal`), with its cash movement. */
+        StaffSharePayout: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "payout" | "reversal";
+            staff: components["schemas"]["SalesRef"];
+            /** @example 300.00 */
+            amount: string;
+            currency: string;
+            /** Format: date */
+            payout_date: string;
+            note: string;
+            cash_account: components["schemas"]["SalesRef"];
+            /** Format: uuid */
+            cash_movement_uuid: string;
+            branch: components["schemas"]["SalesRef"] | null;
+            /** Format: uuid */
+            reverses_uuid: string | null;
+            /** Format: uuid */
+            reversed_by_uuid: string | null;
+            created_by: components["schemas"]["CashUserRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        StaffSharePayoutInput: {
+            /** Format: uuid */
+            staff_uuid: string;
+            /** Format: uuid */
+            cash_account_uuid: string;
+            /** @example 300.00 */
+            amount: string;
+            /**
+             * Format: date
+             * @description Default today; not in the future
+             */
+            date?: string;
+            note?: string;
+            idempotency_key?: string;
+        };
+        StaffSharePayoutPage: {
+            items: components["schemas"]["StaffSharePayout"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeStaffShareRule: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffShareRule"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffShareRulePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffShareRulePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffShareLinePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffShareLinePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffSharesSummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffSharesSummary"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeMyStaffShares: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["MyStaffShares"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffSharePayout: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffSharePayout"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeStaffSharePayoutPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["StaffSharePayoutPage"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeSaleLine: {
             /** @enum {boolean} */
@@ -13134,6 +13628,10 @@ export interface components {
         CashAccountUUID: string;
         /** @description Sale line UUID. */
         SaleLineUUID: string;
+        /** @description Staff share rule UUID. */
+        StaffShareRuleUUID: string;
+        /** @description Staff share payout UUID. */
+        StaffSharePayoutUUID: string;
         /** @description Ledger entry UUID. */
         LedgerEntryUUID: string;
         /** @description Cash movement UUID. */
@@ -24008,6 +24506,516 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantMyStaffShares: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Own shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeMyStaffShares"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantStaffSharesSummary: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+                /** @description Branch uuids; comma-separate or repeat */
+                branch?: string;
+                /** @description Staff uuids; comma-separate or repeat */
+                staff?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffSharesSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffShareRules: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description Staff uuids; comma-separate or repeat */
+                staff?: string;
+                /** @description `service` and / or `product` */
+                item_type?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffShareRulePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantStaffShareRule: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffShareRuleInput"];
+            };
+        };
+        responses: {
+            /** @description The rule */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffShareRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantStaffShareRule: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Staff share rule UUID. */
+                uuid: components["parameters"]["StaffShareRuleUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffShareRule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantStaffShareRule: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Staff share rule UUID. */
+                uuid: components["parameters"]["StaffShareRuleUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchTenantStaffShareRule: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Staff share rule UUID. */
+                uuid: components["parameters"]["StaffShareRuleUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffShareRuleInput"];
+            };
+        };
+        responses: {
+            /** @description The rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffShareRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantStaffShareLinesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffShareLines: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `share_date`, `share_amount`, `base_amount`, `created_at`; prefix `-` for descending. */
+                sort?: string;
+                branch?: string;
+                staff?: string;
+                /** @description `share` and / or `reversal` */
+                kind?: string;
+                item_type?: string;
+                status?: "pending" | "payable";
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Share page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffShareLinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffSharePayoutsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantStaffSharePayouts: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                /** @description One of `payout_date`, `amount`, `created_at`; prefix `-` for descending. */
+                sort?: string;
+                branch?: string;
+                staff?: string;
+                /** @description `payout` and / or `reversal` */
+                kind?: string;
+                date_from?: string;
+                date_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+                /**
+                 * @description Branch picked in the panel header (branch uuid). Narrows branch-bound
+                 *     lists, counts, facets, search and the overview to that branch; access
+                 *     checks on single records still use the member's branch scope. Absent
+                 *     = every branch the caller may access. A branch that is unknown or
+                 *     outside the caller's scope answers `403 BRANCH_NOT_ALLOWED`. The BFF
+                 *     forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Branch"?: components["parameters"]["XBranch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payout page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffSharePayoutPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantStaffSharePayout: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffSharePayoutInput"];
+            };
+        };
+        responses: {
+            /** @description The payout */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffSharePayout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantStaffSharePayout: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Staff share payout UUID. */
+                uuid: components["parameters"]["StaffSharePayoutUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The payout */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffSharePayout"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantStaffSharePayoutReverse: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Staff share payout UUID. */
+                uuid: components["parameters"]["StaffSharePayoutUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalesReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The reversal */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStaffSharePayout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getTenantResourcesMeta: {

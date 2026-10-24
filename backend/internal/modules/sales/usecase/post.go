@@ -134,8 +134,11 @@ func (s *Service) RecordProductSaleTx(ctx context.Context, q *db.Queries, orgID 
 }
 
 // postSaleEntry posts the ledger debit of a sale line (nothing for a line
-// of zero).
+// of zero) and runs the line hook.
 func (s *Service) postSaleEntry(ctx context.Context, q *db.Queries, orgID, lineID int64) error {
+	if err := s.afterLine(ctx, q, orgID, lineID); err != nil {
+		return err
+	}
 	line, err := q.GetSaleLineRowByID(ctx, db.GetSaleLineRowByIDParams{OrganizationID: orgID, ID: lineID})
 	if err != nil {
 		return err
@@ -177,6 +180,9 @@ func (s *Service) reverseLineTx(ctx context.Context, q *db.Queries, orgID int64,
 	})
 	if err != nil {
 		return rev, mapRepoErr(err)
+	}
+	if err := s.afterLine(ctx, q, orgID, rev.ID); err != nil {
+		return rev, err
 	}
 	entry, err := q.GetLedgerEntryBySaleLine(ctx, db.GetLedgerEntryBySaleLineParams{OrganizationID: orgID, SaleLineID: int8Of(line.ID)})
 	if err != nil {

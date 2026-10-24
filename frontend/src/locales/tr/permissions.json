@@ -117,6 +117,8 @@
   "labels.tenant.finance.write": "Kasa ve gider kaydı gir",
   "labels.tenant.earnings.read": "Çalışan kazançlarını görüntüle",
   "labels.tenant.earnings.own": "Yalnız kendi kazancını görüntüle",
+  "labels.tenant.earnings.manage": "Pay oranlarını yönet",
+  "labels.tenant.earnings.pay": "Pay ödemesi yap ve iptal et",
   "groups.tenant_integrations": "Entegrasyonlar",
   "groups.tenant_reservations": "Rezervasyonlar",
   "groups.tenant_schedules": "Program ve kaynaklar",

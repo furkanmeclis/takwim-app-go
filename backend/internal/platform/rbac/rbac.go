@@ -134,6 +134,9 @@ const (
 	PermTenantFinanceWrite        = "tenant.finance.write"
 	PermTenantEarningsRead        = "tenant.earnings.read"
 	PermTenantEarningsOwn         = "tenant.earnings.own"
+	// Staff shares (TEC-917): managing the rates and paying shares out.
+	PermTenantEarningsManage = "tenant.earnings.manage"
+	PermTenantEarningsPay    = "tenant.earnings.pay"
 	// Cash and bank accounts (TEC-914): read, post movements / transfers,
 	// manage accounts, close a till's day, reopen a closed day.
 	PermTenantCashRead         = "tenant.cash.read"

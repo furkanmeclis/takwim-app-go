@@ -107,17 +107,36 @@ func IsValidation(err error) bool {
 	return errors.As(err, &ve)
 }
 
+// LineHook runs inside the transaction that writes a sale line (a sale,
+// a reversal or a replacement), with the line's id: staff shares
+// (TEC-917) write the share of the line with it.
+type LineHook func(ctx context.Context, q *db.Queries, orgID, lineID int64) error
+
 // Service implements the sales and ledger use cases.
 type Service struct {
-	repo *repository.Postgres
-	cash *cashusecase.Service
-	now  func() time.Time
+	repo     *repository.Postgres
+	cash     *cashusecase.Service
+	now      func() time.Time
+	lineHook LineHook
 }
 
 // New builds the service. cash posts the money of collections and refunds
 // into the cash book.
 func New(repo *repository.Postgres, cash *cashusecase.Service) *Service {
 	return &Service{repo: repo, cash: cash, now: time.Now}
+}
+
+// SetLineHook sets the hook that runs for every sale line written.
+func (s *Service) SetLineHook(h LineHook) {
+	s.lineHook = h
+}
+
+// afterLine runs the line hook (nothing without one).
+func (s *Service) afterLine(ctx context.Context, q *db.Queries, orgID, lineID int64) error {
+	if s.lineHook == nil {
+		return nil
+	}
+	return s.lineHook(ctx, q, orgID, lineID)
 }
 
 // SetClock replaces the clock (tests).

@@ -59,6 +59,8 @@ import (
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
+	staffsharesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
+	staffsharesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/observability"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
@@ -192,6 +194,8 @@ func main() {
 	salesSvc := salesusecase.New(salesrepository.NewPostgres(pool, queries), cashSvc)
 	reservationsSvc.SetCompletionHook(salesSvc.RecordReservationTx)
 	productsSvc.SetSaleRecorder(salesmodule.ProductSaleRecorder(salesSvc))
+	// ... and every sale line with a staff member its share (TEC-917).
+	salesSvc.SetLineHook(staffsharesusecase.New(staffsharesrepository.NewPostgres(pool, queries), cashSvc).RecordLineTx)
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)
