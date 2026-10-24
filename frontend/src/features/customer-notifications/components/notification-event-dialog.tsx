@@ -61,8 +61,19 @@ type EventFormValues = {
   templates: TemplateValues[];
 };
 
+/**
+ * What the text editor needs of an event: its code (for the preview), its
+ * variables and its texts. The confirmation request (TEC-979) passes its
+ * own texts.
+ */
+export type TemplateSource = {
+  code: string;
+  variables: string[];
+  templates: CustomerNotificationTemplate[];
+};
+
 function templateFor(
-  event: CustomerNotificationEvent,
+  event: TemplateSource,
   channel: NotificationChannelName,
 ): CustomerNotificationTemplate {
   return (
@@ -411,31 +422,41 @@ function ReminderOffsetsField({
   );
 }
 
-/** One text per channel; the tab shows a dot when its text has an error. */
-function TemplatesField({
+/**
+ * One text per channel; the tab shows a dot when its text has an error.
+ * Binds the form's `templates` field, one entry per channel in the order
+ * of `channels`; the confirmation request texts use it too.
+ */
+export function TemplatesField({
   event,
   disabled,
+  channels = NOTIFICATION_CHANNELS,
+  hint,
 }: {
-  event: CustomerNotificationEvent;
+  event: TemplateSource;
   disabled: boolean;
+  /** Channels with a text (default: the message channels). */
+  channels?: readonly NotificationChannelName[];
+  /** Replaces the default hint under the title. */
+  hint?: string;
 }) {
   const { t } = useLocale();
   const {
     formState: { errors },
   } = useFormContext<EventFormValues>();
-  const [tab, setTab] = useState<string>(NOTIFICATION_CHANNELS[0]);
+  const [tab, setTab] = useState<string>(channels[0]);
 
   return (
     <div className="space-y-3">
       <div>
         <Label>{t("customer_notifications.editor.texts")}</Label>
         <p className="text-muted-foreground text-xs">
-          {t("customer_notifications.editor.texts_hint")}
+          {hint ?? t("customer_notifications.editor.texts_hint")}
         </p>
       </div>
       <Tabs value={tab} onValueChange={setTab} className="space-y-3">
         <TabsList>
-          {NOTIFICATION_CHANNELS.map((channel, index) => (
+          {channels.map((channel, index) => (
             <TabsTrigger key={channel} value={channel}>
               {channelLabel(t, channel)}
               {errors.templates?.[index] ? (
@@ -447,7 +468,7 @@ function TemplatesField({
             </TabsTrigger>
           ))}
         </TabsList>
-        {NOTIFICATION_CHANNELS.map((channel, index) => (
+        {channels.map((channel, index) => (
           <TabsContent
             key={channel}
             value={channel}
@@ -474,7 +495,7 @@ function TemplateEditor({
   channel,
   disabled,
 }: {
-  event: CustomerNotificationEvent;
+  event: TemplateSource;
   index: number;
   channel: NotificationChannelName;
   disabled: boolean;

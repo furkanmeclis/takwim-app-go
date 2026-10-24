@@ -121,5 +121,6 @@
   "errors.no_phone_number": "The customer has no phone number.",
   "errors.no_email_address": "The customer has no e-mail address.",
   "events.confirmation_request": "Booking confirmation request",
-  "channels.voice_call": "Automatic call"
+  "channels.voice_call": "Automatic call",
+  "variables.deadline": "Answer deadline"
 }

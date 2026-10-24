@@ -9,6 +9,13 @@ type Translate = (
   params?: Record<string, string | number>,
 ) => string;
 
+/**
+ * Channels whose request text the business edits (TEC-979), in display
+ * order. WhatsApp sends the approved template; the call reads the
+ * standard text.
+ */
+export const REQUEST_TEXT_CHANNELS = ["sms", "email"] as const;
+
 /** Minutes before the visit offered for the first request. */
 export const FIRST_REQUEST_PRESETS = [
   60, 120, 180, 360, 720, 1440, 2880, 4320, 10080,

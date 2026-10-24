@@ -24,6 +24,7 @@ type Handler struct {
 	engine   *usecase.Engine
 	activity *activity.Recorder
 	events   resourceevents.Publisher
+	texts    TextStore
 }
 
 // New builds the handler. rec may be nil.

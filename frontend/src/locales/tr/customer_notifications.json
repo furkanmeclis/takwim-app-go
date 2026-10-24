@@ -121,5 +121,6 @@
   "errors.no_phone_number": "Müşterinin telefon numarası yok.",
   "errors.no_email_address": "Müşterinin e-posta adresi yok.",
   "events.confirmation_request": "Randevu teyit isteği",
-  "channels.voice_call": "Otomatik arama"
+  "channels.voice_call": "Otomatik arama",
+  "variables.deadline": "Son yanıt saati"
 }

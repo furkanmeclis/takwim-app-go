@@ -87,7 +87,7 @@ func (e *Engine) Settings(ctx context.Context, orgID int64) (model.Settings, err
 	for _, ev := range catalog.All() {
 		def := defaultRule(ev)
 		rule := def
-		view := model.Event{Code: ev.Code, Reminder: ev.Reminder, Variables: append([]string(nil), catalog.Vars...)}
+		view := model.Event{Code: ev.Code, Reminder: ev.Reminder, Variables: catalog.VariablesOf(ev)}
 		if row, ok := byRule[ev.Code]; ok {
 			rule = Rule{Enabled: row.Enabled, Channels: row.Channels, Fallback: row.Fallback, Offsets: row.ReminderOffsets}
 			t := row.UpdatedAt.Time
@@ -113,12 +113,13 @@ func (e *Engine) Settings(ctx context.Context, orgID int64) (model.Settings, err
 
 var placeholderRE = regexp.MustCompile(`\{\{\s*([A-Za-z0-9_.]+)\s*\}\}`)
 
-// unknownVars lists the placeholders of text that are not variables.
-func unknownVars(texts ...string) []string {
+// unknownVars lists the placeholders of text that are not in allowed (the
+// event's variables).
+func unknownVars(allowed []string, texts ...string) []string {
 	out := []string{}
 	for _, t := range texts {
 		for _, m := range placeholderRE.FindAllStringSubmatch(t, -1) {
-			if !slices.Contains(catalog.Vars, m[1]) && !slices.Contains(out, m[1]) {
+			if !slices.Contains(allowed, m[1]) && !slices.Contains(out, m[1]) {
 				out = append(out, m[1])
 			}
 		}
@@ -176,43 +177,7 @@ func (e *Engine) Save(ctx context.Context, orgID, actorID int64, in model.SaveIn
 	} else if len(in.ReminderOffsets) > 0 {
 		ve.add("reminder_offsets", "not_allowed", "only reminders have offsets")
 	}
-	type tplWrite struct {
-		channel, subject, body string
-		reset                  bool
-	}
-	writes := []tplWrite{}
-	seen := map[string]bool{}
-	for i, t := range in.Templates {
-		f := "templates." + strconv.Itoa(i)
-		if !channel.IsMessage(t.Channel) {
-			ve.add(f+".channel", "invalid", "unknown channel")
-			continue
-		}
-		if seen[t.Channel] {
-			ve.add(f+".channel", "duplicate", "channel listed twice")
-			continue
-		}
-		seen[t.Channel] = true
-		subject, body := strings.TrimSpace(t.Subject), strings.TrimSpace(t.Body)
-		if t.Channel != channel.Email {
-			subject = ""
-		}
-		if utf8.RuneCountInString(subject) > catalog.MaxSubject {
-			ve.add(f+".subject", "too_long", "subject is at most 200 characters")
-		}
-		if utf8.RuneCountInString(body) > catalog.MaxBody {
-			ve.add(f+".body", "too_long", "text is at most 1000 characters")
-		}
-		if t.Channel == channel.Email && body != "" && subject == "" {
-			ve.add(f+".subject", "required", "subject is required")
-		}
-		if u := unknownVars(subject, body); len(u) > 0 {
-			ve.add(f+".body", "unknown_variable", "unknown variable: "+strings.Join(u, ", "))
-		}
-		d := catalog.DefaultTemplate(ev, t.Channel)
-		reset := body == "" || (body == strings.TrimSpace(d.Body) && subject == strings.TrimSpace(d.Subject))
-		writes = append(writes, tplWrite{channel: t.Channel, subject: subject, body: body, reset: reset})
-	}
+	writes := validateTemplates(ve, ev, in.Templates, channel.IsMessage)
 	if err := ve.orNil(); err != nil {
 		return model.Event{}, err
 	}
@@ -223,23 +188,7 @@ func (e *Engine) Save(ctx context.Context, orgID, actorID int64, in model.SaveIn
 		}); err != nil {
 			return err
 		}
-		for _, w := range writes {
-			if w.reset {
-				if err := q.DeleteCustomerNotificationTemplate(ctx, db.DeleteCustomerNotificationTemplateParams{
-					OrganizationID: orgID, EventCode: ev.Code, Channel: w.channel,
-				}); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := q.UpsertCustomerNotificationTemplate(ctx, db.UpsertCustomerNotificationTemplateParams{
-				OrganizationID: orgID, EventCode: ev.Code, Channel: w.channel, Subject: w.subject, Body: w.body,
-				UpdatedBy: actor(actorID),
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
+		return writeTemplates(ctx, q, orgID, actorID, ev.Code, writes)
 	})
 	if err != nil {
 		return model.Event{}, err
@@ -282,7 +231,8 @@ func (e *Engine) event(ctx context.Context, orgID int64, code string) (model.Eve
 // Preview renders a text with sample values (the business's name).
 func (e *Engine) Preview(ctx context.Context, orgID int64, in model.PreviewInput) (model.Preview, error) {
 	ve := &ValidationError{}
-	if _, ok := catalog.Get(in.Event); !ok {
+	ev, ok := catalog.Get(in.Event)
+	if !ok {
 		ve.add("event", "invalid", "unknown event")
 	}
 	if !channel.IsMessage(in.Channel) {
@@ -307,7 +257,7 @@ func (e *Engine) Preview(ctx context.Context, orgID int64, in model.PreviewInput
 	}
 	return model.Preview{
 		Subject: templates.Render(subject, vars), Body: templates.Render(in.Body, vars),
-		Unknown: unknownVars(subject, in.Body),
+		Unknown: unknownVars(catalog.VariablesOf(ev), subject, in.Body),
 	}, nil
 }
 
@@ -404,4 +354,93 @@ func IsValidation(err error) (*ValidationError, bool) {
 	var ve *ValidationError
 	ok := errors.As(err, &ve)
 	return ve, ok
+}
+
+// tplWrite is one checked text; reset deletes the business's text (empty,
+// or equal to the default).
+type tplWrite struct {
+	channel, subject, body string
+	reset                  bool
+}
+
+// validateTemplates checks the texts of an event on the channels allowed
+// takes: lengths, the e-mail subject, the event's variables and the ones
+// it requires.
+func validateTemplates(ve *ValidationError, ev catalog.Event, in []model.TemplateInput, allowed func(string) bool) []tplWrite {
+	vars := catalog.VariablesOf(ev)
+	writes := []tplWrite{}
+	seen := map[string]bool{}
+	for i, t := range in {
+		f := "templates." + strconv.Itoa(i)
+		if !allowed(t.Channel) {
+			ve.add(f+".channel", "invalid", "unknown channel")
+			continue
+		}
+		if seen[t.Channel] {
+			ve.add(f+".channel", "duplicate", "channel listed twice")
+			continue
+		}
+		seen[t.Channel] = true
+		subject, body := strings.TrimSpace(t.Subject), strings.TrimSpace(t.Body)
+		if t.Channel != channel.Email {
+			subject = ""
+		}
+		if utf8.RuneCountInString(subject) > catalog.MaxSubject {
+			ve.add(f+".subject", "too_long", "subject is at most 200 characters")
+		}
+		if utf8.RuneCountInString(body) > catalog.MaxBody {
+			ve.add(f+".body", "too_long", "text is at most 1000 characters")
+		}
+		if t.Channel == channel.Email && body != "" && subject == "" {
+			ve.add(f+".subject", "required", "subject is required")
+		}
+		if u := unknownVars(vars, subject, body); len(u) > 0 {
+			ve.add(f+".body", "unknown_variable", "unknown variable: "+strings.Join(u, ", "))
+		}
+		if body != "" {
+			if missing := missingVars(ev.Required, body); len(missing) > 0 {
+				ve.add(f+".body", "missing_variable", "the text must keep: "+strings.Join(missing, ", "))
+			}
+		}
+		d := catalog.DefaultTemplate(ev, t.Channel)
+		reset := body == "" || (body == strings.TrimSpace(d.Body) && subject == strings.TrimSpace(d.Subject))
+		writes = append(writes, tplWrite{channel: t.Channel, subject: subject, body: body, reset: reset})
+	}
+	return writes
+}
+
+// missingVars lists the required variables text does not use.
+func missingVars(required []string, text string) []string {
+	used := map[string]bool{}
+	for _, m := range placeholderRE.FindAllStringSubmatch(text, -1) {
+		used[m[1]] = true
+	}
+	out := []string{}
+	for _, v := range required {
+		if !used[v] {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// writeTemplates stores (or, for a reset, deletes) the checked texts.
+func writeTemplates(ctx context.Context, q *db.Queries, orgID, actorID int64, code string, writes []tplWrite) error {
+	for _, w := range writes {
+		if w.reset {
+			if err := q.DeleteCustomerNotificationTemplate(ctx, db.DeleteCustomerNotificationTemplateParams{
+				OrganizationID: orgID, EventCode: code, Channel: w.channel,
+			}); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := q.UpsertCustomerNotificationTemplate(ctx, db.UpsertCustomerNotificationTemplateParams{
+			OrganizationID: orgID, EventCode: code, Channel: w.channel, Subject: w.subject, Body: w.body,
+			UpdatedBy: actor(actorID),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

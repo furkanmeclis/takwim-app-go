@@ -59,6 +59,24 @@ type Event struct {
 	// Voice is what an automatic call reads out (TEC-923); empty = the
 	// event is never called.
 	Voice string
+	// Variables a text of the event may use; nil = Vars.
+	Variables []string
+	// Editable are the channels whose text the business edits for a
+	// managed event (TEC-979); the others keep the catalog text (a voice
+	// call) or the provider's approved template (WhatsApp).
+	Editable []string
+	// Required are the variables every business text of the event must
+	// keep (the confirmation request's visit link: without it the customer
+	// cannot answer an SMS or an e-mail).
+	Required []string
+}
+
+// VariablesOf returns the variables a text of the event may use.
+func VariablesOf(ev Event) []string {
+	if ev.Variables != nil {
+		return append([]string(nil), ev.Variables...)
+	}
+	return append([]string(nil), Vars...)
 }
 
 // Vars every reservation text may use ({{name}}).
@@ -136,6 +154,10 @@ var ConfirmationVars = append(append([]string(nil), Vars...), "deadline")
 var managed = []Event{
 	{
 		Code: ConfirmationRequest, Channels: []string{channel.SMS, channel.Email},
+		// The business edits the SMS and e-mail texts on the confirmation
+		// settings (TEC-979); WhatsApp sends the approved template and the
+		// call reads Voice. Every text keeps the visit link.
+		Variables: ConfirmationVars, Editable: []string{channel.SMS, channel.Email}, Required: []string{"link"},
 		Text: "{{business_name}}: {{starts_at}} randevunuza geleceğinizi lütfen {{deadline}} saatine kadar teyit edin (no {{reference}}). " +
 			"Teyit, iptal veya değişiklik: {{link}}",
 		Email: Template{
@@ -203,6 +225,6 @@ func SampleVars() map[string]string {
 	return map[string]string{
 		"customer_name": "Ayşe Yılmaz", "business_name": "Örnek Kuaför", "branch_name": "Merkez",
 		"reference": "1042", "starts_at": "24.10.2026 14:30", "date": "24.10.2026", "time": "14:30",
-		"services": "Saç kesimi, Fön", "link": "https://takwim.link/panel",
+		"services": "Saç kesimi, Fön", "link": "https://takwim.link/panel", "deadline": "24.10.2026 12:30",
 	}
 }

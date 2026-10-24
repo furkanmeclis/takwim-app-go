@@ -35,6 +35,10 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/confirmations/settings", h.GetSettings, read)
 	route("PUT /v1/tenant/confirmations/settings", h.PutSettings, read, write)
 	route("POST /v1/tenant/confirmations/settings/reset", h.Reset, read, write)
+	// The request's SMS and e-mail texts (TEC-979).
+	route("GET /v1/tenant/confirmations/texts", h.GetTexts, read)
+	route("PUT /v1/tenant/confirmations/texts", h.PutTexts, read, write)
+	route("POST /v1/tenant/confirmations/texts/reset", h.ResetTexts, read, write)
 
 	// The confirmation list and its follow-up alerts (TEC-924): the
 	// reservations' own permissions; members who see only their own

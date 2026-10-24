@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { ConfirmationRuleDialog } from "@/features/confirmations/components/confirmation-rule-dialog";
+import { ConfirmationTextsSection } from "@/features/confirmations/components/confirmation-texts-section";
 import {
   ON_NO_ANSWER_KEYS,
   callRetriesLabel,
@@ -337,6 +338,8 @@ function ConfirmationSettings() {
           }
         />
       </EntitySectionCard>
+
+      <ConfirmationTextsSection canWrite={canWrite} />
 
       <ConfirmationRuleDialog
         target={editing}

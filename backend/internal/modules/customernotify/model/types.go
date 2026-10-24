@@ -70,6 +70,28 @@ type SaveInput struct {
 	Templates       []TemplateInput `json:"templates"`
 }
 
+// ManagedTexts are the business's texts of a managed event (TEC-979, the
+// confirmation request): its rule lives in another module, only the texts
+// of the editable channels are the business's.
+type ManagedTexts struct {
+	Event     string   `json:"event"`
+	Variables []string `json:"variables"`
+	// Required variables every text must keep.
+	Required  []string   `json:"required"`
+	Templates []Template `json:"templates"`
+	// Voice is the text an automatic call reads out (the catalog's; not
+	// editable).
+	Voice     string     `json:"voice"`
+	Custom    bool       `json:"custom"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// ManagedTextsInput replaces a managed event's texts; a channel left out
+// keeps its text.
+type ManagedTextsInput struct {
+	Templates []TemplateInput `json:"templates"`
+}
+
 // ResetInput names the event to set back to the defaults.
 type ResetInput struct {
 	Event string `json:"event"`

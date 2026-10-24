@@ -9467,6 +9467,90 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/confirmations/texts:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConfirmationTexts
+      summary: The confirmation request texts
+      description: |
+        `tenant.settings.read`, the confirmation add-on (TEC-979). The
+        business's SMS and e-mail texts of the confirmation request with
+        their defaults, the variables (`deadline` included) and the ones
+        every text must keep (`link`, the visit link). WhatsApp sends the
+        approved template and the automatic call reads `voice` (the catalog
+        text); neither is editable. The rule (channels, timing) is the
+        confirmation settings'.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: The texts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationTexts"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantConfirmationTexts
+      summary: Save the confirmation request texts
+      description: |
+        `tenant.settings.write`. Channels `sms` and `email` only; a channel
+        left out keeps its text. An empty text, or one equal to the default,
+        goes back to the default. Subject 200, text 1000 characters; an
+        e-mail text needs a subject. Validation: `400 VALIDATION_ERROR` with
+        `unknown_variable` (a placeholder that is not a variable),
+        `missing_variable` (the text dropped `{{link}}`), `invalid` (another
+        channel).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmationTextsInput"
+      responses:
+        "200":
+          description: The texts after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationTexts"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/confirmations/texts/reset:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConfirmationTextsReset
+      summary: Set the confirmation request texts back to the defaults
+      description: "`tenant.settings.write`. Deletes the business's SMS and e-mail texts of the request."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: The default texts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationTexts"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/confirmations/meta:
     get:
       tags: [Tenant]
@@ -9762,7 +9846,7 @@ paths:
       tags: [Tenant]
       operationId: postTenantCustomerNotificationPreview
       summary: Render a notification text with sample values
-      description: "`tenant.settings.read`. Sample customer and visit, the business's own name; `unknown` lists placeholders that are not variables."
+      description: "`tenant.settings.read`. Sample customer and visit, the business's own name; `unknown` lists placeholders that are not variables of the event. `event` may be `confirmation.request` (its texts are saved under `/v1/tenant/confirmations/texts`; it also knows `deadline`)."
       security:
         - bearerAuth: []
       parameters:
@@ -18555,6 +18639,50 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/ConfirmationSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    ConfirmationTexts:
+      type: object
+      description: The business's texts of the confirmation request (TEC-979).
+      required: [event, variables, required, templates, voice, custom]
+      properties:
+        event: { type: string, enum: [confirmation.request] }
+        variables:
+          type: array
+          items: { type: string }
+        required:
+          type: array
+          description: Variables every text must keep.
+          items: { type: string }
+        templates:
+          type: array
+          description: The editable channels (`sms`, `email`), in display order.
+          items: { $ref: "#/components/schemas/CustomerNotificationTemplate" }
+        voice: { type: string, description: What the automatic call reads out (the catalog text; not editable). }
+        custom: { type: boolean }
+        updated_at: { type: string, format: date-time }
+
+    ConfirmationTextsInput:
+      type: object
+      required: [templates]
+      properties:
+        templates:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [channel, body]
+            properties:
+              channel: { type: string, enum: [sms, email] }
+              subject: { type: string, maxLength: 200, description: E-mail only }
+              body: { type: string, maxLength: 1000, description: Empty = the default text. }
+
+    EnvelopeConfirmationTexts:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConfirmationTexts" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     TenantReservationConfirmation:

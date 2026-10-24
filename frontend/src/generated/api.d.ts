@@ -5926,6 +5926,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/confirmations/texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The confirmation request texts
+         * @description `tenant.settings.read`, the confirmation add-on (TEC-979). The
+         *     business's SMS and e-mail texts of the confirmation request with
+         *     their defaults, the variables (`deadline` included) and the ones
+         *     every text must keep (`link`, the visit link). WhatsApp sends the
+         *     approved template and the automatic call reads `voice` (the catalog
+         *     text); neither is editable. The rule (channels, timing) is the
+         *     confirmation settings'.
+         */
+        get: operations["getTenantConfirmationTexts"];
+        /**
+         * Save the confirmation request texts
+         * @description `tenant.settings.write`. Channels `sms` and `email` only; a channel
+         *     left out keeps its text. An empty text, or one equal to the default,
+         *     goes back to the default. Subject 200, text 1000 characters; an
+         *     e-mail text needs a subject. Validation: `400 VALIDATION_ERROR` with
+         *     `unknown_variable` (a placeholder that is not a variable),
+         *     `missing_variable` (the text dropped `{{link}}`), `invalid` (another
+         *     channel).
+         */
+        put: operations["putTenantConfirmationTexts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/confirmations/texts/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the confirmation request texts back to the defaults
+         * @description `tenant.settings.write`. Deletes the business's SMS and e-mail texts of the request.
+         */
+        post: operations["postTenantConfirmationTextsReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/confirmations/meta": {
         parameters: {
             query?: never;
@@ -6138,7 +6194,7 @@ export interface paths {
         put?: never;
         /**
          * Render a notification text with sample values
-         * @description `tenant.settings.read`. Sample customer and visit, the business's own name; `unknown` lists placeholders that are not variables.
+         * @description `tenant.settings.read`. Sample customer and visit, the business's own name; `unknown` lists placeholders that are not variables of the event. `event` may be `confirmation.request` (its texts are saved under `/v1/tenant/confirmations/texts`; it also knows `deadline`).
          */
         post: operations["postTenantCustomerNotificationPreview"];
         delete?: never;
@@ -12085,6 +12141,37 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["ConfirmationSettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description The business's texts of the confirmation request (TEC-979). */
+        ConfirmationTexts: {
+            /** @enum {string} */
+            event: "confirmation.request";
+            variables: string[];
+            /** @description Variables every text must keep. */
+            required: string[];
+            /** @description The editable channels (`sms`, `email`), in display order. */
+            templates: components["schemas"]["CustomerNotificationTemplate"][];
+            /** @description What the automatic call reads out (the catalog text; not editable). */
+            voice: string;
+            custom: boolean;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        ConfirmationTextsInput: {
+            templates: {
+                /** @enum {string} */
+                channel: "sms" | "email";
+                /** @description E-mail only */
+                subject?: string;
+                /** @description Empty = the default text. */
+                body: string;
+            }[];
+        };
+        EnvelopeConfirmationTexts: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConfirmationTexts"];
             meta: components["schemas"]["ResponseMeta"];
         };
         /** @description The confirmation task of the booking (TEC-921). */
@@ -28835,6 +28922,100 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConfirmationTexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The texts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationTexts"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConfirmationTexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationTextsInput"];
+            };
+        };
+        responses: {
+            /** @description The texts after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationTexts"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConfirmationTextsReset: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The default texts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationTexts"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
         };
     };

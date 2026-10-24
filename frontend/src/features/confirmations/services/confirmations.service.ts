@@ -7,6 +7,8 @@ import type {
   ConfirmationSettings,
   ConfirmationSummary,
   ConfirmationTaskPage,
+  ConfirmationTexts,
+  ConfirmationTextsInput,
   ListConfirmationsParams,
 } from "@/features/confirmations/types";
 import { tenantRequest } from "@/lib/api/tenant-request";
@@ -36,6 +38,25 @@ export const confirmationsService = {
       "POST",
       `${BASE}/settings/reset`,
       { body: { branch_uuid: branchUuid } },
+    );
+  },
+
+  /** The request's SMS and e-mail texts with their defaults (TEC-979). */
+  texts(slug: string) {
+    return tenantRequest<ConfirmationTexts>(slug, "GET", `${BASE}/texts`);
+  },
+
+  saveTexts(slug: string, body: ConfirmationTextsInput) {
+    return tenantRequest<ConfirmationTexts>(slug, "PUT", `${BASE}/texts`, {
+      body,
+    });
+  },
+
+  resetTexts(slug: string) {
+    return tenantRequest<ConfirmationTexts>(
+      slug,
+      "POST",
+      `${BASE}/texts/reset`,
     );
   },
 

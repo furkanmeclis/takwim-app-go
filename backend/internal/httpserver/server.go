@@ -486,6 +486,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	customernotifymodule.RegisterRoutes(mux, customernotifyhandler.New(notifyEngine, activityRec), tokens, loader, tenantResolver)
 	confirmationsH := confirmationshandler.New(confirmEngine, activityRec)
 	confirmationsH.SetResourceEvents(resourceEvents)
+	confirmationsH.SetTexts(notifyEngine)
 	confirmationsmodule.RegisterRoutes(mux, confirmationsH, tokens, loader, tenantResolver)
 	reservationsSvc.SetSearchIndexer(searchIndexer)
 	// Sale lines and the customer ledger (TEC-916): a completed visit and a
