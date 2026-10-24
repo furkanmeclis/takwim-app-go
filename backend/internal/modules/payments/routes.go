@@ -57,6 +57,30 @@ func RegisterRoutes(
 	// Closing a refund to make without paying it back (TEC-978).
 	mux.Handle("POST /v1/tenant/reservations/{uuid}/close-without-refund", middleware.Chain(http.HandlerFunc(h.CloseWithoutRefund), refund...))
 
+	// Money of walk-in product sales (TEC-992): the payment view of a stock
+	// sale and the accounts of a branch (products read), a collection after
+	// the sale and a refund after the return (the money permissions and the
+	// cash module). The sale-time collection and the return-time refund are
+	// part of the products routes.
+	stock := []func(http.Handler) http.Handler{
+		middleware.Authenticate(tokens, loader),
+		middleware.RequireOrganization(resolver),
+		middleware.RequireModule(sector.ModuleProducts),
+		middleware.RequireTenantPermission(rbac.PermTenantProductsRead),
+	}
+	mux.Handle("GET /v1/tenant/stock-movements/payment-accounts", middleware.Chain(http.HandlerFunc(h.StockPaymentAccounts), append(slices.Clone(stock),
+		middleware.RequireAnyTenantPermission(rbac.PermTenantPaymentCollect, rbac.PermTenantPaymentRefund),
+	)...))
+	mux.Handle("GET /v1/tenant/stock-movements/{uuid}/payments", middleware.Chain(http.HandlerFunc(h.StockSalePayments), stock...))
+	mux.Handle("POST /v1/tenant/stock-movements/{uuid}/collections", middleware.Chain(http.HandlerFunc(h.CollectStockSale), append(slices.Clone(stock),
+		middleware.RequireModule(sector.ModuleCash),
+		middleware.RequireTenantPermission(rbac.PermTenantPaymentCollect),
+	)...))
+	mux.Handle("POST /v1/tenant/stock-movements/{uuid}/refunds", middleware.Chain(http.HandlerFunc(h.RefundStockSale), append(slices.Clone(stock),
+		middleware.RequireModule(sector.ModuleCash),
+		middleware.RequireTenantPermission(rbac.PermTenantPaymentRefund),
+	)...))
+
 	// The payment follow-up list: members who take or pay back money, or
 	// read the books.
 	follow := []func(http.Handler) http.Handler{

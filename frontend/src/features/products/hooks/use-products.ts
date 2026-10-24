@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { cashKeys } from "@/features/cash/hooks/query-keys";
 import { productsKeys } from "@/features/products/hooks/query-keys";
 import { productsService } from "@/features/products/services/products.service";
 import type {
@@ -14,6 +15,8 @@ import type {
   ProductVariantPatchRequest,
   SaleReturnRequest,
   StockMovementRequest,
+  StockSaleCollectRequest,
+  StockSaleRefundRequest,
 } from "@/features/products/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { useLocale } from "@/providers/locale-provider";
@@ -195,18 +198,109 @@ export function useRemoveProductImage(uuid: string) {
   );
 }
 
+/** Refreshes the cash book after money moved with a sale or a return. */
+function useInvalidateCash() {
+  const { slug } = useTenant();
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: cashKeys.all(slug) });
+}
+
 export function useRecordStockMovement() {
-  return useProductsMutation(
+  const invalidateCash = useInvalidateCash();
+  const mutation = useProductsMutation(
     (slug, body: StockMovementRequest) =>
       productsService.recordMovement(slug, body),
     "products.movements.toast.recorded",
   );
+  return {
+    ...mutation,
+    mutateAsync: async (body: StockMovementRequest) => {
+      const result = await mutation.mutateAsync(body);
+      if (body.collection) void invalidateCash();
+      return result;
+    },
+  };
 }
 
 export function useReturnSale() {
-  return useProductsMutation(
+  const invalidateCash = useInvalidateCash();
+  const mutation = useProductsMutation(
     (slug, { uuid, body }: { uuid: string; body: SaleReturnRequest }) =>
       productsService.returnSale(slug, uuid, body),
     "products.movements.toast.returned",
   );
+  return {
+    ...mutation,
+    mutateAsync: async (vars: { uuid: string; body: SaleReturnRequest }) => {
+      const result = await mutation.mutateAsync(vars);
+      if (vars.body.refund) void invalidateCash();
+      return result;
+    },
+  };
+}
+
+/** The money of one counter sale (TEC-992); `null` loads nothing. */
+export function useStockSalePayments(uuid: string | null) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: productsKeys.salePayments(slug, uuid ?? ""),
+    queryFn: () => productsService.salePayments(slug, uuid ?? ""),
+    enabled: Boolean(uuid),
+  });
+}
+
+/** Accounts of a branch for counter sales; `null` or `enabled: false` loads nothing. */
+export function useStockPaymentAccounts(
+  branchUuid: string | null,
+  enabled = true,
+) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: productsKeys.paymentAccounts(slug, branchUuid ?? ""),
+    queryFn: () => productsService.paymentAccounts(slug, branchUuid ?? ""),
+    enabled: enabled && Boolean(branchUuid),
+    staleTime: 60_000,
+  });
+}
+
+/** Takes money for a sale after the sale; the ledger and the cash book refresh. */
+export function useCollectStockSale() {
+  const invalidateCash = useInvalidateCash();
+  const mutation = useProductsMutation(
+    (slug, { uuid, body }: { uuid: string; body: StockSaleCollectRequest }) =>
+      productsService.collectSale(slug, uuid, body),
+    "products.movements.toast.collected",
+  );
+  return {
+    ...mutation,
+    mutateAsync: async (vars: {
+      uuid: string;
+      body: StockSaleCollectRequest;
+    }) => {
+      const result = await mutation.mutateAsync(vars);
+      void invalidateCash();
+      return result;
+    },
+  };
+}
+
+/** Pays the money of a sale back after the return. */
+export function useRefundStockSale() {
+  const invalidateCash = useInvalidateCash();
+  const mutation = useProductsMutation(
+    (slug, { uuid, body }: { uuid: string; body: StockSaleRefundRequest }) =>
+      productsService.refundSale(slug, uuid, body),
+    "products.movements.toast.refunded",
+  );
+  return {
+    ...mutation,
+    mutateAsync: async (vars: {
+      uuid: string;
+      body: StockSaleRefundRequest;
+    }) => {
+      const result = await mutation.mutateAsync(vars);
+      void invalidateCash();
+      return result;
+    },
+  };
 }

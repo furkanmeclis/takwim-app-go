@@ -7652,6 +7652,15 @@ paths:
         `transfer_uuid`. A product with variants needs `variant_uuid`. A sale
         needs an active product sold in the branch (`not_offered`); its unit
         price defaults to the branch price.
+
+        A sale may take its money at once (TEC-992): `collection` names the
+        method (`cash`, `card`, `transfer`) and an active till or bank
+        account of the branch or a business-wide one; `amount` defaults to
+        the sale total and is at most what is left to pay
+        (`collection.amount` / `exceeds_remaining`). The collection is
+        posted to the ledger with the sale, in its transaction, and needs
+        `tenant.payment.collect` and the cash module. A closed day of the
+        till is `409` `collection.cash_account_uuid` / `closed`.
       security:
         - bearerAuth: []
       parameters:
@@ -7685,8 +7694,18 @@ paths:
         `sale_return`) and the sale's revenue line is reversed, in one
         transaction. A sale is returned once (`409 STOCK_ALREADY_RETURNED`);
         any other movement is `409 STOCK_NOT_RETURNABLE`. `reason` is
-        required. Money paid for it is refunded separately. Needs
-        `tenant.products.stock` and `tenant.payment.refund`.
+        required. Needs `tenant.products.stock` and `tenant.payment.refund`.
+
+        `refund` pays the money back with the return (TEC-992): by hand,
+        out of an active till, bank or online account of the branch or a
+        business-wide one; `amount` defaults to all that is left of the
+        sale's collections, oldest first, and is at most that
+        (`refund.amount` / `exceeds_refundable`). The refund entries are
+        posted in the return's transaction (a refused refund leaves the
+        stock untouched) and need the cash module. A till that cannot pay
+        it is `409` `refund.cash_account_uuid` / `insufficient_funds`.
+        Money can also be paid back later with
+        `POST /v1/tenant/stock-movements/{uuid}/refunds`.
       security:
         - bearerAuth: []
       parameters:
@@ -7702,6 +7721,11 @@ paths:
               properties:
                 reason: { type: string, maxLength: 200 }
                 note: { type: string, maxLength: 2000 }
+                refund:
+                  description: Money paid back with the return (the cash module).
+                  oneOf:
+                    - $ref: "#/components/schemas/TenantStockSaleRefundInput"
+                    - type: "null"
       responses:
         "201":
           description: The return movement and the product with its new stock
@@ -7714,6 +7738,164 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/stock-movements/payment-accounts:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStockPaymentAccounts
+      summary: Accounts for the money of counter sales
+      description: |
+        The accounts counter sales of a branch take money into
+        (`collect_accounts`: active tills and bank accounts of the branch or
+        business-wide, listed with `tenant.payment.collect`) and pay it back
+        from (`refund_accounts`: tills, bank and online accounts, listed with
+        `tenant.payment.refund`), in the branch's currency (TEC-992). The
+        new sale dialog uses it. Needs `tenant.products.read`, the products
+        module and one of the two money permissions; a branch outside the
+        caller's scope is `422` `branch_uuid` / `not_found`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: branch_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Accounts of the branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockPaymentAccounts"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /v1/tenant/stock-movements/{uuid}/payments:
+    get:
+      tags: [Tenant]
+      operationId: getTenantStockMovementPayments
+      summary: Money of a counter sale
+      description: |
+        The payment view of a `sale` stock movement (TEC-992): what it
+        charges (`expected`, its live revenue debits), what was collected
+        and paid back, the money entries and the live collections with what
+        is left of each. With `tenant.payment.collect` and the cash module
+        the accounts a collection may go into (`can_collect` while something
+        is left to pay and the sale is not returned); with
+        `tenant.payment.refund` the accounts a refund may leave
+        (`can_refund` while money is held). Any other movement, or one
+        outside the caller's branch scope, is `404`. Needs
+        `tenant.products.read` and the products module.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Payment view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockSalePayments"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/stock-movements/{uuid}/collections:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStockMovementCollection
+      summary: Take money for a counter sale
+      description: |
+        Records money taken for a `sale` stock movement after the sale
+        (cash, card or transfer; a part or the rest, at most the remaining
+        amount: `amount` / `exceeds_remaining`): a ledger collection with
+        the movement as its source and its cash movement into an active
+        till or bank account of the sale's branch or a business-wide one.
+        Collections of one sale serialize. A returned sale is
+        `409 PAYMENT_NOT_COLLECTABLE`; a closed day of the till `409`
+        `cash_account_uuid` / `closed`. Needs `tenant.payment.collect`, the
+        cash module, `tenant.products.read` and the products module.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationCollectionRequest"
+      responses:
+        "201":
+          description: Payment view after the collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockSalePayments"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /v1/tenant/stock-movements/{uuid}/refunds:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStockMovementRefund
+      summary: Pay the money of a counter sale back
+      description: |
+        Pays back (part of) the money taken for a `sale` stock movement, by
+        hand (`cash`, `card`, `transfer`, or `online` = paid back outside
+        Takwim), out of an active till, bank or online account of the
+        sale's branch or a business-wide one: one ledger refund per
+        collection it draws on, oldest first, never more than what is left
+        (`amount` / `exceeds_refundable`; an omitted or zero `amount` pays
+        back all of it). `idempotency_key` is required: the same key
+        answers the first result again (`200`, `replayed: true`), the same
+        key with another amount is `409 REFUND_IDEMPOTENCY_REUSED`. A till
+        that cannot pay it is `409` `cash_account_uuid` /
+        `insufficient_funds`. Usually the money goes back with the return
+        (`refund` of `POST .../return`); this route serves a return made
+        without it. Needs `tenant.payment.refund`, the cash module,
+        `tenant.products.read` and the products module.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantStockSaleRefundRequest"
+      responses:
+        "201":
+          description: The payment view after the refund
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockSaleRefundResult"
+        "200":
+          description: "The same key again (`replayed: true`)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockSaleRefundResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /v1/tenant/customers/meta:
     get:
@@ -21154,11 +21336,21 @@ components:
         change of the branch stock, `balance_after` the stock right after
         it. `unit_price` is kept on sales and returns, `unit_cost` on
         receipts and sales.
-      required: [uuid, kind, quantity, balance_after, product, variant, branch, counterpart_branch, transfer_uuid, unit_price, unit_cost, currency, staff, reason, note, source, returned, occurred_at, created_by, created_at]
+      required: [uuid, kind, quantity, balance_after, product, variant, branch, counterpart_branch, transfer_uuid, unit_price, unit_cost, currency, staff, reason, note, source, returned, collected, refunded, occurred_at, created_by, created_at]
       properties:
         uuid: { type: string, format: uuid }
         kind: { type: string, enum: [receipt, sale, return, adjustment, transfer_out, transfer_in] }
         returned: { type: boolean, description: "A sale whose product was taken back (`POST /v1/tenant/stock-movements/{uuid}/return`)." }
+        collected:
+          description: Money taken for a walk-in sale, net of reversals (TEC-992); null on other kinds.
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
+        refunded:
+          description: Money paid back from the sale's collections, net of reversals; null on other kinds.
+          oneOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+            - type: "null"
         quantity: { type: integer }
         balance_after: { type: integer, minimum: 0 }
         product: { $ref: "#/components/schemas/TenantStockRef" }
@@ -21212,6 +21404,34 @@ components:
         reason: { type: string, maxLength: 200 }
         note: { type: string, maxLength: 2000 }
         occurred_at: { type: string, format: date-time, description: "Defaults to now; never in the future" }
+        collection:
+          description: Money taken with the sale (sales only; `tenant.payment.collect` and the cash module).
+          oneOf:
+            - $ref: "#/components/schemas/TenantStockSaleCollectionInput"
+            - type: "null"
+
+    TenantStockSaleCollectionInput:
+      type: object
+      required: [method, cash_account_uuid]
+      properties:
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/MoneyInput"
+          description: Defaults to the sale total; at most what is left to pay.
+        method: { type: string, enum: [cash, card, transfer] }
+        cash_account_uuid: { type: string, format: uuid }
+        note: { type: string, maxLength: 240 }
+
+    TenantStockSaleRefundInput:
+      type: object
+      required: [method, cash_account_uuid]
+      properties:
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/MoneyInput"
+          description: Defaults to all that is left of the sale's collections; at most that.
+        method: { type: string, enum: [cash, card, transfer, online] }
+        cash_account_uuid: { type: string, format: uuid }
 
     TenantStockMovementPage:
       type: object
@@ -25151,6 +25371,126 @@ components:
             name: { type: string }
         provider: { type: string, description: The provider of the online payment behind it ("" = none). }
         provider_refund: { type: boolean, description: The provider's refund API can pay it back. }
+
+    TenantStockSalePayments:
+      type: object
+      description: |
+        The money of a counter sale (TEC-992). `expected` is what the sale
+        charges (its live revenue debits), `paid` = collected - refunded,
+        `remaining` = expected - paid (never below zero), `refundable` =
+        paid (never below zero). `entries` are the money entries only.
+      required: [movement, currency, expected, collected, refunded, paid, remaining, refundable, entries, collections, can_collect, collect_accounts, can_refund, refund_accounts]
+      properties:
+        movement:
+          type: object
+          required: [uuid, product, variant, branch, quantity, returned, occurred_at]
+          properties:
+            uuid: { type: string, format: uuid }
+            product: { type: string }
+            variant: { type: string, description: Empty without a variant. }
+            branch:
+              type: object
+              required: [uuid, name]
+              properties:
+                uuid: { type: string, format: uuid }
+                name: { type: string }
+            quantity: { type: integer, description: Units sold (positive). }
+            returned: { type: boolean }
+            occurred_at: { type: string, format: date-time }
+        currency: { type: string }
+        expected: { $ref: "#/components/schemas/MoneyAmount" }
+        collected: { $ref: "#/components/schemas/MoneyAmount" }
+        refunded: { $ref: "#/components/schemas/MoneyAmount" }
+        paid: { $ref: "#/components/schemas/MoneyAmount" }
+        remaining: { $ref: "#/components/schemas/MoneyAmount" }
+        refundable: { $ref: "#/components/schemas/MoneyAmount" }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerEntry" }
+        collections:
+          type: array
+          items: { $ref: "#/components/schemas/TenantStockSaleCollection" }
+        can_collect: { type: boolean }
+        collect_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CollectAccount" }
+        can_refund: { type: boolean }
+        refund_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CollectAccount" }
+
+    TenantStockSaleCollection:
+      type: object
+      required: [uuid, method, entry_date, amount, refunded, refundable, cash_account]
+      properties:
+        uuid: { type: string, format: uuid }
+        method: { type: string }
+        entry_date: { type: string, format: date }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        refunded: { $ref: "#/components/schemas/MoneyAmount" }
+        refundable: { $ref: "#/components/schemas/MoneyAmount" }
+        cash_account:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+
+    EnvelopeTenantStockSalePayments:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantStockSalePayments" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantStockSaleRefundRequest:
+      type: object
+      required: [method, cash_account_uuid, idempotency_key]
+      properties:
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/MoneyInput"
+          description: Defaults to all that is left of the sale's collections.
+        method: { type: string, enum: [cash, card, transfer, online] }
+        cash_account_uuid: { type: string, format: uuid }
+        reason: { type: string, maxLength: 240 }
+        idempotency_key: { type: string, maxLength: 100, pattern: "^[A-Za-z0-9:_\\-.]+$" }
+
+    TenantStockSaleRefundResult:
+      type: object
+      required: [payments, replayed]
+      properties:
+        payments: { $ref: "#/components/schemas/TenantStockSalePayments" }
+        replayed: { type: boolean }
+
+    EnvelopeTenantStockSaleRefundResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantStockSaleRefundResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantStockPaymentAccounts:
+      type: object
+      required: [currency, collect_accounts, refund_accounts]
+      properties:
+        currency: { type: string }
+        collect_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CollectAccount" }
+        refund_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CollectAccount" }
+
+    EnvelopeTenantStockPaymentAccounts:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantStockPaymentAccounts" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     ReservationRefundRequest:
       type: object

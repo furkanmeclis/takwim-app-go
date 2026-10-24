@@ -10,12 +10,17 @@ import {
 import { permissions } from "@/config/permissions";
 import { useMovementColumns } from "@/features/products/components/movement-columns";
 import { SaleReturnDialog } from "@/features/products/components/sale-return-dialog";
+import {
+  StockSaleCollectDialog,
+  StockSaleRefundDialog,
+} from "@/features/products/components/stock-sale-money-dialogs";
 import { useStockMovementsList } from "@/features/products/hooks/use-products";
 import type {
   ListStockMovementsParams,
   Product,
   StockMovement,
 } from "@/features/products/types";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
@@ -23,10 +28,16 @@ import { usePermission } from "@/providers/permission-provider";
 export function ProductMovementsCard({ product }: { product: Product }) {
   const { t } = useLocale();
   const { can } = usePermission();
+  const hasModule = useNavModules();
   const [returning, setReturning] = useState<StockMovement | null>(null);
+  const [collecting, setCollecting] = useState<StockMovement | null>(null);
+  const [refunding, setRefunding] = useState<StockMovement | null>(null);
   const canReturn =
     can(permissions.tenant.products.stock) &&
     can(permissions.tenant.payment.refund);
+  const canCollect =
+    hasModule("cash") && can(permissions.tenant.payment.collect);
+  const canRefund = hasModule("cash") && can(permissions.tenant.payment.refund);
   const listState = useServerListState({
     initialSort: "-occurred_at",
     initialPageSize: 10,
@@ -40,6 +51,8 @@ export function ProductMovementsCard({ product }: { product: Product }) {
     withProduct: false,
     filters: false,
     onReturn: canReturn ? setReturning : undefined,
+    onCollect: canCollect ? setCollecting : undefined,
+    onRefund: canRefund ? setRefunding : undefined,
   });
   const total = query.data?.total ?? 0;
   const pageCount = Math.max(
@@ -76,6 +89,18 @@ export function ProductMovementsCard({ product }: { product: Product }) {
         movement={returning}
         onOpenChange={(open) => {
           if (!open) setReturning(null);
+        }}
+      />
+      <StockSaleCollectDialog
+        movement={collecting}
+        onOpenChange={(open) => {
+          if (!open) setCollecting(null);
+        }}
+      />
+      <StockSaleRefundDialog
+        movement={refunding}
+        onOpenChange={(open) => {
+          if (!open) setRefunding(null);
         }}
       />
     </EntitySectionCard>

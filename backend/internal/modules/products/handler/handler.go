@@ -16,9 +16,11 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/products/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/activity"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/rbac"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/resourceevents"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/sector"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/apiquery"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/response"
 	"github.com/google/uuid"
@@ -494,6 +496,11 @@ func (h *Handler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 		response.Forbidden(w, r, "Missing permission "+need)
 		return
 	}
+	// Money taken with the sale (TEC-992): the collection permission and
+	// the cash module, like a collection on a visit.
+	if in.Collection != nil && !moneyAllowed(w, r, rbac.PermTenantPaymentCollect) {
+		return
+	}
 	p := authctx.MustPrincipal(r.Context())
 	res, err := h.svc.RecordMovement(r.Context(), scope.ID, p.UserInternal, in)
 	if err != nil {
@@ -514,6 +521,9 @@ func (h *Handler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.Reason != "" {
 			payload["reason"] = m.Reason
+		}
+		if in.Collection != nil {
+			payload["collection_method"] = in.Collection.Method
 		}
 		h.record(r, "products.stock_moved", res.Product, payload, nil)
 		if in.Kind == model.KindSale {
@@ -537,6 +547,10 @@ func (h *Handler) ReturnMovement(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	// Money paid back with the return (TEC-992) moves cash: the cash module.
+	if in.Refund != nil && !moneyAllowed(w, r, rbac.PermTenantPaymentRefund) {
+		return
+	}
 	p := authctx.MustPrincipal(r.Context())
 	res, err := h.svc.ReturnSale(r.Context(), scope.ID, p.UserInternal, id, in)
 	if err != nil {
@@ -550,6 +564,9 @@ func (h *Handler) ReturnMovement(w http.ResponseWriter, r *http.Request) {
 	}
 	if m.Variant != nil {
 		payload["variant"] = m.Variant.Name
+	}
+	if in.Refund != nil {
+		payload["refund_method"] = in.Refund.Method
 	}
 	h.record(r, "products.sale_returned", res.Product, payload, nil)
 	h.salesChanged(r)
@@ -665,8 +682,31 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
+// moneyAllowed checks that the member holds perm and the business has the
+// cash module (a sale collection or a return refund moves cash); false =
+// answered 403.
+func moneyAllowed(w http.ResponseWriter, r *http.Request, perm string) bool {
+	scope := orgctx.Must(r.Context())
+	if !scope.Has(perm) {
+		response.Forbidden(w, r, "Missing permission "+perm)
+		return false
+	}
+	if !entitlement.ForScope(scope).Allows(sector.ModuleCash) {
+		response.Forbidden(w, r, "The cash module is not enabled for this organization")
+		return false
+	}
+	return true
+}
+
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	response.RecordFailure(w, err)
+	var mc *usecase.MoneyConflict
+	if errors.As(err, &mc) {
+		response.ErrorWithDetails(w, r, http.StatusConflict, response.CodeConflict, mc.Message, []response.Detail{{
+			Field: mc.Field, Message: mc.Message, Code: mc.Code,
+		}})
+		return
+	}
 	var qve *apiquery.ValidationError
 	if errors.As(err, &qve) {
 		details := make([]response.Detail, 0, len(qve.Details))

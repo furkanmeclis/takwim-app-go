@@ -35,6 +35,25 @@ func (s *Service) SetSaleReverser(fn SaleReverser) {
 	s.reverse = fn
 }
 
+// ReturnedSale is the sale a return pays money back for.
+type ReturnedSale struct {
+	MovementUUID uuid.UUID
+	BranchID     int64
+	Reason       string
+	ActorID      *int64
+}
+
+// SaleRefunder pays back (part of) the money taken for a returned stock
+// sale (the payments module, TEC-992) inside the return's transaction: a
+// ledger refund out of the cash account.
+type SaleRefunder func(ctx context.Context, q *db.Queries, orgID int64, sale ReturnedSale, in model.SaleRefundInput) error
+
+// SetSaleRefunder installs the sale refunder (nil: a return with a
+// `refund` is refused).
+func (s *Service) SetSaleRefunder(fn SaleRefunder) {
+	s.refund = fn
+}
+
 // ReturnSale takes back the product of a stock sale (a manager's
 // operation, requirements "teslim edilmiş ürün iadesi"): one return
 // movement brings every unit of the sale back to its branch, and the
@@ -54,6 +73,9 @@ func (s *Service) ReturnSale(ctx context.Context, orgID, actorID int64, id uuid.
 	var reason, note string
 	text("reason", &in.Reason, &reason, maxReasonLen, true, true, ve)
 	text("note", &in.Note, &note, maxNoteLen, false, true, ve)
+	if in.Refund != nil && s.refund == nil {
+		ve.add("refund", "unsupported", "refunds are not available")
+	}
 	if err := ve.orNil(); err != nil {
 		return MovementResult{}, err
 	}
@@ -82,7 +104,15 @@ func (s *Service) ReturnSale(ctx context.Context, orgID, actorID int64, id uuid.
 			return err
 		}
 		if s.reverse != nil {
-			return s.reverse(ctx, tx, orgID, sale.Uuid, reason, optional(actor))
+			if err := s.reverse(ctx, tx, orgID, sale.Uuid, reason, optional(actor)); err != nil {
+				return err
+			}
+		}
+		if in.Refund != nil {
+			// The money paid back with it (TEC-992), in the same transaction.
+			return s.refund(ctx, tx, orgID, ReturnedSale{
+				MovementUUID: sale.Uuid, BranchID: sale.BranchID, Reason: reason, ActorID: optional(actor),
+			}, *in.Refund)
 		}
 		return nil
 	})

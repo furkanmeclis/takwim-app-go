@@ -25,7 +25,28 @@ export type StockMovementFacets = Schemas["TenantStockMovementFacets"];
 export type StockMovementRequest = Schemas["TenantStockMovementRequest"];
 export type StockMovementResult = Schemas["TenantStockMovementResult"];
 /** Body of `POST /v1/tenant/stock-movements/{uuid}/return`. */
-export type SaleReturnRequest = { reason: string; note?: string };
+export type SaleReturnRequest = {
+  reason: string;
+  note?: string;
+  /** Money paid back with the return (TEC-992). */
+  refund?: StockSaleRefundInput;
+};
+/** `collection` of a sale movement: money taken with the sale (TEC-992). */
+export type StockSaleCollectionInput =
+  Schemas["TenantStockSaleCollectionInput"];
+/** `refund` of a return: money paid back with it. */
+export type StockSaleRefundInput = Schemas["TenantStockSaleRefundInput"];
+/** `GET /v1/tenant/stock-movements/{uuid}/payments`. */
+export type StockSalePayments = Schemas["TenantStockSalePayments"];
+export type StockSaleCollection = Schemas["TenantStockSaleCollection"];
+/** `POST /v1/tenant/stock-movements/{uuid}/collections`. */
+export type StockSaleCollectRequest = Schemas["ReservationCollectionRequest"];
+/** `POST /v1/tenant/stock-movements/{uuid}/refunds`. */
+export type StockSaleRefundRequest = Schemas["TenantStockSaleRefundRequest"];
+export type StockSaleRefundResult = Schemas["TenantStockSaleRefundResult"];
+/** `GET /v1/tenant/stock-movements/payment-accounts`. */
+export type StockPaymentAccounts = Schemas["TenantStockPaymentAccounts"];
+export type StockPaymentAccount = Schemas["CollectAccount"];
 
 export type ProductUnit = Product["unit"];
 export type StockStatus = ProductStock["status"];

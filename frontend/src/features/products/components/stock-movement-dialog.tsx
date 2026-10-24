@@ -12,12 +12,17 @@ import {
   AppForm,
   AppInput,
   AppSelect,
+  AppSwitch,
   AppTextarea,
+  AppToggleGroup,
   type ComboboxOption,
 } from "@/components/forms";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { permissions } from "@/config/permissions";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
 import {
   MAX_QUANTITY,
   MOVEMENT_REQUEST_KIND_LABEL_KEYS,
@@ -26,9 +31,14 @@ import {
 import {
   useProduct,
   useRecordStockMovement,
+  useStockPaymentAccounts,
 } from "@/features/products/hooks/use-products";
-import { localizeProductError } from "@/features/products/lib/format";
 import {
+  accountOptions,
+  localizeProductError,
+} from "@/features/products/lib/format";
+import {
+  COLLECT_METHODS,
   createMovementSchema,
   movementFormDefaults,
   movementFormToRequest,
@@ -89,12 +99,17 @@ export function StockMovementDialog({
   const { t } = useLocale();
   const { slug } = useTenant();
   const { can } = usePermission();
+  const hasModule = useNavModules();
   const [selectedBranch] = useSelectedBranch(slug);
   const record = useRecordStockMovement();
   const schema = useMemo(() => createMovementSchema(t), [t]);
 
   const canStock = can(permissions.tenant.products.stock);
   const canSell = can(permissions.tenant.products.sell);
+  // Money with the sale (TEC-992): the collection permission and the cash
+  // module, like a collection on a visit.
+  const canCollect =
+    canSell && can(permissions.tenant.payment.collect) && hasModule("cash");
   // A sale takes `tenant.products.sell`; every other kind `.stock`.
   const kinds = MOVEMENT_REQUEST_KINDS.filter((kind) =>
     kind === "sale" ? canSell : canStock,
@@ -109,6 +124,7 @@ export function StockMovementDialog({
     productUuid: defaults?.product?.uuid,
     variantUuid: defaults?.variantUuid,
     branchUuid: defaults?.branchUuid ?? selectedBranch ?? undefined,
+    collect: canCollect,
   });
 
   return (
@@ -154,7 +170,11 @@ export function StockMovementDialog({
             onOpenChange(false);
           }}
         >
-          <MovementFields kinds={kinds} fixedProduct={defaults?.product} />
+          <MovementFields
+            kinds={kinds}
+            fixedProduct={defaults?.product}
+            canCollect={canCollect}
+          />
         </AppForm>
       ) : null}
     </AppDialog>
@@ -164,9 +184,11 @@ export function StockMovementDialog({
 function MovementFields({
   kinds,
   fixedProduct,
+  canCollect,
 }: {
   kinds: MovementRequestKind[];
   fixedProduct?: Product | null;
+  canCollect: boolean;
 }) {
   const { t, locale } = useLocale();
   const { slug } = useTenant();
@@ -431,6 +453,87 @@ function MovementFields({
         label={t("products.movements.fields.note")}
         className="sm:col-span-2"
       />
+      {kind === "sale" && canCollect ? (
+        <CollectionFields branchUuid={branchUuid} />
+      ) : null}
     </>
+  );
+}
+
+/**
+ * Money taken with the sale (TEC-992): method, the till or bank account of
+ * the branch and an optional amount (empty = the sale total). The accounts
+ * come from the branch; without one the sale is recorded unpaid.
+ */
+function CollectionFields({ branchUuid }: { branchUuid: string }) {
+  const { t } = useLocale();
+  const form = useFormContext<MovementFormValues>();
+  const [enabled, account] = useWatch({
+    control: form.control,
+    name: ["collection.enabled", "collection.cash_account_uuid"],
+  });
+  const accountsQuery = useStockPaymentAccounts(branchUuid || null);
+  const accounts = accountsQuery.data?.collect_accounts;
+  const options = useMemo(
+    () => accountOptions(accounts ?? [], t),
+    [accounts, t],
+  );
+
+  // Default to the first account of the branch; drop one of another branch.
+  useEffect(() => {
+    if (!accounts) return;
+    if (!accounts.some((a) => a.uuid === account)) {
+      form.setValue("collection.cash_account_uuid", accounts[0]?.uuid ?? "");
+    }
+  }, [account, accounts, form]);
+
+  return (
+    <div className="grid gap-4 sm:col-span-2">
+      <Separator />
+      <AppSwitch
+        name="collection.enabled"
+        label={t("products.movements.collection.toggle")}
+        description={t("products.movements.collection.toggle_hint")}
+      />
+      {enabled ? (
+        accounts && accounts.length === 0 ? (
+          <Alert>
+            <AlertDescription>
+              {t("products.movements.collection.no_accounts")}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AppToggleGroup
+              name="collection.method"
+              label={t("products.movements.collection.method")}
+              options={COLLECT_METHODS.map((method) => ({
+                value: method,
+                label: t(`products.movements.methods.${method}`),
+              }))}
+            />
+            <AppSelect
+              name="collection.cash_account_uuid"
+              label={t("products.movements.collection.account")}
+              placeholder={t(
+                "products.movements.collection.account_placeholder",
+              )}
+              options={options}
+              disabled={accountsQuery.isLoading}
+            />
+            <AppInput
+              name="collection.amount"
+              inputMode="decimal"
+              label={t("products.movements.collection.amount")}
+              description={t("products.movements.collection.amount_hint")}
+            />
+            <AppInput
+              name="collection.note"
+              label={t("products.movements.collection.note")}
+            />
+          </div>
+        )
+      ) : null}
+    </div>
   );
 }

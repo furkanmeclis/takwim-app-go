@@ -232,6 +232,15 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 		}
 	}
 
+	if in.Collection != nil {
+		switch {
+		case in.Kind != model.KindSale:
+			ve.add("collection", "forbidden", "collection is for sales only")
+		case s.collect == nil:
+			ve.add("collection", "unsupported", "collections are not available")
+		}
+	}
+
 	var reason, note string
 	text("reason", in.Reason, &reason, maxReasonLen, false, true, ve)
 	text("note", in.Note, &note, maxNoteLen, false, true, ve)
@@ -335,14 +344,24 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 				return err
 			}
 			created = append(created, id)
-			if in.Kind == model.KindSale && s.sales != nil {
+			if in.Kind != model.KindSale {
+				return nil
+			}
+			sale := StockSale{
+				MovementUUID: id, BranchID: branchID, BranchUUID: in.BranchUUID, ProductID: product.ID, VariantID: optional(variantID),
+				StaffID: optional(staffID), Description: saleName(product.Name, variant), Quantity: quantity,
+				UnitPrice: money.FromNumericOrZero(unitPrice), OccurredAt: occurred, CreatedBy: optional(actor),
+			}
+			if s.sales != nil {
 				// The product handed over is revenue (TEC-916), in the same
 				// transaction as the stock leaving.
-				return s.sales(ctx, tx, orgID, StockSale{
-					MovementUUID: id, BranchID: branchID, ProductID: product.ID, VariantID: optional(variantID),
-					StaffID: optional(staffID), Description: saleName(product.Name, variant), Quantity: quantity,
-					UnitPrice: money.FromNumericOrZero(unitPrice), OccurredAt: occurred, CreatedBy: optional(actor),
-				})
+				if err := s.sales(ctx, tx, orgID, sale); err != nil {
+					return err
+				}
+			}
+			if in.Collection != nil {
+				// The money taken with it (TEC-992), in the same transaction.
+				return s.collect(ctx, tx, orgID, sale, *in.Collection)
 			}
 			return nil
 		}
@@ -370,6 +389,7 @@ func (s *Service) RecordMovement(ctx context.Context, orgID, actorID int64, in m
 type StockSale struct {
 	MovementUUID uuid.UUID
 	BranchID     int64
+	BranchUUID   uuid.UUID
 	ProductID    int64
 	VariantID    *int64
 	StaffID      *int64
@@ -387,6 +407,22 @@ type SaleRecorder func(ctx context.Context, q *db.Queries, orgID int64, sale Sto
 // posted as revenue).
 func (s *Service) SetSaleRecorder(fn SaleRecorder) {
 	s.sales = fn
+}
+
+// Total is the amount of the sale (units × unit price).
+func (s StockSale) Total() money.Money {
+	return s.UnitPrice.Mul(int64(s.Quantity))
+}
+
+// SaleCollector records the money taken with a stock sale (the payments
+// module, TEC-992) inside the sale's transaction: a ledger collection with
+// its cash movement, keyed by the sale.
+type SaleCollector func(ctx context.Context, q *db.Queries, orgID int64, sale StockSale, in model.SaleCollectionInput) error
+
+// SetSaleCollector installs the sale collector (nil: a sale with a
+// `collection` is refused).
+func (s *Service) SetSaleCollector(fn SaleCollector) {
+	s.collect = fn
 }
 
 func optional(v pgtype.Int8) *int64 {
@@ -591,6 +627,10 @@ func mapMovement(row db.ListStockMovementsRow, currency string) model.Movement {
 	}
 	if row.CreatedByUuid.Valid {
 		m.CreatedBy = &model.Ref{UUID: uuid.UUID(row.CreatedByUuid.Bytes), Name: strings.TrimSpace(row.CreatedByName.String + " " + row.CreatedBySurname.String)}
+	}
+	if row.Kind == model.KindSale {
+		collected, refunded := money.FromNumericOrZero(row.Collected), money.FromNumericOrZero(row.Refunded)
+		m.Collected, m.Refunded = &collected, &refunded
 	}
 	return m
 }

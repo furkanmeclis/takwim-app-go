@@ -162,29 +162,44 @@ The refund view shows `auto_check`, `provider_checks`, `provider_checked_at` and
 `POST /v1/tenant/stock-movements/{uuid}/return` needs `tenant.products.stock` and `tenant.payment.refund`. It takes back every unit of a `sale` movement in one transaction:
 
 - a `return` movement (source `sale_return`), unique per sale;
-- `ReverseLineTx` on the sale's revenue line.
+- `ReverseLineTx` on the sale's revenue line;
+- with a `refund` in the body (TEC-992, below), the money paid back out of a till or account.
 
-It does not pay money back: a refund owed for it is recorded separately. Stock sales do not record a collection yet, so there is no money to refund against; paying back a walk-in sale needs the sale-time collection first (TEC-992). Damaged stock is fixed with a count afterwards. The stock movements table offers "Geri al" on sales not yet returned and shows a "Geri alındı" badge.
+Damaged stock is fixed with a count afterwards. The stock movements table offers "Geri al" on sales not yet returned and shows a "Geri alındı" badge.
+
+### Walk-in sale money (TEC-992)
+
+A counter sale (`POST /v1/tenant/stock-movements`, kind `sale`) has no reservation and usually no customer, so its money is kept against the movement itself: collections and refunds in the sales ledger carry `source_type = 'stock_movement'` and `source_uuid` = the sale movement. The expected amount is the sale's live revenue debit (`sale_lines` of accrual key `stock_movement:<uuid>`), so a corrected sale is reflected and a returned one owes nothing. The logic lives in the payments module (`usecase/stocksales.go`); the products module only calls two hooks (`SaleCollector`, `SaleRefunder`) that `httpserver` wires, so a stock sale works without the cash module.
+
+- **With the sale**: `collection` in the movement body (`method` `cash` / `card` / `transfer`, `cash_account_uuid`, optional `amount` = the sale total by default, optional `note`). It needs `tenant.payment.collect` and the cash module, runs in the sale's transaction (idempotency `stock_sale:<movement uuid>`), and posts a cash movement into the account. The account must be an active till or bank account of the sale's branch (or business-wide) in the sale's currency; a closed day is `409 collection.cash_account_uuid` / `closed`. `collection` on another kind is `422 forbidden`.
+- **Later**: `POST /v1/tenant/stock-movements/{uuid}/collections` (same body as a visit collection, zero or empty amount = what is left, `exceeds_remaining` otherwise). Collections of one sale serialize on a lock of the sale's debits, so parts never exceed the total. A returned sale is `409 PAYMENT_NOT_COLLECTABLE`.
+- **With the return**: `refund` in the return body (`method` `cash` / `card` / `transfer` / `online`, `cash_account_uuid`, optional `amount` = everything collected by default). It runs in the return's transaction (idempotency `stock_return:<movement uuid>`, so a replayed return never pays twice; the second return is `409 STOCK_ALREADY_RETURNED` anyway) and is split over the sale's collections oldest first (`RecordRefundTx` per collection). Over-refund is `422 refund.amount` / `exceeds_refundable`; an empty till is `409 refund.cash_account_uuid` / `insufficient_funds`, and the stock stays sold.
+- **After a return without money**: `POST /v1/tenant/stock-movements/{uuid}/refunds` with an `idempotency_key` (`stock_refund:<key>`, `:2`… per collection). The same key again answers the first result (`200`, `replayed: true`); the same key with another amount is `409 REFUND_IDEMPOTENCY_REUSED`. A sale that is not returned can also be refunded this way (a discount after the fact); the remaining to collect then counts the refund.
+- `GET /v1/tenant/stock-movements/{uuid}/payments` (products read) gives expected / collected / refunded / remaining / refundable, the money entries, the collections with what is left of each and the accounts the caller may use; `GET /v1/tenant/stock-movements/payment-accounts?branch_uuid` lists the accounts for the sale dialog. Movements carry `collected` and `refunded`.
+
+No `refund.completed` notice is sent: the notice needs a customer and a reservation, and a walk-in sale has neither. The stock movements table shows a payment chip (unpaid / partly paid / paid / refunded) with "Tahsilat al" and "Para iadesi" actions; the sale dialog has a "Tahsilatı şimdi al" switch and the return dialog "Parayı şimdi iade et".
 
 The customer panel's visit detail lists the visit's refunds (in progress, refunded, or being followed up) and the refunded total.
 
 ## Errors
 
-| Code                         | Status | When                                                               |
-| ---------------------------- | ------ | ------------------------------------------------------------------ |
-| `PAYMENT_NOT_AVAILABLE`      | 409    | nothing to pay online (not accepted, paid, cancelled, window over) |
-| `PAYMENT_NOT_READY`          | 409    | no working provider account or online cash account                 |
-| `PAYMENT_PROVIDER_ERROR`     | 502    | the provider did not open the page                                 |
-| `PAYMENT_NOT_COLLECTABLE`    | 409    | on-site payment of a cancelled or rejected visit                   |
-| `PAYMENT_SIGNATURE_INVALID`  | 401    | a notification whose signature does not verify                     |
-| `REFUND_IDEMPOTENCY_REUSED`  | 409    | a refund key sent again with another body                          |
-| `REFUND_NOT_OPEN`            | 409    | resolving a refund that is already settled                         |
-| `REFUND_COLLECTION_REVERSED` | 409    | refunding a collection that was reversed                           |
-| `REFUND_NOTHING_TO_CLOSE`    | 409    | closing a visit without a refund when it has none to make          |
-| `REFUND_IN_PROGRESS`         | 409    | closing a visit without a refund while a refund is still open      |
-| `VALIDATION_ERROR` `amount`  | 422    | `exceeds_refundable`: more than is left of the collection          |
-| `STOCK_ALREADY_RETURNED`     | 409    | a sale taken back twice                                            |
-| `STOCK_NOT_RETURNABLE`       | 409    | a return of a movement that is not a sale                          |
+| Code                             | Status | When                                                                   |
+| -------------------------------- | ------ | ---------------------------------------------------------------------- |
+| `PAYMENT_NOT_AVAILABLE`          | 409    | nothing to pay online (not accepted, paid, cancelled, window over)     |
+| `PAYMENT_NOT_READY`              | 409    | no working provider account or online cash account                     |
+| `PAYMENT_PROVIDER_ERROR`         | 502    | the provider did not open the page                                     |
+| `PAYMENT_NOT_COLLECTABLE`        | 409    | on-site payment of a cancelled or rejected visit                       |
+| `PAYMENT_SIGNATURE_INVALID`      | 401    | a notification whose signature does not verify                         |
+| `REFUND_IDEMPOTENCY_REUSED`      | 409    | a refund key sent again with another body                              |
+| `REFUND_NOT_OPEN`                | 409    | resolving a refund that is already settled                             |
+| `REFUND_COLLECTION_REVERSED`     | 409    | refunding a collection that was reversed                               |
+| `REFUND_NOTHING_TO_CLOSE`        | 409    | closing a visit without a refund when it has none to make              |
+| `REFUND_IN_PROGRESS`             | 409    | closing a visit without a refund while a refund is still open          |
+| `VALIDATION_ERROR` `amount`      | 422    | `exceeds_refundable`: more than is left of the collection              |
+| `STOCK_ALREADY_RETURNED`         | 409    | a sale taken back twice                                                |
+| `STOCK_NOT_RETURNABLE`           | 409    | a return of a movement that is not a sale                              |
+| `CONFLICT` `*.cash_account_uuid` | 409    | `insufficient_funds` / `closed` on a stock sale's refund or collection |
+| `VALIDATION_ERROR` `amount`      | 422    | `exceeds_remaining`: a stock sale collection over what is left         |
 
 ## Configuration
 
@@ -220,8 +235,10 @@ The customer panel's visit detail lists the visit's refunds (in progress, refund
   - the refund notices;
   - the status queries (found, not done, still pending with the backoff, nothing sent again).
 - `TestSalesLedger` step 9: the product return and its reversal, once only.
+- `stocksales_db_test.go` (`TestStockSaleMoney`, TEC-992): the sale-time collection and its validation, collections in parts, a return refunding across two collections, a refused over-refund that leaves the stock sold, no collection after a return, refunds after a return without money (key required, too large, replay, reused key, nothing left), an empty till with rollback, other business and receipt lookups, the account list.
 - RT-A01 covers these tenant routes for another business's records:
   - the two original tenant routes;
   - the refund and resolve routes;
   - the follow-up routes;
-  - the product return route.
+  - the product return route;
+  - the stock sale money routes (payments, collections, refunds, payment-accounts) and a sale with another business's account.

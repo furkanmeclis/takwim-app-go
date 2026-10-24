@@ -21,4 +21,9 @@ export const productsKeys = {
     [...productsKeys.movements(slug), "meta"] as const,
   movementFacets: (slug: string) =>
     [...productsKeys.movements(slug), "facets"] as const,
+  /** Money of one counter sale (TEC-992). */
+  salePayments: (slug: string, uuid: string) =>
+    [...productsKeys.movements(slug), "payments", uuid] as const,
+  paymentAccounts: (slug: string, branchUuid: string) =>
+    [...productsKeys.movements(slug), "payment-accounts", branchUuid] as const,
 };
