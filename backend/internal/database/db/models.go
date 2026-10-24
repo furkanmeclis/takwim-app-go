@@ -1214,6 +1214,9 @@ type ReservationLine struct {
 	UnitPrice           pgtype.Numeric     `json:"unit_price"`
 	VatRate             pgtype.Numeric     `json:"vat_rate"`
 	StaffShareRate      pgtype.Numeric     `json:"staff_share_rate"`
+	BundleID            pgtype.Int8        `json:"bundle_id"`
+	BundleName          pgtype.Text        `json:"bundle_name"`
+	ListPrice           pgtype.Numeric     `json:"list_price"`
 }
 
 type ReservationProduct struct {
@@ -1364,6 +1367,37 @@ type ServiceBranch struct {
 	IsActive        bool               `json:"is_active"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ServiceBundle struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	Price          pgtype.Numeric     `json:"price"`
+	ShowOnline     bool               `json:"show_online"`
+	IsActive       bool               `json:"is_active"`
+	SortOrder      int32              `json:"sort_order"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ServiceBundleBranch struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	BundleID       int64              `json:"bundle_id"`
+	BranchID       int64              `json:"branch_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type ServiceBundleItem struct {
+	ID             int64 `json:"id"`
+	OrganizationID int64 `json:"organization_id"`
+	BundleID       int64 `json:"bundle_id"`
+	ServiceID      int64 `json:"service_id"`
+	Position       int32 `json:"position"`
 }
 
 type ServiceCategory struct {

@@ -187,6 +187,7 @@
   "detail.history": "Geçmiş",
   "detail.hold_expires": "Bu talep {{at}} saatine kadar karar verilmezse kendiliğinden iptal olur ve saat boşa çıkar.",
   "lines.time": "Saat",
+  "lines.bundle": "{{name}} paketi",
   "lines.service": "Hizmet",
   "lines.staff": "Personel",
   "lines.resources": "Kaynaklar",
@@ -470,5 +471,9 @@
   "form.section_questions": "Ek alanlar",
   "form.section_questions_desc": "İşletme ayarlarında tanımlanan sorular; cevaplar rezervasyonda saklanır.",
   "columns.custom_answers": "Ek alanlar",
-  "confirmation_task.sources.phone": "Telefonla (personel)"
+  "confirmation_task.sources.phone": "Telefonla (personel)",
+  "fields.bundle": "Birleşik paket",
+  "fields.bundle_none": "Paket yok, hizmetleri tek tek seç",
+  "fields.bundle_hint": "Paket seçilince içindeki hizmetler sırasıyla eklenir; her hizmetin çalışanını ayrı seçebilirsiniz.",
+  "fields.bundle_price": "Paket fiyatı {{price}}; hizmetlere liste fiyatı oranında dağıtılır."
 }

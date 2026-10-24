@@ -5963,6 +5963,226 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/tenant/service-bundles/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceBundlesMeta
+      summary: Service bundle list metadata
+      description: Table contract of `GET /v1/tenant/service-bundles` (`tenant.services.read`, `services` module).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/service-bundles/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceBundlesFacets
+      summary: Service bundle faceted filter options
+      description: Branches offering bundles, inside the caller's scope, with counts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Facets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServiceBundleFacets"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/service-bundles:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceBundles
+      summary: List combined service bundles
+      description: |
+        Combined service bundles (birleşik hizmet paketi, TEC-895) of the
+        `X-Organization` organization (`tenant.services.read`). A bundle sells
+        several services as one offer; `duration_minutes`, `list_price`,
+        `staff_required` and `resource_kinds` follow from its `items`. `q`
+        searches name and description.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `name`, `price`, `sort_order`, `is_active`, `created_at`, `updated_at`; prefix `-` for descending. Default: `sort_order`, name."
+          schema: { type: string, example: name }
+        - name: branch
+          in: query
+          description: "Branch uuids: bundles offered there; comma-separate or repeat"
+          schema: { type: string }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: show_online
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Bundle page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServiceBundlePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantServiceBundle
+      summary: Create a service bundle
+      description: |
+        `tenant.services.write`. Names are unique in the organization,
+        case-insensitive (`409`). `service_uuids` are the contents in the
+        order of service (2–10, a service may repeat; group classes are
+        refused: `service_uuids.N` `group_class`). Every branch in
+        `branch_uuids` must be inside the caller's scope (`not_found`) and
+        offer every service of the bundle (`services_not_offered`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantServiceBundleCreateRequest"
+      responses:
+        "201":
+          description: Created bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServiceBundle"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/service-bundles/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceBundle
+      summary: Get a service bundle
+      description: "`branches[].editable` is false for branches outside the caller's scope. A uuid of another organization answers `404`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServiceBundle"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantServiceBundle
+      summary: Update a service bundle
+      description: |
+        `tenant.services.write`. Omitted fields are unchanged.
+        `service_uuids` replaces the contents; `branch_uuids` replaces the
+        branches inside the caller's scope (branches outside it stay).
+        Bookings already made keep their lines and prices.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantServiceBundlePatchRequest"
+      responses:
+        "200":
+          description: Updated bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantServiceBundle"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantServiceBundle
+      summary: Delete a service bundle (soft)
+      description: "`tenant.services.write`. Booked lines keep the bundle name."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/service-bundles/{uuid}/activity:
+    get:
+      tags: [Tenant]
+      operationId: getTenantServiceBundleActivity
+      summary: Activity of a service bundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeBranchActivityPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/tenant/services/meta:
     get:
       tags: [Tenant]
@@ -18778,6 +18998,131 @@ components:
         data: { $ref: "#/components/schemas/TenantServiceFacets" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
+    TenantServiceBundleItem:
+      type: object
+      required: [position, service_uuid, service_name, duration_minutes, buffer_before_minutes, buffer_after_minutes, list_price, allocated_price, staff_mode, resource_kinds, bookable]
+      properties:
+        position: { type: integer }
+        service_uuid: { type: string, format: uuid }
+        service_name: { type: string }
+        duration_minutes: { type: integer }
+        buffer_before_minutes: { type: integer }
+        buffer_after_minutes: { type: integer }
+        list_price: { $ref: "#/components/schemas/MoneyAmount" }
+        allocated_price:
+          allOf:
+            - $ref: "#/components/schemas/MoneyAmount"
+          description: Share of the bundle price at catalog prices (in proportion to the list prices; the rounding remainder goes to the last item).
+        staff_mode: { type: string, enum: [required, optional, none] }
+        resource_kinds:
+          type: array
+          items: { type: string, enum: [chair, table, area, room, device, bay] }
+        bookable: { type: boolean, description: False when the service was deactivated or deleted. }
+
+    TenantServiceBundle:
+      type: object
+      required: [uuid, name, description, price, list_price, discount, currency, duration_minutes, staff_required, resource_kinds, items, branches, show_online, is_active, bookable, sort_order, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        price: { $ref: "#/components/schemas/MoneyAmount" }
+        list_price: { $ref: "#/components/schemas/MoneyAmount" }
+        discount: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        duration_minutes: { type: integer, description: Sum of the catalog durations of the items. }
+        staff_required: { type: boolean }
+        resource_kinds:
+          type: array
+          items: { type: string, enum: [chair, table, area, room, device, bay] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantServiceBundleItem" }
+        branches:
+          type: array
+          items:
+            type: object
+            required: [uuid, name, code, editable]
+            properties:
+              uuid: { type: string, format: uuid }
+              name: { type: string }
+              code: { type: string }
+              editable: { type: boolean }
+        show_online: { type: boolean }
+        is_active: { type: boolean }
+        bookable: { type: boolean }
+        sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TenantServiceBundleCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, price, service_uuids]
+      properties: &serviceBundleProps
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+        show_online: { type: boolean, description: "Default true on create." }
+        is_active: { type: boolean, description: "Default true on create." }
+        sort_order: { type: integer, minimum: 0, maximum: 100000 }
+        service_uuids:
+          type: array
+          minItems: 2
+          maxItems: 10
+          items: { type: string, format: uuid }
+        branch_uuids:
+          type: array
+          items: { type: string, format: uuid }
+
+    TenantServiceBundlePatchRequest:
+      type: object
+      additionalProperties: false
+      properties: *serviceBundleProps
+
+    TenantServiceBundlePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TenantServiceBundle" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    TenantServiceBundleFacets:
+      type: object
+      required: [branch]
+      properties:
+        branch:
+          type: array
+          items: { $ref: "#/components/schemas/TenantResourceFacet" }
+
+    EnvelopeTenantServiceBundle:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantServiceBundle" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantServiceBundlePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantServiceBundlePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeTenantServiceBundleFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/TenantServiceBundleFacets" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     TenantProductStock:
       type: object
       description: |
@@ -21410,8 +21755,19 @@ components:
     TenantReservationCreateRequest:
       type: object
       additionalProperties: false
-      required: [branch_uuid, customer_uuid, lines, starts_at]
+      required: [branch_uuid, customer_uuid, starts_at]
       properties:
+        bundle_uuid:
+          type: [string, "null"]
+          format: uuid
+          description: |
+            Books a combined service bundle (TEC-895). `lines` must then be
+            the bundle's services in order (each with its own staff member)
+            or empty (any free staff member per service). The bundle must be
+            active and offered in the branch (`bundle_uuid` `inactive`,
+            `not_offered`, `not_bookable`; `lines` `bundle_mismatch`). The
+            bundle price is spread over the lines in proportion to their
+            prices; the rounding remainder goes to the last line.
         party_size:
           type: [integer, "null"]
           minimum: 1
@@ -21425,8 +21781,8 @@ components:
         customer_uuid: { type: string, format: uuid }
         lines:
           type: array
-          minItems: 1
           maxItems: 10
+          description: Services in the order of service; required (at least one) unless `bundle_uuid` is given.
           items: { $ref: "#/components/schemas/TenantReservationLineInput" }
         starts_at: { type: string, format: date-time }
         source: { type: string, enum: [panel], description: Always panel on this route. }
@@ -21827,7 +22183,7 @@ components:
           type: array
           items:
             type: object
-            required: [index, service_uuid, service_name, staff, resources, starts_at, ends_at, duration_minutes, buffer_before_minutes, buffer_after_minutes, unit_price]
+            required: [index, service_uuid, service_name, staff, resources, starts_at, ends_at, duration_minutes, buffer_before_minutes, buffer_after_minutes, unit_price, bundle, list_price]
             properties:
               index: { type: integer }
               service_uuid: { type: [string, "null"], format: uuid, description: Null when the service was deleted (the name stays). }
@@ -21849,6 +22205,20 @@ components:
               buffer_before_minutes: { type: integer }
               buffer_after_minutes: { type: integer }
               unit_price: { $ref: "#/components/schemas/MoneyAmount" }
+              bundle:
+                description: The service bundle the line was booked in (TEC-895); `unit_price` is then the line's share of the bundle price.
+                oneOf:
+                  - type: object
+                    required: [uuid, name]
+                    properties:
+                      uuid: { type: [string, "null"], format: uuid, description: Null when the bundle was deleted (the name stays). }
+                      name: { type: string }
+                  - type: "null"
+              list_price:
+                description: Price of the line before the bundle discount (bundle lines only).
+                oneOf:
+                  - $ref: "#/components/schemas/MoneyAmount"
+                  - type: "null"
         products:
           type: array
           items: { $ref: "#/components/schemas/TenantReservationProduct" }

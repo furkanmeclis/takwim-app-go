@@ -63,6 +63,7 @@ import {
   ANY_STAFF,
   ANY_ZONE,
   createBookingSchema,
+  NO_BUNDLE,
   NO_VEHICLE,
   toLineInputs,
   toPartySize,
@@ -72,12 +73,15 @@ import {
 } from "@/features/reservations/schemas/reservation-forms";
 import type { ReservationFormField } from "@/features/reservations/types";
 import { useSector } from "@/features/sectors/hooks/use-sector";
+import { useServiceBundlesList } from "@/features/service-bundles/hooks/use-service-bundles";
+import { priceLabel } from "@/features/services/lib/format";
 import { useServicesList } from "@/features/services/hooks/use-services";
 import { useAccessibleBranches } from "@/features/staff/hooks/use-staff";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { useSelectedBranch } from "@/features/tenant/hooks/use-selected-branch";
 import { dateKeyInZone } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
 
 const EMPTY_LINE = { service_uuid: "", staff_uuid: ANY_STAFF };
 
@@ -142,6 +146,7 @@ export function ReservationCreatePage() {
     return {
       branch_uuid: branch,
       customer_uuid: "",
+      bundle_uuid: NO_BUNDLE,
       lines: [{ ...EMPTY_LINE, staff_uuid: preset.staff || ANY_STAFF }],
       party_size: "",
       zone: ANY_ZONE,
@@ -202,6 +207,11 @@ export function ReservationCreatePage() {
               const created = await create.mutateAsync({
                 branch_uuid: values.branch_uuid,
                 customer_uuid: values.customer_uuid,
+                // A combined bundle (TEC-895): its services in order.
+                bundle_uuid:
+                  values.bundle_uuid !== NO_BUNDLE
+                    ? values.bundle_uuid
+                    : undefined,
                 lines: toLineInputs(values.lines),
                 party_size: toPartySize(values.party_size),
                 zone: toZone(values.zone),
@@ -260,15 +270,25 @@ function BookingFields({
   isSubmitting: boolean;
   onCancel: () => void;
 }) {
-  const { t } = useLocale();
-  const { slug } = useTenant();
+  const { t, locale } = useLocale();
+  const { slug, organization } = useTenant();
+  const { can } = usePermission();
   const form = useFormContext<BookingFormValues>();
   const { control, setValue } = form;
   const lineArray = useFieldArray({ control, name: "lines" });
-  const [branchUuid, lines, date, startsAt, partyInput, zoneInput] = useWatch({
-    control,
-    name: ["branch_uuid", "lines", "date", "starts_at", "party_size", "zone"],
-  });
+  const [branchUuid, lines, date, startsAt, partyInput, zoneInput, bundleUuid] =
+    useWatch({
+      control,
+      name: [
+        "branch_uuid",
+        "lines",
+        "date",
+        "starts_at",
+        "party_size",
+        "zone",
+        "bundle_uuid",
+      ],
+    });
   const partySize = toPartySize(partyInput);
   const areaZone = toZone(zoneInput);
   const zoneOptions = useZoneOptions(party);
@@ -295,6 +315,45 @@ function BookingFields({
       })),
     [services.data?.items, t],
   );
+
+  // Combined bundles offered in the branch (TEC-895).
+  const bundles = useServiceBundlesList(
+    {
+      limit: 100,
+      offset: 0,
+      sort: "name",
+      branch: branchUuid || undefined,
+      is_active: "true",
+    },
+    {
+      enabled: Boolean(branchUuid) && can(permissions.tenant.services.read),
+    },
+  );
+  const bookableBundles = useMemo(
+    () => (bundles.data?.items ?? []).filter((bundle) => bundle.bookable),
+    [bundles.data?.items],
+  );
+  const bundle = bookableBundles.find((item) => item.uuid === bundleUuid);
+  const bundled = bundleUuid !== NO_BUNDLE;
+
+  // A bundle books its services in order; each keeps its own person.
+  const lastBundle = useRef(bundleUuid);
+  useEffect(() => {
+    if (lastBundle.current === bundleUuid) return;
+    lastBundle.current = bundleUuid;
+    if (bundleUuid === NO_BUNDLE) {
+      lineArray.replace([EMPTY_LINE]);
+      return;
+    }
+    if (!bundle) return;
+    lineArray.replace(
+      bundle.items.map((item) => ({
+        service_uuid: item.service_uuid,
+        staff_uuid: ANY_STAFF,
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- replace is stable per field array
+  }, [bundle, bundleUuid]);
 
   // A group class (gym) books seats of a session: how many people.
   const group = (services.data?.items ?? []).some(
@@ -338,6 +397,7 @@ function BookingFields({
   useEffect(() => {
     if (lastBranch.current === branchUuid) return;
     lastBranch.current = branchUuid;
+    setValue("bundle_uuid", NO_BUNDLE);
     lineArray.replace([EMPTY_LINE]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- replace is stable per field array
   }, [branchUuid]);
@@ -453,6 +513,33 @@ function BookingFields({
         description={t("reservations.form.section_services_desc")}
       >
         <div className="space-y-3">
+          {bookableBundles.length > 0 ? (
+            <AppSelect
+              name="bundle_uuid"
+              label={t("reservations.fields.bundle")}
+              description={
+                bundle
+                  ? t("reservations.fields.bundle_price", {
+                      price: priceLabel(
+                        bundle.price,
+                        bundle.currency || organization?.currency || "TRY",
+                        locale,
+                      ),
+                    })
+                  : t("reservations.fields.bundle_hint")
+              }
+              options={[
+                {
+                  value: NO_BUNDLE,
+                  label: t("reservations.fields.bundle_none"),
+                },
+                ...bookableBundles.map((item) => ({
+                  value: item.uuid,
+                  label: item.name,
+                })),
+              ]}
+            />
+          ) : null}
           {lineArray.fields.map((field, index) => (
             <div
               key={field.id}
@@ -463,7 +550,7 @@ function BookingFields({
                 label={t("reservations.fields.service")}
                 placeholder={t("reservations.fields.service_placeholder")}
                 options={serviceOptions}
-                disabled={!branchUuid}
+                disabled={!branchUuid || bundled}
               />
               <AppSelect
                 name={`lines.${index}.staff_uuid`}
@@ -476,7 +563,7 @@ function BookingFields({
                 variant="ghost"
                 size="icon"
                 aria-label={t("reservations.actions.remove_line")}
-                disabled={lineArray.fields.length === 1}
+                disabled={lineArray.fields.length === 1 || bundled}
                 onClick={() => lineArray.remove(index)}
               >
                 <Trash2 className="size-4" />
@@ -487,7 +574,9 @@ function BookingFields({
             type="button"
             variant="outline"
             size="sm"
-            disabled={lineArray.fields.length >= MAX_LINES || !branchUuid}
+            disabled={
+              lineArray.fields.length >= MAX_LINES || !branchUuid || bundled
+            }
             onClick={() => lineArray.append(EMPTY_LINE)}
           >
             <Plus className="size-4" />

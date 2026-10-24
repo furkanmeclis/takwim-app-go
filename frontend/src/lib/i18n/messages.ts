@@ -8,6 +8,7 @@ import enStaff from "@/locales/en/staff.json";
 import enResources from "@/locales/en/resources.json";
 import enProducts from "@/locales/en/products.json";
 import enServices from "@/locales/en/services.json";
+import enServiceBundles from "@/locales/en/service_bundles.json";
 import enCustomers from "@/locales/en/customers.json";
 import enCash from "@/locales/en/cash.json";
 import enFinance from "@/locales/en/finance.json";
@@ -60,6 +61,7 @@ import trStaff from "@/locales/tr/staff.json";
 import trResources from "@/locales/tr/resources.json";
 import trProducts from "@/locales/tr/products.json";
 import trServices from "@/locales/tr/services.json";
+import trServiceBundles from "@/locales/tr/service_bundles.json";
 import trCustomers from "@/locales/tr/customers.json";
 import trCash from "@/locales/tr/cash.json";
 import trFinance from "@/locales/tr/finance.json";
@@ -146,6 +148,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     staff: trStaff,
     resources: trResources,
     services: trServices,
+    service_bundles: trServiceBundles,
     products: trProducts,
     customers: trCustomers,
     cash: trCash,
@@ -200,6 +203,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     staff: enStaff,
     resources: enResources,
     services: enServices,
+    service_bundles: enServiceBundles,
     products: enProducts,
     customers: enCustomers,
     cash: enCash,

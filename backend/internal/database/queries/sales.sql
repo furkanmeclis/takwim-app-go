@@ -23,9 +23,10 @@ WHERE r.organization_id = sqlc.arg(organization_id) AND r.uuid = sqlc.arg(uuid);
 -- name: ListSalesReservationLines :many
 -- A line served on a package session (TEC-920) carries the session's
 -- value: that value is the line's revenue, and the package already
--- charged the customer for it.
+-- charged the customer for it. A bundle line (TEC-895) carries its list
+-- price next to its share of the bundle price.
 SELECT rl.line_index, rl.service_id, rl.service_name, rl.staff_id, rl.unit_price,
-    ps.amount AS package_amount
+    rl.list_price, ps.amount AS package_amount
 FROM reservation_lines rl
 LEFT JOIN package_sessions ps ON ps.organization_id = rl.organization_id AND ps.reservation_id = rl.reservation_id
     AND ps.line_index = rl.line_index AND ps.status = 'consumed'

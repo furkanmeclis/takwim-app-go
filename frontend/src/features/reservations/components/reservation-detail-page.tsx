@@ -19,6 +19,7 @@ import {
 import { AppForm, AppTextarea } from "@/components/forms";
 import { createColumn } from "@/components/tables";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
@@ -400,7 +401,16 @@ function ReservationLinesCard({ reservation }: { reservation: Reservation }) {
           enableSorting: false,
           gridPrimary: true,
           cell: ({ row }) => (
-            <span className="font-medium">{row.original.service_name}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{row.original.service_name}</span>
+              {row.original.bundle ? (
+                <Badge variant="secondary">
+                  {t("reservations.lines.bundle", {
+                    name: row.original.bundle.name,
+                  })}
+                </Badge>
+              ) : null}
+            </span>
           ),
         }),
         createColumn<ReservationLine>({
@@ -432,8 +442,20 @@ function ReservationLinesCard({ reservation }: { reservation: Reservation }) {
           labelKey: "reservations.lines.price",
           enableSorting: false,
           cell: ({ row }) => (
-            <span className="tabular-nums">
-              {amount(row.original.unit_price, reservation.currency, locale)}
+            <span className="flex flex-col tabular-nums">
+              <span>
+                {amount(row.original.unit_price, reservation.currency, locale)}
+              </span>
+              {row.original.list_price &&
+              row.original.list_price !== row.original.unit_price ? (
+                <span className="text-muted-foreground text-xs line-through">
+                  {amount(
+                    row.original.list_price,
+                    reservation.currency,
+                    locale,
+                  )}
+                </span>
+              ) : null}
             </span>
           ),
         }),

@@ -1583,7 +1583,7 @@ func (q *Queries) ListSalesBranchesByUUID(ctx context.Context, arg ListSalesBran
 
 const listSalesReservationLines = `-- name: ListSalesReservationLines :many
 SELECT rl.line_index, rl.service_id, rl.service_name, rl.staff_id, rl.unit_price,
-    ps.amount AS package_amount
+    rl.list_price, ps.amount AS package_amount
 FROM reservation_lines rl
 LEFT JOIN package_sessions ps ON ps.organization_id = rl.organization_id AND ps.reservation_id = rl.reservation_id
     AND ps.line_index = rl.line_index AND ps.status = 'consumed'
@@ -1602,12 +1602,14 @@ type ListSalesReservationLinesRow struct {
 	ServiceName   string         `json:"service_name"`
 	StaffID       pgtype.Int8    `json:"staff_id"`
 	UnitPrice     pgtype.Numeric `json:"unit_price"`
+	ListPrice     pgtype.Numeric `json:"list_price"`
 	PackageAmount pgtype.Numeric `json:"package_amount"`
 }
 
 // A line served on a package session (TEC-920) carries the session's
 // value: that value is the line's revenue, and the package already
-// charged the customer for it.
+// charged the customer for it. A bundle line (TEC-895) carries its list
+// price next to its share of the bundle price.
 func (q *Queries) ListSalesReservationLines(ctx context.Context, arg ListSalesReservationLinesParams) ([]ListSalesReservationLinesRow, error) {
 	rows, err := q.db.Query(ctx, listSalesReservationLines, arg.OrganizationID, arg.ReservationID)
 	if err != nil {
@@ -1623,6 +1625,7 @@ func (q *Queries) ListSalesReservationLines(ctx context.Context, arg ListSalesRe
 			&i.ServiceName,
 			&i.StaffID,
 			&i.UnitPrice,
+			&i.ListPrice,
 			&i.PackageAmount,
 		); err != nil {
 			return nil, err
