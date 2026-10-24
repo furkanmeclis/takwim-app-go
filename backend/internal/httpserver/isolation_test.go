@@ -749,6 +749,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"basis": "percent", "rate": "10"}, reject},
 		{"POST /v1/tenant/staff-shares/rules", map[string]any{"staff_uuid": orgA.ids["shareStaff"], "item_type": "service",
 			"service_uuid": orgB.ids["service"], "basis": "percent", "rate": "10"}, reject},
+		{"POST /v1/tenant/staff-shares/rules", map[string]any{"staff_uuid": orgA.ids["shareStaff"], "item_type": "product",
+			"product_uuid": orgB.ids["product"], "basis": "percent", "rate": "10"}, reject},
 		{"POST /v1/tenant/staff-shares/payouts", map[string]any{"staff_uuid": orgB.ids["shareStaff"],
 			"cash_account_uuid": orgA.ids["bankAccount"], "amount": "1"}, reject},
 		{"POST /v1/tenant/staff-shares/payouts", map[string]any{"staff_uuid": orgA.ids["shareStaff"],

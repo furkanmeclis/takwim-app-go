@@ -32,11 +32,14 @@ import (
 	salesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/repository"
 	salesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/sales/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/adapters"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/handler"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/i18n"
+	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/ioengine"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/jwt"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
@@ -195,7 +198,7 @@ func TestStaffShares(t *testing.T) {
 	_, springUUID := newService("İlkbahar paketi", "1000", ayseID, bossID)
 	_, aUUID := newService("Hizmet A", "666.67", ayseID)
 	_, bUUID := newService("Hizmet B", "333.33", mehmetID)
-	waxID, _ := idOf(`INSERT INTO products (organization_id, name, sku, price, cost) VALUES ($1, 'Wax', $2, 400, 250) RETURNING id, uuid`,
+	waxID, waxUUID := idOf(`INSERT INTO products (organization_id, name, sku, price, cost) VALUES ($1, 'Wax', $2, 400, 250) RETURNING id, uuid`,
 		org.ID, "WAX-"+suffix)
 	_, customerUUID := idOf(`INSERT INTO customers (organization_id, first_name, last_name) VALUES ($1, 'Zeynep', 'Kaya') RETURNING id, uuid`, org.ID)
 	_, tillUUID := idOf(`INSERT INTO cash_accounts (organization_id, branch_id, kind, name, currency, opening_date)
@@ -235,10 +238,10 @@ func TestStaffShares(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	sellWax := func(staff int64) uuid.UUID {
+	sellProduct := func(product, staff int64, name string) uuid.UUID {
 		t.Helper()
 		line, err := sales.RecordProductSaleTx(ctx, q, org.ID, salesusecase.ProductSale{
-			MovementUUID: uuid.New(), BranchID: branchID, ProductID: waxID, StaffID: &staff, Description: "Wax",
+			MovementUUID: uuid.New(), BranchID: branchID, ProductID: product, StaffID: &staff, Description: name,
 			Quantity: 1, UnitPrice: m("400"), OccurredAt: now,
 		})
 		if err != nil {
@@ -246,6 +249,7 @@ func TestStaffShares(t *testing.T) {
 		}
 		return line
 	}
+	sellWax := func(staff int64) uuid.UUID { return sellProduct(waxID, staff, "Wax") }
 	rule := func(staff uuid.UUID, item string, service *uuid.UUID, rate string, from string) model.Rule {
 		t.Helper()
 		r, err := money.ParseRate(rate)
@@ -510,7 +514,7 @@ func TestStaffShares(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 	loader := mapLoader{owner.Uuid: owner.ID, mel.Uuid: mel.ID, dave.Uuid: dave.ID}
-	staffshares.RegisterRoutes(mux, handler.New(svc, nil), tokens, loader, orgSvc)
+	staffshares.RegisterRoutes(mux, handler.New(svc, nil), staffshares.EngineHandlers{}, tokens, loader, orgSvc)
 	call := func(user db.User, method, path string, body any) (int, map[string]any, string) {
 		t.Helper()
 		access, _, err := tokens.IssueAccess(jwt.AccessInput{UserID: user.Uuid})
@@ -579,6 +583,86 @@ func TestStaffShares(t *testing.T) {
 		t.Fatalf("bad status = %d %s", code, raw)
 	}
 	_ = vb
+
+	// TEC-976: a rate for one product wins over the product default from
+	// its start day on; earlier shares keep their rate.
+	productRule := func(product uuid.UUID, rate, from string) (model.Rule, error) {
+		r, err := money.ParseRate(rate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc.CreateRule(all, org.ID, &owner.ID, model.RuleInput{
+			StaffUUID: &ayseUUID, ItemType: ptr(model.ItemProduct), ProductUUID: &product, Basis: ptr(model.BasisPercent),
+			Rate: &r, ValidFrom: &from,
+		})
+	}
+	waxRule, err := productRule(waxUUID, "25", "2030-01-20")
+	if err != nil || waxRule.Product == nil || waxRule.Product.UUID != waxUUID || waxRule.Product.Name != "Wax" || waxRule.Service != nil {
+		t.Fatalf("product rule = %+v %v", waxRule, err)
+	}
+	if _, err := productRule(waxUUID, "30", "2030-01-20"); !errors.Is(err, usecase.ErrRuleTaken) {
+		t.Fatalf("duplicate product rule = %v", err)
+	}
+	if _, err := productRule(waxUUID, "50", "2030-01-25"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateRule(all, org.ID, &owner.ID, model.RuleInput{
+		StaffUUID: &ayseUUID, ItemType: ptr(model.ItemService), ProductUUID: &waxUUID, Basis: ptr(model.BasisPercent), Rate: ptr(money.Percent(1)),
+	}); !usecase.IsValidation(err) {
+		t.Fatalf("product rate on a service rule = %v", err)
+	}
+	_, foreignProduct := idOf(`INSERT INTO products (organization_id, name, sku, price) VALUES ($1, 'Yabancı', $2, 10) RETURNING id, uuid`,
+		org2.ID, "FX-"+suffix)
+	if _, err := productRule(foreignProduct, "5", "2030-01-20"); !usecase.IsValidation(err) {
+		t.Fatalf("another business's product = %v", err)
+	}
+	if _, _, err := svc.PatchRule(all, org.ID, waxRule.UUID, model.RuleInput{ProductUUID: &foreignProduct}); !usecase.IsValidation(err) {
+		t.Fatalf("product change = %v", err)
+	}
+	gelID, _ := idOf(`INSERT INTO products (organization_id, name, sku, price) VALUES ($1, 'Jel', $2, 400) RETURNING id, uuid`,
+		org.ID, "GEL-"+suffix)
+	now = on(21, 12)
+	sellWax(ayseID)
+	sellProduct(gelID, ayseID, "Jel")
+	products, _, err := svc.ListLines(all, org.ID, usecase.Viewer{}, model.LineFilter{
+		Staff: []uuid.UUID{ayseUUID}, ItemTypes: []string{model.ItemProduct}, DateFrom: date("2030-01-21"), SortField: "share_amount", Limit: 10,
+	})
+	if err != nil || len(products) != 2 {
+		t.Fatalf("product shares = %+v %v", products, err)
+	}
+	// Jel: the product default (10 %); Wax: its own 25 % (the 50 % starts later).
+	if products[0].Description != "Jel" || products[0].RuleScope != model.ScopeDefault || products[0].ShareAmount.String() != "40.00" ||
+		products[1].Description != "Wax" || products[1].RuleScope != model.ScopeProduct || products[1].ShareAmount.String() != "100.00" ||
+		products[1].RuleUUID == nil || *products[1].RuleUUID != waxRule.UUID {
+		t.Fatalf("product shares = %+v", products)
+	}
+	var pastWax string
+	if err := pool.QueryRow(ctx, `SELECT share_amount::text FROM staff_share_lines WHERE organization_id = $1 AND staff_id = $2
+		AND item_type = 'product' AND kind = 'share' AND share_date = '2030-01-07'`, org.ID, ayseID).Scan(&pastWax); err != nil || pastWax != "40.00" {
+		t.Fatalf("past wax share = %s %v", pastWax, err)
+	}
+	if code, data, raw := call(owner, http.MethodPost, "/v1/tenant/staff-shares/rules", map[string]any{
+		"staff_uuid": mehmetUUID, "item_type": "product", "product_uuid": waxUUID, "basis": "percent", "rate": "20",
+		"valid_from": "2030-01-01",
+	}); code != http.StatusCreated || data["product"].(map[string]any)["name"] != "Wax" {
+		t.Fatalf("owner product rule = %d %s", code, raw)
+	}
+
+	// Exports of the shares and payouts follow the list filters.
+	ds, err := adapters.NewLinesIO(svc).Export(all, ioengine.ExportQuery{
+		"staff": ayseUUID.String(), "item_type": "product", "date_from": "2030-01-21", "sort": "-share_amount",
+	}, i18n.Locale("tr"))
+	if err != nil || len(ds.Rows) != 2 || ds.Rows[0]["rule_scope"] != model.ScopeProduct || ds.Rows[0]["share_amount"] != "100.00" ||
+		ds.Rows[0]["business_amount"] != "300.00" || ds.Rows[0]["rate"] != "25.00" || ds.Rows[0]["status"] != model.StatusPayable {
+		t.Fatalf("share export = %+v %v", ds.Rows, err)
+	}
+	pds, err := adapters.NewPayoutsIO(svc).Export(all, ioengine.ExportQuery{"staff": ayseUUID.String(), "kind": "payout"}, i18n.Locale("tr"))
+	if err != nil || len(pds.Rows) != 2 || pds.Rows[0]["staff"] != "Ayşe" {
+		t.Fatalf("payout export = %+v %v", pds.Rows, err)
+	}
+	if _, err := adapters.NewLinesIO(svc).Export(ctx, ioengine.ExportQuery{}, i18n.Locale("tr")); err == nil {
+		t.Fatal("export without an organization accepted")
+	}
 }
 
 func ptrDate(string) *pgtype.Date { return &pgtype.Date{} }

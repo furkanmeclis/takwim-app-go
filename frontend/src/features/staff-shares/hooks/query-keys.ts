@@ -13,4 +13,6 @@ export const staffSharesKeys = {
     [...staffSharesKeys.all(slug), "lines-meta"] as const,
   payouts: (slug: string, params: Record<string, unknown>) =>
     [...staffSharesKeys.all(slug), "payouts", params] as const,
+  payoutsMeta: (slug: string) =>
+    [...staffSharesKeys.all(slug), "payouts-meta"] as const,
 };

@@ -8,6 +8,7 @@ import {
   useServerListState,
 } from "@/components/entity";
 import { ReasonDialog } from "@/features/cash/components/reason-dialog";
+import { ResourceIOToolbar } from "@/features/io";
 import { useStaffShareLineColumns } from "@/features/staff-shares/components/staff-share-line-columns";
 import { useStaffSharePayoutColumns } from "@/features/staff-shares/components/staff-share-payout-columns";
 import {
@@ -17,7 +18,9 @@ import {
 import {
   useReverseStaffSharePayout,
   useStaffShareLines,
+  useStaffShareLinesMeta,
   useStaffSharePayouts,
+  useStaffSharePayoutsMeta,
 } from "@/features/staff-shares/hooks/use-staff-shares";
 import type {
   ListStaffShareLinesParams,
@@ -38,6 +41,18 @@ function filterValues(value: unknown): string[] {
 
 function joined(values: string[]) {
   return values.length ? values.join(",") : undefined;
+}
+
+/** The list query as an export takes it (paging left out). */
+function exportQuery(
+  params: Record<string, string | number | undefined>,
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "limit" || key === "offset" || value === undefined) continue;
+    out[key] = String(value);
+  }
+  return out;
 }
 
 type ListProps = {
@@ -82,6 +97,8 @@ export function StaffShareLinesTable({
   }, [listState.columnFilters, listState.params, period]);
 
   const query = useStaffShareLines(params);
+  // Exports are for viewers of every share (the business page).
+  const meta = useStaffShareLinesMeta(live);
   const columns = useStaffShareLineColumns({ showStaff, filters: true });
   const total = query.data?.total ?? 0;
   const pageCount = Math.max(
@@ -116,10 +133,19 @@ export function StaffShareLinesTable({
       state={listState.tableState}
       features={{ persistKey, rowSelection: false, viewMode: true }}
       toolbarExtra={
-        <EntityToolbar
-          onRefresh={() => void query.refetch()}
-          refreshDisabled={query.isFetching}
-        />
+        <>
+          {live ? (
+            <ResourceIOToolbar
+              resource={STAFF_SHARE_LINES_RESOURCE}
+              query={exportQuery(params)}
+              capabilities={meta.data?.capabilities}
+            />
+          ) : null}
+          <EntityToolbar
+            onRefresh={() => void query.refetch()}
+            refreshDisabled={query.isFetching}
+          />
+        </>
       }
     />
   );
@@ -151,6 +177,7 @@ export function StaffSharePayoutsTable({
   }, [listState.columnFilters, listState.params, period]);
 
   const query = useStaffSharePayouts(params);
+  const meta = useStaffSharePayoutsMeta(live);
   const reverse = useReverseStaffSharePayout();
   const [target, setTarget] = useState<StaffSharePayout | null>(null);
   const onReverse = useCallback((p: StaffSharePayout) => setTarget(p), []);
@@ -191,10 +218,19 @@ export function StaffSharePayoutsTable({
         state={listState.tableState}
         features={{ persistKey, rowSelection: false, viewMode: true }}
         toolbarExtra={
-          <EntityToolbar
-            onRefresh={() => void query.refetch()}
-            refreshDisabled={query.isFetching}
-          />
+          <>
+            {live ? (
+              <ResourceIOToolbar
+                resource={STAFF_SHARE_PAYOUTS_RESOURCE}
+                query={exportQuery(params)}
+                capabilities={meta.data?.capabilities}
+              />
+            ) : null}
+            <EntityToolbar
+              onRefresh={() => void query.refetch()}
+              refreshDisabled={query.isFetching}
+            />
+          </>
         }
       />
       {canReverse ? (

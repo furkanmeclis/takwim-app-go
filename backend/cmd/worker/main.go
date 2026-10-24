@@ -64,6 +64,7 @@ import (
 	staffadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/adapters"
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
+	staffsharesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/adapters"
 	staffsharesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
 	staffsharesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
 	tenantmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/tenant"
@@ -224,7 +225,8 @@ func main() {
 	reservationsSvc.SetCompletionHook(salesSvc.RecordReservationTx)
 	productsSvc.SetSaleRecorder(salesmodule.ProductSaleRecorder(salesSvc))
 	// ... and every sale line with a staff member its share (TEC-917).
-	salesSvc.SetLineHook(staffsharesusecase.New(staffsharesrepository.NewPostgres(pool, queries), cashSvc).RecordLineTx)
+	staffSharesSvc := staffsharesusecase.New(staffsharesrepository.NewPostgres(pool, queries), cashSvc)
+	salesSvc.SetLineHook(staffSharesSvc.RecordLineTx)
 	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
 	// Income and expense records (TEC-915): the export of the list.
 	financeSvc := financeusecase.New(financerepository.NewPostgres(pool, queries), cashSvc, salesSvc)
@@ -252,6 +254,8 @@ func main() {
 		cashadapters.NewAccountsIO(cashSvc),
 		cashadapters.NewMovementsIO(cashSvc),
 		financeadapters.NewEntriesIO(financeSvc),
+		staffsharesadapters.NewLinesIO(staffSharesSvc),
+		staffsharesadapters.NewPayoutsIO(staffSharesSvc),
 		orgadapters.NewIO(jobScopes),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)

@@ -215,6 +215,9 @@ func rulePayload(rule model.Rule) map[string]any {
 	if rule.Service != nil {
 		out["service"] = rule.Service.Name
 	}
+	if rule.Product != nil {
+		out["product"] = rule.Product.Name
+	}
 	if rule.Rate != nil {
 		out["rate"] = rule.Rate.String()
 	}

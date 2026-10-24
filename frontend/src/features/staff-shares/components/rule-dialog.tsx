@@ -15,6 +15,7 @@ import {
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { normalizeAmount, useBusinessToday } from "@/features/cash/lib/format";
+import { useProductsList } from "@/features/products/hooks/use-products";
 import { useServicesList } from "@/features/services/hooks/use-services";
 import {
   BASIS_LABEL_KEYS,
@@ -41,6 +42,7 @@ function createRuleSchema(t: Translate) {
     .object({
       item_type: z.enum(STAFF_SHARE_ITEM_TYPES as ["service", "product"]),
       service_uuid: z.string(),
+      product_uuid: z.string(),
       basis: z.enum(STAFF_SHARE_BASES as ["percent", "fixed"]),
       value: z
         .string()
@@ -83,6 +85,20 @@ function RuleFields({ editing }: { editing: boolean }) {
       })),
     [services.data?.items],
   );
+  const products = useProductsList({
+    limit: 100,
+    offset: 0,
+    sort: "name",
+    is_active: "true",
+  });
+  const productOptions = useMemo(
+    () =>
+      (products.data?.items ?? []).map((product) => ({
+        value: product.uuid,
+        label: product.name,
+      })),
+    [products.data?.items],
+  );
 
   return (
     <>
@@ -106,6 +122,18 @@ function RuleFields({ editing }: { editing: boolean }) {
           searchPlaceholder={t("staff_shares.rules.fields.service_search")}
           emptyText={t("staff_shares.rules.fields.service_empty")}
           options={serviceOptions}
+          className="sm:col-span-2"
+        />
+      ) : null}
+      {!editing && itemType === "product" ? (
+        <AppCombobox
+          name="product_uuid"
+          label={t("staff_shares.rules.fields.product")}
+          description={t("staff_shares.rules.fields.product_hint")}
+          placeholder={t("staff_shares.rules.fields.product_placeholder")}
+          searchPlaceholder={t("staff_shares.rules.fields.product_search")}
+          emptyText={t("staff_shares.rules.fields.product_empty")}
+          options={productOptions}
           className="sm:col-span-2"
         />
       ) : null}
@@ -169,12 +197,17 @@ function toRequest(
       values.item_type === "service" && values.service_uuid
         ? values.service_uuid
         : undefined,
+    product_uuid:
+      values.item_type === "product" && values.product_uuid
+        ? values.product_uuid
+        : undefined,
   };
 }
 
 /**
  * Create or change a share rule of a staff member: the default of
- * services or products, or one service's own rate, from `valid_from` on.
+ * services or products, or one service's or product's own rate, from
+ * `valid_from` on.
  * Shares already calculated keep the rate they were calculated with.
  */
 export function RuleDialog({
@@ -232,6 +265,7 @@ export function RuleDialog({
           defaultValues={{
             item_type: rule?.item_type ?? "service",
             service_uuid: rule?.service?.uuid ?? "",
+            product_uuid: rule?.product?.uuid ?? "",
             basis: rule?.basis ?? "percent",
             value:
               (rule?.basis === "fixed" ? rule.fixed_amount : rule?.rate) ?? "",

@@ -11425,11 +11425,15 @@ paths:
       description: |
         `tenant.earnings.manage`, every branch. The default rate of an item
         type (`service`, `product`: the product commission is kept apart)
-        or, with `service_uuid`, the rate of one service. A percentage of the
+        or, with `service_uuid`, the rate of one service, or, with
+        `product_uuid` (item type `product`), the rate of one product
+        (TEC-976). The rate of the service or product wins over the default
+        of the item type. A percentage of the
         line's net amount or a fixed amount per unit, from `valid_from`
         (default today). A new rate is a new rule with a later
         `valid_from`; shares calculated before keep their values. `409
-        rule_taken` for the same staff member, item and day.
+        rule_taken` for the same staff member, item and day. An unknown
+        `service_uuid` / `product_uuid` is `400 not_found`.
       security:
         - bearerAuth: []
       parameters:
@@ -11595,6 +11599,36 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
 
+  /v1/tenant/staff-shares/lines/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffShareLinesExport
+      summary: Export staff shares
+      description: |
+        Queues an export of the list (`tenant.earnings.read` and `tenant.report.export`; TEC-976). `query`
+        honours `q`, `sort`, `branch`, `staff`, `kind`, `item_type`, `status`,
+        `date_from` and `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
   /v1/tenant/staff-shares/payouts/meta:
     get:
       tags: [Tenant]
@@ -11691,6 +11725,36 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/staff-shares/payouts/export:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStaffSharePayoutsExport
+      summary: Export share payouts
+      description: |
+        Queues an export of the list (`tenant.earnings.read` and `tenant.report.export`; TEC-976). `query`
+        honours `q`, `sort`, `branch`, `staff`, `kind`, `date_from` and
+        `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "202":
+          description: Export job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeExportJob"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
 
   /v1/tenant/staff-shares/payouts/{uuid}:
     get:
@@ -17963,13 +18027,18 @@ components:
 
     StaffShareRule:
       type: object
-      description: An agreed rate of a staff member (the default of an item type, or the rate of one service) from `valid_from` on.
-      required: [uuid, staff, item_type, service, basis, rate, fixed_amount, valid_from, note, share_count, created_at, updated_at]
+      description: An agreed rate of a staff member (the default of an item type, or the rate of one service or one product) from `valid_from` on.
+      required: [uuid, staff, item_type, service, product, basis, rate, fixed_amount, valid_from, note, share_count, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         staff: { $ref: "#/components/schemas/SalesRef" }
         item_type: { type: string, enum: [service, product] }
         service:
+          oneOf:
+            - $ref: "#/components/schemas/SalesRef"
+            - type: "null"
+        product:
+          description: The product of a per-product rate (item type `product`).
           oneOf:
             - $ref: "#/components/schemas/SalesRef"
             - type: "null"
@@ -17984,11 +18053,12 @@ components:
 
     StaffShareRuleInput:
       type: object
-      description: Create (staff_uuid, item_type, basis and its value required) or patch (basis, rate, fixed_amount, valid_from, note).
+      description: Create (staff_uuid, item_type, basis and its value required) or patch (basis, rate, fixed_amount, valid_from, note; the staff member, item type, service and product do not change).
       properties:
         staff_uuid: { type: string, format: uuid }
         item_type: { type: string, enum: [service, product] }
-        service_uuid: { type: string, format: uuid }
+        service_uuid: { type: string, format: uuid, description: "A per-service rate (item type service)" }
+        product_uuid: { type: string, format: uuid, description: "A per-product rate (item type product)" }
         basis: { type: string, enum: [percent, fixed] }
         rate: { type: string, example: "40" }
         fixed_amount: { type: string, example: "50.00" }
@@ -18015,7 +18085,7 @@ components:
         kind: { type: string, enum: [share, reversal] }
         item_type: { type: string, enum: [service, product] }
         status: { type: string, enum: [pending, payable] }
-        rule_scope: { type: string, enum: [default, service] }
+        rule_scope: { type: string, enum: [default, service, product] }
         rule_uuid: { type: [string, "null"], format: uuid }
         basis: { type: string, enum: [percent, fixed] }
         rate: { type: [string, "null"] }

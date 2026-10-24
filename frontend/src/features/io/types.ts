@@ -113,6 +113,8 @@ export type IoResource =
   | "tenant.cash_accounts"
   | "tenant.cash_movements"
   | "tenant.finance_entries"
+  | "tenant.staff_share_lines"
+  | "tenant.staff_share_payouts"
   | "platform.organizations";
 
 export const EXPORT_PATHS: Record<IoResource, string> = {
@@ -131,6 +133,8 @@ export const EXPORT_PATHS: Record<IoResource, string> = {
   "tenant.cash_accounts": "/v1/tenant/cash/accounts/export",
   "tenant.cash_movements": "/v1/tenant/cash/movements/export",
   "tenant.finance_entries": "/v1/tenant/finance/entries/export",
+  "tenant.staff_share_lines": "/v1/tenant/staff-shares/lines/export",
+  "tenant.staff_share_payouts": "/v1/tenant/staff-shares/payouts/export",
 };
 
 export const IMPORT_PATHS: Partial<
