@@ -66,5 +66,6 @@
   "nav_tenant_settings_confirmation": "Booking confirmation",
   "nav_tenant_settings_embed": "Embed code",
   "nav_confirmations": "Confirmation list",
-  "nav_finance": "Income and expenses"
+  "nav_finance": "Income and expenses",
+  "nav_sales_ledger": "Sales ledger"
 }

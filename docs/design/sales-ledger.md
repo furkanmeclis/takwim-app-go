@@ -55,9 +55,19 @@ All routes need the finance module and `tenant.finance.read`; writes also need `
 - `GET /v1/tenant/sales/reservations/{uuid}/balance`: expected (the posted sale lines, or the booked total of an open visit), collected, refunded, paid, remaining, credit, with its lines and entries.
 - `GET /v1/tenant/sales/customers/{uuid}/balance`: charged, paid and balance per currency.
 
+## Panel (TEC-973)
+
+`/t/{slug}/sales-ledger` (nav "Satış defteri", finance module, `tenant.finance.read`; `frontend/src/features/sales`):
+
+- a period picker (default today) and the summary cards per currency: revenue, collections, account transfers and staff payouts, never added together (A20); the same figures per day in a collapsible table;
+- tab **Satış satırları**: `GET /sales/lines` with kind, item type, branch and staff filters, live on `tenant.sale_lines`. A row opens the line drawer; a live sale line is reversed (reason) or corrected (quantity, unit price, discount, reason) from the row or the drawer. Only changed values are sent, so the price field needs `tenant.price.override` and the discount field `tenant.discount.apply` (read-only otherwise);
+- tab **Defter kayıtları**: `GET /sales/entries` with kind and branch filters, live on `tenant.ledger_entries`, and a read-only drawer (collections and refunds are taken and undone on the visit, [payments.md](./payments.md)).
+
+The reservation detail has an "Ödenen / Kalan" card (`/sales/reservations/{uuid}/balance`, with the visit's sale lines and the same drawer) and the customer detail a balance card per currency (`/sales/customers/{uuid}/balance`); both are shown only with the finance module and `tenant.finance.read`. Completing a visit, a stock sale and a stock return publish `tenant.sale_lines` and `tenant.ledger_entries`, so open lists refresh.
+
 ## Not yet
 
-No ledger screen and no export (reports TEC-925); the finance list ([finance-entries.md](./finance-entries.md)) shows sale lines as income and exports them with the business's own records. Collections come from the payments module ([payments.md](./payments.md), TEC-912): the verified online notification and the panel's on-site payment both post through `RecordCollectionTx`, and the reservation detail shows the visit's money entries. A hand-recorded stock return does not reverse a sale line. The manager's return flow (`POST /v1/tenant/stock-movements/{uuid}/return`, TEC-913) writes the return movement and calls `ReverseLineTx` on the sale's line in the same transaction. Refunds post through `RecordRefundTx` from the refunds flow ([payments.md](./payments.md#refunds-tec-913)).
+No export (reports TEC-925); the finance list ([finance-entries.md](./finance-entries.md)) shows sale lines as income and exports them with the business's own records. Collections come from the payments module ([payments.md](./payments.md), TEC-912): the verified online notification and the panel's on-site payment both post through `RecordCollectionTx`, and the reservation detail shows the visit's money entries. A hand-recorded stock return does not reverse a sale line. The manager's return flow (`POST /v1/tenant/stock-movements/{uuid}/return`, TEC-913) writes the return movement and calls `ReverseLineTx` on the sale's line in the same transaction. Refunds post through `RecordRefundTx` from the refunds flow ([payments.md](./payments.md#refunds-tec-913)).
 
 ## Tests
 

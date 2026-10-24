@@ -346,6 +346,9 @@ func (h *Handler) Action(name string) http.HandlerFunc {
 			return
 		}
 		h.record(r, "reservations."+actionEvents[name], out, map[string]any{"reason": in.Reason, "note": in.Note})
+		if name == "complete" {
+			h.salesChanged(r)
+		}
 		response.JSON(w, r, http.StatusOK, out)
 	}
 }
@@ -397,6 +400,22 @@ func (h *Handler) Notes(w http.ResponseWriter, r *http.Request) {
 	h.record(r, "reservations.updated", out, nil)
 	response.JSON(w, r, http.StatusOK, out)
 }
+
+// salesChanged tells the open sale line and ledger lists that a completed
+// visit posted its revenue (the sales hook runs in the same transaction).
+func (h *Handler) salesChanged(r *http.Request) {
+	if h.events == nil {
+		return
+	}
+	h.events.Publish(r.Context(), saleLinesResource, resourceevents.ActionUpdated)
+	h.events.Publish(r.Context(), ledgerEntriesResource, resourceevents.ActionUpdated)
+}
+
+// Live channels of the sales ledger (TEC-916).
+const (
+	saleLinesResource     = "tenant.sale_lines"
+	ledgerEntriesResource = "tenant.ledger_entries"
+)
 
 // record writes the activity event and publishes the list change.
 func (h *Handler) record(r *http.Request, action string, res model.Reservation, extra map[string]any) {

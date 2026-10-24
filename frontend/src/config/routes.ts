@@ -130,6 +130,9 @@ export const routes = {
       detail: (slug: string, uuid: string) =>
         `/t/${encodeURIComponent(slug)}/finance/${uuid}`,
     },
+    /** Sale lines, customer ledger and daily figures (TEC-973). */
+    salesLedger: (slug: string) =>
+      `/t/${encodeURIComponent(slug)}/sales-ledger`,
     /** Multi-session packages (TEC-920): sold packages and definitions. */
     packages: {
       root: (slug: string) => `/t/${encodeURIComponent(slug)}/packages`,
