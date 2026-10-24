@@ -8890,9 +8890,10 @@ export interface paths {
         };
         /**
          * Visits with money (Ödemelerim)
-         * @description The visit list without visits that ended with no money moving
-         *     (cancelled or rejected and unpaid). Same filters as the visit list;
-         *     newest first.
+         * @description The visit list without visits that ended before any money was taken
+         *     (cancelled or rejected with no payment in the ledger). Same filters
+         *     as the visit list; newest first. Amounts come from the payment
+         *     ledger (TEC-967).
          */
         get: operations["listCustomerPayments"];
         put?: never;
@@ -8985,7 +8986,7 @@ export interface paths {
         };
         /**
          * Amounts per currency
-         * @description Currencies are never added together.
+         * @description The ledger amounts of every visible visit, summed per currency (TEC-967). Currencies are never added together.
          */
         get: operations["getCustomerPaymentSummary"];
         put?: never;
@@ -17442,16 +17443,23 @@ export interface components {
             profile: components["schemas"]["CustomerProfile"];
         };
         /**
-         * @description The recorded payment picture of a visit. Until the payment ledger
-         *     records amounts, an online payment is the full total and a refund
-         *     the full total once refunded (`refunded` is null when unknown).
-         *     `balance` is null for a finished visit paid at the business.
+         * @description The money of a visit from the business's payment ledger (TEC-967),
+         *     in the visit's currency; reversed entries are netted out.
+         *     `expected` is what the visit costs: the posted charges once it is
+         *     completed, the booked total while it stands, 0 after a cancel, a
+         *     rejection or a no-show. `paid` is every payment taken (online or at
+         *     the business, in parts), `refunded` what was paid back, `balance`
+         *     what is still owed (expected less paid net of refunded).
+         *     `refund_pending` is money the business holds for a cancelled,
+         *     rejected or refund-waiting visit, or a refund still under way.
          */
         CustomerMoney: {
             total: components["schemas"]["MoneyAmount"];
+            expected: components["schemas"]["MoneyAmount"];
             paid: components["schemas"]["MoneyAmount"];
-            refunded: components["schemas"]["MoneyAmount"] | null;
-            balance: components["schemas"]["MoneyAmount"] | null;
+            refunded: components["schemas"]["MoneyAmount"];
+            refund_pending: components["schemas"]["MoneyAmount"];
+            balance: components["schemas"]["MoneyAmount"];
             currency: string;
             /** @enum {string} */
             method: "on_site" | "online";
@@ -17573,6 +17581,24 @@ export interface components {
                 /** Format: date-time */
                 refunded_at: string | null;
             }[];
+            /** @description The visit's live payments (`payment`) and refunds (`refund`) in the ledger, oldest first (TEC-967); a reversed entry is left out. No notes, accounts or staff. */
+            payments: {
+                /** Format: uuid */
+                uuid: string;
+                /** @enum {string} */
+                kind: "payment" | "refund";
+                /** @enum {string} */
+                method: "" | "cash" | "card" | "transfer" | "online" | "other";
+                amount: components["schemas"]["MoneyAmount"];
+                currency: string;
+                /**
+                 * Format: date
+                 * @description Business day of the entry
+                 */
+                date: string;
+                /** Format: date-time */
+                at: string;
+            }[];
             /**
              * @description Products taken with the visit (TEC-977): `held` (reserved for the visit), `delivered` (handed over when
              *     the visit was completed) or `released` (the visit was cancelled, rejected, expired or missed). Lines the
@@ -17617,6 +17643,7 @@ export interface components {
                 paid: components["schemas"]["MoneyAmount"];
                 refund_pending: components["schemas"]["MoneyAmount"];
                 refunded: components["schemas"]["MoneyAmount"];
+                balance: components["schemas"]["MoneyAmount"];
                 /** Format: int64 */
                 reservation_count: number;
             }[];

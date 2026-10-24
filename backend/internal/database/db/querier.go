@@ -271,9 +271,9 @@ type Querier interface {
 	CustomerPackageFacetBranches(ctx context.Context, arg CustomerPackageFacetBranchesParams) ([]CustomerPackageFacetBranchesRow, error)
 	// Package definitions sold in the caller's branches (list filter options).
 	CustomerPackageFacetPackages(ctx context.Context, arg CustomerPackageFacetPackagesParams) ([]CustomerPackageFacetPackagesRow, error)
-	// Amounts per currency, payment state and whether the visit still stands
-	// (cancelled / rejected visits count only for refunds). Currencies are
-	// never added together.
+	// The money of every visible visit from the payment ledger (TEC-967); the
+	// use case derives each visit's amounts with the same rules as the list
+	// and sums them per currency (currencies are never added together).
 	CustomerPanelPaymentTotals(ctx context.Context, identityID int64) ([]CustomerPanelPaymentTotalsRow, error)
 	// Whether a live business keeps a live customer record with the phone, or
 	// the phone was verified before. Codes go only to such phones (no SMS to
@@ -441,6 +441,8 @@ type Querier interface {
 	// One reservation of the identity: its business and branch context. Any
 	// uuid outside the identity's links answers no rows.
 	GetCustomerPanelReservation(ctx context.Context, arg GetCustomerPanelReservationParams) (GetCustomerPanelReservationRow, error)
+	// The ledger money of one visit (detail and visit link), as in the list.
+	GetCustomerPanelReservationMoney(ctx context.Context, arg GetCustomerPanelReservationMoneyParams) (GetCustomerPanelReservationMoneyRow, error)
 	GetCustomerSearchDocument(ctx context.Context, arg GetCustomerSearchDocumentParams) (GetCustomerSearchDocumentRow, error)
 	GetCustomerSession(ctx context.Context, argUuid uuid.UUID) (GetCustomerSessionRow, error)
 	// The reservation of a visit link, with the same columns as
@@ -885,6 +887,10 @@ type Querier interface {
 	// visibility window as the visits (on the sale time). state is the state
 	// on the business day in the business's time zone.
 	ListCustomerPanelPackages(ctx context.Context, arg ListCustomerPanelPackagesParams) ([]ListCustomerPanelPackagesRow, error)
+	// The payments and refunds of one visit as the customer sees them: live
+	// collections and refunds (a reversed one and the reversal itself are left
+	// out), oldest first.
+	ListCustomerPanelReservationPayments(ctx context.Context, arg ListCustomerPanelReservationPaymentsParams) ([]ListCustomerPanelReservationPaymentsRow, error)
 	ListCustomerPanelReservations(ctx context.Context, arg ListCustomerPanelReservationsParams) ([]ListCustomerPanelReservationsRow, error)
 	// Platform list of releases (TEC-972), newest first unless asked otherwise.
 	// phone is an exact E.164 match; note a case-insensitive part of the note.

@@ -152,11 +152,32 @@ SELECT r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.p
         SELECT DISTINCT rs.staff_name FROM reservation_lines rs
         WHERE rs.organization_id = r.organization_id AND rs.reservation_id = r.id AND rs.staff_name IS NOT NULL
         ORDER BY rs.staff_name
-    )::TEXT[] AS staff_names
+    )::TEXT[] AS staff_names,
+    m.charged, m.collected, m.refunded, m.open_refunds,
+    EXISTS (
+        SELECT 1 FROM sale_lines sl WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id
+    )::BOOLEAN AS sales_posted
 FROM customer_identity_links l
 JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id = l.customer_id
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
 JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+LEFT JOIN LATERAL (
+    -- The visit's money in the payment ledger (TEC-967), in its own
+    -- currency, reversals netted into the kind they undo.
+    SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS charged,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
+            THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS collected,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'refund'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS refunded,
+        (SELECT COALESCE(SUM(f.amount), 0) FROM refunds f
+         WHERE f.organization_id = r.organization_id AND f.reservation_id = r.id
+           AND f.status = 'requested' AND f.currency = r.currency)::NUMERIC(14, 2) AS open_refunds
+    FROM ledger_entries e
+    LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+    WHERE e.organization_id = r.organization_id AND e.reservation_id = r.id AND e.currency = r.currency
+) m ON TRUE
 WHERE l.identity_id = sqlc.arg(identity_id)
   AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
   AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
@@ -164,9 +185,14 @@ WHERE l.identity_id = sqlc.arg(identity_id)
        OR sqlc.narg(upcoming)::BOOLEAN = (r.status IN ('requested', 'active', 'in_service') AND r.ends_at > sqlc.arg(now)))
   AND (sqlc.narg(business_uuid)::UUID IS NULL OR o.uuid = sqlc.narg(business_uuid)::UUID)
   AND (sqlc.narg(statuses)::TEXT[] IS NULL OR r.status = ANY(sqlc.narg(statuses)::TEXT[]))
-  -- Payments view: leave out visits that ended without money moving.
+  -- Payments view: leave out visits that ended before any money was
+  -- taken for them.
   AND (NOT sqlc.arg(with_money)::BOOLEAN
-       OR NOT (r.status IN ('cancelled', 'rejected') AND r.payment_status IN ('on_site', 'online_pending', 'failed')))
+       OR r.status NOT IN ('cancelled', 'rejected')
+       OR EXISTS (
+           SELECT 1 FROM ledger_entries le
+           WHERE le.organization_id = r.organization_id AND le.reservation_id = r.id AND le.kind = 'collection'
+       ))
 ORDER BY
     CASE WHEN sqlc.arg(sort_desc)::BOOLEAN THEN r.starts_at END DESC,
     CASE WHEN NOT sqlc.arg(sort_desc)::BOOLEAN THEN r.starts_at END ASC,
@@ -186,22 +212,87 @@ WHERE l.identity_id = sqlc.arg(identity_id)
   AND (sqlc.narg(business_uuid)::UUID IS NULL OR o.uuid = sqlc.narg(business_uuid)::UUID)
   AND (sqlc.narg(statuses)::TEXT[] IS NULL OR r.status = ANY(sqlc.narg(statuses)::TEXT[]))
   AND (NOT sqlc.arg(with_money)::BOOLEAN
-       OR NOT (r.status IN ('cancelled', 'rejected') AND r.payment_status IN ('on_site', 'online_pending', 'failed')));
+       OR r.status NOT IN ('cancelled', 'rejected')
+       OR EXISTS (
+           SELECT 1 FROM ledger_entries le
+           WHERE le.organization_id = r.organization_id AND le.reservation_id = r.id AND le.kind = 'collection'
+       ));
 
 -- name: CustomerPanelPaymentTotals :many
--- Amounts per currency, payment state and whether the visit still stands
--- (cancelled / rejected visits count only for refunds). Currencies are
--- never added together.
-SELECT r.currency, r.payment_status, (r.status NOT IN ('cancelled', 'rejected'))::BOOLEAN AS standing,
-    COUNT(*)::BIGINT AS reservation_count, COALESCE(SUM(r.total_price), 0)::NUMERIC(14, 2) AS amount
+-- The money of every visible visit from the payment ledger (TEC-967); the
+-- use case derives each visit's amounts with the same rules as the list
+-- and sums them per currency (currencies are never added together).
+SELECT r.status, r.payment_status, r.total_price, r.currency,
+    m.charged, m.collected, m.refunded, m.open_refunds,
+    EXISTS (
+        SELECT 1 FROM sale_lines sl WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id
+    )::BOOLEAN AS sales_posted
 FROM customer_identity_links l
 JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id = l.customer_id
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    -- The visit's money in the payment ledger (TEC-967), in its own
+    -- currency, reversals netted into the kind they undo.
+    SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS charged,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
+            THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS collected,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'refund'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS refunded,
+        (SELECT COALESCE(SUM(f.amount), 0) FROM refunds f
+         WHERE f.organization_id = r.organization_id AND f.reservation_id = r.id
+           AND f.status = 'requested' AND f.currency = r.currency)::NUMERIC(14, 2) AS open_refunds
+    FROM ledger_entries e
+    LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+    WHERE e.organization_id = r.organization_id AND e.reservation_id = r.id AND e.currency = r.currency
+) m ON TRUE
 WHERE l.identity_id = sqlc.arg(identity_id)
   AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
   AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
-GROUP BY r.currency, r.payment_status, standing
-ORDER BY r.currency, r.payment_status, standing;
+ORDER BY r.currency, r.organization_id, r.id;
+
+-- name: GetCustomerPanelReservationMoney :one
+-- The ledger money of one visit (detail and visit link), as in the list.
+SELECT
+    m.charged, m.collected, m.refunded, m.open_refunds,
+    EXISTS (
+        SELECT 1 FROM sale_lines sl WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id
+    )::BOOLEAN AS sales_posted
+FROM reservations r
+LEFT JOIN LATERAL (
+    -- The visit's money in the payment ledger (TEC-967), in its own
+    -- currency, reversals netted into the kind they undo.
+    SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS charged,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
+            THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS collected,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'refund'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS refunded,
+        (SELECT COALESCE(SUM(f.amount), 0) FROM refunds f
+         WHERE f.organization_id = r.organization_id AND f.reservation_id = r.id
+           AND f.status = 'requested' AND f.currency = r.currency)::NUMERIC(14, 2) AS open_refunds
+    FROM ledger_entries e
+    LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+    WHERE e.organization_id = r.organization_id AND e.reservation_id = r.id AND e.currency = r.currency
+) m ON TRUE
+WHERE r.organization_id = sqlc.arg(organization_id) AND r.id = sqlc.arg(id);
+
+-- name: ListCustomerPanelReservationPayments :many
+-- The payments and refunds of one visit as the customer sees them: live
+-- collections and refunds (a reversed one and the reversal itself are left
+-- out), oldest first.
+SELECT e.uuid, e.kind, e.method, e.amount, e.currency, e.entry_date, e.created_at
+FROM ledger_entries e
+WHERE e.organization_id = sqlc.arg(organization_id) AND e.reservation_id = sqlc.arg(reservation_id)
+  AND e.kind IN ('collection', 'refund')
+  AND NOT EXISTS (
+      SELECT 1 FROM ledger_entries x
+      WHERE x.organization_id = e.organization_id AND x.reverses_entry_id = e.id
+  )
+ORDER BY e.created_at, e.id
+LIMIT 100;
 
 -- name: GetCustomerPanelReservation :one
 -- One reservation of the identity: its business and branch context. Any

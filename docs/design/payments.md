@@ -1,6 +1,6 @@
 # Payments: online full payment and payment at the business (TEC-912)
 
-A booking is paid in one of two ways. Online, the customer pays the full amount on the hosted page of the business's own payment provider. On site, staff record cash, card or a transfer on the reservation. Both write a collection to the customer ledger through `sales.RecordCollectionTx` and update the reservation's `payment_status`. Refunds are TEC-913; the customer panel's payment view is TEC-967.
+A booking is paid in one of two ways. Online, the customer pays the full amount on the hosted page of the business's own payment provider. On site, staff record cash, card or a transfer on the reservation. Both write a collection to the customer ledger through `sales.RecordCollectionTx` and update the reservation's `payment_status`. Refunds are TEC-913; the customer panel reads its amounts from the same ledger (TEC-967, [customer-panel.md](./customer-panel.md#payments)).
 
 Code:
 

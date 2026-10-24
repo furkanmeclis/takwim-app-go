@@ -216,18 +216,48 @@ const (
 	MethodOnline = "online"
 )
 
-// Money is what the customer owes and paid for one visit, as recorded.
-// Paid and Refunded come from the payment state until the payment ledger
-// (TEC-912) records amounts; Balance is null when a finished visit is paid
-// at the business (settled there, not recorded here).
+// Money is what the customer owes and paid for one visit, read from the
+// business's payment ledger (TEC-967), in the visit's currency:
+//
+//   - Total: the booked total of the visit.
+//   - Expected: what the visit costs: the posted sale charges once it is
+//     completed, the booked total while it stands, nothing after a cancel,
+//     a rejection or a no-show.
+//   - Paid: the money taken for it (every partial payment, online or at the
+//     business); Refunded: what was paid back.
+//   - Balance: what is still owed (Expected less Paid net of Refunded).
+//   - RefundPending: money the business holds for a visit that no longer
+//     costs it (cancelled, rejected or waiting for a refund), or a refund
+//     still under way.
 type Money struct {
-	Total         money.Money  `json:"total"`
-	Paid          money.Money  `json:"paid"`
-	Refunded      *money.Money `json:"refunded"`
-	Balance       *money.Money `json:"balance"`
-	Currency      string       `json:"currency"`
-	Method        string       `json:"method"`
-	PaymentStatus string       `json:"payment_status"`
+	Total         money.Money `json:"total"`
+	Expected      money.Money `json:"expected"`
+	Paid          money.Money `json:"paid"`
+	Refunded      money.Money `json:"refunded"`
+	RefundPending money.Money `json:"refund_pending"`
+	Balance       money.Money `json:"balance"`
+	Currency      string      `json:"currency"`
+	Method        string      `json:"method"`
+	PaymentStatus string      `json:"payment_status"`
+}
+
+// Payment kinds of the visit detail.
+const (
+	PaymentKindPayment = "payment"
+	PaymentKindRefund  = "refund"
+)
+
+// Payment is one live payment or refund of a visit in the ledger: the
+// partial payments one by one (TEC-967). Notes, accounts and staff are not
+// shown.
+type Payment struct {
+	UUID     uuid.UUID   `json:"uuid"`
+	Kind     string      `json:"kind"`
+	Method   string      `json:"method"`
+	Amount   money.Money `json:"amount"`
+	Currency string      `json:"currency"`
+	Date     string      `json:"date"`
+	At       time.Time   `json:"at"`
 }
 
 // Line is one service of the visit.
@@ -326,6 +356,9 @@ type Reservation struct {
 	History       []HistoryEntry `json:"history"`
 	// Refunds are the refunds of the visit (TEC-913), newest first.
 	Refunds []Refund `json:"refunds"`
+	// Payments are the visit's payments and refunds in the ledger, oldest
+	// first (TEC-967).
+	Payments []Payment `json:"payments"`
 	// Products are the products taken with the visit (TEC-977).
 	Products []Product `json:"products"`
 }
@@ -388,13 +421,16 @@ type RescheduleInput struct {
 	ExpectedVersion *int       `json:"expected_version"`
 }
 
-// PaymentTotal sums one currency.
+// PaymentTotal sums one currency over the person's visits: Booked is the
+// sum of their expected amounts, ReservationCount the visits not cancelled
+// or rejected; the rest add up the visits' Money.
 type PaymentTotal struct {
 	Currency         string      `json:"currency"`
 	Booked           money.Money `json:"booked"`
 	Paid             money.Money `json:"paid"`
 	RefundPending    money.Money `json:"refund_pending"`
 	Refunded         money.Money `json:"refunded"`
+	Balance          money.Money `json:"balance"`
 	ReservationCount int64       `json:"reservation_count"`
 }
 

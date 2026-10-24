@@ -29,7 +29,7 @@ All under **`/v1/customer`**; the browser calls `/api/v1/customer/…` on the sa
 | `POST reservations/{uuid}/cancel`        | `{expected_version}`                                                                            |
 | `POST reservations/{uuid}/availability`  | `{from, to}`: free starts for the same services on the online channel                           |
 | `POST reservations/{uuid}/reschedule`    | `{starts_at, expected_version}`                                                                 |
-| `GET payments`, `GET payments/summary`   | visits with money on them; totals per currency                                                  |
+| `GET payments`, `GET payments/summary`   | visits with money on them; totals per currency, from the payment ledger (TEC-967)               |
 | `POST auth/link`                         | `{token}` of a panel link → the same answer as `auth/verify` (TEC-910)                          |
 | `GET sessions`, `DELETE sessions/{uuid}` | the device list; sign one device out                                                            |
 | `POST phone/start`, `POST phone/verify`  | number change: a code to the new number, then the profile moves                                 |
@@ -66,9 +66,20 @@ The panel never decides on capacity or states itself; it calls the reservations 
 
 ## Payments
 
-There is no payment ledger yet (TEC-912). The amounts come from the visit total and `payment_status`: online payments count as the full total, a refund as the full total once refunded (`refunded` is `null` while it is unknown), `balance` is `null` for a finished visit paid at the business. A cancelled or rejected visit with nothing paid is left out of the payments list. The summary groups by currency.
+The amounts come from the business's payment ledger (TEC-967, [sales-ledger.md](./sales-ledger.md), [payments.md](./payments.md)), in the visit's currency, with reversed entries netted out. The list, the detail, the visit link and the summary use the same rule (`moneyOf` in `panel.go`):
 
-The visit detail answers `refunds` (TEC-913): each refund's amount, its status (`requested` in progress, `succeeded` paid back, or `failed`, shown as "being followed up" by the business) and its dates. When the visit has refunds, `money.refunded` on the detail is the sum of the succeeded ones. The list amounts stay as above until TEC-967.
+| Field            | Meaning                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `total`          | the booked total of the visit                                                                                                                                |
+| `expected`       | what the visit costs, as the business's reservation balance counts it: the posted sale charges once completed, the booked total while it stands, 0 otherwise |
+| `paid`           | every collection for the visit: online, at the business, in parts                                                                                            |
+| `refunded`       | the refunds posted to the ledger                                                                                                                             |
+| `balance`        | still owed: `expected` less `paid` net of `refunded`, never below 0                                                                                          |
+| `refund_pending` | money held beyond `expected` on a cancelled or rejected visit or one in `refund_pending` / `partially_refunded`, or the open (`requested`) refunds if more   |
+
+A no-show prepayment is not shown as a pending refund: it stays with the business's no-show policy. Neither is money the business closed without a refund (`kept`, TEC-978): it stays there as the customer's credit. A payment made at the business shows once the business records it (the payments page says so). The payments list leaves out a cancelled or rejected visit with no collection in the ledger. The summary adds the visits' figures per currency (`booked` = the sum of `expected`, `balance` = still owed; `reservation_count` = visits not cancelled or rejected).
+
+The visit detail answers `payments`: the live collections (`payment`) and refunds (`refund`) of the ledger, oldest first, with method, amount and business day; a reversed entry and its reversal are left out, and notes, accounts and staff are never shown. It also answers `refunds` (TEC-913): each refund's amount, its status (`requested` in progress, `succeeded` paid back, or `failed`, shown as "being followed up" by the business) and its dates.
 
 The visit detail also answers `products` (TEC-977): the products taken with the visit (name, variant, quantity, unit price, amount) and their state: `held` (set aside for the visit), `delivered` (handed over at the visit) or `released` (the visit was cancelled, rejected, expired or missed). A line the business removed is left out; stock codes, costs and the seller are never shown. The visit total already includes held and delivered products.
 
@@ -150,5 +161,4 @@ Acceptance: A29, A30. A number can change hands without anybody telling the pane
 
 ## Not in this issue
 
-- **Payment amounts** from a ledger: TEC-912.
 - **Confirmation** (teyit): the confirmation module drives `confirmation_status` (confirmations.md); the panel shows it and offers the answers.

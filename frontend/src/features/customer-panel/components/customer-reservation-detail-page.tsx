@@ -22,6 +22,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { CustomerConfirmationCard } from "@/features/customer-panel/components/customer-confirmation-card";
+import { CustomerPaymentsCard } from "@/features/customer-panel/components/customer-payments-card";
 import { CustomerProductsCard } from "@/features/customer-panel/components/customer-products-card";
 import { METHOD_KEYS } from "@/features/customer-panel/components/customer-reservation-columns";
 import { CustomerRescheduleDialog } from "@/features/customer-panel/components/customer-reschedule-dialog";
@@ -230,6 +231,8 @@ export function CustomerReservationBody({
       timeStyle: "short",
     },
   ) => datetimeInZone(iso, zone, locale, options);
+  const cash = (value: string) =>
+    amount(value, reservation.money.currency, locale);
 
   return (
     <>
@@ -368,45 +371,45 @@ export function CustomerReservationBody({
                   value: t(METHOD_KEYS[reservation.money.method]),
                 },
                 {
-                  key: "paid",
-                  label: t("customer_panel.columns.paid"),
-                  value: amount(
-                    reservation.money.paid,
-                    reservation.money.currency,
-                    locale,
-                  ),
+                  key: "expected",
+                  label: t("customer_panel.columns.expected"),
+                  value: cash(reservation.money.expected),
                 },
                 {
-                  key: "balance",
-                  label: t("customer_panel.columns.balance"),
-                  value:
-                    reservation.money.balance == null
-                      ? "—"
-                      : amount(
-                          reservation.money.balance,
-                          reservation.money.currency,
-                          locale,
-                        ),
+                  key: "paid",
+                  label: t("customer_panel.columns.paid"),
+                  value: cash(reservation.money.paid),
                 },
-                ...(reservation.money.refunded != null &&
-                toMinor(reservation.money.refunded)
+                ...(toMinor(reservation.money.refunded)
                   ? [
                       {
                         key: "refunded",
                         label: t("customer_panel.columns.refunded"),
-                        value: amount(
-                          reservation.money.refunded,
-                          reservation.money.currency,
-                          locale,
-                        ),
+                        value: cash(reservation.money.refunded),
                       },
                     ]
                   : []),
+                ...(toMinor(reservation.money.refund_pending)
+                  ? [
+                      {
+                        key: "refund_pending",
+                        label: t("customer_panel.columns.refund_pending"),
+                        value: cash(reservation.money.refund_pending),
+                      },
+                    ]
+                  : []),
+                {
+                  key: "balance",
+                  label: t("customer_panel.columns.balance"),
+                  value: cash(reservation.money.balance),
+                },
               ],
             },
           ]}
         />
       </EntitySectionCard>
+
+      <CustomerPaymentsCard reservation={reservation} />
 
       <RefundsCard reservation={reservation} />
 

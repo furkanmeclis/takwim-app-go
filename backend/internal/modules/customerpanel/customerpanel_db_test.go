@@ -548,8 +548,11 @@ func TestCustomerPanelReservations(t *testing.T) {
 	resB := f.book(t, f.orgB.ID, f.branchB, f.cutB, f.ayseB, f.huseyinB, at(11, 0))
 	done := f.book(t, f.orgA.ID, f.branchA, f.cutA, f.ayseA, f.huseyinA, at(9, 0))
 	zeynep := f.book(t, f.orgA.ID, f.branchA, f.cutA, f.ayseA, f.zeynep, at(11, 0))
-	// A paid online visit in B (payment state as the payment layer sets it).
+	// A paid online visit in B: the collection in the ledger and the
+	// payment state as the payment layer sets them.
+	k := f.withLedger(t)
 	paid := f.book(t, f.orgB.ID, f.branchB, f.cutB, f.ayseB, f.huseyinB, at(9, 30))
+	k.collect(t, f.orgB.ID, paid.UUID, "100.00", "online")
 	f.exec("UPDATE reservations SET payment_status = 'paid' WHERE organization_id = $1 AND uuid = $2", f.orgB.ID, paid.UUID)
 	if _, err := f.reservations.Complete(context.Background(), f.orgA.ID, done.UUID, availabilityusecase.Caller{}, f.owner.ID, reservationsusecase.ChangeInput{}); err != nil {
 		t.Fatal(err)
@@ -573,7 +576,7 @@ func TestCustomerPanelReservations(t *testing.T) {
 		t.Fatalf("leak in list: %s", r.raw)
 	}
 	past := decode[page](t, f.do(t, http.MethodGet, "/v1/customer/reservations?scope=past", tok, nil))
-	if past.Total != 1 || past.Items[0].UUID != done.UUID || past.Items[0].Money.Balance != nil || past.Items[0].Money.Method != model.MethodOnSite {
+	if past.Total != 1 || past.Items[0].UUID != done.UUID || past.Items[0].Money.Balance.String() != "100.00" || past.Items[0].Money.Method != model.MethodOnSite {
 		t.Fatalf("past = %+v", past)
 	}
 	onlyB := decode[page](t, f.do(t, http.MethodGet, "/v1/customer/reservations?business="+f.orgB.UUID.String(), tok, nil))
@@ -683,7 +686,7 @@ func TestCustomerPanelReservations(t *testing.T) {
 		if it.UUID == resB.UUID {
 			t.Fatal("cancelled unpaid visit in payments")
 		}
-		if it.UUID == paid.UUID && (it.Money.Paid.String() != "100.00" || it.Money.Balance == nil || it.Money.Balance.String() != "0.00" || it.Money.Method != model.MethodOnline) {
+		if it.UUID == paid.UUID && (it.Money.Paid.String() != "100.00" || it.Money.Balance.String() != "0.00" || it.Money.Method != model.MethodOnline) {
 			t.Fatalf("paid item = %+v", it.Money)
 		}
 	}

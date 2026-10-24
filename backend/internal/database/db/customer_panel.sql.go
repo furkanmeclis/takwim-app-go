@@ -228,7 +228,11 @@ WHERE l.identity_id = $1
   AND ($4::UUID IS NULL OR o.uuid = $4::UUID)
   AND ($5::TEXT[] IS NULL OR r.status = ANY($5::TEXT[]))
   AND (NOT $6::BOOLEAN
-       OR NOT (r.status IN ('cancelled', 'rejected') AND r.payment_status IN ('on_site', 'online_pending', 'failed')))
+       OR r.status NOT IN ('cancelled', 'rejected')
+       OR EXISTS (
+           SELECT 1 FROM ledger_entries le
+           WHERE le.organization_id = r.organization_id AND le.reservation_id = r.id AND le.kind = 'collection'
+       ))
 `
 
 type CountCustomerPanelReservationsParams struct {
@@ -541,29 +545,52 @@ func (q *Queries) CreateCustomerVisitLink(ctx context.Context, arg CreateCustome
 }
 
 const customerPanelPaymentTotals = `-- name: CustomerPanelPaymentTotals :many
-SELECT r.currency, r.payment_status, (r.status NOT IN ('cancelled', 'rejected'))::BOOLEAN AS standing,
-    COUNT(*)::BIGINT AS reservation_count, COALESCE(SUM(r.total_price), 0)::NUMERIC(14, 2) AS amount
+SELECT r.status, r.payment_status, r.total_price, r.currency,
+    m.charged, m.collected, m.refunded, m.open_refunds,
+    EXISTS (
+        SELECT 1 FROM sale_lines sl WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id
+    )::BOOLEAN AS sales_posted
 FROM customer_identity_links l
 JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id = l.customer_id
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
+LEFT JOIN LATERAL (
+    -- The visit's money in the payment ledger (TEC-967), in its own
+    -- currency, reversals netted into the kind they undo.
+    SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS charged,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
+            THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS collected,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'refund'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS refunded,
+        (SELECT COALESCE(SUM(f.amount), 0) FROM refunds f
+         WHERE f.organization_id = r.organization_id AND f.reservation_id = r.id
+           AND f.status = 'requested' AND f.currency = r.currency)::NUMERIC(14, 2) AS open_refunds
+    FROM ledger_entries e
+    LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+    WHERE e.organization_id = r.organization_id AND e.reservation_id = r.id AND e.currency = r.currency
+) m ON TRUE
 WHERE l.identity_id = $1
   AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
   AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
-GROUP BY r.currency, r.payment_status, standing
-ORDER BY r.currency, r.payment_status, standing
+ORDER BY r.currency, r.organization_id, r.id
 `
 
 type CustomerPanelPaymentTotalsRow struct {
-	Currency         string         `json:"currency"`
-	PaymentStatus    string         `json:"payment_status"`
-	Standing         bool           `json:"standing"`
-	ReservationCount int64          `json:"reservation_count"`
-	Amount           pgtype.Numeric `json:"amount"`
+	Status        string         `json:"status"`
+	PaymentStatus string         `json:"payment_status"`
+	TotalPrice    pgtype.Numeric `json:"total_price"`
+	Currency      string         `json:"currency"`
+	Charged       pgtype.Numeric `json:"charged"`
+	Collected     pgtype.Numeric `json:"collected"`
+	Refunded      pgtype.Numeric `json:"refunded"`
+	OpenRefunds   pgtype.Numeric `json:"open_refunds"`
+	SalesPosted   bool           `json:"sales_posted"`
 }
 
-// Amounts per currency, payment state and whether the visit still stands
-// (cancelled / rejected visits count only for refunds). Currencies are
-// never added together.
+// The money of every visible visit from the payment ledger (TEC-967); the
+// use case derives each visit's amounts with the same rules as the list
+// and sums them per currency (currencies are never added together).
 func (q *Queries) CustomerPanelPaymentTotals(ctx context.Context, identityID int64) ([]CustomerPanelPaymentTotalsRow, error) {
 	rows, err := q.db.Query(ctx, customerPanelPaymentTotals, identityID)
 	if err != nil {
@@ -574,11 +601,15 @@ func (q *Queries) CustomerPanelPaymentTotals(ctx context.Context, identityID int
 	for rows.Next() {
 		var i CustomerPanelPaymentTotalsRow
 		if err := rows.Scan(
-			&i.Currency,
+			&i.Status,
 			&i.PaymentStatus,
-			&i.Standing,
-			&i.ReservationCount,
-			&i.Amount,
+			&i.TotalPrice,
+			&i.Currency,
+			&i.Charged,
+			&i.Collected,
+			&i.Refunded,
+			&i.OpenRefunds,
+			&i.SalesPosted,
 		); err != nil {
 			return nil, err
 		}
@@ -718,6 +749,60 @@ func (q *Queries) GetCustomerPanelReservation(ctx context.Context, arg GetCustom
 		&i.BranchDistrict,
 		&i.BranchPhone,
 		&i.Timezone,
+	)
+	return i, err
+}
+
+const getCustomerPanelReservationMoney = `-- name: GetCustomerPanelReservationMoney :one
+SELECT
+    m.charged, m.collected, m.refunded, m.open_refunds,
+    EXISTS (
+        SELECT 1 FROM sale_lines sl WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id
+    )::BOOLEAN AS sales_posted
+FROM reservations r
+LEFT JOIN LATERAL (
+    -- The visit's money in the payment ledger (TEC-967), in its own
+    -- currency, reversals netted into the kind they undo.
+    SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS charged,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
+            THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS collected,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'refund'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS refunded,
+        (SELECT COALESCE(SUM(f.amount), 0) FROM refunds f
+         WHERE f.organization_id = r.organization_id AND f.reservation_id = r.id
+           AND f.status = 'requested' AND f.currency = r.currency)::NUMERIC(14, 2) AS open_refunds
+    FROM ledger_entries e
+    LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+    WHERE e.organization_id = r.organization_id AND e.reservation_id = r.id AND e.currency = r.currency
+) m ON TRUE
+WHERE r.organization_id = $1 AND r.id = $2
+`
+
+type GetCustomerPanelReservationMoneyParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type GetCustomerPanelReservationMoneyRow struct {
+	Charged     pgtype.Numeric `json:"charged"`
+	Collected   pgtype.Numeric `json:"collected"`
+	Refunded    pgtype.Numeric `json:"refunded"`
+	OpenRefunds pgtype.Numeric `json:"open_refunds"`
+	SalesPosted bool           `json:"sales_posted"`
+}
+
+// The ledger money of one visit (detail and visit link), as in the list.
+func (q *Queries) GetCustomerPanelReservationMoney(ctx context.Context, arg GetCustomerPanelReservationMoneyParams) (GetCustomerPanelReservationMoneyRow, error) {
+	row := q.db.QueryRow(ctx, getCustomerPanelReservationMoney, arg.OrganizationID, arg.ID)
+	var i GetCustomerPanelReservationMoneyRow
+	err := row.Scan(
+		&i.Charged,
+		&i.Collected,
+		&i.Refunded,
+		&i.OpenRefunds,
+		&i.SalesPosted,
 	)
 	return i, err
 }
@@ -1151,6 +1236,65 @@ func (q *Queries) ListCustomerPanelBusinesses(ctx context.Context, identityID in
 	return items, nil
 }
 
+const listCustomerPanelReservationPayments = `-- name: ListCustomerPanelReservationPayments :many
+SELECT e.uuid, e.kind, e.method, e.amount, e.currency, e.entry_date, e.created_at
+FROM ledger_entries e
+WHERE e.organization_id = $1 AND e.reservation_id = $2
+  AND e.kind IN ('collection', 'refund')
+  AND NOT EXISTS (
+      SELECT 1 FROM ledger_entries x
+      WHERE x.organization_id = e.organization_id AND x.reverses_entry_id = e.id
+  )
+ORDER BY e.created_at, e.id
+LIMIT 100
+`
+
+type ListCustomerPanelReservationPaymentsParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	ReservationID  pgtype.Int8 `json:"reservation_id"`
+}
+
+type ListCustomerPanelReservationPaymentsRow struct {
+	Uuid      uuid.UUID          `json:"uuid"`
+	Kind      string             `json:"kind"`
+	Method    string             `json:"method"`
+	Amount    pgtype.Numeric     `json:"amount"`
+	Currency  string             `json:"currency"`
+	EntryDate pgtype.Date        `json:"entry_date"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// The payments and refunds of one visit as the customer sees them: live
+// collections and refunds (a reversed one and the reversal itself are left
+// out), oldest first.
+func (q *Queries) ListCustomerPanelReservationPayments(ctx context.Context, arg ListCustomerPanelReservationPaymentsParams) ([]ListCustomerPanelReservationPaymentsRow, error) {
+	rows, err := q.db.Query(ctx, listCustomerPanelReservationPayments, arg.OrganizationID, arg.ReservationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCustomerPanelReservationPaymentsRow{}
+	for rows.Next() {
+		var i ListCustomerPanelReservationPaymentsRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Kind,
+			&i.Method,
+			&i.Amount,
+			&i.Currency,
+			&i.EntryDate,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCustomerPanelReservations = `-- name: ListCustomerPanelReservations :many
 SELECT r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.payment_status,
     r.starts_at, r.ends_at, r.total_price, r.currency, r.cancel_reason, r.created_at,
@@ -1166,11 +1310,32 @@ SELECT r.uuid, r.number, r.status, r.approval_status, r.confirmation_status, r.p
         SELECT DISTINCT rs.staff_name FROM reservation_lines rs
         WHERE rs.organization_id = r.organization_id AND rs.reservation_id = r.id AND rs.staff_name IS NOT NULL
         ORDER BY rs.staff_name
-    )::TEXT[] AS staff_names
+    )::TEXT[] AS staff_names,
+    m.charged, m.collected, m.refunded, m.open_refunds,
+    EXISTS (
+        SELECT 1 FROM sale_lines sl WHERE sl.organization_id = r.organization_id AND sl.reservation_id = r.id
+    )::BOOLEAN AS sales_posted
 FROM customer_identity_links l
 JOIN reservations r ON r.organization_id = l.organization_id AND r.customer_id = l.customer_id
 JOIN organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
 JOIN branches b ON b.organization_id = r.organization_id AND b.id = r.branch_id
+LEFT JOIN LATERAL (
+    -- The visit's money in the payment ledger (TEC-967), in its own
+    -- currency, reversals netted into the kind they undo.
+    SELECT
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'sale'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS charged,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'collection'
+            THEN CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS collected,
+        COALESCE(SUM(CASE WHEN COALESCE(o.kind, e.kind) = 'refund'
+            THEN CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END END), 0)::NUMERIC(14, 2) AS refunded,
+        (SELECT COALESCE(SUM(f.amount), 0) FROM refunds f
+         WHERE f.organization_id = r.organization_id AND f.reservation_id = r.id
+           AND f.status = 'requested' AND f.currency = r.currency)::NUMERIC(14, 2) AS open_refunds
+    FROM ledger_entries e
+    LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+    WHERE e.organization_id = r.organization_id AND e.reservation_id = r.id AND e.currency = r.currency
+) m ON TRUE
 WHERE l.identity_id = $1
   AND (l.visible_from IS NULL OR r.created_at >= l.visible_from)
   AND (l.visible_until IS NULL OR r.created_at < l.visible_until)
@@ -1178,9 +1343,14 @@ WHERE l.identity_id = $1
        OR $2::BOOLEAN = (r.status IN ('requested', 'active', 'in_service') AND r.ends_at > $3))
   AND ($4::UUID IS NULL OR o.uuid = $4::UUID)
   AND ($5::TEXT[] IS NULL OR r.status = ANY($5::TEXT[]))
-  -- Payments view: leave out visits that ended without money moving.
+  -- Payments view: leave out visits that ended before any money was
+  -- taken for them.
   AND (NOT $6::BOOLEAN
-       OR NOT (r.status IN ('cancelled', 'rejected') AND r.payment_status IN ('on_site', 'online_pending', 'failed')))
+       OR r.status NOT IN ('cancelled', 'rejected')
+       OR EXISTS (
+           SELECT 1 FROM ledger_entries le
+           WHERE le.organization_id = r.organization_id AND le.reservation_id = r.id AND le.kind = 'collection'
+       ))
 ORDER BY
     CASE WHEN $7::BOOLEAN THEN r.starts_at END DESC,
     CASE WHEN NOT $7::BOOLEAN THEN r.starts_at END ASC,
@@ -1221,6 +1391,11 @@ type ListCustomerPanelReservationsRow struct {
 	Timezone           string             `json:"timezone"`
 	ServiceNames       []string           `json:"service_names"`
 	StaffNames         []string           `json:"staff_names"`
+	Charged            pgtype.Numeric     `json:"charged"`
+	Collected          pgtype.Numeric     `json:"collected"`
+	Refunded           pgtype.Numeric     `json:"refunded"`
+	OpenRefunds        pgtype.Numeric     `json:"open_refunds"`
+	SalesPosted        bool               `json:"sales_posted"`
 }
 
 func (q *Queries) ListCustomerPanelReservations(ctx context.Context, arg ListCustomerPanelReservationsParams) ([]ListCustomerPanelReservationsRow, error) {
@@ -1263,6 +1438,11 @@ func (q *Queries) ListCustomerPanelReservations(ctx context.Context, arg ListCus
 			&i.Timezone,
 			&i.ServiceNames,
 			&i.StaffNames,
+			&i.Charged,
+			&i.Collected,
+			&i.Refunded,
+			&i.OpenRefunds,
+			&i.SalesPosted,
 		); err != nil {
 			return nil, err
 		}
