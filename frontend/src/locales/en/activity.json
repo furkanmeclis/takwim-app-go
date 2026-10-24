@@ -388,5 +388,7 @@
   "fields.tenant.classes.valid_from": "Start date",
   "fields.tenant.classes.valid_until": "End date",
   "fields.tenant.classes.is_active": "Active",
-  "resources.tenant.class_sessions": "Class sessions"
+  "resources.tenant.class_sessions": "Class sessions",
+  "actions.products.sale_collected": "Sale money collected",
+  "actions.products.sale_refunded": "Sale money refunded"
 }

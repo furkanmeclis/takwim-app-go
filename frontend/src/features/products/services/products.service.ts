@@ -18,6 +18,11 @@ import type {
   StockMovementPage,
   StockMovementRequest,
   StockMovementResult,
+  StockPaymentAccounts,
+  StockSaleCollectRequest,
+  StockSalePayments,
+  StockSaleRefundRequest,
+  StockSaleRefundResult,
 } from "@/features/products/types";
 import { tenantFormRequest, tenantRequest } from "@/lib/api/tenant-request";
 
@@ -168,6 +173,45 @@ export const productsService = {
       slug,
       "POST",
       `${MOVEMENTS}/${uuid}/return`,
+      { body },
+    );
+  },
+
+  /** The money of a counter sale (TEC-992): collected, refunded, accounts. */
+  salePayments(slug: string, uuid: string) {
+    return tenantRequest<StockSalePayments>(
+      slug,
+      "GET",
+      `${MOVEMENTS}/${uuid}/payments`,
+    );
+  },
+
+  /** Accounts a counter sale of the branch takes money into / pays back from. */
+  paymentAccounts(slug: string, branchUuid: string) {
+    return tenantRequest<StockPaymentAccounts>(
+      slug,
+      "GET",
+      `${MOVEMENTS}/payment-accounts`,
+      { query: { branch_uuid: branchUuid } },
+    );
+  },
+
+  /** Takes money for a sale after the sale (a part or the rest). */
+  collectSale(slug: string, uuid: string, body: StockSaleCollectRequest) {
+    return tenantRequest<StockSalePayments>(
+      slug,
+      "POST",
+      `${MOVEMENTS}/${uuid}/collections`,
+      { body },
+    );
+  },
+
+  /** Pays the money of a sale back after the return. */
+  refundSale(slug: string, uuid: string, body: StockSaleRefundRequest) {
+    return tenantRequest<StockSaleRefundResult>(
+      slug,
+      "POST",
+      `${MOVEMENTS}/${uuid}/refunds`,
       { body },
     );
   },

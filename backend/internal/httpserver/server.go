@@ -543,6 +543,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	paymentsSvc.SetResourceEvents(resourceEvents)
 	// Refund done / being processed notices to the customer (TEC-978).
 	paymentsSvc.SetRefundNotifier(paymentsmodule.RefundNotices(notifyEngine, deps.Queries))
+	// Money of walk-in product sales (TEC-992): a collection with the sale
+	// and a refund with the return, in their transactions.
+	productsSvc.SetSaleCollector(paymentsmodule.StockSaleCollector(paymentsSvc))
+	productsSvc.SetSaleRefunder(paymentsmodule.StockSaleRefunder(paymentsSvc))
 	paymentsH := paymentshandler.New(paymentsSvc, activityRec)
 	paymentsH.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
 	paymentsmodule.RegisterRoutes(mux, paymentsH, tokens, loader, tenantResolver)

@@ -257,10 +257,34 @@ type Movement struct {
 	Note              string       `json:"note"`
 	Source            string       `json:"source"`
 	// Returned: a sale whose product was taken back (TEC-913).
-	Returned   bool      `json:"returned"`
-	OccurredAt time.Time `json:"occurred_at"`
-	CreatedBy  *Ref      `json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
+	Returned bool `json:"returned"`
+	// Collected / Refunded: the money taken for a walk-in sale and paid
+	// back from it (TEC-992); nil on other kinds.
+	Collected  *money.Money `json:"collected"`
+	Refunded   *money.Money `json:"refunded"`
+	OccurredAt time.Time    `json:"occurred_at"`
+	CreatedBy  *Ref         `json:"created_by"`
+	CreatedAt  time.Time    `json:"created_at"`
+}
+
+// SaleCollectionInput is the money taken with a walk-in sale (TEC-992),
+// `collection` of a sale movement: it is posted as a ledger collection
+// into the cash account in the sale's transaction. A zero Amount means
+// the sale total.
+type SaleCollectionInput struct {
+	Amount          money.Money `json:"amount"`
+	Method          string      `json:"method"`
+	CashAccountUUID uuid.UUID   `json:"cash_account_uuid"`
+	Note            string      `json:"note"`
+}
+
+// SaleRefundInput pays back the money of a returned sale (TEC-992),
+// `refund` of a return: a ledger refund out of the cash account in the
+// return's transaction. A zero Amount means all that is left.
+type SaleRefundInput struct {
+	Amount          money.Money `json:"amount"`
+	Method          string      `json:"method"`
+	CashAccountUUID uuid.UUID   `json:"cash_account_uuid"`
 }
 
 // MovementInput is the body of POST /stock-movements. Quantity is the
@@ -280,6 +304,8 @@ type MovementInput struct {
 	Reason          *string      `json:"reason"`
 	Note            *string      `json:"note"`
 	OccurredAt      *time.Time   `json:"occurred_at"`
+	// Collection: the money taken with a sale (sales only, TEC-992).
+	Collection *SaleCollectionInput `json:"collection"`
 	// Source marks what produced the movement (not part of the body):
 	// empty is a panel entry ("manual"), SourceImport a count import.
 	Source string `json:"-"`
@@ -342,4 +368,6 @@ const (
 type ReturnInput struct {
 	Reason string `json:"reason"`
 	Note   string `json:"note"`
+	// Refund: the money paid back with the return (TEC-992).
+	Refund *SaleRefundInput `json:"refund"`
 }

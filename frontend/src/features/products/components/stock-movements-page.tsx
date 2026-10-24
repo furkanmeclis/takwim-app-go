@@ -18,6 +18,10 @@ import { routes } from "@/config/routes";
 import { useMovementColumns } from "@/features/products/components/movement-columns";
 import { SaleReturnDialog } from "@/features/products/components/sale-return-dialog";
 import { StockMovementDialog } from "@/features/products/components/stock-movement-dialog";
+import {
+  StockSaleCollectDialog,
+  StockSaleRefundDialog,
+} from "@/features/products/components/stock-sale-money-dialogs";
 import { ResourceIOToolbar } from "@/features/io";
 import {
   PRODUCTS_RESOURCE,
@@ -32,6 +36,7 @@ import type {
   ListStockMovementsParams,
   StockMovement,
 } from "@/features/products/types";
+import { useNavModules } from "@/features/nav-engine/lib/modules";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { tenantLiveList } from "@/features/tenant/lib/live";
 import { useLocale } from "@/providers/locale-provider";
@@ -67,8 +72,11 @@ export function StockMovementsPage() {
   const { t } = useLocale();
   const { slug, organization } = useTenant();
   const { can } = usePermission();
+  const hasModule = useNavModules();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [returning, setReturning] = useState<StockMovement | null>(null);
+  const [collecting, setCollecting] = useState<StockMovement | null>(null);
+  const [refunding, setRefunding] = useState<StockMovement | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -101,9 +109,15 @@ export function StockMovementsPage() {
   const canReturn =
     can(permissions.tenant.products.stock) &&
     can(permissions.tenant.payment.refund);
+  // Money of a sale (TEC-992): the money permissions and the cash module.
+  const canCollect =
+    hasModule("cash") && can(permissions.tenant.payment.collect);
+  const canRefund = hasModule("cash") && can(permissions.tenant.payment.refund);
   const columns = useMovementColumns({
     facets: facetsQuery.data,
     onReturn: canReturn ? setReturning : undefined,
+    onCollect: canCollect ? setCollecting : undefined,
+    onRefund: canRefund ? setRefunding : undefined,
   });
 
   const total = listQuery.data?.total ?? 0;
@@ -240,6 +254,18 @@ export function StockMovementsPage() {
         movement={returning}
         onOpenChange={(open) => {
           if (!open) setReturning(null);
+        }}
+      />
+      <StockSaleCollectDialog
+        movement={collecting}
+        onOpenChange={(open) => {
+          if (!open) setCollecting(null);
+        }}
+      />
+      <StockSaleRefundDialog
+        movement={refunding}
+        onOpenChange={(open) => {
+          if (!open) setRefunding(null);
         }}
       />
     </EntityPage>

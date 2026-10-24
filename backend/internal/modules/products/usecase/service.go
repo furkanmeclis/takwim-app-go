@@ -106,7 +106,22 @@ type Service struct {
 	sales SaleRecorder
 	// reverse reverses the sale line of a returned stock sale (TEC-913).
 	reverse SaleReverser
+	// collect records the money taken with a stock sale and refund pays
+	// the money of a returned sale back (TEC-992).
+	collect SaleCollector
+	refund  SaleRefunder
 }
+
+// MoneyConflict is a cash rule a sale collection or a return refund ran
+// into (a closed day, an archived account, a till that cannot go below
+// zero): answered as 409 with its field.
+type MoneyConflict struct {
+	Field   string
+	Code    string
+	Message string
+}
+
+func (e *MoneyConflict) Error() string { return e.Message }
 
 // New builds the service. indexer may be nil.
 func New(repo *repository.Postgres, indexer SearchIndexer) *Service {

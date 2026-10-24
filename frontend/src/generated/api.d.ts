@@ -4747,6 +4747,15 @@ export interface paths {
          *     `transfer_uuid`. A product with variants needs `variant_uuid`. A sale
          *     needs an active product sold in the branch (`not_offered`); its unit
          *     price defaults to the branch price.
+         *
+         *     A sale may take its money at once (TEC-992): `collection` names the
+         *     method (`cash`, `card`, `transfer`) and an active till or bank
+         *     account of the branch or a business-wide one; `amount` defaults to
+         *     the sale total and is at most what is left to pay
+         *     (`collection.amount` / `exceeds_remaining`). The collection is
+         *     posted to the ledger with the sale, in its transaction, and needs
+         *     `tenant.payment.collect` and the cash module. A closed day of the
+         *     till is `409` `collection.cash_account_uuid` / `closed`.
          */
         post: operations["postTenantStockMovement"];
         delete?: never;
@@ -4771,10 +4780,137 @@ export interface paths {
          *     `sale_return`) and the sale's revenue line is reversed, in one
          *     transaction. A sale is returned once (`409 STOCK_ALREADY_RETURNED`);
          *     any other movement is `409 STOCK_NOT_RETURNABLE`. `reason` is
-         *     required. Money paid for it is refunded separately. Needs
-         *     `tenant.products.stock` and `tenant.payment.refund`.
+         *     required. Needs `tenant.products.stock` and `tenant.payment.refund`.
+         *
+         *     `refund` pays the money back with the return (TEC-992): by hand,
+         *     out of an active till, bank or online account of the branch or a
+         *     business-wide one; `amount` defaults to all that is left of the
+         *     sale's collections, oldest first, and is at most that
+         *     (`refund.amount` / `exceeds_refundable`). The refund entries are
+         *     posted in the return's transaction (a refused refund leaves the
+         *     stock untouched) and need the cash module. A till that cannot pay
+         *     it is `409` `refund.cash_account_uuid` / `insufficient_funds`.
+         *     Money can also be paid back later with
+         *     `POST /v1/tenant/stock-movements/{uuid}/refunds`.
          */
         post: operations["postTenantStockMovementReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/payment-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Accounts for the money of counter sales
+         * @description The accounts counter sales of a branch take money into
+         *     (`collect_accounts`: active tills and bank accounts of the branch or
+         *     business-wide, listed with `tenant.payment.collect`) and pay it back
+         *     from (`refund_accounts`: tills, bank and online accounts, listed with
+         *     `tenant.payment.refund`), in the branch's currency (TEC-992). The
+         *     new sale dialog uses it. Needs `tenant.products.read`, the products
+         *     module and one of the two money permissions; a branch outside the
+         *     caller's scope is `422` `branch_uuid` / `not_found`.
+         */
+        get: operations["getTenantStockPaymentAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/{uuid}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Money of a counter sale
+         * @description The payment view of a `sale` stock movement (TEC-992): what it
+         *     charges (`expected`, its live revenue debits), what was collected
+         *     and paid back, the money entries and the live collections with what
+         *     is left of each. With `tenant.payment.collect` and the cash module
+         *     the accounts a collection may go into (`can_collect` while something
+         *     is left to pay and the sale is not returned); with
+         *     `tenant.payment.refund` the accounts a refund may leave
+         *     (`can_refund` while money is held). Any other movement, or one
+         *     outside the caller's branch scope, is `404`. Needs
+         *     `tenant.products.read` and the products module.
+         */
+        get: operations["getTenantStockMovementPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/{uuid}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take money for a counter sale
+         * @description Records money taken for a `sale` stock movement after the sale
+         *     (cash, card or transfer; a part or the rest, at most the remaining
+         *     amount: `amount` / `exceeds_remaining`): a ledger collection with
+         *     the movement as its source and its cash movement into an active
+         *     till or bank account of the sale's branch or a business-wide one.
+         *     Collections of one sale serialize. A returned sale is
+         *     `409 PAYMENT_NOT_COLLECTABLE`; a closed day of the till `409`
+         *     `cash_account_uuid` / `closed`. Needs `tenant.payment.collect`, the
+         *     cash module, `tenant.products.read` and the products module.
+         */
+        post: operations["postTenantStockMovementCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/stock-movements/{uuid}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay the money of a counter sale back
+         * @description Pays back (part of) the money taken for a `sale` stock movement, by
+         *     hand (`cash`, `card`, `transfer`, or `online` = paid back outside
+         *     Takwim), out of an active till, bank or online account of the
+         *     sale's branch or a business-wide one: one ledger refund per
+         *     collection it draws on, oldest first, never more than what is left
+         *     (`amount` / `exceeds_refundable`; an omitted or zero `amount` pays
+         *     back all of it). `idempotency_key` is required: the same key
+         *     answers the first result again (`200`, `replayed: true`), the same
+         *     key with another amount is `409 REFUND_IDEMPOTENCY_REUSED`. A till
+         *     that cannot pay it is `409` `cash_account_uuid` /
+         *     `insufficient_funds`. Usually the money goes back with the return
+         *     (`refund` of `POST .../return`); this route serves a return made
+         *     without it. Needs `tenant.payment.refund`, the cash module,
+         *     `tenant.products.read` and the products module.
+         */
+        post: operations["postTenantStockMovementRefund"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14290,6 +14426,10 @@ export interface components {
             kind: "receipt" | "sale" | "return" | "adjustment" | "transfer_out" | "transfer_in";
             /** @description A sale whose product was taken back (`POST /v1/tenant/stock-movements/{uuid}/return`). */
             returned: boolean;
+            /** @description Money taken for a walk-in sale, net of reversals (TEC-992); null on other kinds. */
+            collected: components["schemas"]["MoneyAmount"] | null;
+            /** @description Money paid back from the sale's collections, net of reversals; null on other kinds. */
+            refunded: components["schemas"]["MoneyAmount"] | null;
             quantity: number;
             balance_after: number;
             product: components["schemas"]["TenantStockRef"];
@@ -14354,6 +14494,25 @@ export interface components {
              * @description Defaults to now; never in the future
              */
             occurred_at?: string;
+            /** @description Money taken with the sale (sales only; `tenant.payment.collect` and the cash module). */
+            collection?: components["schemas"]["TenantStockSaleCollectionInput"] | null;
+        };
+        TenantStockSaleCollectionInput: {
+            /** @description Defaults to the sale total; at most what is left to pay. */
+            amount?: components["schemas"]["MoneyInput"];
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer";
+            /** Format: uuid */
+            cash_account_uuid: string;
+            note?: string;
+        };
+        TenantStockSaleRefundInput: {
+            /** @description Defaults to all that is left of the sale's collections; at most that. */
+            amount?: components["schemas"]["MoneyInput"];
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer" | "online";
+            /** Format: uuid */
+            cash_account_uuid: string;
         };
         TenantStockMovementPage: {
             items: components["schemas"]["TenantStockMovement"][];
@@ -17365,6 +17524,96 @@ export interface components {
             provider: string;
             /** @description The provider's refund API can pay it back. */
             provider_refund: boolean;
+        };
+        /**
+         * @description The money of a counter sale (TEC-992). `expected` is what the sale
+         *     charges (its live revenue debits), `paid` = collected - refunded,
+         *     `remaining` = expected - paid (never below zero), `refundable` =
+         *     paid (never below zero). `entries` are the money entries only.
+         */
+        TenantStockSalePayments: {
+            movement: {
+                /** Format: uuid */
+                uuid: string;
+                product: string;
+                /** @description Empty without a variant. */
+                variant: string;
+                branch: {
+                    /** Format: uuid */
+                    uuid: string;
+                    name: string;
+                };
+                /** @description Units sold (positive). */
+                quantity: number;
+                returned: boolean;
+                /** Format: date-time */
+                occurred_at: string;
+            };
+            currency: string;
+            expected: components["schemas"]["MoneyAmount"];
+            collected: components["schemas"]["MoneyAmount"];
+            refunded: components["schemas"]["MoneyAmount"];
+            paid: components["schemas"]["MoneyAmount"];
+            remaining: components["schemas"]["MoneyAmount"];
+            refundable: components["schemas"]["MoneyAmount"];
+            entries: components["schemas"]["LedgerEntry"][];
+            collections: components["schemas"]["TenantStockSaleCollection"][];
+            can_collect: boolean;
+            collect_accounts: components["schemas"]["CollectAccount"][];
+            can_refund: boolean;
+            refund_accounts: components["schemas"]["CollectAccount"][];
+        };
+        TenantStockSaleCollection: {
+            /** Format: uuid */
+            uuid: string;
+            method: string;
+            /** Format: date */
+            entry_date: string;
+            amount: components["schemas"]["MoneyAmount"];
+            refunded: components["schemas"]["MoneyAmount"];
+            refundable: components["schemas"]["MoneyAmount"];
+            cash_account: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+        };
+        EnvelopeTenantStockSalePayments: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantStockSalePayments"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TenantStockSaleRefundRequest: {
+            /** @description Defaults to all that is left of the sale's collections. */
+            amount?: components["schemas"]["MoneyInput"];
+            /** @enum {string} */
+            method: "cash" | "card" | "transfer" | "online";
+            /** Format: uuid */
+            cash_account_uuid: string;
+            reason?: string;
+            idempotency_key: string;
+        };
+        TenantStockSaleRefundResult: {
+            payments: components["schemas"]["TenantStockSalePayments"];
+            replayed: boolean;
+        };
+        EnvelopeTenantStockSaleRefundResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantStockSaleRefundResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        TenantStockPaymentAccounts: {
+            currency: string;
+            collect_accounts: components["schemas"]["CollectAccount"][];
+            refund_accounts: components["schemas"]["CollectAccount"][];
+        };
+        EnvelopeTenantStockPaymentAccounts: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["TenantStockPaymentAccounts"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         ReservationRefundRequest: {
             /** Format: uuid */
@@ -27397,6 +27646,8 @@ export interface operations {
                 "application/json": {
                     reason: string;
                     note?: string;
+                    /** @description Money paid back with the return (the cash module). */
+                    refund?: components["schemas"]["TenantStockSaleRefundInput"] | null;
                 };
             };
         };
@@ -27415,6 +27666,158 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantStockPaymentAccounts: {
+        parameters: {
+            query: {
+                branch_uuid: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accounts of the branch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockPaymentAccounts"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getTenantStockMovementPayments: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payment view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockSalePayments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantStockMovementCollection: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservationCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Payment view after the collection */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockSalePayments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    postTenantStockMovementRefund: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantStockSaleRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description The same key again (`replayed: true`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockSaleRefundResult"];
+                };
+            };
+            /** @description The payment view after the refund */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeTenantStockSaleRefundResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getTenantCustomersMeta: {

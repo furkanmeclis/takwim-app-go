@@ -18,6 +18,40 @@ type Translate = (key: string) => string;
 /** Value of an empty staff pick. */
 export const NO_STAFF = "none";
 
+/** Ways money is taken at the counter (API `collection.method`). */
+export const COLLECT_METHODS = ["cash", "card", "transfer"] as const;
+/** Ways money is paid back by hand ("online" = paid back outside Takwim). */
+export const REFUND_METHODS = ["cash", "card", "transfer", "online"] as const;
+export type CollectMethod = (typeof COLLECT_METHODS)[number];
+export type RefundMethod = (typeof REFUND_METHODS)[number];
+
+/** Most characters of a collection's note (API limit). */
+export const MAX_COLLECT_NOTE = 240;
+
+/**
+ * Money with the sale (TEC-992): `enabled` is the switch; the account is
+ * required while it is on, the amount optional (empty = the sale total).
+ */
+export function collectionSchema(t: Translate) {
+  return z.object({
+    enabled: z.boolean(),
+    amount: optionalPriceField(t),
+    method: z.enum(COLLECT_METHODS),
+    cash_account_uuid: z.string(),
+    note: z.string().max(MAX_COLLECT_NOTE, t("products.validation.note_max")),
+  });
+}
+
+export type CollectionFormValues = z.infer<ReturnType<typeof collectionSchema>>;
+
+export const collectionDefaults = (enabled: boolean): CollectionFormValues => ({
+  enabled,
+  amount: "",
+  method: "cash",
+  cash_account_uuid: "",
+  note: "",
+});
+
 function optionalCount(t: Translate, min: number) {
   return z
     .string()
@@ -52,8 +86,20 @@ export function createMovementSchema(t: Translate) {
       reason: z.string().trim().max(200, t("products.validation.reason_max")),
       note: z.string().max(2000),
       occurred_at: z.string(),
+      collection: collectionSchema(t),
     })
     .superRefine((values, ctx) => {
+      if (
+        values.kind === "sale" &&
+        values.collection.enabled &&
+        !values.collection.cash_account_uuid
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["collection", "cash_account_uuid"],
+          message: t("products.validation.account_required"),
+        });
+      }
       if (values.kind === "adjustment") {
         if (values.counted_quantity === "") {
           ctx.addIssue({
@@ -96,6 +142,8 @@ export function movementFormDefaults(defaults: {
   branchUuid?: string;
   productUuid?: string;
   variantUuid?: string;
+  /** The member may take money with a sale: the collection switch starts on. */
+  collect?: boolean;
 }): MovementFormValues {
   return {
     kind: defaults.kind ?? "receipt",
@@ -111,6 +159,7 @@ export function movementFormDefaults(defaults: {
     reason: "",
     note: "",
     occurred_at: "",
+    collection: collectionDefaults(Boolean(defaults.collect)),
   };
 }
 
@@ -143,6 +192,17 @@ export function movementFormToRequest(
     if (values.staff_uuid && values.staff_uuid !== NO_STAFF) {
       body.staff_uuid = values.staff_uuid;
     }
+  }
+  if (kind === "sale" && values.collection.enabled) {
+    const amount = normalizePrice(values.collection.amount);
+    body.collection = {
+      method: values.collection.method,
+      cash_account_uuid: values.collection.cash_account_uuid,
+      ...(amount ? { amount } : {}),
+      ...(values.collection.note.trim()
+        ? { note: values.collection.note.trim() }
+        : {}),
+    };
   }
   if (kind === "receipt") {
     const cost = normalizePrice(values.unit_cost);

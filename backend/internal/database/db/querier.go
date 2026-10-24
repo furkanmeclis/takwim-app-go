@@ -961,6 +961,9 @@ type Querier interface {
 	// 'accepted', 'revoked'.
 	ListInvitations(ctx context.Context, arg ListInvitationsParams) ([]ListInvitationsRow, error)
 	ListLedgerEntries(ctx context.Context, arg ListLedgerEntriesParams) ([]ListLedgerEntriesRow, error)
+	// The entries one request wrote under a key (a refund split over several
+	// collections writes key, key:2, key:3, ...).
+	ListLedgerEntriesByIdempotencyPrefix(ctx context.Context, arg ListLedgerEntriesByIdempotencyPrefixParams) ([]ListLedgerEntriesByIdempotencyPrefixRow, error)
 	// Members without a staff record yet.
 	ListLinkableMembers(ctx context.Context, organizationID int64) ([]ListLinkableMembersRow, error)
 	ListLiveOrganizationIDs(ctx context.Context) ([]int64, error)
@@ -1166,6 +1169,12 @@ type Querier interface {
 	ListStockMovementKindFacets(ctx context.Context, arg ListStockMovementKindFacetsParams) ([]ListStockMovementKindFacetsRow, error)
 	ListStockMovementStaffFacets(ctx context.Context, arg ListStockMovementStaffFacetsParams) ([]ListStockMovementStaffFacetsRow, error)
 	ListStockMovements(ctx context.Context, arg ListStockMovementsParams) ([]ListStockMovementsRow, error)
+	// The live collections of one stock sale with what was paid back from each
+	// (refund entries not reversed), oldest first.
+	ListStockSaleCollections(ctx context.Context, arg ListStockSaleCollectionsParams) ([]ListStockSaleCollectionsRow, error)
+	// The ledger entries of one stock sale, oldest first (same columns as
+	// GetLedgerEntry).
+	ListStockSaleEntries(ctx context.Context, arg ListStockSaleEntriesParams) ([]ListStockSaleEntriesRow, error)
 	ListStorageActivity(ctx context.Context, arg ListStorageActivityParams) ([]ListStorageActivityRow, error)
 	ListStorageLinksByKey(ctx context.Context, objectKey string) ([]StorageLink, error)
 	ListStorageSharesByKey(ctx context.Context, objectKey string) ([]ListStorageSharesByKeyRow, error)
@@ -1234,6 +1243,9 @@ type Querier interface {
 	// Serializes the shift edits of one person (A04 overlap check).
 	LockStaff(ctx context.Context, arg LockStaffParams) (int64, error)
 	LockStockLevel(ctx context.Context, arg LockStockLevelParams) (StockLevel, error)
+	// Serializes the collections of one stock sale (its sale debits; a
+	// corrected sale has a reversed one and a live one).
+	LockStockSaleDebits(ctx context.Context, arg LockStockSaleDebitsParams) ([]int64, error)
 	// Barcode / SKU entry: the products and variants whose code or barcode is
 	// exactly the given text (case-insensitive SKU).
 	LookupStockCode(ctx context.Context, arg LookupStockCodeParams) ([]LookupStockCodeRow, error)
@@ -1488,6 +1500,14 @@ type Querier interface {
 	StaffSharePeriodTotals(ctx context.Context, arg StaffSharePeriodTotalsParams) ([]StaffSharePeriodTotalsRow, error)
 	// SKUs are unique across products and variants of the organization.
 	StockCodeTaken(ctx context.Context, arg StockCodeTakenParams) (bool, error)
+	// Money of walk-in product sales (TEC-992, docs/design/payments.md
+	// "Product sales"). The collections taken for a stock sale and the refunds
+	// paid back from them carry the sale movement as their ledger source
+	// (source_type 'stock_movement', source_uuid = the movement), like the
+	// sale's own revenue debit.
+	// Charged (live sale debits), collected and refunded of one stock sale,
+	// reversals netted into the kind they undo.
+	StockSaleLedgerTotals(ctx context.Context, arg StockSaleLedgerTotalsParams) (StockSaleLedgerTotalsRow, error)
 	// One winner: only an attempt not succeeded yet moves.
 	SucceedPayment(ctx context.Context, arg SucceedPaymentParams) (int64, error)
 	// Lines served on a package session (TEC-920) are paid by the package.

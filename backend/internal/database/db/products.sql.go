@@ -515,7 +515,21 @@ SELECT
     EXISTS (
         SELECT 1 FROM stock_movements rm
         WHERE rm.organization_id = m.organization_id AND rm.source = 'sale_return' AND rm.source_uuid = m.uuid
-    )::boolean AS returned
+    )::boolean AS returned,
+    -- Money of a walk-in sale (TEC-992): collections taken for it and
+    -- refunds paid back, reversals netted.
+    COALESCE((
+        SELECT SUM(CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END) FROM ledger_entries e
+        LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+        WHERE e.organization_id = m.organization_id AND e.source_type = 'stock_movement' AND e.source_uuid = m.uuid
+          AND COALESCE(o.kind, e.kind) = 'collection'
+    ), 0)::numeric AS collected,
+    COALESCE((
+        SELECT SUM(CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END) FROM ledger_entries e
+        LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+        WHERE e.organization_id = m.organization_id AND e.source_type = 'stock_movement' AND e.source_uuid = m.uuid
+          AND COALESCE(o.kind, e.kind) = 'refund'
+    ), 0)::numeric AS refunded
 FROM stock_movements m
 JOIN products p ON p.id = m.product_id AND p.organization_id = m.organization_id
 JOIN branches b ON b.id = m.branch_id AND b.organization_id = m.organization_id
@@ -569,6 +583,8 @@ type GetStockMovementRow struct {
 	CreatedByName         pgtype.Text        `json:"created_by_name"`
 	CreatedBySurname      pgtype.Text        `json:"created_by_surname"`
 	Returned              bool               `json:"returned"`
+	Collected             pgtype.Numeric     `json:"collected"`
+	Refunded              pgtype.Numeric     `json:"refunded"`
 }
 
 func (q *Queries) GetStockMovement(ctx context.Context, arg GetStockMovementParams) (GetStockMovementRow, error) {
@@ -612,6 +628,8 @@ func (q *Queries) GetStockMovement(ctx context.Context, arg GetStockMovementPara
 		&i.CreatedByName,
 		&i.CreatedBySurname,
 		&i.Returned,
+		&i.Collected,
+		&i.Refunded,
 	)
 	return i, err
 }
@@ -1482,7 +1500,21 @@ SELECT
     EXISTS (
         SELECT 1 FROM stock_movements rm
         WHERE rm.organization_id = m.organization_id AND rm.source = 'sale_return' AND rm.source_uuid = m.uuid
-    )::boolean AS returned
+    )::boolean AS returned,
+    -- Money of a walk-in sale (TEC-992): collections taken for it and
+    -- refunds paid back, reversals netted.
+    COALESCE((
+        SELECT SUM(CASE WHEN e.direction = 'credit' THEN e.amount ELSE -e.amount END) FROM ledger_entries e
+        LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+        WHERE e.organization_id = m.organization_id AND e.source_type = 'stock_movement' AND e.source_uuid = m.uuid
+          AND COALESCE(o.kind, e.kind) = 'collection'
+    ), 0)::numeric AS collected,
+    COALESCE((
+        SELECT SUM(CASE WHEN e.direction = 'debit' THEN e.amount ELSE -e.amount END) FROM ledger_entries e
+        LEFT JOIN ledger_entries o ON o.organization_id = e.organization_id AND o.id = e.reverses_entry_id
+        WHERE e.organization_id = m.organization_id AND e.source_type = 'stock_movement' AND e.source_uuid = m.uuid
+          AND COALESCE(o.kind, e.kind) = 'refund'
+    ), 0)::numeric AS refunded
 FROM stock_movements m
 JOIN products p ON p.id = m.product_id AND p.organization_id = m.organization_id
 JOIN branches b ON b.id = m.branch_id AND b.organization_id = m.organization_id
@@ -1570,6 +1602,8 @@ type ListStockMovementsRow struct {
 	CreatedByName         pgtype.Text        `json:"created_by_name"`
 	CreatedBySurname      pgtype.Text        `json:"created_by_surname"`
 	Returned              bool               `json:"returned"`
+	Collected             pgtype.Numeric     `json:"collected"`
+	Refunded              pgtype.Numeric     `json:"refunded"`
 }
 
 func (q *Queries) ListStockMovements(ctx context.Context, arg ListStockMovementsParams) ([]ListStockMovementsRow, error) {
@@ -1633,6 +1667,8 @@ func (q *Queries) ListStockMovements(ctx context.Context, arg ListStockMovements
 			&i.CreatedByName,
 			&i.CreatedBySurname,
 			&i.Returned,
+			&i.Collected,
+			&i.Refunded,
 		); err != nil {
 			return nil, err
 		}

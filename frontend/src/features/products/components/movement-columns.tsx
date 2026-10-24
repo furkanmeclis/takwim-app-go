@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { Undo2 } from "lucide-react";
+import { HandCoins, Undo2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 
@@ -11,7 +11,11 @@ import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { routes } from "@/config/routes";
 import { MOVEMENT_KIND_LABEL_KEYS } from "@/features/products/constants";
-import { priceLabel, signedQuantity } from "@/features/products/lib/format";
+import {
+  priceLabel,
+  salePayment,
+  signedQuantity,
+} from "@/features/products/lib/format";
 import type {
   MovementKind,
   StockMovement,
@@ -35,18 +39,25 @@ const KIND_TONES: Record<MovementKind, "success" | "warning" | "default"> = {
  * `quantity` and `kind` sort on the server; `kind`, `branch` and `staff`
  * are faceted filters. `withProduct` drops the product column on a
  * product's own page. With `onReturn`, a sale not yet taken back offers
- * the return (the caller checks the stock and refund permissions).
+ * the return (the caller checks the stock and refund permissions); with
+ * `onCollect` a sale not paid in full offers to take the money, with
+ * `onRefund` a returned sale still holding money offers to pay it back
+ * (TEC-992).
  */
 export function useMovementColumns({
   facets,
   withProduct = true,
   filters = true,
   onReturn,
+  onCollect,
+  onRefund,
 }: {
   facets?: StockMovementFacets;
   withProduct?: boolean;
   filters?: boolean;
   onReturn?: (movement: StockMovement) => void;
+  onCollect?: (movement: StockMovement) => void;
+  onRefund?: (movement: StockMovement) => void;
 }) {
   const { t, locale } = useLocale();
   const { slug } = useTenant();
@@ -211,6 +222,38 @@ export function useMovementColumns({
         },
       }),
       createColumn<StockMovement>({
+        id: "payment",
+        accessorFn: (row) => row.collected ?? "",
+        labelKey: "products.movements.columns.payment",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const payment = salePayment(row.original);
+          if (!payment) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span className="flex flex-col gap-1">
+              <StatusChip
+                label={t(`products.movements.payment.${payment.state}`)}
+                tone={payment.tone}
+              />
+              {payment.state !== "unpaid" ? (
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {priceLabel(payment.collected, row.original.currency, locale)}
+                  {payment.refunded > 0
+                    ? ` · ${t("products.movements.payment.refunded_amount", {
+                        amount: priceLabel(
+                          String(payment.refunded),
+                          row.original.currency,
+                          locale,
+                        ),
+                      })}`
+                    : ""}
+                </span>
+              ) : null}
+            </span>
+          );
+        },
+      }),
+      createColumn<StockMovement>({
         id: "staff",
         accessorFn: (row) => row.staff?.name ?? "",
         labelKey: "products.movements.columns.staff",
@@ -261,7 +304,7 @@ export function useMovementColumns({
           <span className="line-clamp-2">{row.original.note}</span>
         ),
       }),
-      ...(onReturn
+      ...(onReturn || onCollect || onRefund
         ? [
             createColumn<StockMovement>({
               id: "actions",
@@ -269,19 +312,52 @@ export function useMovementColumns({
               enableSorting: false,
               enableHiding: false,
               enableResizing: false,
-              cell: ({ row }) =>
-                row.original.kind === "sale" && !row.original.returned ? (
-                  <EntityRowActions
-                    actions={[
-                      {
-                        id: "return",
-                        label: t("products.movements.return.action"),
-                        icon: Undo2,
-                        onSelect: () => onReturn(row.original),
-                      },
-                    ]}
-                  />
-                ) : null,
+              cell: ({ row }) => {
+                const movement = row.original;
+                if (movement.kind !== "sale") return null;
+                const payment = salePayment(movement);
+                const actions = [
+                  ...(onCollect &&
+                  !movement.returned &&
+                  payment &&
+                  payment.remaining > 0
+                    ? [
+                        {
+                          id: "collect",
+                          label: t("products.movements.collect.action"),
+                          icon: HandCoins,
+                          onSelect: () => onCollect(movement),
+                        },
+                      ]
+                    : []),
+                  ...(onReturn && !movement.returned
+                    ? [
+                        {
+                          id: "return",
+                          label: t("products.movements.return.action"),
+                          icon: Undo2,
+                          onSelect: () => onReturn(movement),
+                        },
+                      ]
+                    : []),
+                  ...(onRefund &&
+                  movement.returned &&
+                  payment &&
+                  payment.refundable > 0
+                    ? [
+                        {
+                          id: "refund",
+                          label: t("products.movements.refund.action"),
+                          icon: Wallet,
+                          onSelect: () => onRefund(movement),
+                        },
+                      ]
+                    : []),
+                ];
+                return actions.length ? (
+                  <EntityRowActions actions={actions} />
+                ) : null;
+              },
             }),
           ]
         : []),
@@ -293,6 +369,8 @@ export function useMovementColumns({
     facets?.staff,
     filters,
     locale,
+    onCollect,
+    onRefund,
     onReturn,
     slug,
     t,

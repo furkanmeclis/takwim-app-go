@@ -322,3 +322,79 @@ type TestPage struct {
 	Status            string      `json:"status"`
 	ExpiresAt         time.Time   `json:"expires_at"`
 }
+
+// Walk-in product sales (TEC-992): the money of a `sale` stock movement.
+// Its collections and refunds carry the movement as their ledger source
+// (source_type `stock_movement`), like the sale's revenue debit.
+
+// StockSaleRef names the sale movement of a payment view.
+type StockSaleRef struct {
+	UUID       uuid.UUID `json:"uuid"`
+	Product    string    `json:"product"`
+	Variant    string    `json:"variant"`
+	Branch     Ref       `json:"branch"`
+	Quantity   int32     `json:"quantity"`
+	Returned   bool      `json:"returned"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+// StockSaleCollection is one live collection of a stock sale with what is
+// left of it to pay back.
+type StockSaleCollection struct {
+	UUID        uuid.UUID   `json:"uuid"`
+	Method      string      `json:"method"`
+	EntryDate   string      `json:"entry_date"`
+	Amount      money.Money `json:"amount"`
+	Refunded    money.Money `json:"refunded"`
+	Refundable  money.Money `json:"refundable"`
+	CashAccount Ref         `json:"cash_account"`
+}
+
+// StockSalePayments is the payment view of a stock sale in the panel:
+// what the sale charges (its live revenue debits), what was collected and
+// paid back, the money entries, and the accounts the caller may use.
+type StockSalePayments struct {
+	Movement   StockSaleRef `json:"movement"`
+	Currency   string       `json:"currency"`
+	Expected   money.Money  `json:"expected"`
+	Collected  money.Money  `json:"collected"`
+	Refunded   money.Money  `json:"refunded"`
+	Paid       money.Money  `json:"paid"`
+	Remaining  money.Money  `json:"remaining"`
+	Refundable money.Money  `json:"refundable"`
+	// Entries are the money entries (collections, refunds, reversals).
+	Entries     []salesmodel.LedgerEntry `json:"entries"`
+	Collections []StockSaleCollection    `json:"collections"`
+	// CanCollect: the caller may take money for this sale now.
+	CanCollect      bool             `json:"can_collect"`
+	CollectAccounts []CollectAccount `json:"collect_accounts"`
+	// CanRefund: the caller may pay money of this sale back now.
+	CanRefund      bool             `json:"can_refund"`
+	RefundAccounts []CollectAccount `json:"refund_accounts"`
+}
+
+// StockSaleRefundInput pays back (part of) the money taken for a stock
+// sale, by hand, out of a till, bank or online account. A zero Amount
+// means all that is left.
+type StockSaleRefundInput struct {
+	Amount          money.Money `json:"amount"`
+	Method          string      `json:"method"`
+	CashAccountUUID uuid.UUID   `json:"cash_account_uuid"`
+	Reason          string      `json:"reason"`
+	IdempotencyKey  string      `json:"idempotency_key"`
+}
+
+// StockSaleRefundResult is what a refund request answered.
+type StockSaleRefundResult struct {
+	Payments StockSalePayments `json:"payments"`
+	// Replayed: the idempotency key named an earlier request.
+	Replayed bool `json:"replayed"`
+}
+
+// StockPaymentAccounts are the accounts counter sales of a branch take
+// money into and pay it back from (the new sale dialog).
+type StockPaymentAccounts struct {
+	Currency        string           `json:"currency"`
+	CollectAccounts []CollectAccount `json:"collect_accounts"`
+	RefundAccounts  []CollectAccount `json:"refund_accounts"`
+}

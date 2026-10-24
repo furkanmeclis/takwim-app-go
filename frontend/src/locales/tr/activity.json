@@ -388,5 +388,7 @@
   "fields.tenant.classes.valid_from": "Başlangıç tarihi",
   "fields.tenant.classes.valid_until": "Bitiş tarihi",
   "fields.tenant.classes.is_active": "Aktif",
-  "resources.tenant.class_sessions": "Ders seansları"
+  "resources.tenant.class_sessions": "Ders seansları",
+  "actions.products.sale_collected": "Satış tahsilatı alındı",
+  "actions.products.sale_refunded": "Satış için para iadesi yapıldı"
 }
