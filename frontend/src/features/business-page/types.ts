@@ -21,6 +21,8 @@ export type PublicProduct = Schemas["PublicProduct"];
 export type PublicBookingProduct = NonNullable<
   PublicBookingRequest["products"]
 >[number];
+/** Vehicle of a car wash booking (TEC-904 / TEC-971). */
+export type PublicVehicle = Schemas["ReservationVehicle"];
 export type OnlinePaymentStart = Schemas["OnlinePaymentStart"];
 export type TestPaymentPage = Schemas["TestPaymentPage"];
 export type PaymentNotifyResult = Schemas["PaymentNotifyResult"];
@@ -30,6 +32,7 @@ export type PaymentMethod =
 /** Wizard steps the business page shows (subset of the sector flow). */
 export type WizardStep =
   | "branch"
+  | "vehicle"
   | "party_size"
   | "area"
   | "service"

@@ -351,6 +351,16 @@ func TestPublicCatalog(t *testing.T) {
 	if services = decode[[]model.Service](t, r); len(services) != 1 || services[0].Price.String() != "120.00" {
 		t.Fatalf("services of branch = %+v", services)
 	}
+	if services[0].GroupCapacity != nil {
+		t.Fatalf("individual service group capacity = %v", *services[0].GroupCapacity)
+	}
+	// A group class shows its seats (TEC-971: the wizard books it alone).
+	f.exec(`UPDATE services SET group_capacity = 8 WHERE uuid = $1`, f.cut)
+	r = f.do(t, http.MethodGet, base+"/services?branch_uuid="+f.branch.String(), nil, nil)
+	if services = decode[[]model.Service](t, r); len(services) != 1 || services[0].GroupCapacity == nil || *services[0].GroupCapacity != 8 {
+		t.Fatalf("group class = %+v", services)
+	}
+	f.exec(`UPDATE services SET group_capacity = NULL WHERE uuid = $1`, f.cut)
 	for _, id := range []uuid.UUID{f.hidden, f.branch2} {
 		if r := f.do(t, http.MethodGet, base+"/services?branch_uuid="+id.String(), nil, nil); r.code != http.StatusBadRequest || r.detail() != "branch_uuid/not_found" {
 			t.Fatalf("services of %s = %d %s", id, r.code, r.detail())

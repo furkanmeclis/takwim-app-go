@@ -478,7 +478,7 @@ func (q *Queries) ListPublicServiceStaff(ctx context.Context, organizationID int
 
 const listPublicServices = `-- name: ListPublicServices :many
 SELECT s.id, s.uuid, s.name, s.description, s.duration_minutes, s.price, s.payment_mode,
-       s.staff_mode, s.sort_order, s.image_uuid,
+       s.staff_mode, s.sort_order, s.image_uuid, s.group_capacity,
        c.uuid AS category_uuid, c.name AS category_name, c.sort_order AS category_sort_order
 FROM services s
 LEFT JOIN service_categories c
@@ -499,6 +499,7 @@ type ListPublicServicesRow struct {
 	StaffMode         string         `json:"staff_mode"`
 	SortOrder         int32          `json:"sort_order"`
 	ImageUuid         pgtype.UUID    `json:"image_uuid"`
+	GroupCapacity     pgtype.Int4    `json:"group_capacity"`
 	CategoryUuid      pgtype.UUID    `json:"category_uuid"`
 	CategoryName      pgtype.Text    `json:"category_name"`
 	CategorySortOrder pgtype.Int4    `json:"category_sort_order"`
@@ -525,6 +526,7 @@ func (q *Queries) ListPublicServices(ctx context.Context, organizationID int64) 
 			&i.StaffMode,
 			&i.SortOrder,
 			&i.ImageUuid,
+			&i.GroupCapacity,
 			&i.CategoryUuid,
 			&i.CategoryName,
 			&i.CategorySortOrder,

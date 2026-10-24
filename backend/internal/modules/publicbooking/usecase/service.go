@@ -593,6 +593,10 @@ func (s *Service) Services(ctx context.Context, o Org, branchUUID *uuid.UUID) ([
 		if sv.CategoryUuid.Valid {
 			item.Category = &model.Ref{UUID: uuid.UUID(sv.CategoryUuid.Bytes), Name: sv.CategoryName.String}
 		}
+		if sv.GroupCapacity.Valid {
+			seats := int(sv.GroupCapacity.Int32)
+			item.GroupCapacity = &seats
+		}
 		if sv.ImageUuid.Valid {
 			u := "/v1/public/media/services/" + o.UUID.String() + "/images/" + uuid.UUID(sv.ImageUuid.Bytes).String()
 			item.ImageURL = &u

@@ -37,7 +37,11 @@ import {
 } from "@/features/business-page/hooks/use-public-booking";
 import { readAccessToken } from "@/features/business-page/lib/access";
 import { reportPaymentError } from "@/features/business-page/lib/errors";
-import { seatingLabel } from "@/features/business-page/lib/wizard";
+import {
+  flowHasParty,
+  seatingLabel,
+  vehicleText,
+} from "@/features/business-page/lib/wizard";
 import type {
   PublicBusiness,
   PublicReservation,
@@ -328,7 +332,13 @@ function ReservationView({
           <CardDescription>
             {[
               r.branch.name,
-              seatingLabel(t, r.party_size, r.zone),
+              seatingLabel(
+                t,
+                r.party_size,
+                r.zone,
+                flowHasParty(business.flow),
+              ),
+              vehicleText(t, r.vehicle),
               t("business_page.status.number", { number: r.number }),
             ]
               .filter(Boolean)

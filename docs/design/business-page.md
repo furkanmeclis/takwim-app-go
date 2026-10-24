@@ -56,28 +56,33 @@ The status page is `noindex` with `referrer: no-referrer`.
 The steps follow the sector flow of the profile (`flow`); see [sectors.md](./sectors.md).
 
 1. **Branch.** Shown only with more than one public branch; one branch is picked by itself. Each branch shows its address and today's hours in its own time zone (special days first).
-2. **Party size** (TEC-969). Shown when the sector books by party. The public profile has no capacity block, so the page reads this from the flow: it has a `party_size` step exactly when the sector's `capacity.party_size` is set (restaurant).
+2. **Vehicle** (TEC-971). Shown when the flow has a `vehicle` step (car wash), right after the branch as in the flow.
+   - The vehicle type is one tap (`car`, `suv`, `van`, `motorcycle`, `other`; the panel's labels) and must be picked; the plate is optional (letters, digits and spaces, at most 16, upper case as the API stores it).
+   - The vehicle does not change the free times, so it is sent only with the booking (`vehicle` of `POST …/reservations`). A refused vehicle (`vehicle.*`) frees the hold and sends the customer back to this step.
+3. **Party size** (TEC-969). Shown when the sector books by party. The public profile has no capacity block, so the page reads this from the flow: it has a `party_size` step exactly when the sector's `capacity.party_size` is set (restaurant).
    - One tap for 1–8 guests, or a number field with − / + for any size from 1 to 1000. Default 2.
    - `party_size` goes on availability and checkouts. The checkout keeps it, and the booking reads it from there.
-3. **Area** (TEC-969). Shown only when the branch's `zones` has more than one entry. The choices are "Fark etmez" (no `zone`, any area) and each area.
+4. **Area** (TEC-969). Shown only when the branch's `zones` has more than one entry. The choices are "Fark etmez" (no `zone`, any area) and each area.
    - The flow lists the area after the day. The page asks for it before, because `zone` limits the free times the day step shows.
    - Changing the branch clears the area.
-4. **Service.** One or more services (a combined visit, at most 10 lines), grouped by category, with the branch's price and duration. The title is the sector's word for the step (`sectors.steps.service`, `appointment_type`, `session_type`, `class`).
+5. **Service.** One or more services (a combined visit, at most 10 lines), grouped by category, with the branch's price and duration. The title is the sector's word for the step (`sectors.steps.service`, `appointment_type`, `session_type`, `class`).
+   - A group class (`group_capacity`, gym) carries a "Grup dersi · N kişi" badge and is booked on its own (API `group_alone`): picking it replaces the other picks, and picking another service drops it.
    - A flow without a service step (restaurant) still books a service, because a booking line is a service in the API. When the branch offers exactly one service, it is booked without asking; with several (menus, events), the step is shown.
-5. **Person.** Shown when the flow has a `staff` or `class` step and a picked service has people shown online in the branch. For each service the customer picks a person or "no preference" (`staff_uuid: null`, the slot engine assigns someone free). A person's own price and duration are shown when they differ from the branch's.
-6. **Day and time.** `POST …/availability` on channel `web`, 14 days per request (the API allows 31), 15-minute steps.
+6. **Person.** Shown when the flow has a `staff` or `class` step and a picked service has people shown online in the branch. For each service the customer picks a person or "no preference" (`staff_uuid: null`, the slot engine assigns someone free). A person's own price and duration are shown when they differ from the branch's.
+7. **Day and time.** `POST …/availability` on channel `web`, 14 days per request (the API allows 31), 15-minute steps.
    - Arrows move the window, never before today and never past `latest_date`.
    - A day without free starts is greyed out; its status says why (closed, full, too soon, too far, nobody available).
    - **Large parties.** Online bookings seat a party at one table and never join tables. When a picked day is `full` or has nobody available for the party, the page tells the customer to call. It shows the branch's phone (else the business's) with a call button. A closed, too-soon or too-far day shows no such hint.
+   - **Group classes** (TEC-971). Above the days a − / + picker asks how many places to take (1 by default, at most `group_capacity`); it goes as `party_size` on availability and the checkout, so the reservation holds that many seats. Each start shows its free seats (`seats_left`); a session without enough free seats is not offered (API). Changing the places clears the picked time.
    - The first day with free starts is picked by itself.
    - Picking a time shows the planned lines with the assigned people.
-7. **Hold.** "Devam" on the time calls `POST …/checkouts` with a fresh `Idempotency-Key`. The countdown of `expires_at` (`booking.checkout_minutes`) shows on the next steps.
+8. **Hold.** "Devam" on the time calls `POST …/checkouts` with a fresh `Idempotency-Key`. The countdown of `expires_at` (`booking.checkout_minutes`) shows on the next steps.
    - Going back from the contact step releases the hold (`DELETE …/checkouts/{token}`).
    - A taken time (`409 starts_at / taken`) clears the pick and reloads the days.
    - When the countdown ends, the page says that the booking still goes through while the time is free, because the API books an expired checkout again in one transaction.
-8. **Contact.** First and last name, phone (the API normalizes it to E.164), and optional e-mail and note. SMS and e-mail consent are off by default. The `website` honeypot sits off screen with `aria-hidden` and `tabIndex=-1`. There is no OTP; phone verification comes with TEC-909 / TEC-910.
-9. **Summary.** The time, the branch, the party and area, each line with person, time and catalog price, the total, the contact, the payment choice and the cancellation rule. With staff approval the button says "Talep gönder" and a note says the business confirms. The final amount is the API's.
-10. **Booking.** `POST …/reservations` with one `Idempotency-Key` per hold, so a retry returns the same reservation.
+9. **Contact.** First and last name, phone (the API normalizes it to E.164), and optional e-mail and note. SMS and e-mail consent are off by default. The `website` honeypot sits off screen with `aria-hidden` and `tabIndex=-1`. There is no OTP; phone verification comes with TEC-909 / TEC-910.
+10. **Summary.** The time, the branch, the party and area (or the places of a group class), the vehicle, each line with person, time and catalog price, the total, the contact, the payment choice and the cancellation rule. With staff approval the button says "Talep gönder" and a note says the business confirms. The final amount is the API's.
+11. **Booking.** `POST …/reservations` with one `Idempotency-Key` per hold, so a retry returns the same reservation.
 
 - The answer's `access_token` is kept in `localStorage` (`takwim.booking.{uuid}`), and the page opens `/b/{slug}/reservations/{uuid}#t={token}`.
 - A taken time sends the customer back to the time step.
@@ -103,7 +108,7 @@ The headline follows the states:
 | `cancelled`, `rejected`         | cancelled / declined                         |
 | `completed`, `no_show`          | visit done / marked absent                   |
 
-Below the headline come the date and time in the business's time zone, the branch, the party and area (party sectors), the booking number, the state chips (the panel's labels), the lines and the total. A request waiting for the business is reloaded every 30 seconds.
+Below the headline come the date and time in the business's time zone, the branch, the party and area (party sectors) or the places of a group class, the vehicle (car wash), the booking number, the state chips (the panel's labels), the lines and the total. A request waiting for the business is reloaded every 30 seconds.
 
 While the API answers `can_pay_online`, a "Şimdi öde" button opens the provider's hosted page (`POST …/reservations/{uuid}/payment`) and sends the browser there. The provider returns to this page with `?payment=done` or `?payment=failed`. That proves nothing, so the page polls every 3 seconds (about two minutes) while the payment is still `online_pending` and says "checking" or "not completed, try again". The state shown is always the server's, recorded only from the provider's verified notification. In development the test provider's page is `/pay/test/{ref}` (Pay / Decline).
 
@@ -117,7 +122,7 @@ While the API answers `can_pay_online`, a "Şimdi öde" button opens the provide
 ## Not in this issue
 
 - **Theme settings.** Colours, fonts, cover and texts set in the panel need a settings model and an API field; that is TEC-966. The page reads only the logo and branch photos today.
-- **Packages and vehicle steps.** They come with their catalog modules. The product step (TEC-919) is minimal: after the time, when the sector flow has `products` and the branch sells some online, the customer may tick products and set a quantity (at most `max_quantity`); the summary and the status page list them and the total includes them. A product that ran out before the booking sends the customer back to the step (`insufficient_stock`).
+- **Packages step.** It comes with its catalog module. Recurring class sessions and a class timetable (TEC-970) are not read yet: a group class is a service with `group_capacity`, and its sessions are the starts the slot engine offers. The product step (TEC-919) is minimal: after the time, when the sector flow has `products` and the branch sells some online, the customer may tick products and set a quantity (at most `max_quantity`); the summary and the status page list them and the total includes them. A product that ran out before the booking sends the customer back to the step (`insufficient_stock`).
 - **Phone OTP and the customer panel** (TEC-909 / TEC-910). The online payment redirect is TEC-912 ([payments.md](./payments.md)).
 
 ## Embedding and pre-selection (TEC-908)

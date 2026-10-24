@@ -159,5 +159,20 @@
   "status.close_tab": "Sekmeyi kapat",
   "errors.day_full": "Bu gün için online rezervasyon kalmadı. Lütfen başka bir gün seçin.",
   "errors.open_limit": "Bu işletmede açık rezervasyon sınırına ulaştınız. Yeni rezervasyon için mevcut randevunuzun tamamlanmasını bekleyin veya işletmeyle iletişime geçin.",
-  "errors.answers": "Lütfen iletişim adımındaki soruları kontrol edin."
+  "errors.answers": "Lütfen iletişim adımındaki soruları kontrol edin.",
+  "steps.vehicle": "Araç bilgileri",
+  "vehicle.type": "Araç türü",
+  "vehicle.plate": "Plaka (isteğe bağlı)",
+  "vehicle.plate_hint": "Örn. 34 ABC 123. İşletme aracınızı geldiğinizde plakasından tanır.",
+  "vehicle.plate_invalid": "Yalnızca harf, rakam ve boşluk yazın; en fazla {{max}} karakter.",
+  "seats.title": "Kaç kişilik yer ayrılsın?",
+  "seats.hint": "Derste toplam {{capacity}} kişilik kontenjan var; yalnızca yeterli boş yeri olan seanslar listelenir.",
+  "seats.decrease": "Bir yer azalt",
+  "seats.increase": "Bir yer artır",
+  "seats.count": "{{count}} kişilik yer",
+  "seats.left": "{{count}} boş yer",
+  "seats.left_short": "{{count}} yer",
+  "service.group": "Grup dersi · {{count}} kişi",
+  "service.group_alone": "Grup dersi tek başına rezerve edilir; başka bir hizmet seçerseniz ders seçimden çıkar.",
+  "errors.vehicle": "Araç bilgilerini kontrol edin."
 }
