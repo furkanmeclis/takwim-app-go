@@ -245,6 +245,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Source = model.SourcePanel
+	if len(in.Products) > 0 && !productsAllowed(w, r) {
+		return
+	}
 	out, err := h.svc.Create(r.Context(), scope.ID, in, c, authctx.MustPrincipal(r.Context()).UserInternal)
 	if err != nil {
 		writeError(w, r, err)
@@ -476,6 +479,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, usecase.ErrNotFound):
 		response.NotFound(w, r, "Reservation was not found")
+	case errors.Is(err, usecase.ErrProductNotFound):
+		response.NotFound(w, r, "Reservation product was not found")
+	case errors.Is(err, usecase.ErrPaymentPending):
+		conflict(w, r, "payment_status", "online_pending", err)
 	case errors.Is(err, availabilityusecase.ErrNotFound):
 		// The branch of the body: unknown, of another business or outside
 		// the branch scope.

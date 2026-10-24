@@ -415,6 +415,41 @@ func float(n pgtype.Numeric) *float64 {
 	return &v
 }
 
+// Products lists what the customer may add to a booking in a public
+// branch (TEC-919): active products shown online, sold there, with units
+// available (on hand - reserved). Without the products module the list
+// is empty.
+func (s *Service) Products(ctx context.Context, o Org, branchUUID *uuid.UUID) ([]model.Product, error) {
+	id := uuid.Nil
+	if branchUUID != nil {
+		id = *branchUUID
+	}
+	branchID, err := s.publicBranchID(ctx, o, id, "branch_uuid")
+	if err != nil {
+		return nil, err
+	}
+	out := []model.Product{}
+	if !o.modules.Allows(sector.ModuleProducts) {
+		return out, nil
+	}
+	items, err := reservationsusecase.ListProductOptions(ctx, s.q, o.ID, branchID, "", true, 100)
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		p := model.Product{
+			ProductUUID: it.ProductUUID, Name: it.ProductName, VariantUUID: it.VariantUUID, VariantName: it.VariantName,
+			Price: it.Price, MaxQuantity: int(min(it.Available, model.MaxProductQuantity)),
+		}
+		if it.ImageUUID != nil {
+			u := fmt.Sprintf("/v1/public/media/products/%s/images/%s", o.UUID, *it.ImageUUID)
+			p.ImageURL = &u
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 // publicBranchID returns the id of a public branch, or a validation error
 // on field (hidden, inactive, deleted and other businesses' branches).
 func (s *Service) publicBranchID(ctx context.Context, o Org, id uuid.UUID, field string) (int64, error) {
@@ -932,6 +967,18 @@ func (s *Service) Book(ctx context.Context, o Org, in model.BookingInput) (model
 		}
 		input.Lines = append(input.Lines, line)
 	}
+	if len(in.Products) > 0 && !o.modules.Allows(sector.ModuleProducts) {
+		return model.Reservation{}, false, invalid("products", "not_allowed", "the business does not sell products online")
+	}
+	for i, p := range in.Products {
+		if p.Quantity < 1 || p.Quantity > model.MaxProductQuantity {
+			return model.Reservation{}, false, invalid(fmt.Sprintf("products[%d].quantity", i), "invalid",
+				fmt.Sprintf("quantity must be between 1 and %d", model.MaxProductQuantity))
+		}
+		input.Products = append(input.Products, reservationsmodel.ProductInput{
+			ProductUUID: p.ProductUUID, VariantUUID: p.VariantUUID, Quantity: p.Quantity,
+		})
+	}
 	var createdCustomer uuid.UUID
 	res, err := s.reservations.CreateWith(ctx, o.ID, input, availabilityusecase.Caller{}, 0, reservationsusecase.CreateHooks{
 		Before: func(ctx context.Context, tx *availabilityusecase.Tx) (uuid.UUID, error) {
@@ -1050,7 +1097,16 @@ func (s *Service) view(ctx context.Context, o Org, r reservationsmodel.Reservati
 		StartsAt: r.StartsAt, EndsAt: r.EndsAt, TotalPrice: r.TotalPrice, Currency: r.Currency,
 		CustomerNote: r.CustomerNote, ExpiresAt: r.HoldExpiresAt, CancelReason: r.CancelReason,
 		PartySize: r.PartySize, Zone: r.Zone, Vehicle: r.Vehicle,
-		Lines: make([]model.Line, 0, len(r.Lines)), CreatedAt: r.CreatedAt, AccessToken: s.AccessToken(o, r.UUID),
+		Lines: make([]model.Line, 0, len(r.Lines)), Products: make([]model.BookedProduct, 0, len(r.Products)),
+		CreatedAt: r.CreatedAt, AccessToken: s.AccessToken(o, r.UUID),
+	}
+	for _, p := range r.Products {
+		item := model.BookedProduct{Name: p.Product.Name, Quantity: p.Quantity, UnitPrice: p.UnitPrice, Status: p.Status}
+		if p.Variant != nil {
+			name := p.Variant.Name
+			item.VariantName = &name
+		}
+		out.Products = append(out.Products, item)
 	}
 	for _, l := range r.Lines {
 		line := model.Line{

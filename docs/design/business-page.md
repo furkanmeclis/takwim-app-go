@@ -117,5 +117,5 @@ While the API answers `can_pay_online`, a "Şimdi öde" button opens the provide
 ## Not in this issue
 
 - **Theme settings.** Colours, fonts, cover and texts set in the panel need a settings model and an API field; that is TEC-966. The page reads only the logo and branch photos today.
-- **Products, packages, vehicle steps.** They come with their catalog modules.
+- **Packages and vehicle steps.** They come with their catalog modules. The product step (TEC-919) is minimal: after the time, when the sector flow has `products` and the branch sells some online, the customer may tick products and set a quantity (at most `max_quantity`); the summary and the status page list them and the total includes them. A product that ran out before the booking sends the customer back to the step (`insufficient_stock`).
 - **Phone OTP and the customer panel** (TEC-909 / TEC-910), **embedding and pre-selection** (TEC-908). The online payment redirect is TEC-912 ([payments.md](./payments.md)).

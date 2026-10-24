@@ -222,6 +222,25 @@ func (h *Handler) Services(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, out)
 }
 
+// Products serves GET /v1/public/businesses/{slug}/products?branch_uuid=
+// (TEC-919): the products the customer may add in the branch.
+func (h *Handler) Products(w http.ResponseWriter, r *http.Request) {
+	o, ok := h.business(w, r, "read", h.limits.Read)
+	if !ok {
+		return
+	}
+	branch, ok := optionalUUID(w, r, "branch_uuid")
+	if !ok {
+		return
+	}
+	out, err := h.svc.Products(r.Context(), o, branch)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // Staff serves GET /v1/public/businesses/{slug}/staff.
 func (h *Handler) Staff(w http.ResponseWriter, r *http.Request) {
 	o, ok := h.business(w, r, "read", h.limits.Read)

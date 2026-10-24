@@ -306,6 +306,43 @@ type BookingInput struct {
 	Website       string         `json:"website"`
 	// Vehicle: the car of a car wash booking (optional).
 	Vehicle *reservations.Vehicle `json:"vehicle"`
+	// Products: optional products taken with the visit (TEC-919), from
+	// GET …/products of the checkout's branch.
+	Products []BookingProduct `json:"products"`
+}
+
+// BookingProduct is one product of a booking.
+type BookingProduct struct {
+	ProductUUID uuid.UUID  `json:"product_uuid"`
+	VariantUUID *uuid.UUID `json:"variant_uuid"`
+	Quantity    int        `json:"quantity"`
+}
+
+// MaxProductQuantity is the most units of one item a customer may take.
+const MaxProductQuantity = 10
+
+// Product is a product (or variant) the customer may add to a booking in
+// a branch: active, shown online, sold there and with units available.
+type Product struct {
+	ProductUUID uuid.UUID   `json:"product_uuid"`
+	Name        string      `json:"name"`
+	VariantUUID *uuid.UUID  `json:"variant_uuid"`
+	VariantName *string     `json:"variant_name"`
+	Price       money.Money `json:"price"`
+	// MaxQuantity is how many the customer may take (the available units,
+	// at most MaxProductQuantity); the stock itself is not shown.
+	MaxQuantity int     `json:"max_quantity"`
+	ImageURL    *string `json:"image_url"`
+}
+
+// BookedProduct is a product of a booked visit.
+type BookedProduct struct {
+	Name        string      `json:"name"`
+	VariantName *string     `json:"variant_name"`
+	Quantity    int         `json:"quantity"`
+	UnitPrice   money.Money `json:"unit_price"`
+	// Status: held (reserved for the visit), delivered or released.
+	Status string `json:"status"`
 }
 
 // Line is one service of a booked visit.
@@ -350,8 +387,9 @@ type Reservation struct {
 	CancelReason *string    `json:"cancel_reason"`
 	// CanPayOnline: the booking waits for its online payment and the page
 	// can be opened now (POST …/reservations/{uuid}/payment).
-	CanPayOnline bool      `json:"can_pay_online"`
-	Lines        []Line    `json:"lines"`
-	CreatedAt    time.Time `json:"created_at"`
-	AccessToken  string    `json:"access_token,omitempty"`
+	CanPayOnline bool            `json:"can_pay_online"`
+	Lines        []Line          `json:"lines"`
+	Products     []BookedProduct `json:"products"`
+	CreatedAt    time.Time       `json:"created_at"`
+	AccessToken  string          `json:"access_token,omitempty"`
 }

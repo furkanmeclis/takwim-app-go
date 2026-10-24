@@ -143,5 +143,12 @@
   "weekdays.thu": "Perşembe",
   "weekdays.fri": "Cuma",
   "weekdays.sat": "Cumartesi",
-  "weekdays.sun": "Pazar"
+  "weekdays.sun": "Pazar",
+  "steps.products": "Ürün eklemek ister misiniz?",
+  "products.hint": "Ziyaretinizde almak istediğiniz ürünleri seçin; işletme bunları sizin için ayırır. Ürün seçmeden de devam edebilirsiniz.",
+  "products.quantity": "{{name}} adedi",
+  "products.less": "Bir azalt",
+  "products.more": "Bir artır",
+  "products.line": "{{quantity}} adet",
+  "errors.out_of_stock": "Seçtiğiniz ürünlerden biri az önce tükendi. Lütfen ürünlerinizi yeniden seçin."
 }

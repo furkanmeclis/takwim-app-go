@@ -155,6 +155,9 @@ func (s *Service) Reject(ctx context.Context, orgID int64, id uuid.UUID, caller 
 			return ErrInvalidTransition
 		}
 		next.status, next.approval, next.payment = model.StatusRejected, model.ApprovalRejected, unpaid(row.PaymentStatus)
+		if err := releaseProducts(ctx, tx.Q, orgID, row.ID, "rejected"); err != nil {
+			return err
+		}
 		return s.release(ctx, tx, row, "rejected")
 	})
 }
@@ -176,6 +179,9 @@ func (s *Service) Cancel(ctx context.Context, orgID int64, id uuid.UUID, caller 
 			return ErrInvalidTransition
 		}
 		next.status, next.payment, next.cancelReason = model.StatusCancelled, unpaid(row.PaymentStatus), reason
+		if err := releaseProducts(ctx, tx.Q, orgID, row.ID, "cancelled"); err != nil {
+			return err
+		}
 		return s.release(ctx, tx, row, "cancelled")
 	})
 }
@@ -209,6 +215,11 @@ func (s *Service) Complete(ctx context.Context, orgID int64, id uuid.UUID, calle
 			return ErrInvalidTransition
 		}
 		next.status = model.StatusCompleted
+		// The products held for the visit are handed over now (TEC-919);
+		// the completion hook turns them into product sale lines.
+		if err := deliverProducts(ctx, tx.Q, orgID, row, actorID, tx.Now); err != nil {
+			return err
+		}
 		if s.onComplete != nil {
 			return s.onComplete(ctx, tx.Q, orgID, row.ID, actorID)
 		}
@@ -217,14 +228,15 @@ func (s *Service) Complete(ctx context.Context, orgID int64, id uuid.UUID, calle
 }
 
 // NoShow records that the customer did not come; the time stays booked
-// (the staff member kept it free).
+// (the staff member kept it free). Products not handed over go back to
+// the available stock; payments and refunds are handled apart.
 func (s *Service) NoShow(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64, in ChangeInput) (model.Reservation, error) {
-	return s.transition(ctx, orgID, id, caller, actorID, in, "no_show", func(_ *availabilityusecase.Tx, row db.Reservation, next *state) error {
+	return s.transition(ctx, orgID, id, caller, actorID, in, "no_show", func(tx *availabilityusecase.Tx, row db.Reservation, next *state) error {
 		if row.Status != model.StatusActive {
 			return ErrInvalidTransition
 		}
 		next.status = model.StatusNoShow
-		return nil
+		return releaseProducts(ctx, tx.Q, orgID, row.ID, "no_show")
 	})
 }
 
@@ -269,6 +281,9 @@ func expireRequests(ctx context.Context, q *db.Queries, n Notifier, orgID int64,
 			PaymentStatus: unpaid(row.PaymentStatus), CancelReason: pgtype.Text{String: reason, Valid: true},
 		})
 		if err != nil {
+			return err
+		}
+		if err := releaseProducts(ctx, q, orgID, row.ID, "expired"); err != nil {
 			return err
 		}
 		if err := recordEvent(ctx, q, n, updated, "expired", row.Status, updated.Status, 0, reason); err != nil {

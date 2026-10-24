@@ -16,6 +16,11 @@ export type PublicCheckoutRequest = Schemas["PublicCheckoutRequest"];
 export type PublicCheckout = Schemas["PublicCheckout"];
 export type PublicBookingRequest = Schemas["PublicBookingRequest"];
 export type PublicReservation = Schemas["PublicReservation"];
+/** A product sold online in a branch (TEC-919). */
+export type PublicProduct = Schemas["PublicProduct"];
+export type PublicBookingProduct = NonNullable<
+  PublicBookingRequest["products"]
+>[number];
 export type OnlinePaymentStart = Schemas["OnlinePaymentStart"];
 export type TestPaymentPage = Schemas["TestPaymentPage"];
 export type PaymentNotifyResult = Schemas["PaymentNotifyResult"];
@@ -30,6 +35,7 @@ export type WizardStep =
   | "service"
   | "staff"
   | "datetime"
+  | "products"
   | "contact"
   | "summary";
 

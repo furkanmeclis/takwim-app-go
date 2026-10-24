@@ -27,6 +27,7 @@ import {
   type ActionTarget,
 } from "@/features/reservations/components/reservation-action-dialog";
 import { ReservationPaymentsCard } from "@/features/reservations/components/reservation-payments-card";
+import { ReservationProductsCard } from "@/features/reservations/components/reservation-products-card";
 import { ACTION_ICONS } from "@/features/reservations/components/reservation-row-actions";
 import {
   ApprovalChip,
@@ -301,6 +302,11 @@ export function ReservationDetailPage({ uuid }: { uuid: string }) {
           </EntitySectionCard>
 
           <ReservationLinesCard reservation={reservation} />
+
+          <ReservationProductsCard
+            reservation={reservation}
+            editable={canWrite}
+          />
 
           <ReservationPaymentsCard uuid={reservation.uuid} />
 

@@ -341,6 +341,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			"branch_uuid": ids["branch"], "customer_uuid": ids["customer"], "lines": []map[string]any{{"service_uuid": ids["service"]}},
 			"starts_at": "2030-01-07T10:00:00+03:00", "internal_note": m,
 		}), http.StatusCreated, "create reservation"), "uuid")
+		withProduct := must(call(o, http.MethodPost, "/v1/tenant/reservations/"+ids["reservation"]+"/products", map[string]any{
+			"product_uuid": ids["product"], "variant_uuid": ids["variant"], "quantity": 1,
+		}), http.StatusOK, "reservation product")
+		ids["reservationProduct"] = withProduct.data.(map[string]any)["products"].([]any)[0].(map[string]any)["uuid"].(string)
 		ids["cashAccount"] = str(must(call(o, http.MethodPost, "/v1/tenant/cash/accounts", map[string]any{
 			"branch_uuid": ids["branch"], "kind": "cash", "name": m + " Kasa", "opening_balance": "100",
 		}), http.StatusCreated, "create cash account"), "uuid")
@@ -712,6 +716,12 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"PUT /v1/tenant/products/" + orgA.ids["product"] + "/offers", map[string]any{"offers": []map[string]any{{"branch_uuid": orgB.ids["home"]}}}, reject},
 		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
 			"lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}}, reject},
+		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/products", map[string]any{
+			"product_uuid": orgB.ids["product"], "variant_uuid": orgB.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/products", map[string]any{
+			"product_uuid": orgA.ids["product"], "variant_uuid": orgB.ids["variant"], "quantity": 1}, reject},
+		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/products", map[string]any{
+			"product_uuid": orgA.ids["product"], "variant_uuid": orgA.ids["variant"], "quantity": 1, "staff_uuid": orgB.ids["staff"]}, reject},
 		{"POST /v1/tenant/reservations/" + orgA.ids["reservation"] + "/reschedule", map[string]any{"starts_at": "2030-01-07T11:00:00+03:00",
 			"lines": []map[string]any{{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}}, reject},
 	}
@@ -896,6 +906,8 @@ func paramKey(prev, name string) string {
 		return "hold"
 	case "reservations/uuid":
 		return "reservation"
+	case "products/productUuid":
+		return "reservationProduct"
 	case "accounts/uuid":
 		return "cashAccount"
 	case "closings/closingUuid":

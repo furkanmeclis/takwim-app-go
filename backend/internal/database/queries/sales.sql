@@ -26,6 +26,16 @@ FROM reservation_lines rl
 WHERE rl.organization_id = sqlc.arg(organization_id) AND rl.reservation_id = sqlc.arg(reservation_id)
 ORDER BY rl.line_index;
 
+-- name: ListSalesReservationProducts :many
+-- Products handed over with a completed visit (TEC-919): each became one
+-- stock sale movement.
+SELECT rp.product_id, rp.variant_id, rp.staff_id, rp.product_name, rp.variant_name, rp.quantity, rp.unit_price,
+       rp.stock_movement_uuid::uuid AS stock_movement_uuid, rp.delivered_at
+FROM reservation_products rp
+WHERE rp.organization_id = sqlc.arg(organization_id) AND rp.reservation_id = sqlc.arg(reservation_id)
+  AND rp.status = 'delivered'
+ORDER BY rp.id;
+
 -- name: GetSalesCustomerByUUID :one
 SELECT c.id, c.uuid FROM customers c
 WHERE c.organization_id = sqlc.arg(organization_id) AND c.uuid = sqlc.arg(uuid) AND c.deleted_at IS NULL;

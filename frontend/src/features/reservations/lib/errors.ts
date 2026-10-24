@@ -7,6 +7,8 @@ const DETAIL_KEYS: Record<string, string> = {
   taken: "reservations.errors.taken",
   stale: "reservations.errors.stale",
   invalid_transition: "reservations.errors.invalid_transition",
+  insufficient_stock: "reservations.errors.insufficient_stock",
+  online_pending: "reservations.errors.online_pending",
 };
 
 /**

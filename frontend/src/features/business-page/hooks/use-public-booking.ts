@@ -22,6 +22,11 @@ export const publicBookingKeys = {
     "staff",
     branch,
   ],
+  products: (slug: string, branch: string) => [
+    ...publicBookingKeys.all(slug),
+    "products",
+    branch,
+  ],
   availability: (slug: string, body: PublicAvailabilityRequest | null) => [
     ...publicBookingKeys.all(slug),
     "availability",
@@ -67,6 +72,20 @@ export function usePublicStaff(slug: string, branchUuid: string) {
     queryFn: () => publicBookingService.staff(slug, branchUuid),
     enabled: Boolean(branchUuid),
     staleTime: 60_000,
+  });
+}
+
+/** Products of the branch for the optional product step (off = not asked). */
+export function usePublicProducts(
+  slug: string,
+  branchUuid: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: publicBookingKeys.products(slug, branchUuid),
+    queryFn: () => publicBookingService.products(slug, branchUuid),
+    enabled: enabled && Boolean(branchUuid),
+    staleTime: 30_000,
   });
 }
 

@@ -19,11 +19,13 @@ import { LargePartyHint } from "@/features/business-page/components/large-party-
 import { AreaStep } from "@/features/business-page/components/steps/area-step";
 import { DatetimeStep } from "@/features/business-page/components/steps/datetime-step";
 import { PartyStep } from "@/features/business-page/components/steps/party-step";
+import { ProductStep } from "@/features/business-page/components/steps/product-step";
 import { ServiceStep } from "@/features/business-page/components/steps/service-step";
 import { StaffStep } from "@/features/business-page/components/steps/staff-step";
 import { SummaryStep } from "@/features/business-page/components/steps/summary-step";
 import {
   usePublicAvailability,
+  usePublicProducts,
   usePublicServices,
   usePublicStaff,
 } from "@/features/business-page/hooks/use-public-booking";
@@ -32,6 +34,7 @@ import {
   statusHref,
 } from "@/features/business-page/lib/access";
 import {
+  isOutOfStock,
   isSlotTaken,
   reportBookingError,
 } from "@/features/business-page/lib/errors";
@@ -39,14 +42,17 @@ import {
   WINDOW_DAYS,
   checkoutPrices,
   flowHasParty,
+  flowHasProducts,
   flowHasService,
   flowHasStaff,
   hasAreaChoice,
   paymentChoices,
+  productPrices,
   serviceStepKey,
   staffCandidates,
   sumAmounts,
   toLines,
+  toProducts,
   validParty,
   wizardSteps,
 } from "@/features/business-page/lib/wizard";
@@ -69,7 +75,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 /**
  * Booking wizard of the business page: branch → service(s) → person →
- * day and time → contact → summary. The steps follow the sector's flow
+ * day and time → products (optional) → contact → summary. The steps follow the sector's flow
  * (`business.flow`); every rule (availability, prices, approval, payment)
  * is the API's. Picking a time holds it (`checkouts`) for the minutes of
  * `booking.checkout_minutes`; going back frees it.
@@ -102,6 +108,7 @@ export function BookingWizard({
   const [date, setDate] = useState("");
   const [slot, setSlot] = useState<PublicSlot | null>(null);
   const [checkout, setCheckout] = useState<PublicCheckout | null>(null);
+  const [productQty, setProductQty] = useState<Record<string, number>>({});
   const [contact, setContact] = useState<ContactValues | null>(null);
   const [payment, setPayment] = useState<PaymentMethod | undefined>();
   const [busy, setBusy] = useState(false);
@@ -109,6 +116,15 @@ export function BookingWizard({
 
   const servicesQuery = usePublicServices(slug, branchUuid);
   const staffQuery = usePublicStaff(slug, branchUuid);
+  const productsQuery = usePublicProducts(
+    slug,
+    branchUuid,
+    flowHasProducts(business.flow),
+  );
+  const products = useMemo(
+    () => productsQuery.data ?? [],
+    [productsQuery.data],
+  );
   const services = useMemo(
     () => servicesQuery.data ?? [],
     [servicesQuery.data],
@@ -139,6 +155,8 @@ export function BookingWizard({
     areaChoice,
     serviceChoice: !autoService,
     staffChoice,
+    // A product already picked keeps the step while its list reloads.
+    productChoice: products.length > 0 || Object.keys(productQty).length > 0,
   });
   const current: WizardStep = step && steps.includes(step) ? step : steps[0]!;
   const index = steps.indexOf(current);
@@ -175,7 +193,11 @@ export function BookingWizard({
     "";
   const latest = availability.data?.latest_date ?? null;
 
-  const total = checkout ? sumAmounts(checkoutPrices(checkout, services)) : 0;
+  const pickedProducts = toProducts(products, productQty);
+  const productTotal = sumAmounts(productPrices(products, pickedProducts));
+  const total = checkout
+    ? sumAmounts(checkoutPrices(checkout, services)) + productTotal
+    : 0;
   const payments = paymentChoices(business, selected, total);
   const activePayment =
     payment && payments.includes(payment) ? payment : payments[0];
@@ -210,7 +232,9 @@ export function BookingWizard({
   const back = () => {
     if (index <= 0) return;
     const previous = steps[index - 1]!;
-    if (current === "contact") releaseCheckout();
+    // The time is held from the step after the day; going back to the day
+    // frees it.
+    if (previous === "datetime") releaseCheckout();
     goTo(previous);
   };
 
@@ -231,7 +255,7 @@ export function BookingWizard({
       );
       setCheckout(held);
       bookingKey.current = uuid();
-      goTo("contact");
+      goTo(steps[index + 1]!);
     } catch (error) {
       reportBookingError(error, t);
       if (isSlotTaken(error)) {
@@ -249,7 +273,12 @@ export function BookingWizard({
     try {
       const reservation = await publicBookingService.book(
         slug,
-        toBookingRequest(checkout.token, contact, activePayment),
+        toBookingRequest(
+          checkout.token,
+          contact,
+          activePayment,
+          pickedProducts,
+        ),
         bookingKey.current,
       );
       const token = reservation.access_token ?? "";
@@ -261,6 +290,10 @@ export function BookingWizard({
         setCheckout(null);
         resetTime();
         goTo("datetime");
+      } else if (isOutOfStock(error)) {
+        // Someone took the last units; pick again from what is left.
+        void productsQuery.refetch();
+        goTo("products");
       }
       setBusy(false);
     }
@@ -305,6 +338,7 @@ export function BookingWizard({
           setZone("");
           setPickedServices([]);
           setStaffBy({});
+          setProductQty({});
           resetTime();
         }}
       />
@@ -411,6 +445,15 @@ export function BookingWizard({
         }
       />
     );
+  } else if (current === "products") {
+    body = (
+      <ProductStep
+        products={products}
+        value={productQty}
+        currency={business.currency}
+        onChange={setProductQty}
+      />
+    );
   } else if (current === "contact") {
     body = (
       <ContactStep
@@ -427,6 +470,8 @@ export function BookingWizard({
         business={business}
         checkout={checkout}
         services={services}
+        products={products}
+        pickedProducts={pickedProducts}
         contact={contact}
         payments={payments}
         payment={activePayment}
@@ -437,7 +482,7 @@ export function BookingWizard({
     body = null;
   }
 
-  const held = current === "contact" || current === "summary";
+  const held = index > steps.indexOf("datetime");
 
   return (
     <div className="space-y-4">

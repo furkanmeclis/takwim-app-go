@@ -11,6 +11,7 @@ import type {
   PublicBusiness,
   PublicCheckout,
   PublicCheckoutRequest,
+  PublicProduct,
   PublicReservation,
   PublicService,
   PublicStaff,
@@ -106,6 +107,12 @@ export const publicBookingService = {
   },
   staff(slug: string, branchUuid?: string) {
     return request<PublicStaff[]>("GET", slug, "/staff", {
+      query: { branch_uuid: branchUuid },
+    });
+  },
+  /** Products sold online in the branch with units left (TEC-919). */
+  products(slug: string, branchUuid: string) {
+    return request<PublicProduct[]>("GET", slug, "/products", {
       query: { branch_uuid: branchUuid },
     });
   },

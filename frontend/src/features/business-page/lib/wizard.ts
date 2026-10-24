@@ -3,7 +3,9 @@ import type {
   PublicBranch,
   PublicBusiness,
   PublicCheckout,
+  PublicBookingProduct,
   PublicLineInput,
+  PublicProduct,
   PublicService,
   WizardStep,
 } from "@/features/business-page/types";
@@ -52,6 +54,51 @@ export function seatingLabel(
     .join(" · ");
 }
 
+/** Whether the sector's flow offers products with the visit (TEC-919). */
+export function flowHasProducts(flow: string[]) {
+  return flow.includes("products");
+}
+
+/** Key of a sellable item: product, or product + variant. */
+export function productKey(p: {
+  product_uuid: string;
+  variant_uuid?: string | null;
+}) {
+  return p.variant_uuid
+    ? `${p.product_uuid}:${p.variant_uuid}`
+    : p.product_uuid;
+}
+
+/** Picked products of the step as request items (in the list's order). */
+export function toProducts(
+  products: PublicProduct[],
+  quantities: Record<string, number>,
+): PublicBookingProduct[] {
+  return products.flatMap((p) => {
+    const quantity = Math.min(quantities[productKey(p)] ?? 0, p.max_quantity);
+    return quantity > 0
+      ? [
+          {
+            product_uuid: p.product_uuid,
+            variant_uuid: p.variant_uuid,
+            quantity,
+          },
+        ]
+      : [];
+  });
+}
+
+/** Price of each picked product line (unit price × quantity). */
+export function productPrices(
+  products: PublicProduct[],
+  picked: PublicBookingProduct[],
+) {
+  return picked.map((item) => {
+    const p = products.find((x) => productKey(x) === productKey(item));
+    return ((p ? Number(p.price) : 0) * item.quantity).toFixed(2);
+  });
+}
+
 /** Fewest and most people of a party (API limits). */
 export const MIN_PARTY = 1;
 export const MAX_PARTY = 1000;
@@ -87,7 +134,10 @@ export function validParty(value: number) {
  *   the branch offers exactly one service, which is then booked.
  * - The staff step shows when the sector offers it and a picked service
  *   has people to choose from.
- * Vehicle and product steps have no public API yet and are not shown.
+ * - The product step (TEC-919) follows the time, as in the sector flow,
+ *   when the sector sells products with a visit and the branch has some
+ *   online; it is optional.
+ * The vehicle step has no public API yet and is not shown.
  */
 export function wizardSteps({
   branchCount,
@@ -95,12 +145,14 @@ export function wizardSteps({
   areaChoice,
   serviceChoice,
   staffChoice,
+  productChoice = false,
 }: {
   branchCount: number;
   partySize: boolean;
   areaChoice: boolean;
   serviceChoice: boolean;
   staffChoice: boolean;
+  productChoice?: boolean;
 }): WizardStep[] {
   const steps: WizardStep[] = [];
   if (branchCount > 1) steps.push("branch");
@@ -108,7 +160,9 @@ export function wizardSteps({
   if (partySize && areaChoice) steps.push("area");
   if (serviceChoice) steps.push("service");
   if (staffChoice) steps.push("staff");
-  steps.push("datetime", "contact", "summary");
+  steps.push("datetime");
+  if (productChoice) steps.push("products");
+  steps.push("contact", "summary");
   return steps;
 }
 

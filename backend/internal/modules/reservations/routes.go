@@ -56,6 +56,11 @@ func RegisterRoutes(
 	route("POST /v1/tenant/reservations/{uuid}/start", h.Action("start"), write)
 	route("POST /v1/tenant/reservations/{uuid}/complete", h.Action("complete"), write)
 	route("POST /v1/tenant/reservations/{uuid}/no-show", h.Action("no-show"), write)
+	// Products of the visit (TEC-919); the handlers also need the products
+	// module and tenant.products.sell.
+	route("GET /v1/tenant/reservations/{uuid}/product-options", h.ProductOptions, read)
+	route("POST /v1/tenant/reservations/{uuid}/products", h.AddProduct, write)
+	route("DELETE /v1/tenant/reservations/{uuid}/products/{productUuid}", h.RemoveProduct, write)
 }
 
 // Resource is the resource slug of reservations.

@@ -286,6 +286,26 @@ func (s *Service) CreateWith(ctx context.Context, orgID int64, in model.CreateIn
 				return err
 			}
 		}
+		if len(in.Products) > 0 {
+			// The products of the booking are reserved with it (TEC-919):
+			// a request keeps them for as long as its timed hold.
+			picked, err := pickProducts(ctx, tx.Q, orgID, row, in.Products, in.Source != model.SourcePanel, "products")
+			if err != nil {
+				return err
+			}
+			if err := reserveProducts(ctx, tx.Q, orgID, row, picked, in.Source, actorID, "products"); err != nil {
+				return err
+			}
+			extra, err := productsTotal(ctx, tx.Q, orgID, row.ID)
+			if err != nil {
+				return err
+			}
+			if err := tx.Q.SetReservationTotal(ctx, db.SetReservationTotalParams{
+				OrganizationID: orgID, ID: row.ID, TotalPrice: total.Add(extra).Numeric(),
+			}); err != nil {
+				return err
+			}
+		}
 		if err := s.event(ctx, tx.Q, row, "created", "", row.Status, actorID, ""); err != nil {
 			return err
 		}
@@ -510,6 +530,9 @@ func (s *Service) get(ctx context.Context, orgID int64, id uuid.UUID) (model.Res
 			return model.Reservation{}, err
 		}
 		out.Lines = append(out.Lines, item)
+	}
+	if out.Products, err = listProducts(ctx, s.q, orgID, row.ID); err != nil {
+		return model.Reservation{}, err
 	}
 	events, err := s.q.ListReservationEvents(ctx, db.ListReservationEventsParams{OrganizationID: orgID, ReservationID: row.ID})
 	if err != nil {

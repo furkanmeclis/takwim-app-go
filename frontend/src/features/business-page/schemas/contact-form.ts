@@ -3,6 +3,7 @@ import { z } from "zod";
 import type {
   ContactValues,
   PaymentMethod,
+  PublicBookingProduct,
   PublicBookingRequest,
 } from "@/features/business-page/types";
 
@@ -67,6 +68,7 @@ export function toBookingRequest(
   checkoutToken: string,
   values: ContactValues,
   payment: PaymentMethod | undefined,
+  products: PublicBookingProduct[] = [],
 ): PublicBookingRequest {
   return {
     checkout_token: checkoutToken,
@@ -81,5 +83,6 @@ export function toBookingRequest(
     ...(payment ? { payment } : {}),
     customer_note: values.customer_note,
     website: values.website,
+    ...(products.length > 0 ? { products } : {}),
   };
 }

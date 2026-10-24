@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import { cashKeys } from "@/features/cash/hooks/query-keys";
+import { productsKeys } from "@/features/products/hooks/query-keys";
 import { reservationsKeys } from "@/features/reservations/hooks/query-keys";
 import { reportReservationError } from "@/features/reservations/lib/errors";
 import { reservationsService } from "@/features/reservations/services/reservations.service";
@@ -21,6 +22,7 @@ import type {
   ReservationCollectionRequest,
   ReservationCreateRequest,
   ReservationNotesRequest,
+  ReservationProductRequest,
   ReservationRescheduleRequest,
 } from "@/features/reservations/types";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
@@ -193,6 +195,61 @@ export function useUpdateReservationNotes() {
     }) => reservationsService.updateNotes(slug, uuid, body),
     onSuccess: () => {
       appToast.success(t("reservations.toast.notes_saved"));
+      void invalidate();
+    },
+  });
+}
+
+/** Adds a product to a visit; the visit, its money and the stock refresh. */
+export function useAddReservationProduct(uuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: (body: ReservationProductRequest) =>
+      reservationsService.addProduct(slug, uuid, body),
+    onSuccess: (reservation) => {
+      queryClient.setQueryData(
+        reservationsKeys.detail(slug, uuid),
+        reservation,
+      );
+      appToast.success(t("reservations.toast.product_added"));
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: productsKeys.all(slug) });
+    },
+    onError: (error) => {
+      reportReservationError(error, t);
+      void invalidate();
+    },
+  });
+}
+
+/** Removes a held product from a visit and frees its units. */
+export function useRemoveReservationProduct(uuid: string) {
+  const { slug } = useTenant();
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({
+      productUuid,
+      body,
+    }: {
+      productUuid: string;
+      body: ReservationActionRequest;
+    }) => reservationsService.removeProduct(slug, uuid, productUuid, body),
+    onSuccess: (reservation) => {
+      queryClient.setQueryData(
+        reservationsKeys.detail(slug, uuid),
+        reservation,
+      );
+      appToast.success(t("reservations.toast.product_removed"));
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: productsKeys.all(slug) });
+    },
+    onError: (error) => {
+      reportReservationError(error, t);
       void invalidate();
     },
   });

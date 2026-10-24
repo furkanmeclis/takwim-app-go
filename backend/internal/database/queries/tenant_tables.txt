@@ -34,6 +34,7 @@ product_variants
 product_branches
 stock_levels
 stock_movements
+reservation_products
 cash_accounts
 cash_movements
 cash_closings

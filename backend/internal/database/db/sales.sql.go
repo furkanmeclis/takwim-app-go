@@ -1604,6 +1604,64 @@ func (q *Queries) ListSalesReservationLines(ctx context.Context, arg ListSalesRe
 	return items, nil
 }
 
+const listSalesReservationProducts = `-- name: ListSalesReservationProducts :many
+SELECT rp.product_id, rp.variant_id, rp.staff_id, rp.product_name, rp.variant_name, rp.quantity, rp.unit_price,
+       rp.stock_movement_uuid::uuid AS stock_movement_uuid, rp.delivered_at
+FROM reservation_products rp
+WHERE rp.organization_id = $1 AND rp.reservation_id = $2
+  AND rp.status = 'delivered'
+ORDER BY rp.id
+`
+
+type ListSalesReservationProductsParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ReservationID  int64 `json:"reservation_id"`
+}
+
+type ListSalesReservationProductsRow struct {
+	ProductID         int64              `json:"product_id"`
+	VariantID         pgtype.Int8        `json:"variant_id"`
+	StaffID           pgtype.Int8        `json:"staff_id"`
+	ProductName       string             `json:"product_name"`
+	VariantName       pgtype.Text        `json:"variant_name"`
+	Quantity          int32              `json:"quantity"`
+	UnitPrice         pgtype.Numeric     `json:"unit_price"`
+	StockMovementUuid uuid.UUID          `json:"stock_movement_uuid"`
+	DeliveredAt       pgtype.Timestamptz `json:"delivered_at"`
+}
+
+// Products handed over with a completed visit (TEC-919): each became one
+// stock sale movement.
+func (q *Queries) ListSalesReservationProducts(ctx context.Context, arg ListSalesReservationProductsParams) ([]ListSalesReservationProductsRow, error) {
+	rows, err := q.db.Query(ctx, listSalesReservationProducts, arg.OrganizationID, arg.ReservationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSalesReservationProductsRow{}
+	for rows.Next() {
+		var i ListSalesReservationProductsRow
+		if err := rows.Scan(
+			&i.ProductID,
+			&i.VariantID,
+			&i.StaffID,
+			&i.ProductName,
+			&i.VariantName,
+			&i.Quantity,
+			&i.UnitPrice,
+			&i.StockMovementUuid,
+			&i.DeliveredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockLedgerEntry = `-- name: LockLedgerEntry :one
 SELECT e.id FROM ledger_entries e
 WHERE e.organization_id = $1 AND e.id = $2

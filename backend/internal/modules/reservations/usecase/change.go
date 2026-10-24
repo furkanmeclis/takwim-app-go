@@ -156,6 +156,12 @@ func (s *Service) Reschedule(ctx context.Context, orgID int64, id uuid.UUID, cal
 			}
 			total = total.Add(money.FromNumericOrZero(priced[i].UnitPrice))
 		}
+		// The products of the visit stay as they are.
+		extra, err := productsTotal(ctx, tx.Q, orgID, row.ID)
+		if err != nil {
+			return err
+		}
+		total = total.Add(extra)
 		if err := tx.Q.DeleteReservationLines(ctx, db.DeleteReservationLinesParams{OrganizationID: orgID, ReservationID: row.ID}); err != nil {
 			return err
 		}

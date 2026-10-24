@@ -9,6 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { ChoiceCard } from "@/features/business-page/components/choice-card";
 import {
   checkoutPrices,
+  productKey,
+  productPrices,
   seatingLabel,
   sumAmounts,
 } from "@/features/business-page/lib/wizard";
@@ -16,7 +18,9 @@ import type {
   ContactValues,
   PaymentMethod,
   PublicBusiness,
+  PublicBookingProduct,
   PublicCheckout,
+  PublicProduct,
   PublicService,
 } from "@/features/business-page/types";
 import { priceLabel } from "@/features/services/lib/format";
@@ -25,13 +29,15 @@ import { useLocale } from "@/providers/locale-provider";
 
 /**
  * Summary step: the held time, the services with their people and prices,
- * the contact, how the customer pays and the business's rules. The prices
+ * the picked products, the contact, how the customer pays and the business's rules. The prices
  * are the catalog's; the API sets the final amount on the booking.
  */
 export function SummaryStep({
   business,
   checkout,
   services,
+  products = [],
+  pickedProducts = [],
   contact,
   payments,
   payment,
@@ -40,6 +46,8 @@ export function SummaryStep({
   business: PublicBusiness;
   checkout: PublicCheckout;
   services: PublicService[];
+  products?: PublicProduct[];
+  pickedProducts?: PublicBookingProduct[];
   contact: ContactValues;
   payments: PaymentMethod[];
   payment: PaymentMethod | undefined;
@@ -51,7 +59,13 @@ export function SummaryStep({
     datetimeInZone(iso, zone, locale, { hour: "2-digit", minute: "2-digit" });
   const byUuid = new Map(services.map((s) => [s.uuid, s]));
   const prices = checkoutPrices(checkout, services);
-  const total = sumAmounts(prices);
+  const itemPrices = productPrices(products, pickedProducts);
+  const total = sumAmounts(prices) + sumAmounts(itemPrices);
+  const itemName = (item: PublicBookingProduct) => {
+    const p = products.find((x) => productKey(x) === productKey(item));
+    if (!p) return "";
+    return p.variant_name ? `${p.name} / ${p.variant_name}` : p.name;
+  };
   const money = (amount: string | number) =>
     priceLabel(String(amount), business.currency, locale);
 
@@ -95,6 +109,21 @@ export function SummaryStep({
                 </span>
                 <span className="shrink-0 tabular-nums">
                   {money(prices[index] ?? "0")}
+                </span>
+              </li>
+            ))}
+            {pickedProducts.map((item, index) => (
+              <li key={productKey(item)} className="flex justify-between gap-3">
+                <span>
+                  <span className="block font-medium">{itemName(item)}</span>
+                  <span className="text-muted-foreground block tabular-nums">
+                    {t("business_page.products.line", {
+                      quantity: item.quantity,
+                    })}
+                  </span>
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {money(itemPrices[index] ?? "0")}
                 </span>
               </li>
             ))}

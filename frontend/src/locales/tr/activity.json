@@ -294,5 +294,7 @@
   "fields.tenant.staff_share_payouts.cash_account": "Hesap",
   "fields.tenant.staff_share_payouts.payout_date": "Ödeme tarihi",
   "fields.tenant.staff_share_payouts.note": "Not",
-  "fields.tenant.staff_share_payouts.reason": "Neden"
+  "fields.tenant.staff_share_payouts.reason": "Neden",
+  "actions.reservations.product_added": "Randevuya ürün eklendi",
+  "actions.reservations.product_removed": "Randevudan ürün kaldırıldı"
 }
