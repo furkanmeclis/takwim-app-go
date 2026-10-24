@@ -137,6 +137,61 @@ export function createCollectSchema(t: Translate, remaining: number) {
 
 export type CollectFormValues = z.infer<ReturnType<typeof createCollectSchema>>;
 
+/** Ways of a refund recorded by hand ("online" = paid back outside Takwim). */
+export const REFUND_METHODS = ["cash", "card", "transfer", "online"] as const;
+export const REFUND_CHANNELS = ["provider", "manual"] as const;
+
+/** Most characters of a refund's reason or a resolution note (API limit). */
+export const MAX_REFUND_NOTE = 240;
+
+/**
+ * Refund: at most what is left of the chosen collection (the API checks
+ * again under a lock); a manual refund names its way and account.
+ */
+export function createRefundSchema(
+  t: Translate,
+  refundableOf: (collection: string) => number,
+) {
+  return z
+    .object({
+      collection_uuid: z
+        .string()
+        .min(1, t("reservations.validation.collection_required")),
+      amount: z.string().trim(),
+      channel: z.enum(REFUND_CHANNELS),
+      method: z.enum(REFUND_METHODS),
+      cash_account_uuid: z.string(),
+      reason: z
+        .string()
+        .max(MAX_REFUND_NOTE, t("reservations.validation.collect_note_max")),
+    })
+    .superRefine((values, ctx) => {
+      const value = parseAmount(values.amount);
+      if (!(value > 0)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["amount"],
+          message: t("reservations.validation.amount"),
+        });
+      } else if (value > refundableOf(values.collection_uuid) + 0.0001) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["amount"],
+          message: t("reservations.validation.amount_over_refundable"),
+        });
+      }
+      if (values.channel === "manual" && !values.cash_account_uuid) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cash_account_uuid"],
+          message: t("reservations.validation.account_required"),
+        });
+      }
+    });
+}
+
+export type RefundFormValues = z.infer<ReturnType<typeof createRefundSchema>>;
+
 /** Select value for "anyone free" (Radix Select has no empty value). */
 export const ANY_STAFF = "any";
 

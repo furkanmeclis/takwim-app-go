@@ -273,6 +273,19 @@ type Reservation struct {
 	Policies      Policies       `json:"policies"`
 	Actions       Actions        `json:"actions"`
 	History       []HistoryEntry `json:"history"`
+	// Refunds are the refunds of the visit (TEC-913), newest first.
+	Refunds []Refund `json:"refunds"`
+}
+
+// Refund is what the customer sees of one refund: requested (under way),
+// succeeded (paid back) or failed (the business follows it up).
+type Refund struct {
+	UUID        uuid.UUID   `json:"uuid"`
+	Amount      money.Money `json:"amount"`
+	Currency    string      `json:"currency"`
+	Status      string      `json:"status"`
+	RequestedAt time.Time   `json:"requested_at"`
+	RefundedAt  *time.Time  `json:"refunded_at"`
 }
 
 // CancelInput cancels a visit.

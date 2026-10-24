@@ -959,6 +959,37 @@ type RefreshToken struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type Refund struct {
+	ID                   int64              `json:"id"`
+	Uuid                 uuid.UUID          `json:"uuid"`
+	OrganizationID       int64              `json:"organization_id"`
+	BranchID             int64              `json:"branch_id"`
+	ReservationID        int64              `json:"reservation_id"`
+	CollectionEntryID    int64              `json:"collection_entry_id"`
+	PaymentID            pgtype.Int8        `json:"payment_id"`
+	IntegrationAccountID pgtype.Int8        `json:"integration_account_id"`
+	Channel              string             `json:"channel"`
+	Provider             string             `json:"provider"`
+	CashAccountID        int64              `json:"cash_account_id"`
+	Method               string             `json:"method"`
+	Amount               pgtype.Numeric     `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               string             `json:"status"`
+	ProviderStatus       string             `json:"provider_status"`
+	ProviderRefundID     string             `json:"provider_refund_id"`
+	FailureReason        string             `json:"failure_reason"`
+	ProviderAnsweredAt   pgtype.Timestamptz `json:"provider_answered_at"`
+	LedgerEntryID        pgtype.Int8        `json:"ledger_entry_id"`
+	ReflectedAt          pgtype.Timestamptz `json:"reflected_at"`
+	Reason               string             `json:"reason"`
+	IdempotencyKey       string             `json:"idempotency_key"`
+	RequestedBy          pgtype.Int8        `json:"requested_by"`
+	ResolvedBy           pgtype.Int8        `json:"resolved_by"`
+	ResolutionNote       string             `json:"resolution_note"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Reservation struct {
 	ID                 int64              `json:"id"`
 	Uuid               uuid.UUID          `json:"uuid"`

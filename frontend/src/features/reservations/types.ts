@@ -14,6 +14,29 @@ export type CollectAccount = Schemas["CollectAccount"];
 export type ReservationCollectionRequest =
   Schemas["ReservationCollectionRequest"];
 export type CollectMethod = ReservationCollectionRequest["method"];
+export type Refund = Schemas["Refund"];
+export type RefundCollection = Schemas["RefundCollection"];
+export type ReservationRefundRequest = Schemas["ReservationRefundRequest"];
+export type RefundResult = Schemas["RefundResult"];
+export type RefundMethod = NonNullable<ReservationRefundRequest["method"]>;
+export type RefundResolveRequest = {
+  outcome: "succeeded" | "failed";
+  note?: string;
+};
+/** Visits whose money needs a person (`GET /v1/tenant/payments/follow-ups`). */
+export type PaymentFollowUp = Schemas["PaymentFollowUp"];
+export type PaymentFollowUpPage = Schemas["PaymentFollowUpPage"];
+export type PaymentFollowUpKind = PaymentFollowUp["kind"];
+export type PaymentFollowUpFacets =
+  Schemas["EnvelopePaymentFollowUpFacets"]["data"];
+export type ListPaymentFollowUpsParams = {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  q?: string;
+  kind?: string;
+  branch?: string;
+};
 export type ReservationCreateRequest =
   Schemas["TenantReservationCreateRequest"];
 export type ReservationRescheduleRequest =

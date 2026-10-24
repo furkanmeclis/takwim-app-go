@@ -8,6 +8,7 @@ package payments
 
 import (
 	"net/http"
+	"slices"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/middleware"
 	paymentshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/payments/handler"
@@ -45,8 +46,24 @@ func RegisterRoutes(
 		middleware.RequireAnyTenantPermission(rbac.PermTenantReservationsRead, rbac.PermTenantReservationsOwn),
 	}
 	mux.Handle("GET /v1/tenant/reservations/{uuid}/payments", middleware.Chain(http.HandlerFunc(h.ReservationPayments), base...))
-	mux.Handle("POST /v1/tenant/reservations/{uuid}/collections", middleware.Chain(http.HandlerFunc(h.Collect), append(base,
+	mux.Handle("POST /v1/tenant/reservations/{uuid}/collections", middleware.Chain(http.HandlerFunc(h.Collect), append(slices.Clone(base),
 		middleware.RequireModule(sector.ModuleCash),
 		middleware.RequireTenantPermission(rbac.PermTenantPaymentCollect),
 	)...))
+	// Refunds (TEC-913): tenant.payment.refund and the cash module.
+	refund := append(slices.Clone(base), middleware.RequireModule(sector.ModuleCash), middleware.RequireTenantPermission(rbac.PermTenantPaymentRefund))
+	mux.Handle("POST /v1/tenant/reservations/{uuid}/refunds", middleware.Chain(http.HandlerFunc(h.Refund), refund...))
+	mux.Handle("POST /v1/tenant/refunds/{uuid}/resolve", middleware.Chain(http.HandlerFunc(h.ResolveRefund), refund...))
+
+	// The payment follow-up list: members who take or pay back money, or
+	// read the books.
+	follow := []func(http.Handler) http.Handler{
+		middleware.Authenticate(tokens, loader),
+		middleware.RequireOrganization(resolver),
+		middleware.RequireModule(sector.ModuleReservations),
+		middleware.RequireAnyTenantPermission(rbac.PermTenantPaymentRefund, rbac.PermTenantPaymentCollect, rbac.PermTenantFinanceRead),
+	}
+	mux.Handle("GET /v1/tenant/payments/follow-ups/meta", middleware.Chain(http.HandlerFunc(h.FollowUpsMeta), follow...))
+	mux.Handle("GET /v1/tenant/payments/follow-ups/facets", middleware.Chain(http.HandlerFunc(h.FollowUpFacets), follow...))
+	mux.Handle("GET /v1/tenant/payments/follow-ups", middleware.Chain(http.HandlerFunc(h.ListFollowUps), follow...))
 }

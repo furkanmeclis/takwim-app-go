@@ -546,4 +546,39 @@ func TestSalesLedger(t *testing.T) {
 		data["expected"] != "70.00" || data["credit"] != "30.00" {
 		t.Fatalf("reservation balance = %d %s", code, raw)
 	}
+
+	// 9. The manager takes the product back (TEC-913): the units return to
+	// the branch and the sale line is reversed, once.
+	products.SetSaleReverser(sales.ProductSaleReverser(svc))
+	var pve *productsusecase.ValidationError
+	if _, err := products.ReturnSale(ctx, org.ID, owner.ID, sold.Movements[0].UUID, productsmodel.ReturnInput{}); !errors.As(err, &pve) ||
+		pve.Details[0].Field != "reason" {
+		t.Fatalf("return without a reason = %v", err)
+	}
+	returned, err := products.ReturnSale(ctx, org.ID, owner.ID, sold.Movements[0].UUID, productsmodel.ReturnInput{Reason: "kusurlu"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := returned.Movements[0]; m.Kind != productsmodel.KindReturn || m.Quantity != 2 || m.BalanceAfter != 5 ||
+		m.Source != productsmodel.SourceSaleReturn {
+		t.Fatalf("return movement = %+v", m)
+	}
+	if got, err := products.GetMovement(ctx, org.ID, sold.Movements[0].UUID); err != nil || !got.Returned {
+		t.Fatalf("returned sale = %+v %v", got, err)
+	}
+	if _, err := svc.LiveLineOfStockSale(ctx, q, org.ID, sold.Movements[0].UUID); !errors.Is(err, usecase.ErrLineNotFound) {
+		t.Fatalf("live line after the return = %v", err)
+	}
+	if _, n, err := svc.ListLines(ctx, org.ID, model.LineFilter{ItemTypes: []string{model.ItemProduct}, Kinds: []string{model.LineReversal}, Limit: 10}); err != nil || n != 1 {
+		t.Fatalf("product reversals = %d %v", n, err)
+	}
+	if _, err := products.ReturnSale(ctx, org.ID, owner.ID, sold.Movements[0].UUID, productsmodel.ReturnInput{Reason: "again"}); !errors.Is(err, productsusecase.ErrAlreadyReturned) {
+		t.Fatalf("second return = %v", err)
+	}
+	if _, err := products.ReturnSale(ctx, org.ID, owner.ID, returned.Movements[0].UUID, productsmodel.ReturnInput{Reason: "x"}); !errors.Is(err, productsusecase.ErrNotReturnable) {
+		t.Fatalf("return of a return = %v", err)
+	}
+	if _, err := products.ReturnSale(ctx, org2.ID, owner.ID, sold.Movements[0].UUID, productsmodel.ReturnInput{Reason: "x"}); !errors.Is(err, productsusecase.ErrMovementNotFound) {
+		t.Fatalf("foreign return = %v", err)
+	}
 }

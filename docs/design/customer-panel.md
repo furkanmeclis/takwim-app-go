@@ -66,6 +66,8 @@ The panel never decides on capacity or states itself; it calls the reservations 
 
 There is no payment ledger yet (TEC-912). The amounts come from the visit total and `payment_status`: online payments count as the full total, a refund as the full total once refunded (`refunded` is `null` while it is unknown), `balance` is `null` for a finished visit paid at the business. A cancelled or rejected visit with nothing paid is left out of the payments list. The summary groups by currency.
 
+The visit detail answers `refunds` (TEC-913): each refund's amount, its status (`requested` in progress, `succeeded` paid back, or `failed`, shown as "being followed up" by the business) and its dates. When the visit has refunds, `money.refunded` on the detail is the sum of the succeeded ones. The list amounts stay as above until TEC-967.
+
 ## Panel link by SMS
 
 The customer notification engine sends it ([customer-notifications.md](./customer-notifications.md), TEC-911). Every reservation notice (received, accepted, rejected, changed, cancelled, reminder) carries `{{link}}`, so a new public booking gets "your request was received" or "your booking was accepted" with the link to see and manage all bookings (A28). On SMS, `PanelLink` puts a single-use panel link (below) into the text at send time; past 5 links a day for the phone, on other channels, or while the channel is not ready, it is the plain `takwim.link/panel` address, which asks for a code. Stored texts never hold a token.

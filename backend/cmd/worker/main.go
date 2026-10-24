@@ -196,6 +196,7 @@ func main() {
 	productsSvc.SetSaleRecorder(salesmodule.ProductSaleRecorder(salesSvc))
 	// ... and every sale line with a staff member its share (TEC-917).
 	salesSvc.SetLineHook(staffsharesusecase.New(staffsharesrepository.NewPostgres(pool, queries), cashSvc).RecordLineTx)
+	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
 	// Platform organizations (export, bulk activate / suspend). Status
 	// changes invalidate the API's organization cache when Redis is up.
 	jobScopes := orgusecase.New(orgrepository.NewPostgres(pool, queries), nil)

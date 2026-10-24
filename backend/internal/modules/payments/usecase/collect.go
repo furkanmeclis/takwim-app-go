@@ -23,6 +23,9 @@ type ViewOptions struct {
 	// Collect: the member holds tenant.payment.collect and the cash module
 	// is on.
 	Collect bool
+	// Refund: the member holds tenant.payment.refund and the cash module is
+	// on.
+	Refund bool
 }
 
 // collectable reports whether money may be taken for a visit in status.
@@ -92,6 +95,9 @@ func (s *Service) ReservationPayments(ctx context.Context, orgID int64, id uuid.
 		}
 		out.CanCollect = out.Remaining.IsPositive() && len(out.CollectAccounts) > 0
 	}
+	if err := s.refundView(ctx, orgID, row, &out, opts.Refund); err != nil {
+		return out, err
+	}
 	return out, nil
 }
 
@@ -100,7 +106,7 @@ func (s *Service) ReservationPayments(ctx context.Context, orgID int64, id uuid.
 // movement into a till or bank account of the visit's branch (or a
 // business-wide one), in the reservation's transaction. A visit paid in
 // full becomes paid. At most the remaining amount is taken.
-func (s *Service) Collect(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64, in model.CollectInput) (model.ReservationPayments, error) {
+func (s *Service) Collect(ctx context.Context, orgID int64, id uuid.UUID, caller availabilityusecase.Caller, actorID int64, opts ViewOptions, in model.CollectInput) (model.ReservationPayments, error) {
 	view, err := s.ReservationPayments(ctx, orgID, id, caller, ViewOptions{})
 	if err != nil {
 		return view, err
@@ -168,5 +174,5 @@ func (s *Service) Collect(ctx context.Context, orgID int64, id uuid.UUID, caller
 		return view, err
 	}
 	s.changed(ctx, orgID, id)
-	return s.ReservationPayments(ctx, orgID, id, caller, ViewOptions{Collect: true})
+	return s.ReservationPayments(ctx, orgID, id, caller, opts)
 }

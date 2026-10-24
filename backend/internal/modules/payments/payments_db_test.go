@@ -378,7 +378,7 @@ func TestPaymentsFlow(t *testing.T) {
 		t.Fatalf("collect view = %+v, %v", view, err)
 	}
 	collect := func(amount string, method string, account uuid.UUID) (model.ReservationPayments, error) {
-		return svc.Collect(ctx, org.ID, visit.UUID, none, owner.ID, model.CollectInput{
+		return svc.Collect(ctx, org.ID, visit.UUID, none, owner.ID, usecase.ViewOptions{Collect: true}, model.CollectInput{
 			Amount: money.MustParse(amount), Method: method, CashAccountUUID: account,
 		})
 	}
@@ -410,7 +410,7 @@ func TestPaymentsFlow(t *testing.T) {
 	if got := get(r2.UUID); got.Status != reservationsmodel.StatusCancelled || got.PaymentStatus != reservationsmodel.PaymentFailed {
 		t.Fatalf("unpaid lapsed = %s / %s", got.Status, got.PaymentStatus)
 	}
-	if _, err := svc.Collect(ctx, org.ID, r2.UUID, none, owner.ID, model.CollectInput{
+	if _, err := svc.Collect(ctx, org.ID, r2.UUID, none, owner.ID, usecase.ViewOptions{Collect: true}, model.CollectInput{
 		Amount: money.FromUnits(10), Method: "cash", CashAccountUUID: tillUUID,
 	}); !errors.Is(err, usecase.ErrNotCollectable) {
 		t.Fatalf("collect cancelled = %v", err)

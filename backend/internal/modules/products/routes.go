@@ -90,6 +90,10 @@ func RegisterRoutes(
 	route("GET /v1/tenant/stock-movements/facets", h.MovementFacets, read)
 	route("GET /v1/tenant/stock-movements", h.ListMovements, read)
 	route("POST /v1/tenant/stock-movements", h.CreateMovement, read)
+	// Taking back a product handed over is a manager's operation: stock and
+	// refund permissions (TEC-913).
+	route("POST /v1/tenant/stock-movements/{uuid}/return", h.ReturnMovement, read,
+		perm(rbac.PermTenantProductsStock), perm(rbac.PermTenantPaymentRefund))
 }
 
 // ExportQueryKeys are the list filters an export honours.

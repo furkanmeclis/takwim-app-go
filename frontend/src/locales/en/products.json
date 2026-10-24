@@ -250,5 +250,18 @@
   "movements.fields.reason_placeholder": "E.g. supplier invoice, customer return",
   "movements.fields.occurred_at": "Date",
   "movements.fields.occurred_at_hint": "Left empty, now; cannot be in the future.",
-  "movements.fields.note": "Note"
+  "movements.fields.note": "Note",
+  "movements.returned": "Returned",
+  "movements.columns.actions": "Actions",
+  "movements.toast.returned": "Product taken back; the sale was reversed.",
+  "movements.return.action": "Take back (return)",
+  "movements.return.title": "Take back a sale",
+  "movements.return.description": "{{quantity}} × {{product}} go back into {{branch}} stock and the sale's revenue is reversed.",
+  "movements.return.money_hint": "This does not pay money back. If the customer is owed money, record the refund separately. Correct damaged stock with a count afterwards.",
+  "movements.return.reason": "Reason",
+  "movements.return.note": "Note",
+  "movements.return.submit": "Take back",
+  "movements.return.reason_required": "Enter a reason.",
+  "movements.return.reason_max": "The reason can be at most 200 characters.",
+  "movements.return.note_max": "The note can be at most 2000 characters."
 }

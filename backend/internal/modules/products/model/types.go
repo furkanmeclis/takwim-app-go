@@ -252,9 +252,11 @@ type Movement struct {
 	Reason            string       `json:"reason"`
 	Note              string       `json:"note"`
 	Source            string       `json:"source"`
-	OccurredAt        time.Time    `json:"occurred_at"`
-	CreatedBy         *Ref         `json:"created_by"`
-	CreatedAt         time.Time    `json:"created_at"`
+	// Returned: a sale whose product was taken back (TEC-913).
+	Returned   bool      `json:"returned"`
+	OccurredAt time.Time `json:"occurred_at"`
+	CreatedBy  *Ref      `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // MovementInput is the body of POST /stock-movements. Quantity is the
@@ -313,4 +315,16 @@ type ActivityEntry struct {
 	Payload   json.RawMessage `json:"payload"`
 	Actor     *ActivityActor  `json:"actor"`
 	CreatedAt time.Time       `json:"created_at"`
+}
+
+// SourceSaleReturn marks the return movement of a sale (its source_uuid is
+// the sale movement).
+const SourceSaleReturn = "sale_return"
+
+// ReturnInput takes back the product of a stock sale (a manager's
+// operation): the units come back to the branch's stock and the sale's
+// revenue line is reversed.
+type ReturnInput struct {
+	Reason string `json:"reason"`
+	Note   string `json:"note"`
 }

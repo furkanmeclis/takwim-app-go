@@ -1,23 +1,32 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import {
   EntitySectionCard,
   EntityTable,
   useServerListState,
 } from "@/components/entity";
+import { permissions } from "@/config/permissions";
 import { useMovementColumns } from "@/features/products/components/movement-columns";
+import { SaleReturnDialog } from "@/features/products/components/sale-return-dialog";
 import { useStockMovementsList } from "@/features/products/hooks/use-products";
 import type {
   ListStockMovementsParams,
   Product,
+  StockMovement,
 } from "@/features/products/types";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
 
 /** Ledger rows of one product (all its variants), newest first. */
 export function ProductMovementsCard({ product }: { product: Product }) {
   const { t } = useLocale();
+  const { can } = usePermission();
+  const [returning, setReturning] = useState<StockMovement | null>(null);
+  const canReturn =
+    can(permissions.tenant.products.stock) &&
+    can(permissions.tenant.payment.refund);
   const listState = useServerListState({
     initialSort: "-occurred_at",
     initialPageSize: 10,
@@ -27,7 +36,11 @@ export function ProductMovementsCard({ product }: { product: Product }) {
     [listState.params, product.uuid],
   );
   const query = useStockMovementsList(params);
-  const columns = useMovementColumns({ withProduct: false, filters: false });
+  const columns = useMovementColumns({
+    withProduct: false,
+    filters: false,
+    onReturn: canReturn ? setReturning : undefined,
+  });
   const total = query.data?.total ?? 0;
   const pageCount = Math.max(
     1,
@@ -57,6 +70,12 @@ export function ProductMovementsCard({ product }: { product: Product }) {
           columnFilters: false,
           facetedFilters: false,
           globalFilter: false,
+        }}
+      />
+      <SaleReturnDialog
+        movement={returning}
+        onOpenChange={(open) => {
+          if (!open) setReturning(null);
         }}
       />
     </EntitySectionCard>

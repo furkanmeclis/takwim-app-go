@@ -11,6 +11,24 @@ import (
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 )
 
+func TestTestpayRefund(t *testing.T) {
+	p := testpay.New("https://app.test/")
+	acc := integrations.Account{Credentials: integrations.Credentials{"secret_key": "s3cret"}}
+	in := payments.RefundRequest{OrderRef: "ref1", RefundRef: "rf1", Amount: money.MustParse("40.00")}
+	if res, err := p.Refund(context.Background(), acc, in); err != nil || res.ProviderRefundID != "test_refund_rf1" {
+		t.Fatalf("refund = %+v, %v", res, err)
+	}
+	var pe *payments.ProviderError
+	in.Amount = money.MustParse("40.13")
+	if _, err := p.Refund(context.Background(), acc, in); !errors.As(err, &pe) || pe.Temporary {
+		t.Fatalf("declined = %v", err)
+	}
+	in.Amount = money.MustParse("40.99")
+	if _, err := p.Refund(context.Background(), acc, in); !errors.As(err, &pe) || !pe.Temporary {
+		t.Fatalf("unknown = %v", err)
+	}
+}
+
 func TestTestpay(t *testing.T) {
 	p := testpay.New("https://app.test/")
 	acc := integrations.Account{Credentials: integrations.Credentials{"secret_key": "s3cret"}}

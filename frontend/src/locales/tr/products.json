@@ -250,5 +250,18 @@
   "movements.fields.reason_placeholder": "Örn. tedarikçi faturası, müşteri iadesi",
   "movements.fields.occurred_at": "Tarih",
   "movements.fields.occurred_at_hint": "Boş bırakılırsa şimdi; ileri tarih olamaz.",
-  "movements.fields.note": "Not"
+  "movements.fields.note": "Not",
+  "movements.returned": "Geri alındı",
+  "movements.columns.actions": "İşlemler",
+  "movements.toast.returned": "Ürün geri alındı; satış geri çevrildi.",
+  "movements.return.action": "Geri al (iade)",
+  "movements.return.title": "Satışı geri al",
+  "movements.return.description": "{{branch}} şubesindeki {{quantity}} adet {{product}} stoğa geri girer ve satış geliri geri çevrilir.",
+  "movements.return.money_hint": "Bu işlem parayı iade etmez. Müşteriye ödeme yapıldıysa iadeyi ayrıca kaydedin. Hasarlı ürünü sonra sayımla düzeltin.",
+  "movements.return.reason": "Gerekçe",
+  "movements.return.note": "Not",
+  "movements.return.submit": "Geri al",
+  "movements.return.reason_required": "Gerekçe yazın.",
+  "movements.return.reason_max": "Gerekçe en fazla 200 karakter olabilir.",
+  "movements.return.note_max": "Not en fazla 2000 karakter olabilir."
 }

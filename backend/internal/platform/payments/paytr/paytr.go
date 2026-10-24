@@ -290,3 +290,78 @@ func (p *Provider) Acknowledge(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
 }
+
+var _ payments.Refunder = (*Provider)(nil)
+
+// RefundFields builds the form of PayTR's refund (iade) API (exported for
+// tests): paytr_token = base64(HMAC-SHA256(merchant_key, merchant_id +
+// merchant_oid + return_amount + merchant_salt)).
+func (p *Provider) RefundFields(account integrations.Account, in payments.RefundRequest) (url.Values, error) {
+	c := account.Credentials
+	if in.OrderRef == "" || !in.Amount.IsPositive() {
+		return nil, &payments.ProviderError{Code: "invalid_request", Message: "order reference and amount are required"}
+	}
+	amount := in.Amount.String()
+	v := url.Values{
+		"merchant_id":   {c["merchant_id"]},
+		"merchant_oid":  {in.OrderRef},
+		"return_amount": {amount},
+		"paytr_token":   {sign(c["merchant_key"], c["merchant_id"]+in.OrderRef+amount+c["merchant_salt"])},
+	}
+	if in.RefundRef != "" {
+		v.Set("reference_no", in.RefundRef)
+	}
+	return v, nil
+}
+
+// Refund implements payments.Refunder (PayTR refund API, R4): a full or
+// partial refund of a paid order. A transport failure, a 5xx or an
+// unreadable answer leaves the result unknown (Temporary).
+func (p *Provider) Refund(ctx context.Context, account integrations.Account, in payments.RefundRequest) (payments.RefundResult, error) {
+	form, err := p.RefundFields(account, in)
+	if err != nil {
+		return payments.RefundResult{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.BaseURL+"/odeme/iade", strings.NewReader(form.Encode()))
+	if err != nil {
+		return payments.RefundResult{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := p.Client.Do(req)
+	if err != nil {
+		return payments.RefundResult{}, &payments.ProviderError{Message: err.Error(), Temporary: true}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return payments.RefundResult{}, &payments.ProviderError{Message: err.Error(), Temporary: true}
+	}
+	if resp.StatusCode >= 500 {
+		return payments.RefundResult{}, &payments.ProviderError{Code: strconv.Itoa(resp.StatusCode), Message: "provider unavailable", Temporary: true}
+	}
+	var out struct {
+		Status      string `json:"status"`
+		IsTest      any    `json:"is_test"`
+		ReferenceNo string `json:"reference_no"`
+		ErrNo       any    `json:"err_no"`
+		ErrMsg      string `json:"err_msg"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return payments.RefundResult{}, &payments.ProviderError{Message: "unreadable refund answer", Temporary: true}
+	}
+	switch out.Status {
+	case "success":
+		ref := out.ReferenceNo
+		if ref == "" {
+			ref = in.RefundRef
+		}
+		return payments.RefundResult{ProviderRefundID: ref, Test: fmt.Sprint(out.IsTest) == "1"}, nil
+	case "error", "failed":
+		code := ""
+		if out.ErrNo != nil {
+			code = fmt.Sprint(out.ErrNo)
+		}
+		return payments.RefundResult{}, &payments.ProviderError{Code: code, Message: out.ErrMsg}
+	}
+	return payments.RefundResult{}, &payments.ProviderError{Message: "unexpected refund answer", Temporary: true}
+}

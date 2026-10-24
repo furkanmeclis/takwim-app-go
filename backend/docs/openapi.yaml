@@ -7112,6 +7112,47 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/stock-movements/{uuid}/return:
+    post:
+      tags: [Tenant]
+      operationId: postTenantStockMovementReturn
+      summary: Take back the product of a sale
+      description: |
+        A manager's operation (TEC-913): every unit of a `sale` movement
+        comes back to its branch as one `return` movement (`source`
+        `sale_return`) and the sale's revenue line is reversed, in one
+        transaction. A sale is returned once (`409 STOCK_ALREADY_RETURNED`);
+        any other movement is `409 STOCK_NOT_RETURNABLE`. `reason` is
+        required. Money paid for it is refunded separately. Needs
+        `tenant.products.stock` and `tenant.payment.refund`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 200 }
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "201":
+          description: The return movement and the product with its new stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeTenantStockMovementResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/customers/meta:
     get:
       tags: [Tenant]
@@ -7983,7 +8024,12 @@ paths:
         `tenant.payment.collect` and the cash module, `collect_accounts`
         lists the tills and bank accounts of the visit's branch (and the
         business-wide ones) and `can_collect` says whether money can be
-        taken now. Needs `tenant.reservations.read` or `.own` (own visits).
+        taken now. `refunds` are the refund requests and `refundable` what
+        may still be paid back; for a member with `tenant.payment.refund`
+        and the cash module, `refund_collections` lists the live
+        collections with what is left of each and `refund_accounts` the
+        accounts a manual refund may leave (`can_refund`). Needs
+        `tenant.reservations.read` or `.own` (own visits).
       security:
         - bearerAuth: []
       parameters:
@@ -8038,6 +8084,206 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/reservations/{uuid}/refunds:
+    post:
+      tags: [Tenant]
+      operationId: postTenantReservationRefund
+      summary: Pay money back
+      description: |
+        Pays back (part of) one live collection of the visit, at most what
+        is left of it (the collection less its refunds and the refunds under
+        way; `amount` / `exceeds_refundable`). The request, the provider's
+        answer and the posting to the books are recorded apart (`status`,
+        `provider_status`, `ledger_entry_uuid` / `reflected_at`).
+
+        - `channel: provider` calls the refund API of the online payment's
+          provider (method `online`, out of the payment's online account;
+          `channel` / `unsupported` when the provider cannot). A confirmed
+          refund is posted at once (`succeeded`), a refusal is `failed`, an
+          unknown result (timeout, 5xx) stays `requested` with
+          `provider_status: uncertain` and is never sent again: settle it
+          with `POST /v1/tenant/refunds/{uuid}/resolve`.
+        - `channel: manual` records money handed back (`cash`, `card`,
+          `transfer`) or a refund made in the provider's own panel
+          (`online`) out of `cash_account_uuid` (an active till, bank or
+          online account of the branch or business-wide; a till pays out at
+          most what it holds, `409` `insufficient_funds`).
+
+        After the posting the visit's `payment_status` becomes `refunded`
+        (nothing paid any more) or `partially_refunded`; the visit itself
+        never changes. `idempotency_key` identifies the request: the same key
+        answers the same refund with `200` and `replayed: true` (sending
+        nothing), the key with another body `409 REFUND_IDEMPOTENCY_REUSED`.
+        Needs `tenant.payment.refund`, the cash module and
+        `tenant.reservations.read` or `.own`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationRefundRequest"
+      responses:
+        "200":
+          description: The same request again (replayed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRefundResult"
+        "201":
+          description: The refund and the payments after it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRefundResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/refunds/{uuid}/resolve:
+    post:
+      tags: [Tenant]
+      operationId: postTenantRefundResolve
+      summary: Settle a refund with an unknown result
+      description: |
+        For a provider refund still `requested` (unknown result, or confirmed
+        but not posted) after a person checked the provider's panel:
+        `succeeded` posts it now, `failed` ends it (a refund the provider
+        confirmed can only be posted: `outcome` / `confirmed`). A settled
+        refund is `409 REFUND_NOT_OPEN`. Needs `tenant.payment.refund`, the
+        cash module and the reservation's reach.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [succeeded, failed] }
+                note: { type: string, maxLength: 240 }
+      responses:
+        "200":
+          description: The refund and the payments after it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeRefundResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/payments/follow-ups/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantPaymentFollowUpsMeta
+      summary: Payment follow-up list metadata
+      description: Table contract of `GET /v1/tenant/payments/follow-ups`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/payments/follow-ups/facets:
+    get:
+      tags: [Tenant]
+      operationId: getTenantPaymentFollowUpFacets
+      summary: Payment follow-up kinds
+      description: Counts per `kind` with the `branch` and `q` filters (A14).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Q"
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kind counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePaymentFollowUpFacets"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/payments/follow-ups:
+    get:
+      tags: [Tenant]
+      operationId: getTenantPaymentFollowUps
+      summary: Payment follow-up list
+      description: |
+        Visits whose money needs a person (A14), in the caller's branch
+        scope: `refund_pending` (paid and then cancelled or rejected, or an
+        online payment that arrived after the visit was cancelled: `late`),
+        `refund_unverified` (a provider refund whose result is unknown),
+        `refund_failed` (the last refund failed while money is still held)
+        and `unpaid` (a completed visit not paid in full). `amount` is what
+        is to be refunded (paid less refunded) or, for `unpaid`, what is
+        still owed. `q` searches the customer's name or the reservation
+        number. Needs the reservations module and one of
+        `tenant.payment.refund`, `tenant.payment.collect`,
+        `tenant.finance.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/XBranch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: sort
+          in: query
+          description: "One of `starts_at`, `amount`, `number`, `updated_at`; prefix `-` for descending. Default: latest visit first."
+          schema: { type: string }
+        - name: branch
+          in: query
+          description: "Branch uuids; comma-separate or repeat"
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: "Follow-up kinds; comma-separate or repeat"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Follow-up page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopePaymentFollowUpPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenant/reservations/{uuid}/accept:
     post:
@@ -15916,10 +16162,11 @@ components:
         change of the branch stock, `balance_after` the stock right after
         it. `unit_price` is kept on sales and returns, `unit_cost` on
         receipts and sales.
-      required: [uuid, kind, quantity, balance_after, product, variant, branch, counterpart_branch, transfer_uuid, unit_price, unit_cost, currency, staff, reason, note, source, occurred_at, created_by, created_at]
+      required: [uuid, kind, quantity, balance_after, product, variant, branch, counterpart_branch, transfer_uuid, unit_price, unit_cost, currency, staff, reason, note, source, returned, occurred_at, created_by, created_at]
       properties:
         uuid: { type: string, format: uuid }
         kind: { type: string, enum: [receipt, sale, return, adjustment, transfer_out, transfer_in] }
+        returned: { type: boolean, description: "A sale whose product was taken back (`POST /v1/tenant/stock-movements/{uuid}/return`)." }
         quantity: { type: integer }
         balance_after: { type: integer, minimum: 0 }
         product: { $ref: "#/components/schemas/TenantStockRef" }
@@ -15948,7 +16195,7 @@ components:
             - type: "null"
         reason: { type: string }
         note: { type: string }
-        source: { type: string, example: manual }
+        source: { type: string, example: manual, description: "`manual`, or `sale_return` for the return of a sale." }
         occurred_at: { type: string, format: date-time }
         created_by:
           oneOf:
@@ -19426,13 +19673,13 @@ components:
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
-        kind: { type: string, enum: [cash, bank] }
+        kind: { type: string, enum: [cash, bank, online] }
         currency: { type: string }
         branch: { type: boolean, description: false = a business-wide account. }
 
     ReservationPayments:
       type: object
-      required: [reservation, status, payment_status, currency, expected, paid, remaining, credit, entries, online, can_collect, collect_accounts]
+      required: [reservation, status, payment_status, currency, expected, paid, remaining, credit, entries, online, can_collect, collect_accounts, refundable, refunds, can_refund, refund_collections, refund_accounts]
       properties:
         reservation:
           type: object
@@ -19457,6 +19704,183 @@ components:
         collect_accounts:
           type: array
           items: { $ref: "#/components/schemas/CollectAccount" }
+        refundable: { $ref: "#/components/schemas/MoneyAmount" }
+        refunds:
+          type: array
+          items: { $ref: "#/components/schemas/Refund" }
+        can_refund: { type: boolean }
+        refund_collections:
+          type: array
+          items: { $ref: "#/components/schemas/RefundCollection" }
+        refund_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/CollectAccount" }
+
+    Refund:
+      type: object
+      description: |
+        One refund request with its three steps: the request, the
+        provider's answer (`provider_status`, empty for a manual refund) and
+        the posting to the books (`ledger_entry_uuid`, `reflected_at`).
+        `needs_action`: a provider refund still open after the provider was
+        asked (unknown result, or confirmed and not posted yet).
+      required: [uuid, channel, provider, method, amount, currency, status, provider_status, provider_refund_id, failure_reason, reason, resolution_note, collection_uuid, cash_account, ledger_entry_uuid, requested_by, provider_answered_at, reflected_at, created_at, needs_action]
+      properties:
+        uuid: { type: string, format: uuid }
+        channel: { type: string, enum: [provider, manual] }
+        provider: { type: string }
+        method: { type: string, enum: [cash, card, transfer, online, other] }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        currency: { type: string }
+        status: { type: string, enum: [requested, succeeded, failed] }
+        provider_status: { type: string, enum: ["", succeeded, failed, uncertain] }
+        provider_refund_id: { type: string }
+        failure_reason: { type: string }
+        reason: { type: string }
+        resolution_note: { type: string }
+        collection_uuid: { type: string, format: uuid }
+        cash_account:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        ledger_entry_uuid: { type: [string, "null"], format: uuid }
+        requested_by:
+          oneOf:
+            - type: object
+              required: [uuid, name]
+              properties:
+                uuid: { type: string, format: uuid }
+                name: { type: string }
+            - type: "null"
+        provider_answered_at: { type: [string, "null"], format: date-time }
+        reflected_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        needs_action: { type: boolean }
+
+    RefundCollection:
+      type: object
+      required: [uuid, method, entry_date, amount, refunded, pending, refundable, cash_account, provider, provider_refund]
+      properties:
+        uuid: { type: string, format: uuid }
+        method: { type: string }
+        entry_date: { type: string, format: date }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        refunded: { $ref: "#/components/schemas/MoneyAmount" }
+        pending: { $ref: "#/components/schemas/MoneyAmount" }
+        refundable: { $ref: "#/components/schemas/MoneyAmount" }
+        cash_account:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        provider: { type: string, description: The provider of the online payment behind it ("" = none). }
+        provider_refund: { type: boolean, description: The provider's refund API can pay it back. }
+
+    ReservationRefundRequest:
+      type: object
+      required: [collection_uuid, amount, channel, idempotency_key]
+      properties:
+        collection_uuid: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/MoneyInput" }
+        channel: { type: string, enum: [provider, manual] }
+        method: { type: string, enum: [cash, card, transfer, online], description: Manual refunds only. }
+        cash_account_uuid: { type: [string, "null"], format: uuid, description: Manual refunds only. }
+        reason: { type: string, maxLength: 240 }
+        idempotency_key: { type: string, maxLength: 100, pattern: "^[A-Za-z0-9:_\\-.]+$" }
+
+    RefundResult:
+      type: object
+      required: [refund, payments, replayed]
+      properties:
+        refund: { $ref: "#/components/schemas/Refund" }
+        payments: { $ref: "#/components/schemas/ReservationPayments" }
+        replayed: { type: boolean }
+
+    EnvelopeRefundResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/RefundResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    PaymentFollowUp:
+      type: object
+      required: [uuid, number, kind, status, payment_status, cancel_reason, starts_at, branch, customer, currency, charged, collected, refunded, amount, late, open_refunds, last_refund_status, last_refund_failure, last_refund_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid, description: The reservation. }
+        number: { type: integer, format: int64 }
+        kind: { type: string, enum: [refund_pending, refund_failed, refund_unverified, unpaid] }
+        status: { type: string }
+        payment_status: { type: string, enum: [on_site, online_pending, paid, refund_pending, partially_refunded, refunded, failed] }
+        cancel_reason: { type: [string, "null"] }
+        starts_at: { type: string, format: date-time }
+        branch:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        customer:
+          oneOf:
+            - type: object
+              required: [uuid, name]
+              properties:
+                uuid: { type: string, format: uuid }
+                name: { type: string }
+            - type: "null"
+        currency: { type: string }
+        charged: { $ref: "#/components/schemas/MoneyAmount" }
+        collected: { $ref: "#/components/schemas/MoneyAmount" }
+        refunded: { $ref: "#/components/schemas/MoneyAmount" }
+        amount: { $ref: "#/components/schemas/MoneyAmount" }
+        late: { type: boolean, description: An online payment arrived after the visit was cancelled. }
+        open_refunds: { type: integer, format: int64 }
+        last_refund_status: { type: string, enum: ["", requested, succeeded, failed] }
+        last_refund_failure: { type: string }
+        last_refund_at: { type: [string, "null"], format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PaymentFollowUpPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentFollowUp" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    EnvelopePaymentFollowUpPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/PaymentFollowUpPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopePaymentFollowUpFacets:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [kind]
+          properties:
+            kind:
+              type: array
+              items:
+                type: object
+                required: [value, count]
+                properties:
+                  value: { type: string }
+                  count: { type: integer, format: int64 }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     EnvelopeReservationPayments:
       type: object
@@ -19640,7 +20064,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/CustomerReservationItem"
         - type: object
-          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history]
+          required: [branch, version, customer_note, hold_expires_at, lines, policies, actions, history, refunds]
           properties:
             branch:
               type: object
@@ -19691,6 +20115,19 @@ components:
                   type: { type: string }
                   to_status: { type: [string, "null"] }
                   at: { type: string, format: date-time }
+            refunds:
+              type: array
+              description: "Refunds of the visit, newest first: `requested` (under way), `succeeded` (paid back), `failed` (the business follows it up)."
+              items:
+                type: object
+                required: [uuid, amount, currency, status, requested_at, refunded_at]
+                properties:
+                  uuid: { type: string, format: uuid }
+                  amount: { $ref: "#/components/schemas/MoneyAmount" }
+                  currency: { type: string }
+                  status: { type: string, enum: [requested, succeeded, failed] }
+                  requested_at: { type: string, format: date-time }
+                  refunded_at: { type: [string, "null"], format: date-time }
 
     CustomerReservationPage:
       type: object

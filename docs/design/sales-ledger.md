@@ -55,7 +55,7 @@ All routes need the finance module and `tenant.finance.read`; writes also need `
 
 ## Not yet
 
-No ledger screen and no export (reports TEC-925). Collections come from the payments module ([payments.md](./payments.md), TEC-912): the verified online notification and the panel's on-site payment both post through `RecordCollectionTx`, and the reservation detail shows the visit's money entries. A stock return does not reverse its sale line automatically; the manager's return flow (TEC-913) calls `ReverseLineTx`.
+No ledger screen and no export (reports TEC-925). Collections come from the payments module ([payments.md](./payments.md), TEC-912): the verified online notification and the panel's on-site payment both post through `RecordCollectionTx`, and the reservation detail shows the visit's money entries. A hand-recorded stock return does not reverse a sale line. The manager's return flow (`POST /v1/tenant/stock-movements/{uuid}/return`, TEC-913) writes the return movement and calls `ReverseLineTx` on the sale's line in the same transaction. Refunds post through `RecordRefundTx` from the refunds flow ([payments.md](./payments.md#refunds-tec-913)).
 
 ## Tests
 

@@ -101,6 +101,8 @@ type Querier interface {
 	CountOrganizationSettingsVersions(ctx context.Context, organizationID int64) (int64, error)
 	CountOrganizationsWithStats(ctx context.Context, arg CountOrganizationsWithStatsParams) (int64, error)
 	CountOutboxByStatus(ctx context.Context, status string) (int64, error)
+	// Matching visits per kind (the list total and the kind facet).
+	CountPaymentFollowUps(ctx context.Context, arg CountPaymentFollowUpsParams) ([]CountPaymentFollowUpsRow, error)
 	CountPermissions(ctx context.Context, q_ pgtype.Text) (int64, error)
 	CountPlatformNotifications(ctx context.Context, arg CountPlatformNotificationsParams) (int64, error)
 	CountPlatformOrganizationActivity(ctx context.Context, arg CountPlatformOrganizationActivityParams) (int64, error)
@@ -300,6 +302,7 @@ type Querier interface {
 	GetCashAccount(ctx context.Context, arg GetCashAccountParams) (GetCashAccountRow, error)
 	GetCashAccountByID(ctx context.Context, arg GetCashAccountByIDParams) (GetCashAccountByIDRow, error)
 	GetCashAccountSearchDocument(ctx context.Context, arg GetCashAccountSearchDocumentParams) (GetCashAccountSearchDocumentRow, error)
+	GetCashAccountUUIDByID(ctx context.Context, arg GetCashAccountUUIDByIDParams) (uuid.UUID, error)
 	GetCashClosing(ctx context.Context, arg GetCashClosingParams) (GetCashClosingRow, error)
 	GetCashMovement(ctx context.Context, arg GetCashMovementParams) (GetCashMovementRow, error)
 	GetCashMovementByIdempotencyKey(ctx context.Context, arg GetCashMovementByIdempotencyKeyParams) (GetCashMovementByIdempotencyKeyRow, error)
@@ -391,6 +394,9 @@ type Querier interface {
 	// the branch's time zone.
 	GetPublicReservationMeta(ctx context.Context, arg GetPublicReservationMetaParams) (GetPublicReservationMetaRow, error)
 	GetPublicReservationUUID(ctx context.Context, arg GetPublicReservationUUIDParams) (uuid.UUID, error)
+	GetRefundAccount(ctx context.Context, arg GetRefundAccountParams) (GetRefundAccountRow, error)
+	GetRefundByIdempotencyKey(ctx context.Context, arg GetRefundByIdempotencyKeyParams) (GetRefundByIdempotencyKeyRow, error)
+	GetRefundByUUID(ctx context.Context, arg GetRefundByUUIDParams) (GetRefundByUUIDRow, error)
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
 	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
 	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)
@@ -511,6 +517,8 @@ type Querier interface {
 	// Online payments (TEC-912, docs/design/payments.md).
 	InsertPayment(ctx context.Context, arg InsertPaymentParams) (Payment, error)
 	InsertPushTicket(ctx context.Context, arg InsertPushTicketParams) error
+	// Refunds and the payment follow-up list (TEC-913, docs/design/payments.md).
+	InsertRefund(ctx context.Context, arg InsertRefundParams) (Refund, error)
 	InsertReservationProduct(ctx context.Context, arg InsertReservationProductParams) (ReservationProduct, error)
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	// --------------------------------------------------------------- sale lines
@@ -622,6 +630,8 @@ type Querier interface {
 	// the name may be the previous holder's.
 	ListCustomerPanelBusinesses(ctx context.Context, identityID int64) ([]ListCustomerPanelBusinessesRow, error)
 	ListCustomerPanelReservations(ctx context.Context, arg ListCustomerPanelReservationsParams) ([]ListCustomerPanelReservationsRow, error)
+	// What the customer panel shows of a visit's refunds.
+	ListCustomerRefunds(ctx context.Context, arg ListCustomerRefundsParams) ([]ListCustomerRefundsRow, error)
 	ListCustomerSearchDocuments(ctx context.Context, organizationID int64) ([]ListCustomerSearchDocumentsRow, error)
 	ListCustomerSourceFacets(ctx context.Context, organizationID int64) ([]ListCustomerSourceFacetsRow, error)
 	ListCustomerTagFacets(ctx context.Context, organizationID int64) ([]ListCustomerTagFacetsRow, error)
@@ -687,6 +697,11 @@ type Querier interface {
 	// Access state: 'upcoming' before access_starts_at, 'expired' after
 	// access_ends_at, 'open' otherwise. Window: 'unlimited' without an end.
 	ListOrganizationsWithStats(ctx context.Context, arg ListOrganizationsWithStatsParams) ([]ListOrganizationsWithStatsRow, error)
+	// Visits whose money needs a person: a refund waiting (cancelled after it
+	// was paid, a late online payment), a refund whose provider result is
+	// unknown, a last refund that failed while money is still held, and
+	// finished visits not paid in full.
+	ListPaymentFollowUps(ctx context.Context, arg ListPaymentFollowUpsParams) ([]ListPaymentFollowUpsRow, error)
 	ListPermissionSlugsByRoleID(ctx context.Context, roleID int64) ([]string, error)
 	ListPermissionSlugsByRoleSlug(ctx context.Context, slug string) ([]string, error)
 	ListPermissionsFiltered(ctx context.Context, arg ListPermissionsFilteredParams) ([]Permission, error)
@@ -721,6 +736,13 @@ type Querier interface {
 	ListPublicStaff(ctx context.Context, organizationID int64) ([]ListPublicStaffRow, error)
 	ListPublicStaffBranches(ctx context.Context, organizationID int64) ([]ListPublicStaffBranchesRow, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
+	// Accounts a manual refund may leave: tills, bank and online accounts of
+	// the branch or business-wide, in the currency.
+	ListRefundAccounts(ctx context.Context, arg ListRefundAccountsParams) ([]ListRefundAccountsRow, error)
+	// The live collections of a reservation with what was paid back from each
+	// (refund entries not reversed) and what is being refunded (requested
+	// refunds), and the online payment behind a collection.
+	ListRefundableCollections(ctx context.Context, arg ListRefundableCollectionsParams) ([]ListRefundableCollectionsRow, error)
 	// Branches with reservations (in the caller's scope) for the list filter.
 	ListReservationBranchFacets(ctx context.Context, arg ListReservationBranchFacetsParams) ([]ListReservationBranchFacetsRow, error)
 	ListReservationEvents(ctx context.Context, arg ListReservationEventsParams) ([]ListReservationEventsRow, error)
@@ -734,6 +756,7 @@ type Querier interface {
 	// nothing available.
 	ListReservationProductOptions(ctx context.Context, arg ListReservationProductOptionsParams) ([]ListReservationProductOptionsRow, error)
 	ListReservationProducts(ctx context.Context, arg ListReservationProductsParams) ([]ListReservationProductsRow, error)
+	ListReservationRefunds(ctx context.Context, arg ListReservationRefundsParams) ([]ListReservationRefundsRow, error)
 	// Reservation engines (TEC-963): Cmd+K documents. Every query filters by
 	// organization_id; joins by alias.organization_id too.
 	// owner_user_ids: the member who booked it and the accounts of the staff
@@ -852,6 +875,7 @@ type Querier interface {
 	LockLedgerEntry(ctx context.Context, arg LockLedgerEntryParams) (int64, error)
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
 	LockPayment(ctx context.Context, arg LockPaymentParams) (LockPaymentRow, error)
+	LockRefund(ctx context.Context, arg LockRefundParams) (Refund, error)
 	// Claims a job for one provider call (one worker at a time; an expired
 	// claim of a crashed worker is free again).
 	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
@@ -887,6 +911,8 @@ type Querier interface {
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) error
 	MarkOutboxPublished(ctx context.Context, id int64) error
 	MarkOutboxRetry(ctx context.Context, arg MarkOutboxRetryParams) error
+	// The refund ledger entry is written: the refund is done.
+	MarkRefundPosted(ctx context.Context, arg MarkRefundPostedParams) (int64, error)
 	// OAuth sign-up stores a random hash; the user never chose a password.
 	MarkUserPasswordUnset(ctx context.Context, id int64) error
 	// Reservation record (TEC-899). Every query filters by organization_id;
@@ -909,6 +935,8 @@ type Querier interface {
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ResolveOrganizationScopeBySlug(ctx context.Context, arg ResolveOrganizationScopeBySlugParams) (ResolveOrganizationScopeBySlugRow, error)
 	ResolveOrganizationScopeByUUID(ctx context.Context, arg ResolveOrganizationScopeByUUIDParams) (ResolveOrganizationScopeByUUIDRow, error)
+	// A person settled an unknown result: the provider did not refund.
+	ResolveRefundFailed(ctx context.Context, arg ResolveRefundFailedParams) (int64, error)
 	// The rule of a staff member for an item on a day: a rule of the service
 	// wins over the default of the item type; among them the latest start on
 	// or before the day.
@@ -965,6 +993,11 @@ type Querier interface {
 	// Returns the previous key so the caller can remove the old object.
 	SetProductImage(ctx context.Context, arg SetProductImageParams) (pgtype.Text, error)
 	SetPublicCheckoutReservation(ctx context.Context, arg SetPublicCheckoutReservationParams) error
+	// The provider's answer to a refund that is still requested. A failed
+	// answer ends the refund; succeeded / uncertain wait for the posting / a
+	// person.
+	SetRefundProviderAnswer(ctx context.Context, arg SetRefundProviderAnswerParams) (int64, error)
+	SetRefundResolver(ctx context.Context, arg SetRefundResolverParams) error
 	// The total of a new booking once its products are reserved.
 	SetReservationTotal(ctx context.Context, arg SetReservationTotalParams) error
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error

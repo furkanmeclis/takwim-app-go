@@ -86,6 +86,7 @@ export const EVENT_LABEL_KEYS: Record<string, string> = {
   late_payment: "reservations.events.late_payment",
   product_added: "reservations.events.product_added",
   product_removed: "reservations.events.product_removed",
+  refund_recorded: "reservations.events.refund_recorded",
 };
 
 /** System cancel reasons; people's own reasons are shown as typed. */

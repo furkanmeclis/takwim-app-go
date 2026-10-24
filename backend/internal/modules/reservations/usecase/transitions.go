@@ -60,6 +60,33 @@ func unpaid(payment string) string {
 	return payment
 }
 
+// closedPayment is the payment state of a visit being cancelled or
+// rejected: a payment that never happened ends (unpaid), and a visit for
+// which money is still held (collections minus refunds on the ledger, on
+// site or online) waits for its refund (TEC-913).
+func closedPayment(ctx context.Context, q *db.Queries, row db.Reservation) (string, error) {
+	next := unpaid(row.PaymentStatus)
+	if next == model.PaymentRefundPending {
+		return next, nil
+	}
+	rows, err := q.LedgerTotals(ctx, db.LedgerTotalsParams{
+		OrganizationID: row.OrganizationID, ReservationID: pgtype.Int8{Int64: row.ID, Valid: true},
+	})
+	if err != nil {
+		return "", err
+	}
+	for _, r := range rows {
+		if r.Currency != row.Currency {
+			continue
+		}
+		held := money.FromNumericOrZero(r.Collected).Sub(money.FromNumericOrZero(r.Refunded))
+		if held.IsPositive() {
+			return model.PaymentRefundPending, nil
+		}
+	}
+	return next, nil
+}
+
 // transition loads the record under the capacity lock, checks visibility
 // and version, lets step change capacity and state, then writes the new
 // state (version + 1) and the event.
@@ -154,7 +181,11 @@ func (s *Service) Reject(ctx context.Context, orgID int64, id uuid.UUID, caller 
 		if row.Status != model.StatusRequested || row.ApprovalStatus != model.ApprovalPending {
 			return ErrInvalidTransition
 		}
-		next.status, next.approval, next.payment = model.StatusRejected, model.ApprovalRejected, unpaid(row.PaymentStatus)
+		payment, err := closedPayment(ctx, tx.Q, row)
+		if err != nil {
+			return err
+		}
+		next.status, next.approval, next.payment = model.StatusRejected, model.ApprovalRejected, payment
 		if err := releaseProducts(ctx, tx.Q, orgID, row.ID, "rejected"); err != nil {
 			return err
 		}
@@ -178,7 +209,11 @@ func (s *Service) Cancel(ctx context.Context, orgID int64, id uuid.UUID, caller 
 		if row.Status != model.StatusRequested && row.Status != model.StatusActive {
 			return ErrInvalidTransition
 		}
-		next.status, next.payment, next.cancelReason = model.StatusCancelled, unpaid(row.PaymentStatus), reason
+		payment, err := closedPayment(ctx, tx.Q, row)
+		if err != nil {
+			return err
+		}
+		next.status, next.payment, next.cancelReason = model.StatusCancelled, payment, reason
 		if err := releaseProducts(ctx, tx.Q, orgID, row.ID, "cancelled"); err != nil {
 			return err
 		}
@@ -276,9 +311,13 @@ func expireRequests(ctx context.Context, q *db.Queries, n Notifier, orgID int64,
 		if row.ApprovalStatus == model.ApprovalPending {
 			reason = model.ReasonApprovalTimeout
 		}
+		payment, err := closedPayment(ctx, q, row)
+		if err != nil {
+			return err
+		}
 		updated, err := q.UpdateReservationState(ctx, db.UpdateReservationStateParams{
 			OrganizationID: orgID, ID: row.ID, Status: model.StatusCancelled, ApprovalStatus: row.ApprovalStatus,
-			PaymentStatus: unpaid(row.PaymentStatus), CancelReason: pgtype.Text{String: reason, Valid: true},
+			PaymentStatus: payment, CancelReason: pgtype.Text{String: reason, Valid: true},
 		})
 		if err != nil {
 			return err
@@ -385,6 +424,68 @@ func (s *Service) RecordPayment(ctx context.Context, orgID int64, id uuid.UUID, 
 			return err
 		}
 		return s.event(ctx, tx.Q, updated, typ, row.Status, updated.Status, actorID, note)
+	})
+	if err != nil {
+		return model.Reservation{}, "", err
+	}
+	out, err := s.get(ctx, orgID, id)
+	return out, outcome, err
+}
+
+// What RecordRefund did with the payment state.
+const (
+	// RefundAll: nothing is paid for the visit any more (refunded).
+	RefundAll = "refunded"
+	// RefundPart: part of the money was paid back (partially_refunded).
+	RefundPart = "partially_refunded"
+	// RefundKept: an open visit paid more than its total got the extra
+	// back; the payment state stays.
+	RefundKept = "kept"
+)
+
+// RecordRefund applies money paid back for a visit (TEC-913) in one
+// transaction with the posting itself: the record is locked, post writes
+// the refund (and returns what is still paid for the visit after it), then
+// the payment state follows:
+//
+//   - nothing paid any more: refunded;
+//   - a cancelled or rejected visit, a refund waiting or one done before,
+//     or an open visit now paid less than its total: partially_refunded;
+//   - otherwise (an overpayment paid back) the state stays.
+//
+// The visit itself never changes: a refund does not reopen or cancel it.
+func (s *Service) RecordRefund(ctx context.Context, orgID int64, id uuid.UUID, actorID int64, note string, post PaymentPost) (model.Reservation, string, error) {
+	outcome := ""
+	err := s.holds.Run(ctx, orgID, func(tx *availabilityusecase.Tx) error {
+		row, err := s.visible(ctx, tx.Q, orgID, id, availabilityusecase.Caller{}, true)
+		if err != nil {
+			return err
+		}
+		paid, err := post(ctx, tx.Q, row)
+		if err != nil {
+			return err
+		}
+		next := stateOf(row)
+		closed := row.Status == model.StatusCancelled || row.Status == model.StatusRejected
+		total := money.FromNumericOrZero(row.TotalPrice)
+		switch {
+		case !paid.IsPositive():
+			next.payment, outcome = model.PaymentRefunded, RefundAll
+		case closed, row.PaymentStatus == model.PaymentRefundPending, row.PaymentStatus == model.PaymentRefunded,
+			row.PaymentStatus == model.PaymentPartiallyRefunded,
+			row.PaymentStatus == model.PaymentPaid && paid.Cmp(total) < 0:
+			next.payment, outcome = model.PaymentPartiallyRefunded, RefundPart
+		default:
+			outcome = RefundKept
+		}
+		updated, err := tx.Q.UpdateReservationState(ctx, db.UpdateReservationStateParams{
+			OrganizationID: orgID, ID: row.ID, Status: next.status, ApprovalStatus: next.approval,
+			PaymentStatus: next.payment, CancelReason: pgtype.Text{String: next.cancelReason, Valid: next.cancelReason != ""},
+		})
+		if err != nil {
+			return err
+		}
+		return s.event(ctx, tx.Q, updated, "refund_recorded", row.Status, updated.Status, actorID, note)
 	})
 	if err != nil {
 		return model.Reservation{}, "", err

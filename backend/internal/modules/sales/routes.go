@@ -8,7 +8,10 @@ package sales
 
 import (
 	"context"
+	"errors"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/middleware"
@@ -60,6 +63,27 @@ func RegisterRoutes(
 	route("GET /v1/tenant/sales/summary", h.Summary, read)
 	route("GET /v1/tenant/sales/reservations/{uuid}/balance", h.ReservationBalance, read)
 	route("GET /v1/tenant/sales/customers/{uuid}/balance", h.CustomerBalance, read)
+}
+
+// ProductSaleReverser adapts the service to the product return flow
+// (TEC-913): the live sale line of a returned stock sale is reversed in the
+// return's transaction. A sale without a live line (posted before the
+// ledger existed, or already reversed on the books) moves the stock only.
+func ProductSaleReverser(svc *salesusecase.Service) productsusecase.SaleReverser {
+	return func(ctx context.Context, q *db.Queries, orgID int64, movement uuid.UUID, reason string, actorID *int64) error {
+		line, err := svc.LiveLineOfStockSale(ctx, q, orgID, movement)
+		if errors.Is(err, salesusecase.ErrLineNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		_, err = svc.ReverseLineTx(ctx, q, orgID, line, "return: "+reason, actorID)
+		if errors.Is(err, salesusecase.ErrAlreadyReversed) {
+			return nil
+		}
+		return err
+	}
 }
 
 // Engine slugs.

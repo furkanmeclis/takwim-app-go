@@ -90,15 +90,67 @@ Rules:
 
 `GET /v1/tenant/reservations/{uuid}/payments` answers expected, paid, remaining and overpaid amounts, the money entries of the ledger (collections, refunds and their reversals), the online attempts, and the accounts that can take money (`can_collect`). The reservation detail page shows this as the Payments card with a "Tahsilat al" dialog.
 
+## Refunds (TEC-913)
+
+A refund pays money back on one collection of a visit. It is a `refunds` row (migration `000063_refunds`) and, once it succeeds, a `refund` entry in the sales ledger (`RecordRefundTx`, idempotency `refund:<uuid>`, source `refund`) plus a cash movement out of the chosen account.
+
+`POST /v1/tenant/reservations/{uuid}/refunds` needs `tenant.payment.refund` and the cash module. The body names the collection, the amount, the channel and an `idempotency_key`:
+
+- `provider`: the provider's refund call, for an online payment whose provider can refund. `testpay` decides by the cents of the amount: `.13` is declined and `.99` gives an unknown result. `paytr` posts to `/odeme/iade`.
+- `manual`: a refund paid by hand (`cash`, `card`, `transfer`, or `online` = paid back outside Takwim) from a till or account of the branch. A till cannot go below zero (`409 cash_account_uuid` / `insufficient_funds`).
+
+Rules:
+
+- The amount is at most what is left of the collection: the collection less its succeeded refunds and the refunds still open. The check runs again under a lock on the collection, so partial refunds can never exceed the collection.
+- The same key with the same body answers the first result (`200`, `replayed: true`). The same key with another body is `409 REFUND_IDEMPOTENCY_REUSED`. The UI makes a new key each time the dialog opens.
+- The provider is called synchronously, outside the database transaction:
+  - A definite refusal ends the refund as `failed`, with its reason.
+  - A timeout, a 5xx or an unreadable answer leaves it `requested` with `provider_status` `uncertain`. It is never sent again by itself.
+  - `POST /v1/tenant/refunds/{uuid}/resolve` (`succeeded` or `failed`) settles it after someone checks the provider's panel. A refund the provider confirmed can only be posted.
+- After a posted refund the visit's `payment_status` becomes `refunded` when nothing paid is left, otherwise `partially_refunded` (history `refund_recorded`).
+- A cancel, a reject or the request expiry of a visit that still holds money now sets `refund_pending`, also for money taken on site. The dialog defaults to the full amount left, so cancelling a confirmed booking ends in a full refund.
+
+The Payments card shows the refundable amount, a refunds table (status, channel, reason) with "Sonucu işle" for open refunds, and the "İade yap" dialog.
+
+### Follow-up list
+
+`GET /v1/tenant/payments/follow-ups` (plus `/meta` and `/facets`) lists visits whose money needs a person, in the caller's branch scope. It needs the reservations module and one of `tenant.payment.refund`, `tenant.payment.collect` or `tenant.finance.read`. Kinds, first match wins:
+
+| Kind                | When                                                                          |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `refund_unverified` | a provider refund is still open                                               |
+| `refund_failed`     | the last refund failed and money is still held                                |
+| `refund_pending`    | `payment_status = refund_pending` (`late` = the money arrived after a cancel) |
+| `unpaid`            | a completed visit whose charges are not fully paid                            |
+
+`amount` is what is left to refund, or what is still owed for `unpaid`. The panel page is `/t/{slug}/reservations/follow-ups` ("Ödeme takibi" in the sidebar). A row opens the visit.
+
+### Product returns
+
+`POST /v1/tenant/stock-movements/{uuid}/return` needs `tenant.products.stock` and `tenant.payment.refund`. It takes back every unit of a `sale` movement in one transaction:
+
+- a `return` movement (source `sale_return`), unique per sale;
+- `ReverseLineTx` on the sale's revenue line.
+
+It does not pay money back: a refund owed for it is recorded separately. Damaged stock is fixed with a count afterwards. The stock movements table offers "Geri al" on sales not yet returned and shows a "Geri alındı" badge.
+
+The customer panel's visit detail lists the visit's refunds (in progress, refunded, or being followed up) and the refunded total.
+
 ## Errors
 
-| Code                        | Status | When                                                               |
-| --------------------------- | ------ | ------------------------------------------------------------------ |
-| `PAYMENT_NOT_AVAILABLE`     | 409    | nothing to pay online (not accepted, paid, cancelled, window over) |
-| `PAYMENT_NOT_READY`         | 409    | no working provider account or online cash account                 |
-| `PAYMENT_PROVIDER_ERROR`    | 502    | the provider did not open the page                                 |
-| `PAYMENT_NOT_COLLECTABLE`   | 409    | on-site payment of a cancelled or rejected visit                   |
-| `PAYMENT_SIGNATURE_INVALID` | 401    | a notification whose signature does not verify                     |
+| Code                         | Status | When                                                               |
+| ---------------------------- | ------ | ------------------------------------------------------------------ |
+| `PAYMENT_NOT_AVAILABLE`      | 409    | nothing to pay online (not accepted, paid, cancelled, window over) |
+| `PAYMENT_NOT_READY`          | 409    | no working provider account or online cash account                 |
+| `PAYMENT_PROVIDER_ERROR`     | 502    | the provider did not open the page                                 |
+| `PAYMENT_NOT_COLLECTABLE`    | 409    | on-site payment of a cancelled or rejected visit                   |
+| `PAYMENT_SIGNATURE_INVALID`  | 401    | a notification whose signature does not verify                     |
+| `REFUND_IDEMPOTENCY_REUSED`  | 409    | a refund key sent again with another body                          |
+| `REFUND_NOT_OPEN`            | 409    | resolving a refund that is already settled                         |
+| `REFUND_COLLECTION_REVERSED` | 409    | refunding a collection that was reversed                           |
+| `VALIDATION_ERROR` `amount`  | 422    | `exceeds_refundable`: more than is left of the collection          |
+| `STOCK_ALREADY_RETURNED`     | 409    | a sale taken back twice                                            |
+| `STOCK_NOT_RETURNABLE`       | 409    | a return of a movement that is not a sale                          |
 
 ## Configuration
 
@@ -120,5 +172,18 @@ Rules:
   - a cancelled visit;
   - the test page outside development.
 - `paytr_test.go`: the token and notification hashes, the checkout call against a fake host, and verification.
-- `testpay_test.go`: signing.
-- RT-A01 covers the two tenant routes for another business's reservation.
+- `testpay_test.go`: signing and the refund answers.
+- `refund_test.go` (paytr): the refund token, and success, refusal and unknown answers against a fake host.
+- `refunds_db_test.go` (`TestRefundsFlow`):
+  - provider partial refunds of a cancelled online booking, a replayed key and a reused key;
+  - an over-refund;
+  - declined and unknown results with resolve;
+  - manual refunds, including an empty till;
+  - a cash partial refund after an on-site payment;
+  - the follow-up kinds, facets, search and branch scope.
+- `TestSalesLedger` step 9: the product return and its reversal, once only.
+- RT-A01 covers these tenant routes for another business's records:
+  - the two original tenant routes;
+  - the refund and resolve routes;
+  - the follow-up routes;
+  - the product return route.

@@ -434,6 +434,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// share in the line's transaction.
 	staffSharesSvc := staffsharesusecase.New(staffsharesrepository.NewPostgres(deps.DB, deps.Queries), cashSvc)
 	salesSvc.SetLineHook(staffSharesSvc.RecordLineTx)
+	// A product taken back reverses its sale line (TEC-913).
+	productsSvc.SetSaleReverser(salesmodule.ProductSaleReverser(salesSvc))
 	availabilitySvc := availabilityusecase.New(deps.Queries, orgsettingsSvc)
 	availabilitySvc.SetBusySource(capacityHolds.Busy())
 	availabilitymodule.RegisterRoutes(mux, availabilityhandler.New(availabilitySvc, capacityHolds), tokens, loader, tenantResolver)
