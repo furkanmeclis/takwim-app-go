@@ -123,6 +123,26 @@ type VisitCancelInput struct {
 	ExpectedVersion *int   `json:"expected_version"`
 }
 
+// ConfirmInput is the customer's "Geleceğim" (TEC-921).
+type ConfirmInput struct{}
+
+// ChangeRequestInput asks the business for another time; the booking is
+// kept until the business moves it.
+type ChangeRequestInput struct {
+	Note string `json:"note"`
+}
+
+// VisitConfirmInput confirms the visit of a visit link.
+type VisitConfirmInput struct {
+	Token string `json:"token"`
+}
+
+// VisitChangeRequestInput asks for a change through a visit link.
+type VisitChangeRequestInput struct {
+	Token string `json:"token"`
+	Note  string `json:"note"`
+}
+
 // VisitLink is a link to one visit, for the message that carries it.
 type VisitLink struct {
 	URL       string    `json:"url"`
@@ -235,6 +255,12 @@ const (
 	ReasonBusinessUnavailable = "business_unavailable"
 	ReasonOnlineUnavailable   = "online_unavailable"
 	ReasonServicesChanged     = "services_changed"
+	// ReasonNotRequested: the business does not ask for a confirmation of
+	// this visit (TEC-921).
+	ReasonNotRequested = "not_requested"
+	// ReasonAnswered: the confirmation was already answered (or a change
+	// was already asked for).
+	ReasonAnswered = "answered"
 	// ReasonSignInRequired: a visit link does not move a visit; the panel
 	// (signed in) does.
 	ReasonSignInRequired = "sign_in_required"
@@ -252,6 +278,19 @@ type Action struct {
 type Actions struct {
 	Cancel     Action `json:"cancel"`
 	Reschedule Action `json:"reschedule"`
+	// Confirm ("Geleceğim") and RequestChange answer the business's
+	// confirmation request (TEC-921); Until is the answer deadline.
+	Confirm       Action `json:"confirm"`
+	RequestChange Action `json:"request_change"`
+}
+
+// Confirmation is what the customer sees of the business's confirmation
+// request (nil when the business does not ask).
+type Confirmation struct {
+	Status            string     `json:"status"`
+	DeadlineAt        time.Time  `json:"deadline_at"`
+	AnsweredAt        *time.Time `json:"answered_at"`
+	ChangeRequestedAt *time.Time `json:"change_requested_at"`
 }
 
 // HistoryEntry is a customer-visible step of the visit (no notes, no
@@ -272,6 +311,7 @@ type Reservation struct {
 	Lines         []Line         `json:"lines"`
 	Policies      Policies       `json:"policies"`
 	Actions       Actions        `json:"actions"`
+	Confirmation  *Confirmation  `json:"confirmation"`
 	History       []HistoryEntry `json:"history"`
 	// Refunds are the refunds of the visit (TEC-913), newest first.
 	Refunds []Refund `json:"refunds"`

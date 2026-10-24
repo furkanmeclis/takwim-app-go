@@ -10,6 +10,8 @@ export const REASON_KEYS: Record<string, string> = {
   online_unavailable: "customer_panel.reasons.online_unavailable",
   services_changed: "customer_panel.reasons.services_changed",
   sign_in_required: "customer_panel.reasons.sign_in_required",
+  not_requested: "customer_panel.reasons.not_requested",
+  answered: "customer_panel.reasons.answered",
 };
 
 const CONFLICT_KEYS: Record<string, string> = {

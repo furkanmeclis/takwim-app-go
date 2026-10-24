@@ -874,6 +874,35 @@ func (q *Queries) GetReservationForVisitLink(ctx context.Context, arg GetReserva
 	return i, err
 }
 
+const getReservationForVisitLinkByID = `-- name: GetReservationForVisitLinkByID :one
+SELECT r.organization_id, r.id, r.uuid, r.ends_at FROM reservations r
+WHERE r.organization_id = $1 AND r.id = $2
+`
+
+type GetReservationForVisitLinkByIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type GetReservationForVisitLinkByIDRow struct {
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+}
+
+func (q *Queries) GetReservationForVisitLinkByID(ctx context.Context, arg GetReservationForVisitLinkByIDParams) (GetReservationForVisitLinkByIDRow, error) {
+	row := q.db.QueryRow(ctx, getReservationForVisitLinkByID, arg.OrganizationID, arg.ID)
+	var i GetReservationForVisitLinkByIDRow
+	err := row.Scan(
+		&i.OrganizationID,
+		&i.ID,
+		&i.Uuid,
+		&i.EndsAt,
+	)
+	return i, err
+}
+
 const hideCustomerIdentityHistory = `-- name: HideCustomerIdentityHistory :execrows
 UPDATE customer_identity_links l SET visible_from = GREATEST(COALESCE(l.visible_from, NOW()), NOW())
 FROM organizations o

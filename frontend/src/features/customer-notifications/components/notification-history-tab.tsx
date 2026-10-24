@@ -13,7 +13,7 @@ import { createColumn } from "@/components/tables";
 import { DeliveryDrawer } from "@/features/customer-notifications/components/delivery-drawer";
 import {
   NOTIFICATION_CHANNELS,
-  NOTIFICATION_EVENTS,
+  HISTORY_EVENTS,
   NOTIFICATION_STATUSES,
   STATUS_TONES,
   channelLabel,
@@ -90,7 +90,7 @@ export function NotificationHistoryTab() {
           enableSorting: true,
           gridPrimary: true,
           filterVariant: "faceted",
-          filterOptions: NOTIFICATION_EVENTS.map((code) => ({
+          filterOptions: HISTORY_EVENTS.map((code) => ({
             value: code,
             label: eventLabel(t, code),
           })),

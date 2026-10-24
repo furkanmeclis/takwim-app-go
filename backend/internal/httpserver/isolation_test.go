@@ -156,7 +156,8 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 			t.Fatal(err)
 		}
 		// The seed opens a second branch: above the starter plan (TEC-883).
-		if org, err = orgSvc.SetEntitlements(ctx, org.UUID, orgmodel.SetEntitlementsInput{Plan: "growth"}); err != nil {
+		// The confirmation add-on opens its routes (TEC-921).
+		if org, err = orgSvc.SetEntitlements(ctx, org.UUID, orgmodel.SetEntitlementsInput{Plan: "growth", Addons: []string{"confirmation"}}); err != nil {
 			t.Fatal(err)
 		}
 		return &isoOrg{org: org, owner: owner, marker: marker, ids: map[string]string{}}
@@ -701,6 +702,10 @@ func TestTenantIsolationRT_A01(t *testing.T) {
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{{"service_uuid": orgB.ids["service"]}}}, reject},
 		{"POST /v1/tenant/availability/search", map[string]any{"branch_uuid": orgA.ids["branch"], "lines": []map[string]any{
 			{"service_uuid": orgA.ids["service"], "staff_uuid": orgB.ids["staff"]}}}, reject},
+		{"PUT /v1/tenant/confirmations/settings", map[string]any{"branch_uuid": orgB.ids["branch"], "enabled": true,
+			"channels": []string{"sms"}, "fallback": true, "first_request_minutes": 1440, "follow_up_minutes": 0,
+			"max_attempts": 1, "deadline_minutes": 120, "window_start_minute": nil, "window_end_minute": nil, "on_no_answer": "cancel"}, reject},
+		{"POST /v1/tenant/confirmations/settings/reset", map[string]any{"branch_uuid": orgB.ids["branch"]}, reject},
 	}
 	for _, c := range cases {
 		method, path, _ := strings.Cut(c.route, " ")

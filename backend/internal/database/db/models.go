@@ -236,6 +236,25 @@ type CashMovement struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type ConfirmationSetting struct {
+	ID                  int64              `json:"id"`
+	OrganizationID      int64              `json:"organization_id"`
+	BranchID            pgtype.Int8        `json:"branch_id"`
+	Enabled             bool               `json:"enabled"`
+	Channels            []string           `json:"channels"`
+	Fallback            bool               `json:"fallback"`
+	FirstRequestMinutes int32              `json:"first_request_minutes"`
+	FollowUpMinutes     int32              `json:"follow_up_minutes"`
+	MaxAttempts         int32              `json:"max_attempts"`
+	DeadlineMinutes     int32              `json:"deadline_minutes"`
+	WindowStartMinute   pgtype.Int4        `json:"window_start_minute"`
+	WindowEndMinute     pgtype.Int4        `json:"window_end_minute"`
+	OnNoAnswer          string             `json:"on_no_answer"`
+	UpdatedBy           pgtype.Int8        `json:"updated_by"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Customer struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`
@@ -1020,6 +1039,35 @@ type Reservation struct {
 	Zone               string             `json:"zone"`
 	VehicleType        pgtype.Text        `json:"vehicle_type"`
 	VehiclePlate       string             `json:"vehicle_plate"`
+}
+
+type ReservationConfirmation struct {
+	ID                 int64                `json:"id"`
+	Uuid               uuid.UUID            `json:"uuid"`
+	OrganizationID     int64                `json:"organization_id"`
+	ReservationID      int64                `json:"reservation_id"`
+	Round              int32                `json:"round"`
+	ReservationVersion int32                `json:"reservation_version"`
+	StartsAt           pgtype.Timestamptz   `json:"starts_at"`
+	Status             string               `json:"status"`
+	Channels           []string             `json:"channels"`
+	Fallback           bool                 `json:"fallback"`
+	OnNoAnswer         string               `json:"on_no_answer"`
+	AttemptTimes       []pgtype.Timestamptz `json:"attempt_times"`
+	AttemptsSent       int32                `json:"attempts_sent"`
+	NextAttemptAt      pgtype.Timestamptz   `json:"next_attempt_at"`
+	DeadlineAt         pgtype.Timestamptz   `json:"deadline_at"`
+	Answer             pgtype.Text          `json:"answer"`
+	AnswerChannel      pgtype.Text          `json:"answer_channel"`
+	AnsweredAt         pgtype.Timestamptz   `json:"answered_at"`
+	ChangeRequestedAt  pgtype.Timestamptz   `json:"change_requested_at"`
+	ChangeNote         string               `json:"change_note"`
+	Outcome            pgtype.Text          `json:"outcome"`
+	LastError          string               `json:"last_error"`
+	PlannedAt          pgtype.Timestamptz   `json:"planned_at"`
+	ClosedAt           pgtype.Timestamptz   `json:"closed_at"`
+	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz   `json:"updated_at"`
 }
 
 type ReservationEvent struct {

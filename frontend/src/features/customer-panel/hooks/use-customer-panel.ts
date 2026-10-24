@@ -144,6 +144,38 @@ export function useCancelReservation(uuid: string) {
   });
 }
 
+/** "Geleceğim" for the business's confirmation request (TEC-921). */
+export function useConfirmReservation(uuid: string) {
+  const queryClient = useQueryClient();
+  const refresh = useRefreshAfterChange();
+  return useMutation({
+    mutationFn: () => customerPanelService.confirm(uuid),
+    onSuccess: (reservation) => {
+      queryClient.setQueryData(
+        customerPanelKeys.reservation(uuid),
+        reservation,
+      );
+      refresh(uuid);
+    },
+  });
+}
+
+export function useRequestReservationChange(uuid: string) {
+  const queryClient = useQueryClient();
+  const refresh = useRefreshAfterChange();
+  return useMutation({
+    mutationFn: (note: string) =>
+      customerPanelService.requestChange(uuid, note),
+    onSuccess: (reservation) => {
+      queryClient.setQueryData(
+        customerPanelKeys.reservation(uuid),
+        reservation,
+      );
+      refresh(uuid);
+    },
+  });
+}
+
 export function useRescheduleReservation(uuid: string) {
   const queryClient = useQueryClient();
   const refresh = useRefreshAfterChange();

@@ -300,5 +300,10 @@
   "actions.reservations.payment_collected": "Ödeme alındı",
   "actions.reservations.refund_requested": "İade kaydedildi",
   "actions.reservations.refund_resolved": "İade sonucu işlendi",
-  "actions.products.sale_returned": "Satış geri alındı"
+  "actions.products.sale_returned": "Satış geri alındı",
+  "resources.tenant.confirmations": "Randevu teyidi",
+  "actions.confirmations.updated": "Teyit kuralı güncellendi",
+  "actions.confirmations.reset": "Teyit kuralı varsayılana döndü",
+  "actions.reservations.confirmed": "Müşteri randevuyu teyit etti",
+  "actions.reservations.change_requested": "Müşteri değişiklik istedi"
 }

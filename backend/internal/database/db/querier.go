@@ -68,6 +68,9 @@ type Querier interface {
 	CountCashAccounts(ctx context.Context, arg CountCashAccountsParams) (int64, error)
 	CountCashClosings(ctx context.Context, arg CountCashClosingsParams) (int64, error)
 	CountCashMovements(ctx context.Context, arg CountCashMovementsParams) (int64, error)
+	// Requests of the current round a channel really sent (accepted by a
+	// provider): an expired task without one is unreachable, never cancelled.
+	CountConfirmationSends(ctx context.Context, arg CountConfirmationSendsParams) (int64, error)
 	CountCustomerAccessLinksSince(ctx context.Context, arg CountCustomerAccessLinksSinceParams) (int64, error)
 	CountCustomerAuthEventsFromIPSince(ctx context.Context, arg CountCustomerAuthEventsFromIPSinceParams) (int64, error)
 	CountCustomerNotificationDeliveries(ctx context.Context, arg CountCustomerNotificationDeliveriesParams) (int64, error)
@@ -141,6 +144,9 @@ type Querier interface {
 	// outside the caller's scope, and business-wide accounts (branch_id NULL)
 	// for a branch-limited member, are left out.
 	CreateCashAccount(ctx context.Context, arg CreateCashAccountParams) (CreateCashAccountRow, error)
+	// A confirmation row of the reservation history (from / to are
+	// confirmation statuses).
+	CreateConfirmationEvent(ctx context.Context, arg CreateConfirmationEventParams) error
 	// Tenant resource: customers (TEC-896). Every query on customers and
 	// customer_identity_links filters by organization_id. customer_identities is
 	// platform-level: only the link use case touches it, and no tenant response
@@ -221,6 +227,7 @@ type Querier interface {
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
 	DeleteBranchImage(ctx context.Context, arg DeleteBranchImageParams) (int64, error)
 	DeleteCapacityAllocations(ctx context.Context, arg DeleteCapacityAllocationsParams) error
+	DeleteConfirmationSettings(ctx context.Context, arg DeleteConfirmationSettingsParams) (int64, error)
 	DeleteCustomerIdentityLink(ctx context.Context, arg DeleteCustomerIdentityLinkParams) (int64, error)
 	DeleteCustomerNotificationRule(ctx context.Context, arg DeleteCustomerNotificationRuleParams) error
 	DeleteCustomerNotificationTemplate(ctx context.Context, arg DeleteCustomerNotificationTemplateParams) error
@@ -307,6 +314,16 @@ type Querier interface {
 	GetCashMovement(ctx context.Context, arg GetCashMovementParams) (GetCashMovementRow, error)
 	GetCashMovementByIdempotencyKey(ctx context.Context, arg GetCashMovementByIdempotencyKeyParams) (GetCashMovementByIdempotencyKeyRow, error)
 	GetCollectAccount(ctx context.Context, arg GetCollectAccountParams) (GetCollectAccountRow, error)
+	GetConfirmationBranch(ctx context.Context, arg GetConfirmationBranchParams) (GetConfirmationBranchRow, error)
+	// Customer confirmation (TEC-921). Every query filters by organization_id;
+	// joins by alias.organization_id too.
+	// What decides whether the add-on is on: the sector, plan and add-ons.
+	GetConfirmationOrganization(ctx context.Context, organizationID int64) (GetConfirmationOrganizationRow, error)
+	// The reservation a task acts on, locked (lock order: reservation, then
+	// its task), with the time zone of its branch.
+	GetConfirmationReservation(ctx context.Context, arg GetConfirmationReservationParams) (GetConfirmationReservationRow, error)
+	GetConfirmationReservationByUUID(ctx context.Context, arg GetConfirmationReservationByUUIDParams) (GetConfirmationReservationByUUIDRow, error)
+	GetConfirmationTimezone(ctx context.Context, arg GetConfirmationTimezoneParams) (string, error)
 	// Versioned organization settings. Rows are immutable; the current settings
 	// are the highest version of the organization.
 	GetCurrentOrganizationSettings(ctx context.Context, organizationID int64) (GetCurrentOrganizationSettingsRow, error)
@@ -331,6 +348,8 @@ type Querier interface {
 	// The reservation of a visit link, with the same columns as
 	// GetCustomerPanelReservation (the panel's view and rules are reused).
 	GetCustomerVisitReservation(ctx context.Context, arg GetCustomerVisitReservationParams) (GetCustomerVisitReservationRow, error)
+	// The branch's own row, else the business-wide row.
+	GetEffectiveConfirmationSettings(ctx context.Context, arg GetEffectiveConfirmationSettingsParams) (ConfirmationSetting, error)
 	GetExportJobByID(ctx context.Context, id int64) (ExportJob, error)
 	GetExportJobByUUID(ctx context.Context, argUuid uuid.UUID) (ExportJob, error)
 	GetGitHubAppSettings(ctx context.Context) (GithubAppSetting, error)
@@ -398,6 +417,7 @@ type Querier interface {
 	GetRefundByIdempotencyKey(ctx context.Context, arg GetRefundByIdempotencyKeyParams) (GetRefundByIdempotencyKeyRow, error)
 	GetRefundByUUID(ctx context.Context, arg GetRefundByUUIDParams) (GetRefundByUUIDRow, error)
 	GetReservation(ctx context.Context, arg GetReservationParams) (GetReservationRow, error)
+	GetReservationConfirmation(ctx context.Context, arg GetReservationConfirmationParams) (ReservationConfirmation, error)
 	GetReservationCurrency(ctx context.Context, organizationID int64) (string, error)
 	GetReservationCustomer(ctx context.Context, arg GetReservationCustomerParams) (GetReservationCustomerRow, error)
 	// The person serving the first staffed line (credited with products by
@@ -405,6 +425,7 @@ type Querier interface {
 	GetReservationFirstStaff(ctx context.Context, arg GetReservationFirstStaffParams) (int64, error)
 	GetReservationForUpdate(ctx context.Context, arg GetReservationForUpdateParams) (Reservation, error)
 	GetReservationForVisitLink(ctx context.Context, arg GetReservationForVisitLinkParams) (GetReservationForVisitLinkRow, error)
+	GetReservationForVisitLinkByID(ctx context.Context, arg GetReservationForVisitLinkByIDParams) (GetReservationForVisitLinkByIDRow, error)
 	// The service of a planned line with its prices: personal (service_staff) ›
 	// branch offer (service_branches) › list price.
 	GetReservationLineService(ctx context.Context, arg GetReservationLineServiceParams) (GetReservationLineServiceRow, error)
@@ -618,6 +639,9 @@ type Querier interface {
 	// Tills and bank accounts a collection at the business may go into: the
 	// branch's own and the business-wide ones of the currency.
 	ListCollectAccounts(ctx context.Context, arg ListCollectAccountsParams) ([]ListCollectAccountsRow, error)
+	// The branches the settings page lists (inside the caller's scope).
+	ListConfirmationBranches(ctx context.Context, arg ListConfirmationBranchesParams) ([]ListConfirmationBranchesRow, error)
+	ListConfirmationSettings(ctx context.Context, organizationID int64) ([]ListConfirmationSettingsRow, error)
 	// The send history: one row per channel attempt. branch_ids = the caller's
 	// branch scope (NULL = every branch).
 	ListCustomerNotificationDeliveries(ctx context.Context, arg ListCustomerNotificationDeliveriesParams) ([]ListCustomerNotificationDeliveriesRow, error)
@@ -644,6 +668,9 @@ type Querier interface {
 	// Businesses with notices to send (the worker's scan).
 	ListDueCustomerNotificationOrganizations(ctx context.Context, nowAt pgtype.Timestamptz) ([]int64, error)
 	ListDuePushTickets(ctx context.Context, arg ListDuePushTicketsParams) ([]ListDuePushTicketsRow, error)
+	// Tasks with an attempt or a deadline due (the worker's scan; every
+	// business, or one when organization_id is given).
+	ListDueReservationConfirmations(ctx context.Context, arg ListDueReservationConfirmationsParams) ([]ListDueReservationConfirmationsRow, error)
 	// The sweep: runner jobs whose next call is due, across organizations
 	// (each row carries its organization_id; the runner re-scopes from it).
 	ListDueRunnerJobs(ctx context.Context, limitCount int32) ([]ListDueRunnerJobsRow, error)
@@ -876,6 +903,7 @@ type Querier interface {
 	LockOrganizationRow(ctx context.Context, id int64) (Organization, error)
 	LockPayment(ctx context.Context, arg LockPaymentParams) (LockPaymentRow, error)
 	LockRefund(ctx context.Context, arg LockRefundParams) (Refund, error)
+	LockReservationConfirmation(ctx context.Context, arg LockReservationConfirmationParams) (ReservationConfirmation, error)
 	// Claims a job for one provider call (one worker at a time; an expired
 	// claim of a crashed worker is free again).
 	LockRunnerJob(ctx context.Context, arg LockRunnerJobParams) (int64, error)
@@ -920,6 +948,9 @@ type Querier interface {
 	// Runs under the capacity lock of the organization (uq number guards).
 	NextReservationNumber(ctx context.Context, organizationID int64) (int64, error)
 	PingDB(ctx context.Context) (int32, error)
+	// A new task, or the task planned again for a moved visit (next round,
+	// answers cleared).
+	PlanReservationConfirmation(ctx context.Context, arg PlanReservationConfirmationParams) (ReservationConfirmation, error)
 	ProductVariantNameTaken(ctx context.Context, arg ProductVariantNameTakenParams) (bool, error)
 	QueueImportJob(ctx context.Context, argUuid uuid.UUID) (ImportJob, error)
 	// Amount paid back from one collection (refunds minus reversed refunds).
@@ -969,6 +1000,8 @@ type Querier interface {
 	// Revenue per business day and currency: sales at their gross price, the
 	// discounts, the reversals (negative) and the net.
 	SalesRevenueByDay(ctx context.Context, arg SalesRevenueByDayParams) ([]SalesRevenueByDayRow, error)
+	// Writes the mutable state of a task.
+	SaveReservationConfirmation(ctx context.Context, arg SaveReservationConfirmationParams) error
 	// Stores the outcome of a provider call and releases the claim.
 	SaveRunnerJob(ctx context.Context, arg SaveRunnerJobParams) error
 	ServiceNameTaken(ctx context.Context, arg ServiceNameTakenParams) (bool, error)
@@ -998,6 +1031,10 @@ type Querier interface {
 	// person.
 	SetRefundProviderAnswer(ctx context.Context, arg SetRefundProviderAnswerParams) (int64, error)
 	SetRefundResolver(ctx context.Context, arg SetRefundResolverParams) error
+	// The customer confirmation field. bump raises the version (a change of
+	// its own: request sent, answer, deadline); a status set as part of
+	// another change keeps that change's version.
+	SetReservationConfirmationStatus(ctx context.Context, arg SetReservationConfirmationStatusParams) (int32, error)
 	// The total of a new booking once its products are reserved.
 	SetReservationTotal(ctx context.Context, arg SetReservationTotalParams) error
 	SetResourceActive(ctx context.Context, arg SetResourceActiveParams) error
@@ -1102,6 +1139,7 @@ type Querier interface {
 	UpdateUserTOTPRecoveryHashes(ctx context.Context, arg UpdateUserTOTPRecoveryHashesParams) error
 	UpdateWebAuthnCredentialCounter(ctx context.Context, arg UpdateWebAuthnCredentialCounterParams) error
 	UpdateWebAuthnCredentialName(ctx context.Context, arg UpdateWebAuthnCredentialNameParams) (WebauthnCredential, error)
+	UpsertConfirmationSettings(ctx context.Context, arg UpsertConfirmationSettingsParams) (ConfirmationSetting, error)
 	// Platform-level: called only after the phone was proven.
 	UpsertCustomerIdentity(ctx context.Context, arg UpsertCustomerIdentityParams) (CustomerIdentity, error)
 	UpsertCustomerNotificationRule(ctx context.Context, arg UpsertCustomerNotificationRuleParams) (CustomerNotificationRule, error)

@@ -22,6 +22,9 @@ func RegisterRoutes(mux *http.ServeMux, h *customerpanelhandler.Handler) {
 	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/cancel", h.Authenticate(h.Cancel))
 	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/availability", h.Authenticate(h.Availability))
 	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/reschedule", h.Authenticate(h.Reschedule))
+	// TEC-921: answers to the business's confirmation request.
+	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/confirm", h.Authenticate(h.Confirm))
+	mux.HandleFunc("POST /v1/customer/reservations/{uuid}/change-request", h.Authenticate(h.RequestChange))
 	mux.HandleFunc("GET /v1/customer/payments", h.Authenticate(h.Payments))
 	mux.HandleFunc("GET /v1/customer/payments/summary", h.Authenticate(h.PaymentSummary))
 	// TEC-910: panel links, devices, number change, reassigned numbers.
@@ -34,4 +37,6 @@ func RegisterRoutes(mux *http.ServeMux, h *customerpanelhandler.Handler) {
 	// Visit links: one reservation, no session. The token is the only key.
 	mux.HandleFunc("POST /v1/customer/visit", h.Visit)
 	mux.HandleFunc("POST /v1/customer/visit/cancel", h.VisitCancel)
+	mux.HandleFunc("POST /v1/customer/visit/confirm", h.VisitConfirm)
+	mux.HandleFunc("POST /v1/customer/visit/change-request", h.VisitRequestChange)
 }

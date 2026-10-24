@@ -134,7 +134,7 @@ func actor(actorID int64) pgtype.Int8 { return pgtype.Int8{Int64: actorID, Valid
 func (e *Engine) Save(ctx context.Context, orgID, actorID int64, in model.SaveInput) (model.Event, error) {
 	ve := &ValidationError{}
 	ev, ok := catalog.Get(in.Event)
-	if !ok {
+	if !ok || catalog.Managed(in.Event) {
 		ve.add("event", "invalid", "unknown event")
 		return model.Event{}, ve
 	}
@@ -249,7 +249,7 @@ func (e *Engine) Save(ctx context.Context, orgID, actorID int64, in model.SaveIn
 
 // Reset sets an event back to the default rule and texts.
 func (e *Engine) Reset(ctx context.Context, orgID int64, code string) (model.Event, error) {
-	if _, ok := catalog.Get(code); !ok {
+	if _, ok := catalog.Get(code); !ok || catalog.Managed(code) {
 		ve := &ValidationError{}
 		ve.add("event", "invalid", "unknown event")
 		return model.Event{}, ve

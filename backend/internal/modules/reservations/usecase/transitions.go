@@ -31,7 +31,7 @@ type ChangeInput struct {
 func lockedView(r db.Reservation) model.Locked {
 	return model.Locked{
 		CustomerID: r.CustomerID, Status: r.Status, PaymentStatus: r.PaymentStatus,
-		StartsAt: r.StartsAt.Time, Version: int(r.Version),
+		ConfirmationStatus: r.ConfirmationStatus, StartsAt: r.StartsAt.Time, Version: int(r.Version),
 	}
 }
 

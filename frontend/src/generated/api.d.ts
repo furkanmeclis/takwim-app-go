@@ -5410,6 +5410,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/confirmations/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer confirmation rules
+         * @description The confirmation add-on (TEC-921): the business-wide rule (or the
+         *     template when none is saved), every branch the caller may see with
+         *     its effective rule (`custom` = its own rule), the channels with
+         *     whether a provider can deliver now, and the limits
+         *     (`tenant.settings.read`). Without the add-on: `403 MODULE_NOT_ENABLED`.
+         */
+        get: operations["getTenantConfirmationSettings"];
+        /**
+         * Save the business-wide or a branch's confirmation rule
+         * @description `tenant.settings.write`. Without `branch_uuid` the business-wide rule
+         *     is replaced (needs access to every branch); with it, that branch's
+         *     own rule. Timings are minutes before the visit start: the first
+         *     request (30 to 10080), the follow-up (0 = none, before the first
+         *     request), the deadline (0 to 10080, at least 30 minutes after the
+         *     last request). `max_attempts` 1 to 5 counts the first request. The
+         *     window (both minutes of the day or both null) is at least 60
+         *     minutes. Saved rules apply to bookings planned from now on.
+         *     Validation: `400 VALIDATION_ERROR` with field codes; unknown branch:
+         *     `404`.
+         */
+        put: operations["putTenantConfirmationSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/confirmations/settings/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a saved confirmation rule
+         * @description `tenant.settings.write`. Without `branch_uuid` the business-wide rule
+         *     goes back to the template; with it, the branch follows the
+         *     business-wide rule again.
+         */
+        post: operations["postTenantConfirmationReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/customer-notifications/settings": {
         parameters: {
             query?: never;
@@ -7453,6 +7512,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customer/reservations/{uuid}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a visit ("Geleceğim")
+         * @description Answers the business's confirmation request (TEC-921): no further
+         *     requests go out and the visit is not cancelled for no answer. Allowed
+         *     while `actions.confirm.allowed` (until the deadline, or until the
+         *     start when the business kept the visit after the deadline). Not
+         *     allowed: `409 ACTION_NOT_ALLOWED` with detail `confirm` /
+         *     `not_requested`, `answered`, `status` or `business_unavailable`.
+         */
+        post: operations["confirmCustomerReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/reservations/{uuid}/change-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the business for another time
+         * @description Answers the confirmation request with a change request: the visit
+         *     stays booked, no further requests go out and it is not cancelled
+         *     for no answer; the business moves it (or the customer confirms
+         *     later). Once per visit (`409` detail `request_change/answered`).
+         */
+        post: operations["requestCustomerReservationChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customer/reservations/{uuid}/availability": {
         parameters: {
             query?: never;
@@ -7726,6 +7833,48 @@ export interface paths {
          * @description The business's cancel rules apply exactly as in the panel (`409 ACTION_NOT_ALLOWED`, `stale`).
          */
         post: operations["cancelCustomerVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/visit/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the visit of a visit link
+         * @description The "Geleceğim" button of the confirmation message's link (TEC-921).
+         *     Opening the link answers nothing; only this request does. Same rules
+         *     as the panel's confirm (`409 ACTION_NOT_ALLOWED`).
+         */
+        post: operations["confirmCustomerVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customer/visit/change-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for another time through a visit link
+         * @description Same rules as the panel's change request (`409 ACTION_NOT_ALLOWED`).
+         */
+        post: operations["requestCustomerVisitChange"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9555,6 +9704,100 @@ export interface components {
             name: "sms" | "whatsapp" | "email";
             /** @description A provider can deliver now; otherwise sends are skipped. */
             ready: boolean;
+        };
+        ConfirmationRule: {
+            enabled: boolean;
+            /** @description In order; the first is the primary channel. */
+            channels: ("sms" | "whatsapp" | "email")[];
+            /** @description Try the next channel when one fails. */
+            fallback: boolean;
+            /** @description Minutes before the start. */
+            first_request_minutes: number;
+            /** @description Minutes before the start; 0 = none. */
+            follow_up_minutes: number;
+            max_attempts: number;
+            /** @description Last answer: minutes before the start. */
+            deadline_minutes: number;
+            /** @description Local minute of the day requests may start. */
+            window_start_minute: number | null;
+            window_end_minute: number | null;
+            /** @enum {string} */
+            on_no_answer: "cancel" | "flag";
+        };
+        ConfirmationSaveInput: components["schemas"]["ConfirmationRule"] & {
+            /**
+             * Format: uuid
+             * @description Null = the business-wide rule.
+             */
+            branch_uuid?: string | null;
+        };
+        ConfirmationBranchRule: {
+            branch: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            };
+            /** @description The branch has its own rule. */
+            custom: boolean;
+            rule: components["schemas"]["ConfirmationRule"];
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        ConfirmationSettings: {
+            channels: {
+                /** @enum {string} */
+                name: "sms" | "whatsapp" | "email";
+                ready: boolean;
+            }[];
+            default: components["schemas"]["ConfirmationRule"];
+            default_custom: boolean;
+            /** Format: date-time */
+            default_updated_at: string | null;
+            template: components["schemas"]["ConfirmationRule"];
+            branches: components["schemas"]["ConfirmationBranchRule"][];
+            limits: {
+                min_response_minutes: number;
+                min_first_request_minutes: number;
+                max_minutes: number;
+                max_attempts: number;
+                min_window_minutes: number;
+            };
+        };
+        EnvelopeConfirmationSettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConfirmationSettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description The confirmation task of the booking (TEC-921). */
+        TenantReservationConfirmation: {
+            /** @enum {string} */
+            status: "scheduled" | "pending" | "confirmed" | "declined" | "expired" | "dropped";
+            channels: string[];
+            /** @enum {string} */
+            on_no_answer: "cancel" | "flag";
+            attempt_times: string[];
+            attempts_sent: number;
+            attempts_planned: number;
+            /** Format: date-time */
+            next_attempt_at: string | null;
+            /** Format: date-time */
+            deadline_at: string;
+            /** @enum {string|null} */
+            answer: "confirm" | "cancel" | "change" | null;
+            answer_channel: string | null;
+            /** Format: date-time */
+            answered_at: string | null;
+            /** Format: date-time */
+            change_requested_at: string | null;
+            change_note: string;
+            /** @enum {string|null} */
+            outcome: "cancelled" | "flagged" | "unreachable" | null;
+            last_error: string;
+            /** Format: date-time */
+            planned_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
         };
         CustomerNotificationSettings: {
             channels: components["schemas"]["CustomerNotificationChannel"][];
@@ -12847,6 +13090,7 @@ export interface components {
              * @description When a waiting request lets its capacity go.
              */
             hold_expires_at: string | null;
+            confirmation?: components["schemas"]["TenantReservationConfirmation"] | null;
             lines: {
                 index: number;
                 /**
@@ -12874,7 +13118,7 @@ export interface components {
             events: {
                 version: number;
                 /** @enum {string} */
-                type: "created" | "accepted" | "rejected" | "cancelled" | "started" | "completed" | "no_show" | "paid" | "expired" | "rescheduled" | "notes_updated" | "payment_recorded" | "late_payment" | "product_added" | "product_removed";
+                type: "created" | "accepted" | "rejected" | "cancelled" | "started" | "completed" | "no_show" | "paid" | "expired" | "rescheduled" | "notes_updated" | "payment_recorded" | "late_payment" | "product_added" | "product_removed" | "confirmation_scheduled" | "confirmation_requested" | "confirmation_confirmed" | "confirmation_declined" | "confirmation_change_requested" | "confirmation_expired" | "confirmation_dropped";
                 from_status: string | null;
                 to_status: string | null;
                 actor: string | null;
@@ -13898,7 +14142,7 @@ export interface components {
              */
             until: string | null;
             /** @enum {string|null} */
-            reason: "status" | "cutoff" | "business_unavailable" | "online_unavailable" | "services_changed" | "sign_in_required" | null;
+            reason: "status" | "cutoff" | "business_unavailable" | "online_unavailable" | "services_changed" | "sign_in_required" | "not_requested" | "answered" | null;
         };
         CustomerReservation: components["schemas"]["CustomerReservationItem"] & {
             branch: {
@@ -13934,7 +14178,20 @@ export interface components {
             actions: {
                 cancel: components["schemas"]["CustomerAction"];
                 reschedule: components["schemas"]["CustomerAction"];
+                confirm: components["schemas"]["CustomerAction"];
+                request_change: components["schemas"]["CustomerAction"];
             };
+            /** @description The business's confirmation request (TEC-921); null when none was asked. */
+            confirmation?: {
+                /** @enum {string} */
+                status: "not_required" | "scheduled" | "pending" | "confirmed" | "declined" | "expired";
+                /** Format: date-time */
+                deadline_at: string;
+                /** Format: date-time */
+                answered_at: string | null;
+                /** Format: date-time */
+                change_requested_at: string | null;
+            } | null;
             history: {
                 type: string;
                 to_status: string | null;
@@ -22894,6 +23151,8 @@ export interface operations {
                 status?: string;
                 /** @description `pending`, `accepted`, `rejected` (any of) */
                 approval_status?: string;
+                /** @description `not_required`, `scheduled`, `pending`, `confirmed`, `declined`, `expired` (any of; TEC-921) */
+                confirmation_status?: string;
                 /** @description `on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` (any of) */
                 payment_status?: string;
                 /** @description `panel`, `online`, `embed` (any of) */
@@ -23905,6 +24164,109 @@ export interface operations {
             400: components["responses"]["OrganizationRequired"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConfirmationSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationSettings"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConfirmationSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationSaveInput"];
+            };
+        };
+        responses: {
+            /** @description The settings after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConfirmationReset: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    branch_uuid?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The settings after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConfirmationSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -27710,6 +28072,71 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    confirmCustomerReservation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Confirmed visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    requestCustomerReservationChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Visit with the change request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     searchCustomerReservationStarts: {
         parameters: {
             query?: never;
@@ -28040,6 +28467,65 @@ export interface operations {
         };
         responses: {
             /** @description Cancelled visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    confirmCustomerVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Confirmed visit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomerReservation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    requestCustomerVisitChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Visit with the change request */
             200: {
                 headers: {
                     [name: string]: unknown;

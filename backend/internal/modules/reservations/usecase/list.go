@@ -29,7 +29,8 @@ func (s *Service) List(ctx context.Context, orgID int64, f model.ListFilter, cal
 	}
 	p := db.ListReservationsParams{
 		OrganizationID: orgID, BranchIds: orgctx.BranchScope(ctx), Branches: f.Branches, Staff: f.Staff,
-		Statuses: f.Statuses, ApprovalStatuses: f.ApprovalStatuses, PaymentStatuses: f.PaymentStatuses, Sources: f.Sources,
+		Statuses: f.Statuses, ApprovalStatuses: f.ApprovalStatuses, ConfirmationStatuses: f.ConfirmationStatuses,
+		PaymentStatuses: f.PaymentStatuses, Sources: f.Sources,
 		SortField: f.SortField, SortDesc: f.SortDesc, LimitCount: f.Limit, OffsetCount: f.Offset,
 	}
 	if f.CustomerUUID != nil {
@@ -64,7 +65,7 @@ func (s *Service) List(ctx context.Context, orgID int64, f model.ListFilter, cal
 	total, err := s.q.CountReservations(ctx, db.CountReservationsParams{
 		OrganizationID: p.OrganizationID, BranchIds: p.BranchIds, OwnUserID: p.OwnUserID, OwnStaffID: p.OwnStaffID,
 		Branches: p.Branches, CustomerUuid: p.CustomerUuid, Staff: p.Staff, Statuses: p.Statuses,
-		ApprovalStatuses: p.ApprovalStatuses, PaymentStatuses: p.PaymentStatuses, Sources: p.Sources,
+		ApprovalStatuses: p.ApprovalStatuses, ConfirmationStatuses: p.ConfirmationStatuses, PaymentStatuses: p.PaymentStatuses, Sources: p.Sources,
 		StartsFrom: p.StartsFrom, StartsTo: p.StartsTo, Q: p.Q, QDigits: p.QDigits,
 	})
 	if err != nil {

@@ -59,5 +59,6 @@
   "nav_cash": "Cash and bank",
   "nav_my_shares": "My shares",
   "nav_staff_shares": "Staff shares",
-  "nav_payment_follow_ups": "Payment follow-up"
+  "nav_payment_follow_ups": "Payment follow-up",
+  "nav_tenant_settings_confirmation": "Booking confirmation"
 }

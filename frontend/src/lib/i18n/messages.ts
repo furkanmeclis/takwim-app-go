@@ -15,6 +15,7 @@ import enStaffShares from "@/locales/en/staff_shares.json";
 import enReservations from "@/locales/en/reservations.json";
 import enCustomerPanel from "@/locales/en/customer_panel.json";
 import enCustomerNotifications from "@/locales/en/customer_notifications.json";
+import enConfirmations from "@/locales/en/confirmations.json";
 import enBranding from "@/locales/en/branding.json";
 import enBulk from "@/locales/en/bulk.json";
 import enBusinessPage from "@/locales/en/business_page.json";
@@ -63,6 +64,7 @@ import trStaffShares from "@/locales/tr/staff_shares.json";
 import trReservations from "@/locales/tr/reservations.json";
 import trCustomerPanel from "@/locales/tr/customer_panel.json";
 import trCustomerNotifications from "@/locales/tr/customer_notifications.json";
+import trConfirmations from "@/locales/tr/confirmations.json";
 import trBranding from "@/locales/tr/branding.json";
 import trBulk from "@/locales/tr/bulk.json";
 import trBusinessPage from "@/locales/tr/business_page.json";
@@ -146,6 +148,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     reservations: trReservations,
     customer_panel: trCustomerPanel,
     customer_notifications: trCustomerNotifications,
+    confirmations: trConfirmations,
     tenant_members: trTenantMembers,
     tenant_roles: trTenantRoles,
     tenant_settings: trTenantSettings,
@@ -196,6 +199,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     reservations: enReservations,
     customer_panel: enCustomerPanel,
     customer_notifications: enCustomerNotifications,
+    confirmations: enConfirmations,
     tenant_members: enTenantMembers,
     tenant_roles: enTenantRoles,
     tenant_settings: enTenantSettings,

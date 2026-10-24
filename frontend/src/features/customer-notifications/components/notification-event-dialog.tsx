@@ -250,8 +250,11 @@ export function NotificationEventDialog({
   );
 }
 
-/** Ordered channel choice: checked channels first, in sending order. */
-function ChannelOrderField({
+/**
+ * Ordered channel choice: checked channels first, in sending order. Binds
+ * the form's `channels` field; the confirmation settings use it too.
+ */
+export function ChannelOrderField({
   readiness,
   disabled,
 }: {

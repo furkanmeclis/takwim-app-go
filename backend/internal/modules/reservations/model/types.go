@@ -32,7 +32,7 @@ const (
 	ApprovalModePanel = "panel"
 )
 
-// Customer confirmation ("Geleceğim"); the confirmation module (TEC-90x)
+// Customer confirmation ("Geleceğim"); the confirmation module (TEC-921)
 // moves it, every other booking stays not_required.
 const (
 	ConfirmationNotRequired = "not_required"
@@ -42,6 +42,37 @@ const (
 	ConfirmationDeclined    = "declined"
 	ConfirmationExpired     = "expired"
 )
+
+// ReasonConfirmationTimeout is the cancel reason of a booking the customer
+// did not confirm by the deadline (K-007).
+const ReasonConfirmationTimeout = "confirmation_timeout"
+
+// Confirmation is the confirmation task of a booking (TEC-921): when the
+// customer is asked, until when an answer counts and what happened.
+type Confirmation struct {
+	// Status: scheduled, pending, confirmed, declined, expired, dropped
+	// (no longer applies: the visit moved on or the add-on was turned off).
+	Status          string      `json:"status"`
+	Channels        []string    `json:"channels"`
+	OnNoAnswer      string      `json:"on_no_answer"`
+	AttemptTimes    []time.Time `json:"attempt_times"`
+	AttemptsSent    int         `json:"attempts_sent"`
+	AttemptsPlanned int         `json:"attempts_planned"`
+	NextAttemptAt   *time.Time  `json:"next_attempt_at"`
+	DeadlineAt      time.Time   `json:"deadline_at"`
+	// Answer: confirm, cancel or change, with the channel it came on
+	// (panel, visit_link; whatsapp / voice later).
+	Answer            *string    `json:"answer"`
+	AnswerChannel     *string    `json:"answer_channel"`
+	AnsweredAt        *time.Time `json:"answered_at"`
+	ChangeRequestedAt *time.Time `json:"change_requested_at"`
+	ChangeNote        string     `json:"change_note"`
+	// Outcome of an expired task: cancelled, flagged or unreachable.
+	Outcome   *string    `json:"outcome"`
+	LastError string     `json:"last_error"`
+	PlannedAt time.Time  `json:"planned_at"`
+	ClosedAt  *time.Time `json:"closed_at"`
+}
 
 // Payment of the booking.
 const (
@@ -71,6 +102,9 @@ const (
 const (
 	ReasonApprovalTimeout = "approval_timeout"
 	ReasonPaymentTimeout  = "payment_timeout"
+	// ReasonCustomerCancelled: the customer cancelled in the customer panel
+	// or through a visit link.
+	ReasonCustomerCancelled = "customer_cancelled"
 )
 
 // CreateInput books a visit. Lines are the services in the order the
@@ -244,8 +278,10 @@ type Reservation struct {
 	Lines         []Line     `json:"lines"`
 	Products      []Product  `json:"products"`
 	Events        []Event    `json:"events"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	// Confirmation is the customer confirmation task (nil: none planned).
+	Confirmation *Confirmation `json:"confirmation"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 // Slug is the resource slug (activity, live lists).
@@ -272,11 +308,12 @@ type RescheduleInput struct {
 
 // Locked is what a guard sees of a reservation locked for a change.
 type Locked struct {
-	CustomerID    int64
-	Status        string
-	PaymentStatus string
-	StartsAt      time.Time
-	Version       int
+	CustomerID         int64
+	Status             string
+	PaymentStatus      string
+	ConfirmationStatus string
+	StartsAt           time.Time
+	Version            int
 }
 
 // NotesInput edits the notes and form answers.
@@ -295,13 +332,15 @@ type ListFilter struct {
 	CustomerUUID     *uuid.UUID
 	Statuses         []string
 	ApprovalStatuses []string
-	PaymentStatuses  []string
-	Sources          []string
-	StartsFrom       *time.Time
-	StartsTo         *time.Time
-	SortField        string
-	SortDesc         bool
-	Limit, Offset    int32
+	// ConfirmationStatuses: customer confirmation (TEC-921).
+	ConfirmationStatuses []string
+	PaymentStatuses      []string
+	Sources              []string
+	StartsFrom           *time.Time
+	StartsTo             *time.Time
+	SortField            string
+	SortDesc             bool
+	Limit, Offset        int32
 }
 
 // Customer is the customer of a list row.

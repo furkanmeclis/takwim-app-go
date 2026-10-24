@@ -6,12 +6,14 @@ import { useMemo } from "react";
 import { createColumn } from "@/components/tables";
 import {
   APPROVAL,
+  CONFIRMATION,
   PAYMENT,
   SOURCE,
   STATUS,
 } from "@/features/reservations/constants";
 import {
   ApprovalChip,
+  ConfirmationChip,
   PaymentChip,
   ReservationStatusChip,
 } from "@/features/reservations/components/reservation-status-chips";
@@ -58,7 +60,8 @@ export function useReservationColumns({ handlers, facets }: Options) {
   const { t, locale } = useLocale();
   const { organization } = useTenant();
   const zone = organization?.timezone ?? undefined;
-  const { sector } = useSector();
+  const { sector, hasModule } = useSector();
+  const confirmations = hasModule("confirmation");
   const party = Boolean(sector?.capacity.party_size);
   const vehicle = Boolean(sector?.flow.includes("vehicle"));
 
@@ -172,6 +175,17 @@ export function useReservationColumns({ handlers, facets }: Options) {
         ),
       }),
       createColumn<ReservationListItem>({
+        accessorKey: "confirmation_status",
+        labelKey: "reservations.columns.confirmation_status",
+        enableSorting: false,
+        defaultHidden: !confirmations,
+        filterVariant: "faceted",
+        filterOptions: enumOptions(CONFIRMATION, t),
+        cell: ({ row }) => (
+          <ConfirmationChip status={row.original.confirmation_status} />
+        ),
+      }),
+      createColumn<ReservationListItem>({
         accessorKey: "payment_status",
         labelKey: "reservations.columns.payment_status",
         enableSorting: false,
@@ -233,6 +247,7 @@ export function useReservationColumns({ handlers, facets }: Options) {
   }, [
     facets?.branch,
     facets?.staff,
+    confirmations,
     handlers,
     locale,
     party,

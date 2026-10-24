@@ -99,6 +99,19 @@ export const customerPanelService = {
       `/reservations/${uuid}/cancel`,
       { body: { expected_version: expectedVersion }, idempotent: true },
     ),
+  /** "Geleceğim": answers the business's confirmation request (TEC-921). */
+  confirm: (uuid: string) =>
+    customerRequest<CustomerReservation>(
+      "POST",
+      `/reservations/${uuid}/confirm`,
+      { body: {}, idempotent: true },
+    ),
+  requestChange: (uuid: string, note: string) =>
+    customerRequest<CustomerReservation>(
+      "POST",
+      `/reservations/${uuid}/change-request`,
+      { body: { note }, idempotent: true },
+    ),
   availability: (uuid: string, from: string, to: string) =>
     customerRequest<CustomerAvailability>(
       "POST",
@@ -143,5 +156,13 @@ export const customerPanelService = {
   visitCancel: (token: string, expectedVersion: number) =>
     customerRequest<CustomerReservation>("POST", "/visit/cancel", {
       body: { token, expected_version: expectedVersion },
+    }),
+  visitConfirm: (token: string) =>
+    customerRequest<CustomerReservation>("POST", "/visit/confirm", {
+      body: { token },
+    }),
+  visitRequestChange: (token: string, note: string) =>
+    customerRequest<CustomerReservation>("POST", "/visit/change-request", {
+      body: { token, note },
     }),
 };

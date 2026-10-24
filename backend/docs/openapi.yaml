@@ -7856,6 +7856,10 @@ paths:
           in: query
           description: "`pending`, `accepted`, `rejected` (any of)"
           schema: { type: string }
+        - name: confirmation_status
+          in: query
+          description: "`not_required`, `scheduled`, `pending`, `confirmed`, `declined`, `expired` (any of; TEC-921)"
+          schema: { type: string }
         - name: payment_status
           in: query
           description: "`on_site`, `online_pending`, `paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` (any of)"
@@ -8733,6 +8737,104 @@ paths:
         "400": { $ref: "#/components/responses/OrganizationRequired" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/confirmations/settings:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConfirmationSettings
+      summary: Customer confirmation rules
+      description: |
+        The confirmation add-on (TEC-921): the business-wide rule (or the
+        template when none is saved), every branch the caller may see with
+        its effective rule (`custom` = its own rule), the channels with
+        whether a provider can deliver now, and the limits
+        (`tenant.settings.read`). Without the add-on: `403 MODULE_NOT_ENABLED`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationSettings"
+        "400": { $ref: "#/components/responses/OrganizationRequired" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantConfirmationSettings
+      summary: Save the business-wide or a branch's confirmation rule
+      description: |
+        `tenant.settings.write`. Without `branch_uuid` the business-wide rule
+        is replaced (needs access to every branch); with it, that branch's
+        own rule. Timings are minutes before the visit start: the first
+        request (30 to 10080), the follow-up (0 = none, before the first
+        request), the deadline (0 to 10080, at least 30 minutes after the
+        last request). `max_attempts` 1 to 5 counts the first request. The
+        window (both minutes of the day or both null) is at least 60
+        minutes. Saved rules apply to bookings planned from now on.
+        Validation: `400 VALIDATION_ERROR` with field codes; unknown branch:
+        `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmationSaveInput"
+      responses:
+        "200":
+          description: The settings after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationSettings"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/confirmations/settings/reset:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConfirmationReset
+      summary: Remove a saved confirmation rule
+      description: |
+        `tenant.settings.write`. Without `branch_uuid` the business-wide rule
+        goes back to the template; with it, the branch follows the
+        business-wide rule again.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branch_uuid: { type: [string, "null"], format: uuid }
+      responses:
+        "200":
+          description: The settings after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConfirmationSettings"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenant/customer-notifications/settings:
@@ -11943,6 +12045,77 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/customer/reservations/{uuid}/confirm:
+    post:
+      tags: [Customer panel]
+      operationId: confirmCustomerReservation
+      summary: Confirm a visit ("Geleceğim")
+      description: |
+        Answers the business's confirmation request (TEC-921): no further
+        requests go out and the visit is not cancelled for no answer. Allowed
+        while `actions.confirm.allowed` (until the deadline, or until the
+        start when the business kept the visit after the deadline). Not
+        allowed: `409 ACTION_NOT_ALLOWED` with detail `confirm` /
+        `not_requested`, `answered`, `status` or `business_unavailable`.
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Confirmed visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/reservations/{uuid}/change-request:
+    post:
+      tags: [Customer panel]
+      operationId: requestCustomerReservationChange
+      summary: Ask the business for another time
+      description: |
+        Answers the confirmation request with a change request: the visit
+        stays booked, no further requests go out and it is not cancelled
+        for no answer; the business moves it (or the customer confirms
+        later). Once per visit (`409` detail `request_change/answered`).
+      security:
+        - customerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Visit with the change request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/customer/reservations/{uuid}/availability:
     post:
       tags: [Customer panel]
@@ -12307,6 +12480,66 @@ paths:
       responses:
         "200":
           description: Cancelled visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/visit/confirm:
+    post:
+      tags: [Customer panel]
+      operationId: confirmCustomerVisit
+      summary: Confirm the visit of a visit link
+      description: |
+        The "Geleceğim" button of the confirmation message's link (TEC-921).
+        Opening the link answers nothing; only this request does. Same rules
+        as the panel's confirm (`409 ACTION_NOT_ALLOWED`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token: { type: string, minLength: 32, maxLength: 32 }
+      responses:
+        "200":
+          description: Confirmed visit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCustomerReservation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/customer/visit/change-request:
+    post:
+      tags: [Customer panel]
+      operationId: requestCustomerVisitChange
+      summary: Ask for another time through a visit link
+      description: Same rules as the panel's change request (`409 ACTION_NOT_ALLOWED`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              additionalProperties: false
+              properties:
+                token: { type: string, minLength: 32, maxLength: 32 }
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Visit with the change request
           content:
             application/json:
               schema:
@@ -14679,6 +14912,111 @@ components:
       properties:
         name: { type: string, enum: [sms, whatsapp, email] }
         ready: { type: boolean, description: A provider can deliver now; otherwise sends are skipped. }
+
+    ConfirmationRule:
+      type: object
+      required: [enabled, channels, fallback, first_request_minutes, follow_up_minutes, max_attempts, deadline_minutes,
+        window_start_minute, window_end_minute, on_no_answer]
+      properties:
+        enabled: { type: boolean }
+        channels:
+          type: array
+          description: In order; the first is the primary channel.
+          items: { type: string, enum: [sms, whatsapp, email] }
+        fallback: { type: boolean, description: Try the next channel when one fails. }
+        first_request_minutes: { type: integer, minimum: 30, maximum: 10080, description: Minutes before the start. }
+        follow_up_minutes: { type: integer, minimum: 0, maximum: 10080, description: "Minutes before the start; 0 = none." }
+        max_attempts: { type: integer, minimum: 1, maximum: 5 }
+        deadline_minutes: { type: integer, minimum: 0, maximum: 10080, description: "Last answer: minutes before the start." }
+        window_start_minute: { type: [integer, "null"], minimum: 0, maximum: 1439, description: Local minute of the day requests may start. }
+        window_end_minute: { type: [integer, "null"], minimum: 1, maximum: 1440 }
+        on_no_answer: { type: string, enum: [cancel, flag] }
+
+    ConfirmationSaveInput:
+      allOf:
+        - $ref: "#/components/schemas/ConfirmationRule"
+        - type: object
+          properties:
+            branch_uuid: { type: [string, "null"], format: uuid, description: Null = the business-wide rule. }
+
+    ConfirmationBranchRule:
+      type: object
+      required: [branch, custom, rule, updated_at]
+      properties:
+        branch:
+          type: object
+          required: [uuid, name]
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+        custom: { type: boolean, description: The branch has its own rule. }
+        rule: { $ref: "#/components/schemas/ConfirmationRule" }
+        updated_at: { type: [string, "null"], format: date-time }
+
+    ConfirmationSettings:
+      type: object
+      required: [channels, default, default_custom, default_updated_at, template, branches, limits]
+      properties:
+        channels:
+          type: array
+          items:
+            type: object
+            required: [name, ready]
+            properties:
+              name: { type: string, enum: [sms, whatsapp, email] }
+              ready: { type: boolean }
+        default: { $ref: "#/components/schemas/ConfirmationRule" }
+        default_custom: { type: boolean }
+        default_updated_at: { type: [string, "null"], format: date-time }
+        template: { $ref: "#/components/schemas/ConfirmationRule" }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/ConfirmationBranchRule" }
+        limits:
+          type: object
+          required: [min_response_minutes, min_first_request_minutes, max_minutes, max_attempts, min_window_minutes]
+          properties:
+            min_response_minutes: { type: integer }
+            min_first_request_minutes: { type: integer }
+            max_minutes: { type: integer }
+            max_attempts: { type: integer }
+            min_window_minutes: { type: integer }
+
+    EnvelopeConfirmationSettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConfirmationSettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    TenantReservationConfirmation:
+      type: object
+      description: The confirmation task of the booking (TEC-921).
+      required: [status, channels, on_no_answer, attempt_times, attempts_sent, attempts_planned, next_attempt_at, deadline_at,
+        answer, answer_channel, answered_at, change_requested_at, change_note, outcome, last_error, planned_at, closed_at]
+      properties:
+        status: { type: string, enum: [scheduled, pending, confirmed, declined, expired, dropped] }
+        channels:
+          type: array
+          items: { type: string }
+        on_no_answer: { type: string, enum: [cancel, flag] }
+        attempt_times:
+          type: array
+          items: { type: string, format: date-time }
+        attempts_sent: { type: integer }
+        attempts_planned: { type: integer }
+        next_attempt_at: { type: [string, "null"], format: date-time }
+        deadline_at: { type: string, format: date-time }
+        answer: { type: [string, "null"], enum: [confirm, cancel, change, null] }
+        answer_channel: { type: [string, "null"] }
+        answered_at: { type: [string, "null"], format: date-time }
+        change_requested_at: { type: [string, "null"], format: date-time }
+        change_note: { type: string }
+        outcome: { type: [string, "null"], enum: [cancelled, flagged, unreachable, null] }
+        last_error: { type: string }
+        planned_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
 
     CustomerNotificationSettings:
       type: object
@@ -18846,6 +19184,10 @@ components:
         version: { type: integer }
         cancel_reason: { type: [string, "null"] }
         hold_expires_at: { type: [string, "null"], format: date-time, description: When a waiting request lets its capacity go. }
+        confirmation:
+          oneOf:
+            - $ref: "#/components/schemas/TenantReservationConfirmation"
+            - type: "null"
         lines:
           type: array
           items:
@@ -18882,7 +19224,12 @@ components:
             required: [version, type, from_status, to_status, actor, note, created_at]
             properties:
               version: { type: integer }
-              type: { type: string, enum: [created, accepted, rejected, cancelled, started, completed, no_show, paid, expired, rescheduled, notes_updated, payment_recorded, late_payment, product_added, product_removed] }
+              type:
+                type: string
+                enum: [created, accepted, rejected, cancelled, started, completed, no_show, paid, expired, rescheduled, notes_updated,
+                  payment_recorded, late_payment, product_added, product_removed,
+                  confirmation_scheduled, confirmation_requested, confirmation_confirmed, confirmation_declined,
+                  confirmation_change_requested, confirmation_expired, confirmation_dropped]
               from_status: { type: [string, "null"] }
               to_status: { type: [string, "null"] }
               actor: { type: [string, "null"] }
@@ -20058,7 +20405,7 @@ components:
         until: { type: [string, "null"], format: date-time, description: The last moment the action is allowed. }
         reason:
           type: [string, "null"]
-          enum: [status, cutoff, business_unavailable, online_unavailable, services_changed, sign_in_required, null]
+          enum: [status, cutoff, business_unavailable, online_unavailable, services_changed, sign_in_required, not_requested, answered, null]
 
     CustomerReservation:
       allOf:
@@ -20102,10 +20449,23 @@ components:
                 change_cutoff_minutes: { type: [integer, "null"] }
             actions:
               type: object
-              required: [cancel, reschedule]
+              required: [cancel, reschedule, confirm, request_change]
               properties:
                 cancel: { $ref: "#/components/schemas/CustomerAction" }
                 reschedule: { $ref: "#/components/schemas/CustomerAction" }
+                confirm: { $ref: "#/components/schemas/CustomerAction" }
+                request_change: { $ref: "#/components/schemas/CustomerAction" }
+            confirmation:
+              description: The business's confirmation request (TEC-921); null when none was asked.
+              oneOf:
+                - type: object
+                  required: [status, deadline_at, answered_at, change_requested_at]
+                  properties:
+                    status: { type: string, enum: [not_required, scheduled, pending, confirmed, declined, expired] }
+                    deadline_at: { type: string, format: date-time }
+                    answered_at: { type: [string, "null"], format: date-time }
+                    change_requested_at: { type: [string, "null"], format: date-time }
+                - type: "null"
             history:
               type: array
               items:

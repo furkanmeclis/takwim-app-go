@@ -118,6 +118,7 @@ export function ReservationsPage() {
       staff: joined(column("staff")),
       status: joined(column("status")),
       approval_status: joined(column("approval_status")),
+      confirmation_status: joined(column("confirmation_status")),
       payment_status: joined(column("payment_status")),
       source: joined(column("source")),
       starts_from: period.value === "upcoming" ? period.at : undefined,
@@ -168,6 +169,7 @@ export function ReservationsPage() {
       staff: listParams.staff,
       status: listParams.status,
       approval_status: listParams.approval_status,
+      confirmation_status: listParams.confirmation_status,
       payment_status: listParams.payment_status,
       source: listParams.source,
       starts_from: listParams.starts_from,
@@ -176,6 +178,7 @@ export function ReservationsPage() {
     [
       listParams.approval_status,
       listParams.branch,
+      listParams.confirmation_status,
       listParams.payment_status,
       listParams.q,
       listParams.sort,
@@ -259,6 +262,7 @@ export function ReservationsPage() {
     Boolean(listParams.staff) ||
     Boolean(listParams.status) ||
     Boolean(listParams.approval_status) ||
+    Boolean(listParams.confirmation_status) ||
     Boolean(listParams.payment_status) ||
     Boolean(listParams.source) ||
     period.value !== "all";

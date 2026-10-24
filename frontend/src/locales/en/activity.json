@@ -300,5 +300,10 @@
   "actions.reservations.payment_collected": "Payment collected",
   "actions.reservations.refund_requested": "Refund recorded",
   "actions.reservations.refund_resolved": "Refund result recorded",
-  "actions.products.sale_returned": "Sale taken back"
+  "actions.products.sale_returned": "Sale taken back",
+  "resources.tenant.confirmations": "Booking confirmation",
+  "actions.confirmations.updated": "Confirmation rule updated",
+  "actions.confirmations.reset": "Confirmation rule reset",
+  "actions.reservations.confirmed": "Customer confirmed the booking",
+  "actions.reservations.change_requested": "Customer asked for a change"
 }
