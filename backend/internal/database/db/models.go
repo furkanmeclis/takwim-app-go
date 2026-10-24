@@ -1558,6 +1558,7 @@ type StaffShareRule struct {
 	CreatedBy      pgtype.Int8        `json:"created_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ProductID      pgtype.Int8        `json:"product_id"`
 }
 
 type StaffTimeOff struct {

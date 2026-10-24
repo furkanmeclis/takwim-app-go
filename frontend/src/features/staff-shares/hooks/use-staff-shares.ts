@@ -75,6 +75,27 @@ export function useStaffSharePayouts(
   });
 }
 
+/** Table contracts of the share and payout lists (export capability). */
+export function useStaffShareLinesMeta(enabled = true) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: staffSharesKeys.linesMeta(slug),
+    queryFn: () => staffSharesService.linesMeta(slug),
+    staleTime: 5 * 60_000,
+    enabled,
+  });
+}
+
+export function useStaffSharePayoutsMeta(enabled = true) {
+  const { slug } = useTenant();
+  return useQuery({
+    queryKey: staffSharesKeys.payoutsMeta(slug),
+    queryFn: () => staffSharesService.payoutsMeta(slug),
+    staleTime: 5 * 60_000,
+    enabled,
+  });
+}
+
 /** A write changes balances, lists and the cash book: refresh both modules. */
 function useInvalidateStaffShares() {
   const { slug } = useTenant();

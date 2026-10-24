@@ -14,7 +14,7 @@ func LinesMeta() resourcemeta.ResourceMeta {
 		DefaultSort:   "-share_date",
 		DefaultFields: []string{"share_date", "staff", "description", "base_amount", "rate", "share_amount", "status"},
 		Capabilities: resourcemeta.Capabilities{
-			Read: true, Search: true, Filter: true, Sort: true,
+			Read: true, Search: true, Filter: true, Sort: true, Export: true,
 		},
 		SearchableFields: []string{"description", "staff.name", "customer.name"},
 		SortableFields:   []string{"share_date", "share_amount", "base_amount", "created_at"},
@@ -52,7 +52,7 @@ func PayoutsMeta() resourcemeta.ResourceMeta {
 		DefaultSort:   "-payout_date",
 		DefaultFields: []string{"payout_date", "staff", "amount", "cash_account", "kind", "note"},
 		Capabilities: resourcemeta.Capabilities{
-			Read: true, Create: true, Search: true, Filter: true, Sort: true,
+			Read: true, Create: true, Search: true, Filter: true, Sort: true, Export: true,
 		},
 		SearchableFields: []string{"note", "staff.name"},
 		SortableFields:   []string{"payout_date", "amount", "created_at"},

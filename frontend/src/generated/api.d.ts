@@ -7027,11 +7027,15 @@ export interface paths {
          * Add a staff share rule
          * @description `tenant.earnings.manage`, every branch. The default rate of an item
          *     type (`service`, `product`: the product commission is kept apart)
-         *     or, with `service_uuid`, the rate of one service. A percentage of the
+         *     or, with `service_uuid`, the rate of one service, or, with
+         *     `product_uuid` (item type `product`), the rate of one product
+         *     (TEC-976). The rate of the service or product wins over the default
+         *     of the item type. A percentage of the
          *     line's net amount or a fixed amount per unit, from `valid_from`
          *     (default today). A new rate is a new rule with a later
          *     `valid_from`; shares calculated before keep their values. `409
-         *     rule_taken` for the same staff member, item and day.
+         *     rule_taken` for the same staff member, item and day. An unknown
+         *     `service_uuid` / `product_uuid` is `400 not_found`.
          */
         post: operations["postTenantStaffShareRule"];
         delete?: never;
@@ -7111,6 +7115,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/staff-shares/lines/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export staff shares
+         * @description Queues an export of the list (`tenant.earnings.read` and `tenant.report.export`; TEC-976). `query`
+         *     honours `q`, `sort`, `branch`, `staff`, `kind`, `item_type`, `status`,
+         *     `date_from` and `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantStaffShareLinesExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/staff-shares/payouts/meta": {
         parameters: {
             query?: never;
@@ -7154,6 +7180,28 @@ export interface paths {
          *     member). The cash book rules apply (closed day, till floor).
          */
         post: operations["postTenantStaffSharePayout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/staff-shares/payouts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export share payouts
+         * @description Queues an export of the list (`tenant.earnings.read` and `tenant.report.export`; TEC-976). `query`
+         *     honours `q`, `sort`, `branch`, `staff`, `kind`, `date_from` and
+         *     `date_to`. Poll `GET /v1/tenant/exports/{uuid}`.
+         */
+        post: operations["postTenantStaffSharePayoutsExport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11820,7 +11868,7 @@ export interface components {
             customer_uuid: string;
             totals: components["schemas"]["LedgerTotals"][];
         };
-        /** @description An agreed rate of a staff member (the default of an item type, or the rate of one service) from `valid_from` on. */
+        /** @description An agreed rate of a staff member (the default of an item type, or the rate of one service or one product) from `valid_from` on. */
         StaffShareRule: {
             /** Format: uuid */
             uuid: string;
@@ -11828,6 +11876,8 @@ export interface components {
             /** @enum {string} */
             item_type: "service" | "product";
             service: components["schemas"]["SalesRef"] | null;
+            /** @description The product of a per-product rate (item type `product`). */
+            product: components["schemas"]["SalesRef"] | null;
             /** @enum {string} */
             basis: "percent" | "fixed";
             /**
@@ -11853,14 +11903,22 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        /** @description Create (staff_uuid, item_type, basis and its value required) or patch (basis, rate, fixed_amount, valid_from, note). */
+        /** @description Create (staff_uuid, item_type, basis and its value required) or patch (basis, rate, fixed_amount, valid_from, note; the staff member, item type, service and product do not change). */
         StaffShareRuleInput: {
             /** Format: uuid */
             staff_uuid?: string;
             /** @enum {string} */
             item_type?: "service" | "product";
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description A per-service rate (item type service)
+             */
             service_uuid?: string;
+            /**
+             * Format: uuid
+             * @description A per-product rate (item type product)
+             */
+            product_uuid?: string;
             /** @enum {string} */
             basis?: "percent" | "fixed";
             /** @example 40 */
@@ -11889,7 +11947,7 @@ export interface components {
             /** @enum {string} */
             status: "pending" | "payable";
             /** @enum {string} */
-            rule_scope: "default" | "service";
+            rule_scope: "default" | "service" | "product";
             /** Format: uuid */
             rule_uuid: string | null;
             /** @enum {string} */
@@ -30164,6 +30222,39 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
         };
     };
+    postTenantStaffShareLinesExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
     getTenantStaffSharePayoutsMeta: {
         parameters: {
             query?: never;
@@ -30274,6 +30365,39 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    postTenantStaffSharePayoutsExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeExportJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
         };
     };
     getTenantStaffSharePayout: {

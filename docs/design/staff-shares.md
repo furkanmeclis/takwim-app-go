@@ -4,11 +4,11 @@
 
 ## Tables
 
-| Table                 | Holds                                                                                                                                                                                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `staff_share_rules`   | an agreed rate of a staff member: `item_type` (`service` / `product`), optional `service_id` (a per-service rate), `basis` `percent` (`rate` 0–100) or `fixed` (`fixed_amount` per unit), `valid_from`, `note`. One rule per staff, item type, service and start day. |
-| `staff_share_lines`   | the share of one sale line (`share`) or the exact negative of one (`reversal`): the rule, basis, rate / amount and base applied at the time, `share_amount`, `share_date`, branch, staff. Append-only; one share per sale line and one reversal per share.            |
-| `staff_share_payouts` | money paid to a staff member (`payout`) or the reversal of one (`reversal`), with its cash movement. Append-only; idempotency key per organization.                                                                                                                   |
+| Table                 | Holds                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `staff_share_rules`   | an agreed rate of a staff member: `item_type` (`service` / `product`), optional `service_id` (a per-service rate) or `product_id` (a per-product rate, TEC-976), `basis` `percent` (`rate` 0–100) or `fixed` (`fixed_amount` per unit), `valid_from`, `note`. One rule per staff, item type, service or product and start day. |
+| `staff_share_lines`   | the share of one sale line (`share`) or the exact negative of one (`reversal`): the rule, basis, rate / amount and base applied at the time, `share_amount`, `share_date`, branch, staff. Append-only; one share per sale line and one reversal per share.                                                                     |
+| `staff_share_payouts` | money paid to a staff member (`payout`) or the reversal of one (`reversal`), with its cash movement. Append-only; idempotency key per organization.                                                                                                                                                                            |
 
 All three carry `organization_id` with composite foreign keys (`queries/tenant_tables.txt`). Triggers refuse updates and deletes on lines and payouts (a deleted rule only clears `rule_id`), and check that a share matches its sale line and a reversal is the exact negative of the share it reverses.
 
@@ -16,7 +16,7 @@ All three carry `organization_id` with composite foreign keys (`queries/tenant_t
 
 The sales module calls a line hook (`sales.Service.SetLineHook`) inside the transaction that writes a sale line, so a sale line without its share cannot exist:
 
-- **Rule.** A service line first looks for the staff member's rate of that service, then for their default service rate; a product line for their default product rate. Within a scope the rule with the latest `valid_from` on or before the sale day wins. No rule means a zero share (the row is still written so the line counts in the totals).
+- **Rule.** A service line first looks for the staff member's rate of that service, then for their default service rate; a product line first for their rate of that product, then for their default product rate. Within a scope the rule with the latest `valid_from` on or before the sale day wins. No rule means a zero share (the row is still written so the line counts in the totals). The share records the scope it used (`rule_scope` `default`, `service` or `product`).
 - **Percent** shares are `net_amount × rate`, rounded half up to the kuruş. **Fixed** shares are `fixed_amount × quantity`, never more than the line's net amount and never below zero.
 - **Owners earn no share.** A staff record whose account holds the `owner` role of the business is skipped.
 - **Corrections keep the rate.** A correction (`POST /v1/tenant/sales/lines/{uuid}/correct`) reverses the old line and writes a new one; the new line's share reuses the rule and rate of the line it replaces, so a later rate change does not reach it.
@@ -24,6 +24,13 @@ The sales module calls a line hook (`sales.Service.SetLineHook`) inside the tran
 - Lines sold before this change, or before a rule existed, are not recalculated.
 
 Example (A15): a 1.000 TL service at 40 % and a 400 TL product at 10 % give 400 + 40 = 440 TL to the staff member and 960 TL to the business. A16: a 1.000 TL package over list prices 800 + 400 splits into 666,67 + 333,33; at 40 % and 30 % (two staff members) the shares are 266,67 + 100,00 = 366,67 and the business keeps 633,33.
+
+## Packages (TEC-976)
+
+A package price is spread over its services before any share is calculated, so the staff shares and the business share of a package always add up to its price:
+
+- **Service bundles** (TEC-895): the booking splits the bundle price over its lines in proportion to their list prices (`usecase.AllocateBase`, which is `bundlemodel.Distribute`: half up to the kuruş, the remainder on the last line). Each sale line's net amount is its part (gross = list price, discount = the bundle discount), and its share follows the rule of the line's own staff member (the service rate first, then the default). A16 above is a bundle.
+- **Multi-session packages** (TEC-920): one service, so there is nothing to split between services; each session used is a sale line at the session value (`floor(price / total)`, the last session takes the rest), and the sessions add up to the price. The share of each session follows the rule of the staff member who serves it.
 
 ## Pending, payable, paid
 
@@ -48,9 +55,10 @@ All routes need the module and `tenant.earnings.read` or `tenant.earnings.own`. 
 
 - `GET /v1/tenant/staff-shares/summary?date_from&date_to`: per staff member and currency, per branch, and totals (revenue, share, business share, pending, paid in the period) with each staff member's balance. Default the first of the month to today, at most 366 days.
 - `GET /v1/tenant/staff-shares/me?date_from&date_to`: the caller's today and period rows.
-- `GET /v1/tenant/staff-shares/rules` (`?staff&item_type`), `GET …/rules/{uuid}`. `POST`, `PATCH`, `DELETE …/rules[/{uuid}]` need `tenant.earnings.read` + `tenant.earnings.manage` and access to every branch (rates are business-wide). A second rule for the same slot and day is `409`.
+- `GET /v1/tenant/staff-shares/rules` (`?staff&item_type`), `GET …/rules/{uuid}`. `POST`, `PATCH`, `DELETE …/rules[/{uuid}]` need `tenant.earnings.read` + `tenant.earnings.manage` and access to every branch (rates are business-wide). `service_uuid` (item type `service`) or `product_uuid` (item type `product`) makes a per-service or per-product rate; neither changes on `PATCH`. A second rule for the same slot and day is `409`.
 - `GET /v1/tenant/staff-shares/lines` (+ `/meta`): `staff`, `branch`, `kind`, `item_type`, `status`, `date_from`, `date_to`, `q`; sort `share_date`, `share_amount`, `base_amount`, `created_at`.
 - `GET /v1/tenant/staff-shares/payouts` (+ `/meta`, `/{uuid}`): `staff`, `branch`, `kind`, `date_from`, `date_to`, `q`. `POST …/payouts` and `POST …/payouts/{uuid}/reverse` need `tenant.earnings.read` + `tenant.earnings.pay`.
+- `POST /v1/tenant/staff-shares/lines/export` and `POST …/payouts/export` (io engine, TEC-976) need `tenant.earnings.read` + `tenant.report.export` and honour the list filters. The share file has the base, rule scope, rate, staff share and business share of each line; the payout file the account, branch, note and whether the payout was reversed. Nothing is imported: shares follow their sale lines and payouts post cash movements.
 
 ## Roles
 
@@ -68,16 +76,16 @@ All routes need the module and `tenant.earnings.read` or `tenant.earnings.own`. 
 ## Panel
 
 - **Çalışan payları**: period picker, totals, tabs for the per-staff summary (with "Pay öde" on rows with a payable balance) and per-branch summary, the calculated shares and the payouts (with reversal).
-- **Staff detail → Pay oranları**: the staff member's rules; add, edit and delete with `tenant.earnings.manage`.
+- **Staff detail → Pay oranları**: the staff member's rules (default, per service, per product); add, edit and delete with `tenant.earnings.manage`.
+- The share and payout lists of **Çalışan payları** have the export menu (with `tenant.report.export`).
 - **Paylarım**: today, the period, payable now and paid, then the member's own shares and payouts.
 
 Multi-session packages (TEC-920, [session-packages.md](./session-packages.md)): a service paid by a package session is a sale line at the session value (5 sessions for 2.500 TL → 500 TL), so its share base is the session value. The line has no ledger debit of its own (the package charge covers it), so the visit is fully paid and the share is payable.
 
-## Not yet
+Migration `000072_staff_share_product_rules` adds `product_id` (composite foreign key, only with item type `product`), widens the slot index and allows the `product` scope on shares. Its down migration removes the per-product rules; shares calculated with one keep their amounts and get the `default` scope.
 
-- Service bundles (TEC-895): the bundles module will split a bundle price over its services with `usecase.AllocateBase` (half-up rounding, remainder on the last part) before shares are calculated.
-- Per-product rates (only a default product rate today) and an export of shares and payouts.
+Reports of shares stay with TEC-925.
 
 ## Tests
 
-`backend/internal/modules/staffshares/staffshares_db_test.go` covers A15, A16, A17 (rate change, correction, return reversal), the owner exemption, pending / payable, the payout cap, idempotency, payout reversal, append-only triggers, the own view and organization isolation. `httpserver/isolation_test.go` probes every route with another organization's records.
+`backend/internal/modules/staffshares/staffshares_db_test.go` covers A15, A16, A17 (rate change, correction, return reversal), the owner exemption, pending / payable, the payout cap, idempotency, payout reversal, append-only triggers, the own view, organization isolation, per-product rates (start day, default fallback, earlier shares unchanged, validation) and both exports. `reservations/bundles_db_test.go` books A16 as a real bundle. `httpserver/isolation_test.go` probes every route with another organization's records.

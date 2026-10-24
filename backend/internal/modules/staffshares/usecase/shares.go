@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/database/db"
+	bundlemodel "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/servicebundles/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/model"
 	"github.com/furkanmeclis/nextjs-go-boilerplate/backend/pkg/money"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -40,27 +41,15 @@ func ShareOf(a Applied, base money.Money, quantity int64) money.Money {
 // their list prices: each part is rounded half up to the kuruş and the
 // rounding difference goes to the last part, so the parts add up to the
 // package price (requirements §11: 1.000,00 TL over 800 + 400 is 666,67 +
-// 333,33). The shares are then calculated per part.
+// 333,33). It is the split service bundles book their lines with
+// (bundlemodel.Distribute, TEC-895), so a bundle line's net amount is its
+// part and its share is calculated from that part by the rule of the line's
+// own staff member (TEC-976).
 func AllocateBase(total money.Money, listPrices []money.Money) []money.Money {
-	out := make([]money.Money, len(listPrices))
 	if len(listPrices) == 0 {
-		return out
+		return []money.Money{}
 	}
-	var sum int64
-	for _, p := range listPrices {
-		sum += max(p.Minor(), 0)
-	}
-	if sum == 0 {
-		parts, _ := total.Split(len(listPrices))
-		return parts
-	}
-	used := money.NewIn(0, total.Currency())
-	for i, p := range listPrices[:len(listPrices)-1] {
-		out[i] = total.Ratio(max(p.Minor(), 0), sum)
-		used = used.Add(out[i])
-	}
-	out[len(out)-1] = total.Sub(used)
-	return out
+	return bundlemodel.Distribute(total, listPrices)
 }
 
 // RecordLineTx writes the share of a sale line inside the caller's
@@ -155,7 +144,7 @@ func (s *Service) ruleFor(ctx context.Context, q *db.Queries, orgID int64, line 
 	}
 	rule, err := q.ResolveShareRule(ctx, db.ResolveShareRuleParams{
 		OrganizationID: orgID, StaffID: line.StaffID.Int64, ItemType: line.ItemType, ServiceID: line.ServiceID,
-		OnDate: line.SaleDate,
+		ProductID: line.ProductID, OnDate: line.SaleDate,
 	})
 	if err != nil {
 		if isNotFound(err) {
@@ -164,8 +153,11 @@ func (s *Service) ruleFor(ctx context.Context, q *db.Queries, orgID int64, line 
 		return Applied{}, false, err
 	}
 	a := Applied{RuleID: int8Of(rule.ID), Scope: model.ScopeDefault, Basis: rule.Basis}
-	if rule.ServiceID.Valid {
+	switch {
+	case rule.ServiceID.Valid:
 		a.Scope = model.ScopeService
+	case rule.ProductID.Valid:
+		a.Scope = model.ScopeProduct
 	}
 	if r := ratePtr(rule.Rate); r != nil {
 		a.Rate = *r

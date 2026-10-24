@@ -289,6 +289,7 @@
   "fields.tenant.staff_share_rules.staff": "Staff",
   "fields.tenant.staff_share_rules.item_type": "Item type",
   "fields.tenant.staff_share_rules.service": "Service",
+  "fields.tenant.staff_share_rules.product": "Product",
   "fields.tenant.staff_share_rules.basis": "Calculation",
   "fields.tenant.staff_share_rules.rate": "Rate",
   "fields.tenant.staff_share_rules.fixed_amount": "Amount per unit",

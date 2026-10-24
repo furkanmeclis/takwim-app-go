@@ -447,16 +447,41 @@ func (q *Queries) GetSharePayoutRow(ctx context.Context, arg GetSharePayoutRowPa
 	return i, err
 }
 
+const getShareProductByUUID = `-- name: GetShareProductByUUID :one
+SELECT p.id, p.uuid, p.name FROM products p
+WHERE p.organization_id = $1 AND p.uuid = $2 AND p.deleted_at IS NULL
+`
+
+type GetShareProductByUUIDParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type GetShareProductByUUIDRow struct {
+	ID   int64     `json:"id"`
+	Uuid uuid.UUID `json:"uuid"`
+	Name string    `json:"name"`
+}
+
+func (q *Queries) GetShareProductByUUID(ctx context.Context, arg GetShareProductByUUIDParams) (GetShareProductByUUIDRow, error) {
+	row := q.db.QueryRow(ctx, getShareProductByUUID, arg.OrganizationID, arg.Uuid)
+	var i GetShareProductByUUIDRow
+	err := row.Scan(&i.ID, &i.Uuid, &i.Name)
+	return i, err
+}
+
 const getShareRule = `-- name: GetShareRule :one
 SELECT r.id, r.uuid, r.staff_id, r.item_type, r.basis, r.rate, r.fixed_amount, r.valid_from, r.note,
     r.created_at, r.updated_at,
     st.uuid AS staff_uuid, st.name AS staff_name,
     sv.uuid AS service_uuid, sv.name AS service_name,
+    pr.uuid AS product_uuid, pr.name AS product_name,
     (SELECT COUNT(*) FROM staff_share_lines l
      WHERE l.organization_id = r.organization_id AND l.rule_id = r.id)::bigint AS share_count
 FROM staff_share_rules r
 JOIN staff st ON st.organization_id = r.organization_id AND st.id = r.staff_id
 LEFT JOIN services sv ON sv.organization_id = r.organization_id AND sv.id = r.service_id
+LEFT JOIN products pr ON pr.organization_id = r.organization_id AND pr.id = r.product_id
 WHERE r.organization_id = $1 AND r.uuid = $2
 `
 
@@ -481,6 +506,8 @@ type GetShareRuleRow struct {
 	StaffName   string             `json:"staff_name"`
 	ServiceUuid pgtype.UUID        `json:"service_uuid"`
 	ServiceName pgtype.Text        `json:"service_name"`
+	ProductUuid pgtype.UUID        `json:"product_uuid"`
+	ProductName pgtype.Text        `json:"product_name"`
 	ShareCount  int64              `json:"share_count"`
 }
 
@@ -503,6 +530,8 @@ func (q *Queries) GetShareRule(ctx context.Context, arg GetShareRuleParams) (Get
 		&i.StaffName,
 		&i.ServiceUuid,
 		&i.ServiceName,
+		&i.ProductUuid,
+		&i.ProductName,
 		&i.ShareCount,
 	)
 	return i, err
@@ -758,10 +787,12 @@ func (q *Queries) InsertSharePayout(ctx context.Context, arg InsertSharePayoutPa
 const insertShareRule = `-- name: InsertShareRule :one
 
 INSERT INTO staff_share_rules (
-    organization_id, staff_id, item_type, service_id, basis, rate, fixed_amount, valid_from, note, created_by
+    organization_id, staff_id, item_type, service_id, product_id, basis, rate, fixed_amount, valid_from, note,
+    created_by
 ) VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10
+    $1, $2, $3, $4,
+    $5, $6,
+    $7, $8, $9, $10, $11
 )
 RETURNING id, uuid
 `
@@ -771,6 +802,7 @@ type InsertShareRuleParams struct {
 	StaffID        int64          `json:"staff_id"`
 	ItemType       string         `json:"item_type"`
 	ServiceID      pgtype.Int8    `json:"service_id"`
+	ProductID      pgtype.Int8    `json:"product_id"`
 	Basis          string         `json:"basis"`
 	Rate           pgtype.Numeric `json:"rate"`
 	FixedAmount    pgtype.Numeric `json:"fixed_amount"`
@@ -791,6 +823,7 @@ func (q *Queries) InsertShareRule(ctx context.Context, arg InsertShareRuleParams
 		arg.StaffID,
 		arg.ItemType,
 		arg.ServiceID,
+		arg.ProductID,
 		arg.Basis,
 		arg.Rate,
 		arg.FixedAmount,
@@ -1144,15 +1177,18 @@ SELECT r.id, r.uuid, r.staff_id, r.item_type, r.basis, r.rate, r.fixed_amount, r
     r.created_at, r.updated_at,
     st.uuid AS staff_uuid, st.name AS staff_name,
     sv.uuid AS service_uuid, sv.name AS service_name,
+    pr.uuid AS product_uuid, pr.name AS product_name,
     (SELECT COUNT(*) FROM staff_share_lines l
      WHERE l.organization_id = r.organization_id AND l.rule_id = r.id)::bigint AS share_count
 FROM staff_share_rules r
 JOIN staff st ON st.organization_id = r.organization_id AND st.id = r.staff_id
 LEFT JOIN services sv ON sv.organization_id = r.organization_id AND sv.id = r.service_id
+LEFT JOIN products pr ON pr.organization_id = r.organization_id AND pr.id = r.product_id
 WHERE r.organization_id = $1
   AND ($2::bigint[] IS NULL OR r.staff_id = ANY($2::bigint[]))
   AND ($3::text[] IS NULL OR r.item_type = ANY($3::text[]))
-ORDER BY st.name, r.item_type DESC, (r.service_id IS NOT NULL), sv.name NULLS FIRST, r.valid_from DESC, r.id DESC
+ORDER BY st.name, r.item_type DESC, (r.service_id IS NOT NULL OR r.product_id IS NOT NULL),
+    COALESCE(sv.name, pr.name) NULLS FIRST, r.valid_from DESC, r.id DESC
 LIMIT $5 OFFSET $4
 `
 
@@ -1180,6 +1216,8 @@ type ListShareRulesRow struct {
 	StaffName   string             `json:"staff_name"`
 	ServiceUuid pgtype.UUID        `json:"service_uuid"`
 	ServiceName pgtype.Text        `json:"service_name"`
+	ProductUuid pgtype.UUID        `json:"product_uuid"`
+	ProductName pgtype.Text        `json:"product_name"`
 	ShareCount  int64              `json:"share_count"`
 }
 
@@ -1214,6 +1252,8 @@ func (q *Queries) ListShareRules(ctx context.Context, arg ListShareRulesParams) 
 			&i.StaffName,
 			&i.ServiceUuid,
 			&i.ServiceName,
+			&i.ProductUuid,
+			&i.ProductName,
 			&i.ShareCount,
 		); err != nil {
 			return nil, err
@@ -1305,13 +1345,14 @@ func (q *Queries) LockShareStaff(ctx context.Context, arg LockShareStaffParams) 
 }
 
 const resolveShareRule = `-- name: ResolveShareRule :one
-SELECT r.id, r.service_id, r.basis, r.rate, r.fixed_amount
+SELECT r.id, r.service_id, r.product_id, r.basis, r.rate, r.fixed_amount
 FROM staff_share_rules r
 WHERE r.organization_id = $1 AND r.staff_id = $2
   AND r.item_type = $3
   AND (r.service_id IS NULL OR r.service_id = $4::bigint)
-  AND r.valid_from <= $5::date
-ORDER BY (r.service_id IS NOT NULL) DESC, r.valid_from DESC, r.id DESC
+  AND (r.product_id IS NULL OR r.product_id = $5::bigint)
+  AND r.valid_from <= $6::date
+ORDER BY (r.service_id IS NOT NULL OR r.product_id IS NOT NULL) DESC, r.valid_from DESC, r.id DESC
 LIMIT 1
 `
 
@@ -1320,32 +1361,36 @@ type ResolveShareRuleParams struct {
 	StaffID        int64       `json:"staff_id"`
 	ItemType       string      `json:"item_type"`
 	ServiceID      pgtype.Int8 `json:"service_id"`
+	ProductID      pgtype.Int8 `json:"product_id"`
 	OnDate         pgtype.Date `json:"on_date"`
 }
 
 type ResolveShareRuleRow struct {
 	ID          int64          `json:"id"`
 	ServiceID   pgtype.Int8    `json:"service_id"`
+	ProductID   pgtype.Int8    `json:"product_id"`
 	Basis       string         `json:"basis"`
 	Rate        pgtype.Numeric `json:"rate"`
 	FixedAmount pgtype.Numeric `json:"fixed_amount"`
 }
 
 // The rule of a staff member for an item on a day: a rule of the service
-// wins over the default of the item type; among them the latest start on
-// or before the day.
+// (or of the product, TEC-976) wins over the default of the item type;
+// among them the latest start on or before the day.
 func (q *Queries) ResolveShareRule(ctx context.Context, arg ResolveShareRuleParams) (ResolveShareRuleRow, error) {
 	row := q.db.QueryRow(ctx, resolveShareRule,
 		arg.OrganizationID,
 		arg.StaffID,
 		arg.ItemType,
 		arg.ServiceID,
+		arg.ProductID,
 		arg.OnDate,
 	)
 	var i ResolveShareRuleRow
 	err := row.Scan(
 		&i.ID,
 		&i.ServiceID,
+		&i.ProductID,
 		&i.Basis,
 		&i.Rate,
 		&i.FixedAmount,

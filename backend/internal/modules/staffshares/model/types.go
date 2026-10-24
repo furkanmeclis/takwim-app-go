@@ -39,6 +39,7 @@ var Bases = []string{BasisPercent, BasisFixed}
 const (
 	ScopeDefault = "default"
 	ScopeService = "service"
+	ScopeProduct = "product"
 )
 
 // Share line kinds.
@@ -88,12 +89,14 @@ type UserRef struct {
 }
 
 // Rule is an agreed rate of a staff member: the default of an item type
-// (Service nil) or the override for one service, from ValidFrom on.
+// (Service and Product nil) or the override for one service or one
+// product, from ValidFrom on.
 type Rule struct {
 	UUID        uuid.UUID    `json:"uuid"`
 	Staff       Ref          `json:"staff"`
 	ItemType    string       `json:"item_type"`
 	Service     *Ref         `json:"service"`
+	Product     *Ref         `json:"product"`
 	Basis       string       `json:"basis"`
 	Rate        *money.Rate  `json:"rate"`
 	FixedAmount *money.Money `json:"fixed_amount"`
@@ -106,13 +109,15 @@ type Rule struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// RuleInput creates (every field but Note required, ServiceUUID optional)
-// or patches a rule (Basis, Rate, FixedAmount, ValidFrom, Note; the staff
-// member, item type and service of a rule do not change).
+// RuleInput creates (every field but Note required, ServiceUUID /
+// ProductUUID optional) or patches a rule (Basis, Rate, FixedAmount,
+// ValidFrom, Note; the staff member, item type, service and product of a
+// rule do not change).
 type RuleInput struct {
 	StaffUUID   *uuid.UUID   `json:"staff_uuid"`
 	ItemType    *string      `json:"item_type"`
 	ServiceUUID *uuid.UUID   `json:"service_uuid"`
+	ProductUUID *uuid.UUID   `json:"product_uuid"`
 	Basis       *string      `json:"basis"`
 	Rate        *money.Rate  `json:"rate"`
 	FixedAmount *money.Money `json:"fixed_amount"`

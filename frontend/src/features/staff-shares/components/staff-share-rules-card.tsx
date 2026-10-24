@@ -35,7 +35,8 @@ const PAGE_SIZE = 20;
 
 /**
  * Share rules of a staff member on their detail page: the default rate of
- * services and products and per-service rates, each from a start date.
+ * services and products and per-service / per-product rates, each from a
+ * start date.
  * Hidden when the staff shares module is off or the member cannot see
  * staff earnings.
  */
@@ -71,7 +72,8 @@ function RulesCard({ staffUuid }: { staffUuid: string }) {
   const columns = [
     createColumn<StaffShareRule>({
       id: "scope",
-      accessorFn: (row) => row.service?.name ?? row.item_type,
+      accessorFn: (row) =>
+        row.service?.name ?? row.product?.name ?? row.item_type,
       labelKey: "staff_shares.rules.columns.scope",
       enableSorting: false,
       gridSecondary: true,
@@ -81,6 +83,11 @@ function RulesCard({ staffUuid }: { staffUuid: string }) {
           {row.original.service ? (
             <Badge variant="secondary">
               {t("staff_shares.rules.override")}
+            </Badge>
+          ) : null}
+          {row.original.product ? (
+            <Badge variant="secondary">
+              {t("staff_shares.rules.override_product")}
             </Badge>
           ) : null}
         </div>

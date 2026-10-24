@@ -124,8 +124,8 @@ func (s *Service) applyFields(ctx context.Context, ve *ValidationError, f *ruleF
 }
 
 // CreateRule adds a rate of a staff member: the default of an item type
-// or, with ServiceUUID, the rate of one service. Rules are business-wide,
-// so the caller needs access to every branch.
+// or, with ServiceUUID / ProductUUID, the rate of one service or product.
+// Rules are business-wide, so the caller needs access to every branch.
 func (s *Service) CreateRule(ctx context.Context, orgID int64, userID *int64, in model.RuleInput) (model.Rule, error) {
 	if err := orgctx.RequireAllBranches(ctx); err != nil {
 		return model.Rule{}, ErrAllBranches
@@ -161,6 +161,18 @@ func (s *Service) CreateRule(ctx context.Context, orgID int64, userID *int64, in
 			return model.Rule{}, err
 		}
 	}
+	var productID pgtype.Int8
+	if in.ProductUUID != nil {
+		if itemType != model.ItemProduct {
+			ve.add("product_uuid", "invalid", "a product rate needs item_type product")
+		} else if p, err := q.GetShareProductByUUID(ctx, db.GetShareProductByUUIDParams{OrganizationID: orgID, Uuid: *in.ProductUUID}); err == nil {
+			productID = int8Of(p.ID)
+		} else if isNotFound(err) {
+			ve.add("product_uuid", "not_found", "product not found")
+		} else {
+			return model.Rule{}, err
+		}
+	}
 	f := ruleFields{}
 	if in.Basis == nil {
 		ve.add("basis", "required", "basis is required")
@@ -171,8 +183,9 @@ func (s *Service) CreateRule(ctx context.Context, orgID int64, userID *int64, in
 		return model.Rule{}, err
 	}
 	row, err := q.InsertShareRule(ctx, db.InsertShareRuleParams{
-		OrganizationID: orgID, StaffID: staffID, ItemType: itemType, ServiceID: serviceID, Basis: f.basis,
-		Rate: rateArg(f.rate), FixedAmount: moneyArg(f.fixed), ValidFrom: f.validFrom, Note: f.note, CreatedBy: int8Ptr(userID),
+		OrganizationID: orgID, StaffID: staffID, ItemType: itemType, ServiceID: serviceID, ProductID: productID,
+		Basis: f.basis, Rate: rateArg(f.rate), FixedAmount: moneyArg(f.fixed), ValidFrom: f.validFrom, Note: f.note,
+		CreatedBy: int8Ptr(userID),
 	})
 	if err != nil {
 		return model.Rule{}, mapRepoErr(err)
@@ -204,6 +217,9 @@ func (s *Service) PatchRule(ctx context.Context, orgID int64, id uuid.UUID, in m
 	}
 	if in.ServiceUUID != nil {
 		ve.add("service_uuid", "immutable", "the service of a rule does not change")
+	}
+	if in.ProductUUID != nil {
+		ve.add("product_uuid", "immutable", "the product of a rule does not change")
 	}
 	f := ruleFields{basis: row.Basis, rate: ratePtr(row.Rate), fixed: amountPtr(row.FixedAmount), validFrom: row.ValidFrom, note: row.Note}
 	s.applyFields(ctx, ve, &f, in, false)
@@ -251,6 +267,9 @@ func mapRule(r db.GetShareRuleRow) model.Rule {
 	}
 	if r.ServiceUuid.Valid {
 		out.Service = &model.Ref{UUID: uuid.UUID(r.ServiceUuid.Bytes), Name: r.ServiceName.String}
+	}
+	if r.ProductUuid.Valid {
+		out.Product = &model.Ref{UUID: uuid.UUID(r.ProductUuid.Bytes), Name: r.ProductName.String}
 	}
 	return out
 }

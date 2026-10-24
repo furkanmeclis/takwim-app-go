@@ -556,6 +556,7 @@ type Querier interface {
 	GetSharePayout(ctx context.Context, arg GetSharePayoutParams) (GetSharePayoutRow, error)
 	GetSharePayoutByIdempotencyKey(ctx context.Context, arg GetSharePayoutByIdempotencyKeyParams) (GetSharePayoutByIdempotencyKeyRow, error)
 	GetSharePayoutRow(ctx context.Context, arg GetSharePayoutRowParams) (GetSharePayoutRowRow, error)
+	GetShareProductByUUID(ctx context.Context, arg GetShareProductByUUIDParams) (GetShareProductByUUIDRow, error)
 	GetShareRule(ctx context.Context, arg GetShareRuleParams) (GetShareRuleRow, error)
 	// TEC-917: staff share rules, the share of each sale line and share
 	// payouts. Every query takes the organization id.
@@ -1242,8 +1243,8 @@ type Querier interface {
 	// A person settled an unknown result: the provider did not refund.
 	ResolveRefundFailed(ctx context.Context, arg ResolveRefundFailedParams) (int64, error)
 	// The rule of a staff member for an item on a day: a rule of the service
-	// wins over the default of the item type; among them the latest start on
-	// or before the day.
+	// (or of the product, TEC-976) wins over the default of the item type;
+	// among them the latest start on or before the day.
 	ResolveShareRule(ctx context.Context, arg ResolveShareRuleParams) (ResolveShareRuleRow, error)
 	ResourceNameTaken(ctx context.Context, arg ResourceNameTakenParams) (bool, error)
 	// Bulk delete rollback.

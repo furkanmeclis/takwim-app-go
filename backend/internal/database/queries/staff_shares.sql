@@ -24,15 +24,16 @@ SELECT EXISTS (
 
 -- name: ResolveShareRule :one
 -- The rule of a staff member for an item on a day: a rule of the service
--- wins over the default of the item type; among them the latest start on
--- or before the day.
-SELECT r.id, r.service_id, r.basis, r.rate, r.fixed_amount
+-- (or of the product, TEC-976) wins over the default of the item type;
+-- among them the latest start on or before the day.
+SELECT r.id, r.service_id, r.product_id, r.basis, r.rate, r.fixed_amount
 FROM staff_share_rules r
 WHERE r.organization_id = sqlc.arg(organization_id) AND r.staff_id = sqlc.arg(staff_id)
   AND r.item_type = sqlc.arg(item_type)
   AND (r.service_id IS NULL OR r.service_id = sqlc.narg(service_id)::bigint)
+  AND (r.product_id IS NULL OR r.product_id = sqlc.narg(product_id)::bigint)
   AND r.valid_from <= sqlc.arg(on_date)::date
-ORDER BY (r.service_id IS NOT NULL) DESC, r.valid_from DESC, r.id DESC
+ORDER BY (r.service_id IS NOT NULL OR r.product_id IS NOT NULL) DESC, r.valid_from DESC, r.id DESC
 LIMIT 1;
 
 -- name: GetShareStaffByUUID :one
@@ -47,6 +48,10 @@ WHERE st.organization_id = sqlc.arg(organization_id) AND st.user_id = sqlc.arg(u
 SELECT sv.id, sv.uuid, sv.name FROM services sv
 WHERE sv.organization_id = sqlc.arg(organization_id) AND sv.uuid = sqlc.arg(uuid) AND sv.deleted_at IS NULL;
 
+-- name: GetShareProductByUUID :one
+SELECT p.id, p.uuid, p.name FROM products p
+WHERE p.organization_id = sqlc.arg(organization_id) AND p.uuid = sqlc.arg(uuid) AND p.deleted_at IS NULL;
+
 -- name: LockShareStaff :one
 -- Serializes the payouts of one staff member.
 SELECT st.id FROM staff st
@@ -57,9 +62,11 @@ FOR UPDATE;
 
 -- name: InsertShareRule :one
 INSERT INTO staff_share_rules (
-    organization_id, staff_id, item_type, service_id, basis, rate, fixed_amount, valid_from, note, created_by
+    organization_id, staff_id, item_type, service_id, product_id, basis, rate, fixed_amount, valid_from, note,
+    created_by
 ) VALUES (
-    sqlc.arg(organization_id), sqlc.arg(staff_id), sqlc.arg(item_type), sqlc.narg(service_id), sqlc.arg(basis),
+    sqlc.arg(organization_id), sqlc.arg(staff_id), sqlc.arg(item_type), sqlc.narg(service_id),
+    sqlc.narg(product_id), sqlc.arg(basis),
     sqlc.narg(rate), sqlc.narg(fixed_amount), sqlc.arg(valid_from), sqlc.arg(note), sqlc.narg(created_by)
 )
 RETURNING id, uuid;
@@ -79,11 +86,13 @@ SELECT r.id, r.uuid, r.staff_id, r.item_type, r.basis, r.rate, r.fixed_amount, r
     r.created_at, r.updated_at,
     st.uuid AS staff_uuid, st.name AS staff_name,
     sv.uuid AS service_uuid, sv.name AS service_name,
+    pr.uuid AS product_uuid, pr.name AS product_name,
     (SELECT COUNT(*) FROM staff_share_lines l
      WHERE l.organization_id = r.organization_id AND l.rule_id = r.id)::bigint AS share_count
 FROM staff_share_rules r
 JOIN staff st ON st.organization_id = r.organization_id AND st.id = r.staff_id
 LEFT JOIN services sv ON sv.organization_id = r.organization_id AND sv.id = r.service_id
+LEFT JOIN products pr ON pr.organization_id = r.organization_id AND pr.id = r.product_id
 WHERE r.organization_id = sqlc.arg(organization_id) AND r.uuid = sqlc.arg(uuid);
 
 -- name: ListShareRules :many
@@ -91,15 +100,18 @@ SELECT r.id, r.uuid, r.staff_id, r.item_type, r.basis, r.rate, r.fixed_amount, r
     r.created_at, r.updated_at,
     st.uuid AS staff_uuid, st.name AS staff_name,
     sv.uuid AS service_uuid, sv.name AS service_name,
+    pr.uuid AS product_uuid, pr.name AS product_name,
     (SELECT COUNT(*) FROM staff_share_lines l
      WHERE l.organization_id = r.organization_id AND l.rule_id = r.id)::bigint AS share_count
 FROM staff_share_rules r
 JOIN staff st ON st.organization_id = r.organization_id AND st.id = r.staff_id
 LEFT JOIN services sv ON sv.organization_id = r.organization_id AND sv.id = r.service_id
+LEFT JOIN products pr ON pr.organization_id = r.organization_id AND pr.id = r.product_id
 WHERE r.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(staff_ids)::bigint[] IS NULL OR r.staff_id = ANY(sqlc.narg(staff_ids)::bigint[]))
   AND (sqlc.narg(item_types)::text[] IS NULL OR r.item_type = ANY(sqlc.narg(item_types)::text[]))
-ORDER BY st.name, r.item_type DESC, (r.service_id IS NOT NULL), sv.name NULLS FIRST, r.valid_from DESC, r.id DESC
+ORDER BY st.name, r.item_type DESC, (r.service_id IS NOT NULL OR r.product_id IS NOT NULL),
+    COALESCE(sv.name, pr.name) NULLS FIRST, r.valid_from DESC, r.id DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
 -- name: CountShareRules :one

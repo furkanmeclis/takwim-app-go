@@ -151,6 +151,7 @@ import (
 	staffrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/repository"
 	staffusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staff/usecase"
 	staffsharesmodule "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares"
+	staffsharesadapters "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/adapters"
 	staffshareshandler "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/handler"
 	staffsharesrepository "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/repository"
 	staffsharesusecase "github.com/furkanmeclis/nextjs-go-boilerplate/backend/internal/modules/staffshares/usecase"
@@ -592,6 +593,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		cashadapters.NewAccountsIO(cashSvc),
 		cashadapters.NewMovementsIO(cashSvc),
 		financeadapters.NewEntriesIO(financeSvc),
+		staffsharesadapters.NewLinesIO(staffSharesSvc),
+		staffsharesadapters.NewPayoutsIO(staffSharesSvc),
 		orgadapters.NewIO(orgSvc),
 	)
 	exportSvc := exportusecase.New(deps.Queries, deps.Storage, ioReg, jobQueue, notifSvc, activityRec, log)
@@ -715,7 +718,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	salesmodule.RegisterRoutes(mux, salesH, tokens, loader, tenantResolver)
 	staffSharesH := staffshareshandler.New(staffSharesSvc, activityRec)
 	staffSharesH.SetResourceEvents(resourceEvents)
-	staffsharesmodule.RegisterRoutes(mux, staffSharesH, tokens, loader, tenantResolver)
+	staffsharesmodule.RegisterRoutes(mux, staffSharesH, staffsharesmodule.EngineHandlers{
+		ExportLines:   exportH.TenantExport(staffsharesmodule.LinesResource, staffsharesmodule.ExportLineQueryKeys...),
+		ExportPayouts: exportH.TenantExport(staffsharesmodule.PayoutsResource, staffsharesmodule.ExportPayoutQueryKeys...),
+	}, tokens, loader, tenantResolver)
 	financeH := financehandler.New(financeSvc, activityRec)
 	financeH.SetResourceEvents(resourceEvents)
 	financemodule.RegisterRoutes(mux, financeH, financemodule.EngineHandlers{

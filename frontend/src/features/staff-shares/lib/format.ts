@@ -40,12 +40,13 @@ export function useShareRateLabel() {
   );
 }
 
-/** "Hizmetler (varsayılan)" or the service name of an override. */
+/** "Hizmetler (varsayılan)" or the service / product name of an override. */
 export function ruleScopeLabel(
   t: (key: string, params?: Record<string, string | number>) => string,
-  rule: Pick<StaffShareRule, "item_type" | "service">,
+  rule: Pick<StaffShareRule, "item_type" | "service" | "product">,
 ) {
   if (rule.service) return rule.service.name;
+  if (rule.product) return rule.product.name;
   return rule.item_type === "product"
     ? t("staff_shares.rules.scope_default_product")
     : t("staff_shares.rules.scope_default_service");
